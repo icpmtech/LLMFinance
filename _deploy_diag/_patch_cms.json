@@ -1,0 +1,5335 @@
+{
+ "posts": [
+  {
+   "title": "Trump se protege sobre pagar governo de volta por anúncios que já foram ao ar",
+   "slug": "trump-se-protege-sobre-pagar-governo-de-volta-por-anuncios-que",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "Trump se protege sobre pair governo de volta por anúncios que já foram ao ar O tom geral é neutro.",
+    "keywords": [],
+    "image_id": "med_20070c78223a",
+    "noindex": false
+   },
+   "excerpt": "Trump se protege sobre pair governo de volta por anúncios que já foram ao ar O tom geral é neutro.",
+   "markdown": "Trump se protege sobre pair governo de volta por anúncios que já foram ao ar.\n\n**Fonte:** cnbc.com · 2026-10-06 — [ler a notícia original](https://www.cnbc.com/2026/10/05/trump-ads-election.html)\n",
+   "cover_id": null,
+   "category_ids": [],
+   "tags": [
+    "cnbc.com",
+    "TV",
+    "inteligência artificial"
+   ],
+   "author": "teste@teste.com",
+   "featured": false,
+   "blocks": [],
+   "reading_minutes": 1,
+   "id": "post_8b984e2e4355",
+   "created_at": "2026-10-16T13:18:43.408519+00:00",
+   "updated_at": "2026-10-16T13:45:30.608248+00:00",
+   "published_at": "2026-10-16T13:20:33.123671+00:00",
+   "news_id": "TV-bba88ed7ad0663b39736"
+  }
+ ],
+ "municipios": [
+  {
+   "title": "Despesas da Câmara Municipal de Lisboa",
+   "slug": "lisboa",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "municipio": "Lisboa",
+   "geocod": "1A01106",
+   "excerpt": "",
+   "blocks": [],
+   "dados": {
+    "municipio": "Lisboa",
+    "geocod": "1A01106",
+    "geocod_curto": "1106",
+    "distrito": "Lisboa",
+    "nuts": "1A0",
+    "nuts_nome": "Grande Lisboa",
+    "ano_despesas": 2023,
+    "anos_despesas": [
+     "2023"
+    ],
+    "serie_despesas": [
+     {
+      "ano": "2023",
+      "total": 1016328000.0
+     }
+    ],
+    "por_classificador": [
+     {
+      "codigo": "D",
+      "etiqueta": "Total",
+      "valor": 1016328000.0
+     },
+     {
+      "codigo": "D1",
+      "etiqueta": "Despesas correntes",
+      "valor": 752327000.0
+     },
+     {
+      "codigo": "D11",
+      "etiqueta": "Despesas com pessoal",
+      "valor": 299993000.0
+     },
+     {
+      "codigo": "D12",
+      "etiqueta": "Aquisição de bens e serviços",
+      "valor": 167145000.0
+     },
+     {
+      "codigo": "D13",
+      "etiqueta": "Juros e outros encargos",
+      "valor": 7438000.0
+     },
+     {
+      "codigo": "D14",
+      "etiqueta": "Transferências correntes para freguesias",
+      "valor": 90546000.0
+     },
+     {
+      "codigo": "D15",
+      "etiqueta": "Outras despesas correntes",
+      "valor": 187206000.0
+     },
+     {
+      "codigo": "D2",
+      "etiqueta": "Despesas de capital",
+      "valor": 264001000.0
+     },
+     {
+      "codigo": "D21",
+      "etiqueta": "Aquisição de bens de capital",
+      "valor": 205556000.0
+     },
+     {
+      "codigo": "D22",
+      "etiqueta": "Transferências de capital",
+      "valor": 30444000.0
+     },
+     {
+      "codigo": "D221",
+      "etiqueta": "Transferências de capital para freguesias",
+      "valor": 23327000.0
+     },
+     {
+      "codigo": "D222",
+      "etiqueta": "Outras transferências de capital",
+      "valor": 7117000.0
+     },
+     {
+      "codigo": "D23",
+      "etiqueta": "Outras despesas de capital",
+      "valor": 0.0
+     },
+     {
+      "codigo": "D24",
+      "etiqueta": "Ativos financeiros",
+      "valor": 0.0
+     },
+     {
+      "codigo": "D25",
+      "etiqueta": "Passivos financeiros",
+      "valor": 28001000.0
+     }
+    ],
+    "despesas_total": 1016328000.0,
+    "despesas_correntes": 752327000.0,
+    "despesas_capital": 264001000.0,
+    "despesas_pessoal": 299993000.0,
+    "despesas_bens_servicos": 167145000.0,
+    "contratos": {
+     "total": 18464,
+     "valor": 2167649772.7400002,
+     "primeiro_ano": 2012,
+     "ultimo_ano": 2026,
+     "por_ano": {
+      "2012": {
+       "contratos": 982,
+       "valor": 70703949.48
+      },
+      "2013": {
+       "contratos": 1109,
+       "valor": 90336657.72999999
+      },
+      "2014": {
+       "contratos": 818,
+       "valor": 63796802.24999999
+      },
+      "2015": {
+       "contratos": 1209,
+       "valor": 77002733.77999999
+      },
+      "2016": {
+       "contratos": 1476,
+       "valor": 151983042.60999998
+      },
+      "2017": {
+       "contratos": 1456,
+       "valor": 140800303.57999998
+      },
+      "2018": {
+       "contratos": 1483,
+       "valor": 139252227.62
+      },
+      "2019": {
+       "contratos": 1623,
+       "valor": 171433792.51
+      },
+      "2020": {
+       "contratos": 1316,
+       "valor": 172772897.7
+      },
+      "2021": {
+       "contratos": 1142,
+       "valor": 315999370.69
+      },
+      "2022": {
+       "contratos": 1143,
+       "valor": 150446797.45
+      },
+      "2023": {
+       "contratos": 1412,
+       "valor": 178650381.77
+      },
+      "2024": {
+       "contratos": 1226,
+       "valor": 181212149.76
+      },
+      "2025": {
+       "contratos": 1115,
+       "valor": 155693147.76
+      },
+      "2026": {
+       "contratos": 848,
+       "valor": 106858747.75
+      }
+     },
+     "fornecedores": [
+      {
+       "nome": "Escalatur - Viagens e Turismo",
+       "contratos": 306,
+       "valor": 676588.34
+      },
+      {
+       "nome": "Schindler Ascensores e Escadas Rolantes",
+       "contratos": 60,
+       "valor": 637003.52
+      },
+      {
+       "nome": "Viagens Abreu",
+       "contratos": 57,
+       "valor": 93926.02
+      },
+      {
+       "nome": "Schindler - Ascensores e Escadas Rolantes",
+       "contratos": 48,
+       "valor": 362636.69
+      },
+      {
+       "nome": "PERENE",
+       "contratos": 43,
+       "valor": 6619521.33
+      }
+     ],
+     "adjudicantes": [
+      "Município de Lisboa",
+      "Serviços Sociais da Câmara Municipal de Lisboa",
+      "Serviços Sociais Câmara Municipal de Lisboa",
+      "Câmara Municipal de Lisboa",
+      "Municipio de Lisboa",
+      "SERVIÇOS SOCIAIS DA CÂMARA MUNICIPAL DE LISBOA",
+      "Camara Municipal de Lisboa",
+      "CÂMARA MUNICIPAL DE LISBOA",
+      "MUNICIPIO DE LISBOA",
+      "Municipio de lisboa",
+      "CAMARA MUNICIPAL DE LISBOA",
+      "CML- Câmara Municipal de Lisboa",
+      "Câmara Municipal lisboa",
+      "município de Lisboa"
+     ]
+    },
+    "recolhido_em": "2026-10-13T15:37:14Z",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://dados.gov.pt/pt/datasets/despesas-eur-das-camaras-municipais-1"
+     }
+    ]
+   },
+   "id": "mun_2990c95f1de2",
+   "created_at": "2026-10-13T20:40:51.912173+00:00",
+   "updated_at": "2026-10-13T20:40:52.546336+00:00",
+   "published_at": "2026-10-13T20:40:52.546328+00:00"
+  },
+  {
+   "title": "Despesas da Camara Municipal do Porto",
+   "slug": "porto",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "qa.municipios.1791912330@iqos.dev",
+   "seo": {
+    "title": "",
+    "description": "A Camara Municipal do Porto gastou 317,6 milhoes de euros em 2023 e tem 1 147,2 milhoes em contratos no Portal BASE desde 2012.",
+    "keywords": [
+     "despesas",
+     "Camara Municipal do Porto",
+     "contratacao publica"
+    ],
+    "image_id": null,
+    "noindex": false
+   },
+   "municipio": "Porto",
+   "geocod": "11A1312",
+   "excerpt": "A Camara Municipal do Porto gastou 317,6 milhoes de euros em 2023 e tem 1 147,2 milhoes em contratos no Portal BASE desde 2012.",
+   "blocks": [
+    {
+     "id": "blk_95dab56901d1",
+     "type": "texto",
+     "hidden": false,
+     "data": {
+      "markdown": "## A despesa em 2023\n\nA Câmara Municipal do Porto executou **317,6 milhões de euros** de despesa em 2023, o ano mais recente publicado pelo INE (indicador 0013909, com origem na DGAL). A maior parte é despesa corrente — **242,3 milhões de euros** — e **75,2 milhões** foram despesa de capital, sobretudo investimento municipal.\n\nA rubrica mais pesada é a despesa com pessoal, **104,9 milhões de euros**, quase um terço do total. Segue-se a aquisição de bens e serviços, com **58,9 milhões**, e a aquisição de bens de capital, com **64,9 milhões**. Os juros e outros encargos financeiros ficaram em 403 mil euros: um peso residual no orçamento.\n\n## A contratação pública\n\nNo Portal BASE, o município aparece como adjudicante em **17 759 contratos** celebrados entre 2012 e 2026, no valor acumulado de **1 147,2 milhões de euros**. A série anual mostra um crescimento forte nos últimos anos: 1 060 contratos e 58,6 milhões de euros em 2022; **1 468 contratos e 140,4 milhões em 2024**, o ano de maior valor registado; e 1 440 contratos e 113,9 milhões em 2025. Em 2024, o Porto foi o **quinto município do país** por valor contratado.\n\nEntre os principais fornecedores estão empresas de construção e engenharia e de serviços gerais — a Porto Sá Construções, com **3,3 milhões de euros** em 177 contratos, e a Alfredo Peniche, com **4,0 milhões** em 216 contratos.\n\n## Como ler estes números\n\nA despesa e a contratação vêm de fontes diferentes e não coincidem: a primeira é a execução orçamental do município no ano civil; a segunda são contratos celebrados, e o valor de um contrato conta no ano em que é assinado, mesmo que a execução se estenda por vários anos. Os quadros abaixo indicam sempre o ano de referência, e os dados são atualizados na plataforma a partir das fontes oficiais.\n"
+     }
+    }
+   ],
+   "dados": {
+    "municipio": "Porto",
+    "geocod": "11A1312",
+    "geocod_curto": "1312",
+    "distrito": "Porto",
+    "nuts": "11A",
+    "nuts_nome": "Área Metropolitana do Porto",
+    "ano_despesas": 2023,
+    "anos_despesas": [
+     "2023"
+    ],
+    "serie_despesas": [
+     {
+      "ano": "2023",
+      "total": 317577000.0
+     }
+    ],
+    "por_classificador": [
+     {
+      "codigo": "D",
+      "etiqueta": "Total",
+      "valor": 317577000.0
+     },
+     {
+      "codigo": "D1",
+      "etiqueta": "Despesas correntes",
+      "valor": 242346000.0
+     },
+     {
+      "codigo": "D11",
+      "etiqueta": "Despesas com pessoal",
+      "valor": 104870000.0
+     },
+     {
+      "codigo": "D12",
+      "etiqueta": "Aquisição de bens e serviços",
+      "valor": 58862000.0
+     },
+     {
+      "codigo": "D13",
+      "etiqueta": "Juros e outros encargos",
+      "valor": 403000.0
+     },
+     {
+      "codigo": "D14",
+      "etiqueta": "Transferências correntes para freguesias",
+      "valor": 5596000.0
+     },
+     {
+      "codigo": "D15",
+      "etiqueta": "Outras despesas correntes",
+      "valor": 72616000.0
+     },
+     {
+      "codigo": "D2",
+      "etiqueta": "Despesas de capital",
+      "valor": 75231000.0
+     },
+     {
+      "codigo": "D21",
+      "etiqueta": "Aquisição de bens de capital",
+      "valor": 64926000.0
+     },
+     {
+      "codigo": "D22",
+      "etiqueta": "Transferências de capital",
+      "valor": 3454000.0
+     },
+     {
+      "codigo": "D221",
+      "etiqueta": "Transferências de capital para freguesias",
+      "valor": 0.0
+     },
+     {
+      "codigo": "D222",
+      "etiqueta": "Outras transferências de capital",
+      "valor": 3454000.0
+     },
+     {
+      "codigo": "D23",
+      "etiqueta": "Outras despesas de capital",
+      "valor": 598000.0
+     },
+     {
+      "codigo": "D24",
+      "etiqueta": "Ativos financeiros",
+      "valor": 483000.0
+     },
+     {
+      "codigo": "D25",
+      "etiqueta": "Passivos financeiros",
+      "valor": 5770000.0
+     }
+    ],
+    "despesas_total": 317577000.0,
+    "despesas_correntes": 242346000.0,
+    "despesas_capital": 75231000.0,
+    "despesas_pessoal": 104870000.0,
+    "despesas_bens_servicos": 58862000.0,
+    "contratos": {
+     "total": 17759,
+     "valor": 1147236906.6499999,
+     "primeiro_ano": 2012,
+     "ultimo_ano": 2026,
+     "por_ano": {
+      "2012": {
+       "contratos": 698,
+       "valor": 55368307.27000001
+      },
+      "2013": {
+       "contratos": 951,
+       "valor": 39056550.28
+      },
+      "2014": {
+       "contratos": 1093,
+       "valor": 48711231.42000001
+      },
+      "2015": {
+       "contratos": 1372,
+       "valor": 52580694.53
+      },
+      "2016": {
+       "contratos": 1512,
+       "valor": 96682768.46000001
+      },
+      "2017": {
+       "contratos": 1522,
+       "valor": 94237462.63999999
+      },
+      "2018": {
+       "contratos": 1304,
+       "valor": 81080417.91
+      },
+      "2019": {
+       "contratos": 1190,
+       "valor": 50909738.72
+      },
+      "2020": {
+       "contratos": 859,
+       "valor": 69377440.62
+      },
+      "2021": {
+       "contratos": 947,
+       "valor": 67076393.63
+      },
+      "2022": {
+       "contratos": 1060,
+       "valor": 58609786.989999995
+      },
+      "2023": {
+       "contratos": 1213,
+       "valor": 73617108.05
+      },
+      "2024": {
+       "contratos": 1468,
+       "valor": 140360316.3
+      },
+      "2025": {
+       "contratos": 1440,
+       "valor": 113903101.29
+      },
+      "2026": {
+       "contratos": 994,
+       "valor": 105197240.69999999
+      }
+     },
+     "fornecedores": [
+      {
+       "nome": "Rioboco - Serviços Gerais",
+       "contratos": 340,
+       "valor": 846500.85
+      },
+      {
+       "nome": "Meikegest - Engenharia",
+       "contratos": 315,
+       "valor": 298067.31
+      },
+      {
+       "nome": "Alfredo Peniche",
+       "contratos": 216,
+       "valor": 3969216.63
+      },
+      {
+       "nome": "Porto Sá Construções",
+       "contratos": 177,
+       "valor": 3254615.48
+      },
+      {
+       "nome": "RIOBOCO - Serviços Gerais",
+       "contratos": 168,
+       "valor": 524244.51
+      }
+     ],
+     "adjudicantes": [
+      "CMPH - DomusSocial - Empresa de Habitação e Manutenção do Município do Porto",
+      "Município do Porto",
+      "CMPL - Porto Lazer - Empresa de Desporto e Lazer do Município do Porto",
+      "CMPEA - Empresa de Águas do Município do Porto",
+      "CMPEAE - Empresa de Águas e Energia do Município do Porto",
+      "Gestão de Obras Públicas da Câmara Municipal do Porto",
+      "Câmara Municipal do Porto",
+      "CMPH  Empresa de Habitação e Manutenção do Município do Porto",
+      "CMPEAE - Empresa de Águas e Energia do Município do Porto EM",
+      "Municipio do Porto",
+      "Empresa de Águas e Energia do Município do Porto",
+      "CMPEAE-Empresa de Águas e Energia do Município do Porto",
+      "CMPEA-Empresa de Águas do Município do Porto EM",
+      "CMPL-PORTO LAZER-EMPRESA DE DESPORTO E LAZER DO MUNICIPIO DO PORTO",
+      "Empresa de Águas do Município do Porto",
+      "CMPEA - Emp. Águas Municipio Porto",
+      "CMPEA - Empresa de Águas do Municipio do Porto",
+      "CMPEA-Empresa de Águas do Município do Porto",
+      "CMPEAE  Empresa de Águas e Energia do Município do Porto",
+      "CMPEAE – Empresa de Águas e Energia do Município do Porto",
+      "Cmph - Domussocial - Empresa de Habitação e Manutenção do Município do Porto",
+      "Empresa de Águas do Município do Porto EM",
+      "Empresa de águas e Energia do Município do Porto",
+      "Empresa Águas e Energia do Município do Porto",
+      "Portolazer - Empresa de Desporto e Lazer do Município do Porto"
+     ]
+    },
+    "recolhido_em": "2026-10-13T15:37:14Z",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://dados.gov.pt/pt/datasets/despesas-eur-das-camaras-municipais-1"
+     }
+    ]
+   },
+   "id": "mun_a1ee4e196c51",
+   "created_at": "2026-10-13T16:25:55.762726+00:00",
+   "updated_at": "2026-10-13T17:00:18.978554+00:00",
+   "published_at": "2026-10-13T17:00:18.978554+00:00"
+  },
+  {
+   "title": "Despesas da Câmara Municipal de Braga",
+   "slug": "braga",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "municipio": "Braga",
+   "geocod": "1120303",
+   "excerpt": "",
+   "blocks": [],
+   "dados": {
+    "municipio": "Braga",
+    "geocod": "1120303",
+    "geocod_curto": "0303",
+    "distrito": "Braga",
+    "nuts": "112",
+    "nuts_nome": "Cávado",
+    "ano_despesas": 2023,
+    "anos_despesas": [
+     "2023"
+    ],
+    "serie_despesas": [
+     {
+      "ano": "2023",
+      "total": 152775000.0
+     }
+    ],
+    "por_classificador": [
+     {
+      "codigo": "D",
+      "etiqueta": "Total",
+      "valor": 152775000.0
+     },
+     {
+      "codigo": "D1",
+      "etiqueta": "Despesas correntes",
+      "valor": 111740000.0
+     },
+     {
+      "codigo": "D11",
+      "etiqueta": "Despesas com pessoal",
+      "valor": 44461000.0
+     },
+     {
+      "codigo": "D12",
+      "etiqueta": "Aquisição de bens e serviços",
+      "valor": 34097000.0
+     },
+     {
+      "codigo": "D13",
+      "etiqueta": "Juros e outros encargos",
+      "valor": 653000.0
+     },
+     {
+      "codigo": "D14",
+      "etiqueta": "Transferências correntes para freguesias",
+      "valor": 7034000.0
+     },
+     {
+      "codigo": "D15",
+      "etiqueta": "Outras despesas correntes",
+      "valor": 25494000.0
+     },
+     {
+      "codigo": "D2",
+      "etiqueta": "Despesas de capital",
+      "valor": 41035000.0
+     },
+     {
+      "codigo": "D21",
+      "etiqueta": "Aquisição de bens de capital",
+      "valor": 25713000.0
+     },
+     {
+      "codigo": "D22",
+      "etiqueta": "Transferências de capital",
+      "valor": 4370000.0
+     },
+     {
+      "codigo": "D221",
+      "etiqueta": "Transferências de capital para freguesias",
+      "valor": 4219000.0
+     },
+     {
+      "codigo": "D222",
+      "etiqueta": "Outras transferências de capital",
+      "valor": 151000.0
+     },
+     {
+      "codigo": "D23",
+      "etiqueta": "Outras despesas de capital",
+      "valor": 2603000.0
+     },
+     {
+      "codigo": "D24",
+      "etiqueta": "Ativos financeiros",
+      "valor": 0.0
+     },
+     {
+      "codigo": "D25",
+      "etiqueta": "Passivos financeiros",
+      "valor": 8348000.0
+     }
+    ],
+    "despesas_total": 152775000.0,
+    "despesas_correntes": 111740000.0,
+    "despesas_capital": 41035000.0,
+    "despesas_pessoal": 44461000.0,
+    "despesas_bens_servicos": 34097000.0,
+    "contratos": {
+     "total": 5375,
+     "valor": 429212807.33000004,
+     "primeiro_ano": 2012,
+     "ultimo_ano": 2026,
+     "por_ano": {
+      "2012": {
+       "contratos": 172,
+       "valor": 25468512.69
+      },
+      "2013": {
+       "contratos": 190,
+       "valor": 10160642.48
+      },
+      "2014": {
+       "contratos": 172,
+       "valor": 6081332.33
+      },
+      "2015": {
+       "contratos": 183,
+       "valor": 8408710.959999999
+      },
+      "2016": {
+       "contratos": 365,
+       "valor": 9700047.15
+      },
+      "2017": {
+       "contratos": 389,
+       "valor": 27567382.13
+      },
+      "2018": {
+       "contratos": 416,
+       "valor": 20414774.73
+      },
+      "2019": {
+       "contratos": 358,
+       "valor": 21878028.990000002
+      },
+      "2020": {
+       "contratos": 323,
+       "valor": 15143869.06
+      },
+      "2021": {
+       "contratos": 381,
+       "valor": 34795929.35
+      },
+      "2022": {
+       "contratos": 396,
+       "valor": 27655052.63
+      },
+      "2023": {
+       "contratos": 483,
+       "valor": 44621105.91
+      },
+      "2024": {
+       "contratos": 566,
+       "valor": 70534559.39
+      },
+      "2025": {
+       "contratos": 556,
+       "valor": 45650202.669999994
+      },
+      "2026": {
+       "contratos": 425,
+       "valor": 61132656.86
+      }
+     },
+     "fornecedores": [
+      {
+       "nome": "LIGALOTE",
+       "contratos": 43,
+       "valor": 1780272.3699999999
+      },
+      {
+       "nome": "ALEXANDRE BARBOSA BORGES",
+       "contratos": 36,
+       "valor": 16925256.47
+      },
+      {
+       "nome": "CONSTRUÇÕES BOAVENTURA &amp; FILHOS",
+       "contratos": 29,
+       "valor": 560835.71
+      },
+      {
+       "nome": "SOCINOG",
+       "contratos": 29,
+       "valor": 1143922.5899999999
+      },
+      {
+       "nome": "Alexandre Barbosa Borges",
+       "contratos": 28,
+       "valor": 17832776.25
+      }
+     ],
+     "adjudicantes": [
+      "Município de Braga",
+      "Câmara Municipal de Braga",
+      "Municipio de Braga",
+      "Município de Braga_OE"
+     ]
+    },
+    "recolhido_em": "2026-10-13T15:37:14Z",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://dados.gov.pt/pt/datasets/despesas-eur-das-camaras-municipais-1"
+     }
+    ]
+   },
+   "id": "mun_ccd93d0c1bc0",
+   "created_at": "2026-10-13T20:44:00.803764+00:00",
+   "updated_at": "2026-10-13T20:44:01.638585+00:00",
+   "published_at": "2026-10-13T20:44:01.638579+00:00"
+  }
+ ],
+ "pesquisas": [
+  {
+   "title": "Despesas municipais do distrito de Porto em 2024",
+   "slug": "despesas-municipais-do-distrito-de-porto-em-2024",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "filtros": {
+    "q": "",
+    "distrito": "Porto",
+    "nuts": "",
+    "ano_contratos": 2024,
+    "ordenar": "despesas",
+    "ordem": "desc",
+    "min_despesas": null,
+    "limite": 50
+   },
+   "descricao_filtros": "distrito de Porto, contratação de 2024, ordenado por despesa total (decrescente)",
+   "intro": "",
+   "blocks": [],
+   "dados": {
+    "filtros": {
+     "q": "",
+     "distrito": "Porto",
+     "nuts": "",
+     "ano_contratos": 2024,
+     "ordenar": "despesas",
+     "ordem": "desc",
+     "min_despesas": null,
+     "limite": 50
+    },
+    "descricao": "distrito de Porto, contratação de 2024, ordenado por despesa total (decrescente)",
+    "total": 18,
+    "linhas": 18,
+    "itens": [
+     {
+      "nome": "Porto",
+      "geocod": "11A1312",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 317577000.0,
+      "despesas_pessoal": 104870000.0,
+      "contratos_total": 17759,
+      "contratos_valor": 1147236906.6499999,
+      "contratos_ano_total": 1468,
+      "contratos_ano_valor": 140360316.3,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 994,
+        "valor": 105197240.69999999
+       },
+       {
+        "ano": "2025",
+        "contratos": 1440,
+        "valor": 113903101.29
+       },
+       {
+        "ano": "2024",
+        "contratos": 1468,
+        "valor": 140360316.3
+       },
+       {
+        "ano": "2023",
+        "contratos": 1213,
+        "valor": 73617108.05
+       },
+       {
+        "ano": "2022",
+        "contratos": 1060,
+        "valor": 58609786.989999995
+       }
+      ]
+     },
+     {
+      "nome": "Vila Nova de Gaia",
+      "geocod": "11A1317",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 208347000.0,
+      "despesas_pessoal": 72947000.0,
+      "contratos_total": 4627,
+      "contratos_valor": 605437920.92,
+      "contratos_ano_total": 375,
+      "contratos_ano_valor": 98735502.72999999,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 322,
+        "valor": 33074487.08
+       },
+       {
+        "ano": "2025",
+        "contratos": 476,
+        "valor": 51004629.35
+       },
+       {
+        "ano": "2024",
+        "contratos": 375,
+        "valor": 98735502.72999999
+       },
+       {
+        "ano": "2023",
+        "contratos": 304,
+        "valor": 49823464.61
+       },
+       {
+        "ano": "2022",
+        "contratos": 318,
+        "valor": 37261099.08
+       }
+      ]
+     },
+     {
+      "nome": "Matosinhos",
+      "geocod": "11A1308",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 156980000.0,
+      "despesas_pessoal": 46153000.0,
+      "contratos_total": 6159,
+      "contratos_valor": 671325398.34,
+      "contratos_ano_total": 695,
+      "contratos_ano_valor": 99039937.7,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 512,
+        "valor": 67160326.68
+       },
+       {
+        "ano": "2025",
+        "contratos": 591,
+        "valor": 95610266.24000001
+       },
+       {
+        "ano": "2024",
+        "contratos": 695,
+        "valor": 99039937.7
+       },
+       {
+        "ano": "2023",
+        "contratos": 529,
+        "valor": 42301899.239999995
+       },
+       {
+        "ano": "2022",
+        "contratos": 446,
+        "valor": 35938846.28
+       }
+      ]
+     },
+     {
+      "nome": "Gondomar",
+      "geocod": "11A1304",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 108069000.0,
+      "despesas_pessoal": 33201000.0,
+      "contratos_total": 3690,
+      "contratos_valor": 440381908.42,
+      "contratos_ano_total": 311,
+      "contratos_ano_valor": 50315919.35,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 329,
+        "valor": 42878969.75
+       },
+       {
+        "ano": "2025",
+        "contratos": 342,
+        "valor": 45214412.67
+       },
+       {
+        "ano": "2024",
+        "contratos": 311,
+        "valor": 50315919.35
+       },
+       {
+        "ano": "2023",
+        "contratos": 332,
+        "valor": 39718691.71
+       },
+       {
+        "ano": "2022",
+        "contratos": 281,
+        "valor": 31585962.259999998
+       }
+      ]
+     },
+     {
+      "nome": "Maia",
+      "geocod": "11A1306",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 104214000.0,
+      "despesas_pessoal": 32510000.0,
+      "contratos_total": 5263,
+      "contratos_valor": 484904869.71,
+      "contratos_ano_total": 426,
+      "contratos_ano_valor": 43975204.96,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 291,
+        "valor": 58736015.8
+       },
+       {
+        "ano": "2025",
+        "contratos": 425,
+        "valor": 75357672.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 426,
+        "valor": 43975204.96
+       },
+       {
+        "ano": "2023",
+        "contratos": 410,
+        "valor": 40491750.3
+       },
+       {
+        "ano": "2022",
+        "contratos": 368,
+        "valor": 26370569.900000002
+       }
+      ]
+     },
+     {
+      "nome": "Paredes",
+      "geocod": "11A1310",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 76603000.0,
+      "despesas_pessoal": 21328000.0,
+      "contratos_total": 2869,
+      "contratos_valor": 263082342.64,
+      "contratos_ano_total": 220,
+      "contratos_ano_valor": 21131696.2,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 249,
+        "valor": 18611371.89
+       },
+       {
+        "ano": "2025",
+        "contratos": 308,
+        "valor": 32806047.97
+       },
+       {
+        "ano": "2024",
+        "contratos": 220,
+        "valor": 21131696.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 239,
+        "valor": 19598429.169999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 189,
+        "valor": 18307606.0
+       }
+      ]
+     },
+     {
+      "nome": "Vila do Conde",
+      "geocod": "11A1316",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 75391000.0,
+      "despesas_pessoal": 23830000.0,
+      "contratos_total": 5183,
+      "contratos_valor": 312682660.05,
+      "contratos_ano_total": 631,
+      "contratos_ano_valor": 49165576.24,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 409,
+        "valor": 28529581.22
+       },
+       {
+        "ano": "2025",
+        "contratos": 612,
+        "valor": 38198894.64
+       },
+       {
+        "ano": "2024",
+        "contratos": 631,
+        "valor": 49165576.24
+       },
+       {
+        "ano": "2023",
+        "contratos": 530,
+        "valor": 33059495.76
+       },
+       {
+        "ano": "2022",
+        "contratos": 392,
+        "valor": 18707965.68
+       }
+      ]
+     },
+     {
+      "nome": "Valongo",
+      "geocod": "11A1315",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 70465000.0,
+      "despesas_pessoal": 22860000.0,
+      "contratos_total": 4837,
+      "contratos_valor": 313228015.18,
+      "contratos_ano_total": 582,
+      "contratos_ano_valor": 32879889.94,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 384,
+        "valor": 21430735.240000002
+       },
+       {
+        "ano": "2025",
+        "contratos": 569,
+        "valor": 33615009.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 582,
+        "valor": 32879889.94
+       },
+       {
+        "ano": "2023",
+        "contratos": 591,
+        "valor": 52712976.2
+       },
+       {
+        "ano": "2022",
+        "contratos": 572,
+        "valor": 16158967.88
+       }
+      ]
+     },
+     {
+      "nome": "Póvoa de Varzim",
+      "geocod": "11A1313",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 67742000.0,
+      "despesas_pessoal": 21093000.0,
+      "contratos_total": 3397,
+      "contratos_valor": 269748521.63,
+      "contratos_ano_total": 317,
+      "contratos_ano_valor": 26803605.55,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 300,
+        "valor": 22307979.5
+       },
+       {
+        "ano": "2025",
+        "contratos": 302,
+        "valor": 32403128.15
+       },
+       {
+        "ano": "2024",
+        "contratos": 317,
+        "valor": 26803605.55
+       },
+       {
+        "ano": "2023",
+        "contratos": 348,
+        "valor": 24568680.59
+       },
+       {
+        "ano": "2022",
+        "contratos": 345,
+        "valor": 15185018.370000001
+       }
+      ]
+     },
+     {
+      "nome": "Penafiel",
+      "geocod": "11C1311",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 60042000.0,
+      "despesas_pessoal": 18804000.0,
+      "contratos_total": 3617,
+      "contratos_valor": 263824666.56,
+      "contratos_ano_total": 342,
+      "contratos_ano_valor": 45409930.19,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 308,
+        "valor": 19898090.66
+       },
+       {
+        "ano": "2025",
+        "contratos": 404,
+        "valor": 30765625.23
+       },
+       {
+        "ano": "2024",
+        "contratos": 342,
+        "valor": 45409930.19
+       },
+       {
+        "ano": "2023",
+        "contratos": 257,
+        "valor": 17019960.99
+       },
+       {
+        "ano": "2022",
+        "contratos": 241,
+        "valor": 13647963.49
+       }
+      ]
+     },
+     {
+      "nome": "Felgueiras",
+      "geocod": "11C1303",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 56218000.0,
+      "despesas_pessoal": 15609000.0,
+      "contratos_total": 2796,
+      "contratos_valor": 205738439.22,
+      "contratos_ano_total": 289,
+      "contratos_ano_valor": 24868284.71,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 238,
+        "valor": 10099550.48
+       },
+       {
+        "ano": "2025",
+        "contratos": 351,
+        "valor": 39244690.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 289,
+        "valor": 24868284.71
+       },
+       {
+        "ano": "2023",
+        "contratos": 212,
+        "valor": 19626062.740000002
+       },
+       {
+        "ano": "2022",
+        "contratos": 171,
+        "valor": 13416471.309999999
+       }
+      ]
+     },
+     {
+      "nome": "Santo Tirso",
+      "geocod": "11A1314",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 50631000.0,
+      "despesas_pessoal": 16733000.0,
+      "contratos_total": 2847,
+      "contratos_valor": 269245953.95,
+      "contratos_ano_total": 272,
+      "contratos_ano_valor": 47467837.76,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 188,
+        "valor": 13779160.37
+       },
+       {
+        "ano": "2025",
+        "contratos": 227,
+        "valor": 32957757.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 272,
+        "valor": 47467837.76
+       },
+       {
+        "ano": "2023",
+        "contratos": 235,
+        "valor": 28348199.5
+       },
+       {
+        "ano": "2022",
+        "contratos": 158,
+        "valor": 15567251.290000001
+       }
+      ]
+     },
+     {
+      "nome": "Lousada",
+      "geocod": "11C1305",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 47944000.0,
+      "despesas_pessoal": 15017000.0,
+      "contratos_total": 2117,
+      "contratos_valor": 155376867.14,
+      "contratos_ano_total": 195,
+      "contratos_ano_valor": 13565740.58,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 202,
+        "valor": 15120566.47
+       },
+       {
+        "ano": "2025",
+        "contratos": 183,
+        "valor": 29175215.22
+       },
+       {
+        "ano": "2024",
+        "contratos": 195,
+        "valor": 13565740.58
+       },
+       {
+        "ano": "2023",
+        "contratos": 101,
+        "valor": 6369158.35
+       },
+       {
+        "ano": "2022",
+        "contratos": 148,
+        "valor": 11637103.34
+       }
+      ]
+     },
+     {
+      "nome": "Amarante",
+      "geocod": "11C1301",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 46325000.0,
+      "despesas_pessoal": 16224000.0,
+      "contratos_total": 2841,
+      "contratos_valor": 227398894.94,
+      "contratos_ano_total": 266,
+      "contratos_ano_valor": 12199607.83,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 229,
+        "valor": 27838955.02
+       },
+       {
+        "ano": "2025",
+        "contratos": 278,
+        "valor": 31444866.85
+       },
+       {
+        "ano": "2024",
+        "contratos": 266,
+        "valor": 12199607.83
+       },
+       {
+        "ano": "2023",
+        "contratos": 260,
+        "valor": 43361481.82
+       },
+       {
+        "ano": "2022",
+        "contratos": 216,
+        "valor": 10090035.36
+       }
+      ]
+     },
+     {
+      "nome": "Paços de Ferreira",
+      "geocod": "11C1309",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 40276000.0,
+      "despesas_pessoal": 14577000.0,
+      "contratos_total": 1793,
+      "contratos_valor": 142247967.46,
+      "contratos_ano_total": 208,
+      "contratos_ano_valor": 33387559.61,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 164,
+        "valor": 7041436.43
+       },
+       {
+        "ano": "2025",
+        "contratos": 250,
+        "valor": 32900072.45
+       },
+       {
+        "ano": "2024",
+        "contratos": 208,
+        "valor": 33387559.61
+       },
+       {
+        "ano": "2023",
+        "contratos": 240,
+        "valor": 20693688.06
+       },
+       {
+        "ano": "2022",
+        "contratos": 128,
+        "valor": 7545968.149999999
+       }
+      ]
+     },
+     {
+      "nome": "Marco de Canaveses",
+      "geocod": "11C1307",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 39906000.0,
+      "despesas_pessoal": 12192000.0,
+      "contratos_total": 1965,
+      "contratos_valor": 233820168.34000003,
+      "contratos_ano_total": 220,
+      "contratos_ano_valor": 94472060.63,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 188,
+        "valor": 13033167.600000001
+       },
+       {
+        "ano": "2025",
+        "contratos": 265,
+        "valor": 23599531.36
+       },
+       {
+        "ano": "2024",
+        "contratos": 220,
+        "valor": 94472060.63
+       },
+       {
+        "ano": "2023",
+        "contratos": 217,
+        "valor": 24800521.509999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 122,
+        "valor": 5274585.98
+       }
+      ]
+     },
+     {
+      "nome": "Trofa",
+      "geocod": "11A1318",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 39150000.0,
+      "despesas_pessoal": 9535000.0,
+      "contratos_total": 2131,
+      "contratos_valor": 164053775.24,
+      "contratos_ano_total": 228,
+      "contratos_ano_valor": 25908915.759999998,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 159,
+        "valor": 10449892.71
+       },
+       {
+        "ano": "2025",
+        "contratos": 172,
+        "valor": 16351383.14
+       },
+       {
+        "ano": "2024",
+        "contratos": 228,
+        "valor": 25908915.759999998
+       },
+       {
+        "ano": "2023",
+        "contratos": 243,
+        "valor": 18165796.39
+       },
+       {
+        "ano": "2022",
+        "contratos": 232,
+        "valor": 15764583.84
+       }
+      ]
+     },
+     {
+      "nome": "Baião",
+      "geocod": "11C1302",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 24998000.0,
+      "despesas_pessoal": 8131000.0,
+      "contratos_total": 1556,
+      "contratos_valor": 86845575.07000001,
+      "contratos_ano_total": 155,
+      "contratos_ano_valor": 9130205.54,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 134,
+        "valor": 9840355.16
+       },
+       {
+        "ano": "2025",
+        "contratos": 143,
+        "valor": 10527849.88
+       },
+       {
+        "ano": "2024",
+        "contratos": 155,
+        "valor": 9130205.54
+       },
+       {
+        "ano": "2023",
+        "contratos": 133,
+        "valor": 8526169.07
+       },
+       {
+        "ano": "2022",
+        "contratos": 113,
+        "valor": 4887747.22
+       }
+      ]
+     }
+    ],
+    "ano_contratos": 2024,
+    "ano_despesas": 2023,
+    "despesas_somadas": 1590878000.0,
+    "contratos_somados": 6256580851.46,
+    "contratos_ano_somados": 868817791.5800002,
+    "contratos_ano_total_somados": 7200,
+    "distritos": [
+     {
+      "key": "Porto",
+      "count": 18
+     }
+    ],
+    "adjudicatarios": {
+     "ano": 2024,
+     "total": 3624,
+     "valor": 888105537.5899997,
+     "municipios": 18,
+     "total_municipios": 18,
+     "itens": [
+      {
+       "nome": "Edilages",
+       "contratos": 42,
+       "valor": 48737249.12,
+       "variantes": 1
+      },
+      {
+       "nome": "REDE AMBIENTE - Engenharia e Serviços",
+       "contratos": 3,
+       "valor": 47941223.34,
+       "variantes": 1
+      },
+      {
+       "nome": "Construções Corte Recto - Engenharia &amp; Construção",
+       "contratos": 7,
+       "valor": 47323847.04,
+       "variantes": 1
+      },
+      {
+       "nome": "GERTAL – Companhia Geral de Restaurantes e Alimentação",
+       "contratos": 5,
+       "valor": 44989629.839999996,
+       "variantes": 3
+      },
+      {
+       "nome": "FCC Environment Portugal",
+       "contratos": 3,
+       "valor": 34378438.47,
+       "variantes": 2
+      },
+      {
+       "nome": "Eurest Portugal Lda",
+       "contratos": 14,
+       "valor": 24194477.64,
+       "variantes": 1
+      },
+      {
+       "nome": "Costeira - Engenharia e Construção",
+       "contratos": 4,
+       "valor": 22814449.15,
+       "variantes": 2
+      },
+      {
+       "nome": "SUMA - SERVIÇOS URBANOS E MEIO AMBIENTE S.A.",
+       "contratos": 2,
+       "valor": 19624498.24,
+       "variantes": 1
+      },
+      {
+       "nome": "Ecoambiente - Serviços e Meio Ambiente",
+       "contratos": 1,
+       "valor": 19549998.24,
+       "variantes": 1
+      },
+      {
+       "nome": "Casais - Engenharia e Construção",
+       "contratos": 2,
+       "valor": 13910800.26,
+       "variantes": 1
+      },
+      {
+       "nome": "EUREST (PORTUGAL)-SOCIEDADE EUROPEIA DE RESTAURANTES LDA",
+       "contratos": 6,
+       "valor": 12574581.56,
+       "variantes": 2
+      },
+      {
+       "nome": "CONSTRUÇÕES CORTE RECTO - ENGENHARIA E CONSTRUÇÃO",
+       "contratos": 1,
+       "valor": 10196199.04,
+       "variantes": 1
+      },
+      {
+       "nome": "IBERDROLA CLIENTES PORTUGAL",
+       "contratos": 5,
+       "valor": 9397361.120000001,
+       "variantes": 2
+      },
+      {
+       "nome": "Ferreira - Construção",
+       "contratos": 1,
+       "valor": 9276707.62,
+       "variantes": 1
+      },
+      {
+       "nome": "TREE ESTRUTURAS",
+       "contratos": 14,
+       "valor": 8034243.91,
+       "variantes": 1
+      },
+      {
+       "nome": "FIDELIDADE-COMPANHIA DE SEGUROS",
+       "contratos": 17,
+       "valor": 7843704.43,
+       "variantes": 5
+      },
+      {
+       "nome": "Togamil - Construções",
+       "contratos": 2,
+       "valor": 7379490.0,
+       "variantes": 1
+      },
+      {
+       "nome": "DIZconstrução Lda",
+       "contratos": 16,
+       "valor": 7127605.01,
+       "variantes": 1
+      },
+      {
+       "nome": "Matosinhoshabit-MH",
+       "contratos": 11,
+       "valor": 6508488.42,
+       "variantes": 1
+      },
+      {
+       "nome": "Sá Limpa - Facility Services",
+       "contratos": 10,
+       "valor": 6354326.34,
+       "variantes": 2
+      }
+     ]
+    },
+    "graficos": [
+     {
+      "id": "municipios",
+      "titulo": "Municípios do filtro",
+      "subtitulo": "Despesa total 2023",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "Porto",
+        "valor": 317577000.0,
+        "nota": "140,4 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Vila Nova de Gaia",
+        "valor": 208347000.0,
+        "nota": "98,7 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Matosinhos",
+        "valor": 156980000.0,
+        "nota": "99,0 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Gondomar",
+        "valor": 108069000.0,
+        "nota": "50,3 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Maia",
+        "valor": 104214000.0,
+        "nota": "44,0 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Paredes",
+        "valor": 76603000.0,
+        "nota": "21,1 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Vila do Conde",
+        "valor": 75391000.0,
+        "nota": "49,2 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Valongo",
+        "valor": 70465000.0,
+        "nota": "32,9 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Póvoa de Varzim",
+        "valor": 67742000.0,
+        "nota": "26,8 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Penafiel",
+        "valor": 60042000.0,
+        "nota": "45,4 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Felgueiras",
+        "valor": 56218000.0,
+        "nota": "24,9 M€ contratado em 2024"
+       },
+       {
+        "rotulo": "Santo Tirso",
+        "valor": 50631000.0,
+        "nota": "47,5 M€ contratado em 2024"
+       }
+      ]
+     },
+     {
+      "id": "anos_contratos",
+      "titulo": "Contratado por ano",
+      "subtitulo": "Portal BASE · contratos (adjudicante = município) · soma dos municípios do filtro",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "2022",
+        "valor": 355957532.42,
+        "contratos": 5500
+       },
+       {
+        "rotulo": "2023",
+        "valor": 562803534.0600001,
+        "contratos": 6394
+       },
+       {
+        "rotulo": "2024",
+        "valor": 868817791.5800002,
+        "contratos": 7200
+       },
+       {
+        "rotulo": "2025",
+        "valor": 765080154.14,
+        "contratos": 7338
+       },
+       {
+        "rotulo": "2026",
+        "valor": 525027882.7600001,
+        "contratos": 5600
+       }
+      ]
+     }
+    ],
+    "origem": "json-local",
+    "gerado_em": "2026-10-13T20:49:56.115189+00:00",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://www.base.gov.pt/Base4/pt/resultados/"
+     }
+    ]
+   },
+   "capa_id": null,
+   "logo_id": null,
+   "cor": "",
+   "excerpt": "distrito de Porto, contratação de 2024, ordenado por despesa total (decrescente)",
+   "id": "pes_23398b71c83d",
+   "created_at": "2026-10-13T20:49:56.117920+00:00",
+   "updated_at": "2026-10-13T20:49:56.572264+00:00",
+   "published_at": "2026-10-13T20:49:56.572259+00:00"
+  },
+  {
+   "title": "Despesas municipais — ordenado por despesa total (decrescente)",
+   "slug": "despesas-municipais-ordenado-por-despesa-total-decrescente-3",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "filtros": {
+    "q": "",
+    "distrito": "",
+    "nuts": "",
+    "ano_contratos": null,
+    "ordenar": "despesas",
+    "ordem": "desc",
+    "min_despesas": null,
+    "limite": 50
+   },
+   "descricao_filtros": "ordenado por despesa total (decrescente)",
+   "intro": "",
+   "blocks": [],
+   "dados": {
+    "filtros": {
+     "q": "",
+     "distrito": "",
+     "nuts": "",
+     "ano_contratos": null,
+     "ordenar": "despesas",
+     "ordem": "desc",
+     "min_despesas": null,
+     "limite": 50
+    },
+    "descricao": "ordenado por despesa total (decrescente)",
+    "total": 308,
+    "linhas": 50,
+    "itens": [
+     {
+      "nome": "Lisboa",
+      "geocod": "1A01106",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 1016328000.0,
+      "despesas_pessoal": 299993000.0,
+      "contratos_total": 18464,
+      "contratos_valor": 2167649772.7400002,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 848,
+        "valor": 106858747.75
+       },
+       {
+        "ano": "2025",
+        "contratos": 1115,
+        "valor": 155693147.76
+       },
+       {
+        "ano": "2024",
+        "contratos": 1226,
+        "valor": 181212149.76
+       },
+       {
+        "ano": "2023",
+        "contratos": 1412,
+        "valor": 178650381.77
+       },
+       {
+        "ano": "2022",
+        "contratos": 1143,
+        "valor": 150446797.45
+       }
+      ]
+     },
+     {
+      "nome": "Sintra",
+      "geocod": "1A01111",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 396378000.0,
+      "despesas_pessoal": 73302000.0,
+      "contratos_total": 9533,
+      "contratos_valor": 1021994639.2699999,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 678,
+        "valor": 61412899.55
+       },
+       {
+        "ano": "2025",
+        "contratos": 919,
+        "valor": 83932463.28999999
+       },
+       {
+        "ano": "2024",
+        "contratos": 899,
+        "valor": 186037604.19
+       },
+       {
+        "ano": "2023",
+        "contratos": 822,
+        "valor": 32615444.069999997
+       },
+       {
+        "ano": "2022",
+        "contratos": 605,
+        "valor": 52152891.449999996
+       }
+      ]
+     },
+     {
+      "nome": "Porto",
+      "geocod": "11A1312",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 317577000.0,
+      "despesas_pessoal": 104870000.0,
+      "contratos_total": 17759,
+      "contratos_valor": 1147236906.6499999,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 994,
+        "valor": 105197240.69999999
+       },
+       {
+        "ano": "2025",
+        "contratos": 1440,
+        "valor": 113903101.29
+       },
+       {
+        "ano": "2024",
+        "contratos": 1468,
+        "valor": 140360316.3
+       },
+       {
+        "ano": "2023",
+        "contratos": 1213,
+        "valor": 73617108.05
+       },
+       {
+        "ano": "2022",
+        "contratos": 1060,
+        "valor": 58609786.989999995
+       }
+      ]
+     },
+     {
+      "nome": "Cascais",
+      "geocod": "1A01105",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 300334000.0,
+      "despesas_pessoal": 57627000.0,
+      "contratos_total": 5581,
+      "contratos_valor": 1220755276.72,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 415,
+        "valor": 178013296.46
+       },
+       {
+        "ano": "2025",
+        "contratos": 482,
+        "valor": 105176920.0
+       },
+       {
+        "ano": "2024",
+        "contratos": 517,
+        "valor": 297533549.17
+       },
+       {
+        "ano": "2023",
+        "contratos": 514,
+        "valor": 144865343.23
+       },
+       {
+        "ano": "2022",
+        "contratos": 402,
+        "valor": 90668876.23
+       }
+      ]
+     },
+     {
+      "nome": "Oeiras",
+      "geocod": "1A01110",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 234115000.0,
+      "despesas_pessoal": 63426000.0,
+      "contratos_total": 9533,
+      "contratos_valor": 1054244063.6,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 693,
+        "valor": 88283178.39
+       },
+       {
+        "ano": "2025",
+        "contratos": 880,
+        "valor": 128582642.02
+       },
+       {
+        "ano": "2024",
+        "contratos": 762,
+        "valor": 159549510.0
+       },
+       {
+        "ano": "2023",
+        "contratos": 766,
+        "valor": 85208386.25
+       },
+       {
+        "ano": "2022",
+        "contratos": 680,
+        "valor": 78851732.65
+       }
+      ]
+     },
+     {
+      "nome": "Vila Nova de Gaia",
+      "geocod": "11A1317",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 208347000.0,
+      "despesas_pessoal": 72947000.0,
+      "contratos_total": 4627,
+      "contratos_valor": 605437920.92,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 322,
+        "valor": 33074487.08
+       },
+       {
+        "ano": "2025",
+        "contratos": 476,
+        "valor": 51004629.35
+       },
+       {
+        "ano": "2024",
+        "contratos": 375,
+        "valor": 98735502.72999999
+       },
+       {
+        "ano": "2023",
+        "contratos": 304,
+        "valor": 49823464.61
+       },
+       {
+        "ano": "2022",
+        "contratos": 318,
+        "valor": 37261099.08
+       }
+      ]
+     },
+     {
+      "nome": "Loures",
+      "geocod": "1A01107",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 198956000.0,
+      "despesas_pessoal": 62936000.0,
+      "contratos_total": 5794,
+      "contratos_valor": 640880025.81,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 411,
+        "valor": 74391228.99
+       },
+       {
+        "ano": "2025",
+        "contratos": 532,
+        "valor": 53209008.75
+       },
+       {
+        "ano": "2024",
+        "contratos": 532,
+        "valor": 114406955.92
+       },
+       {
+        "ano": "2023",
+        "contratos": 444,
+        "valor": 100538199.17
+       },
+       {
+        "ano": "2022",
+        "contratos": 465,
+        "valor": 34616439.61
+       }
+      ]
+     },
+     {
+      "nome": "Loulé",
+      "geocod": "1500808",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 169231000.0,
+      "despesas_pessoal": 45271000.0,
+      "contratos_total": 7365,
+      "contratos_valor": 508023178.90000004,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 427,
+        "valor": 38823863.07
+       },
+       {
+        "ano": "2025",
+        "contratos": 601,
+        "valor": 41197078.17
+       },
+       {
+        "ano": "2024",
+        "contratos": 564,
+        "valor": 51287143.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 593,
+        "valor": 53949546.86
+       },
+       {
+        "ano": "2022",
+        "contratos": 603,
+        "valor": 46023016.77
+       }
+      ]
+     },
+     {
+      "nome": "Matosinhos",
+      "geocod": "11A1308",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 156980000.0,
+      "despesas_pessoal": 46153000.0,
+      "contratos_total": 6159,
+      "contratos_valor": 671325398.34,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 512,
+        "valor": 67160326.68
+       },
+       {
+        "ano": "2025",
+        "contratos": 591,
+        "valor": 95610266.24000001
+       },
+       {
+        "ano": "2024",
+        "contratos": 695,
+        "valor": 99039937.7
+       },
+       {
+        "ano": "2023",
+        "contratos": 529,
+        "valor": 42301899.239999995
+       },
+       {
+        "ano": "2022",
+        "contratos": 446,
+        "valor": 35938846.28
+       }
+      ]
+     },
+     {
+      "nome": "Seixal",
+      "geocod": "1B01510",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 154008000.0,
+      "despesas_pessoal": 60196000.0,
+      "contratos_total": 5239,
+      "contratos_valor": 378300351.16999996,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 279,
+        "valor": 40565765.0
+       },
+       {
+        "ano": "2025",
+        "contratos": 572,
+        "valor": 63090771.589999996
+       },
+       {
+        "ano": "2024",
+        "contratos": 583,
+        "valor": 41031654.87
+       },
+       {
+        "ano": "2023",
+        "contratos": 532,
+        "valor": 38763324.04
+       },
+       {
+        "ano": "2022",
+        "contratos": 380,
+        "valor": 21097980.43
+       }
+      ]
+     },
+     {
+      "nome": "Braga",
+      "geocod": "1120303",
+      "distrito": "Braga",
+      "ano_despesas": 2023,
+      "despesas_total": 152775000.0,
+      "despesas_pessoal": 44461000.0,
+      "contratos_total": 5375,
+      "contratos_valor": 429212807.33000004,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 425,
+        "valor": 61132656.86
+       },
+       {
+        "ano": "2025",
+        "contratos": 556,
+        "valor": 45650202.669999994
+       },
+       {
+        "ano": "2024",
+        "contratos": 566,
+        "valor": 70534559.39
+       },
+       {
+        "ano": "2023",
+        "contratos": 483,
+        "valor": 44621105.91
+       },
+       {
+        "ano": "2022",
+        "contratos": 396,
+        "valor": 27655052.63
+       }
+      ]
+     },
+     {
+      "nome": "Almada",
+      "geocod": "1B01503",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 152287000.0,
+      "despesas_pessoal": 58282000.0,
+      "contratos_total": 5411,
+      "contratos_valor": 415008328.87,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 260,
+        "valor": 26115300.680000003
+       },
+       {
+        "ano": "2025",
+        "contratos": 348,
+        "valor": 71660156.91
+       },
+       {
+        "ano": "2024",
+        "contratos": 448,
+        "valor": 57251355.26
+       },
+       {
+        "ano": "2023",
+        "contratos": 482,
+        "valor": 31136537.16
+       },
+       {
+        "ano": "2022",
+        "contratos": 402,
+        "valor": 36857473.589999996
+       }
+      ]
+     },
+     {
+      "nome": "Coimbra",
+      "geocod": "1920603",
+      "distrito": "Coimbra",
+      "ano_despesas": 2023,
+      "despesas_total": 141680000.0,
+      "despesas_pessoal": 46205000.0,
+      "contratos_total": 4046,
+      "contratos_valor": 505496911.86,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 262,
+        "valor": 48497340.04
+       },
+       {
+        "ano": "2025",
+        "contratos": 371,
+        "valor": 38060830.46
+       },
+       {
+        "ano": "2024",
+        "contratos": 351,
+        "valor": 78224013.72
+       },
+       {
+        "ano": "2023",
+        "contratos": 333,
+        "valor": 53932200.63
+       },
+       {
+        "ano": "2022",
+        "contratos": 312,
+        "valor": 30016447.83
+       }
+      ]
+     },
+     {
+      "nome": "Funchal",
+      "geocod": "3003103",
+      "distrito": "Região Autónoma da Madeira",
+      "ano_despesas": 2023,
+      "despesas_total": 124797000.0,
+      "despesas_pessoal": 42743000.0,
+      "contratos_total": 2324,
+      "contratos_valor": 291984947.54,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 131,
+        "valor": 14186644.19
+       },
+       {
+        "ano": "2025",
+        "contratos": 220,
+        "valor": 42397850.86
+       },
+       {
+        "ano": "2024",
+        "contratos": 192,
+        "valor": 23339405.89
+       },
+       {
+        "ano": "2023",
+        "contratos": 168,
+        "valor": 25688966.57
+       },
+       {
+        "ano": "2022",
+        "contratos": 161,
+        "valor": 36524306.77
+       }
+      ]
+     },
+     {
+      "nome": "Setúbal",
+      "geocod": "1B01512",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 117449000.0,
+      "despesas_pessoal": 42806000.0,
+      "contratos_total": 5953,
+      "contratos_valor": 408201214.42,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 408,
+        "valor": 22698753.74
+       },
+       {
+        "ano": "2025",
+        "contratos": 425,
+        "valor": 55189762.12
+       },
+       {
+        "ano": "2024",
+        "contratos": 289,
+        "valor": 36280193.74
+       },
+       {
+        "ano": "2023",
+        "contratos": 383,
+        "valor": 89407377.89
+       },
+       {
+        "ano": "2022",
+        "contratos": 421,
+        "valor": 28869719.240000002
+       }
+      ]
+     },
+     {
+      "nome": "Vila Nova de Famalicão",
+      "geocod": "1190312",
+      "distrito": "Braga",
+      "ano_despesas": 2023,
+      "despesas_total": 117368000.0,
+      "despesas_pessoal": 36659000.0,
+      "contratos_total": 6660,
+      "contratos_valor": 545905636.83,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 383,
+        "valor": 26433657.37
+       },
+       {
+        "ano": "2025",
+        "contratos": 619,
+        "valor": 87900731.44
+       },
+       {
+        "ano": "2024",
+        "contratos": 630,
+        "valor": 77516483.91
+       },
+       {
+        "ano": "2023",
+        "contratos": 585,
+        "valor": 81978222.7
+       },
+       {
+        "ano": "2022",
+        "contratos": 381,
+        "valor": 25827423.04
+       }
+      ]
+     },
+     {
+      "nome": "Guimarães",
+      "geocod": "1190308",
+      "distrito": "Braga",
+      "ano_despesas": 2023,
+      "despesas_total": 116396000.0,
+      "despesas_pessoal": 33876000.0,
+      "contratos_total": 3567,
+      "contratos_valor": 500238422.85999995,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 359,
+        "valor": 40782198.46
+       },
+       {
+        "ano": "2025",
+        "contratos": 429,
+        "valor": 84157938.45
+       },
+       {
+        "ano": "2024",
+        "contratos": 395,
+        "valor": 52752086.510000005
+       },
+       {
+        "ano": "2023",
+        "contratos": 277,
+        "valor": 42629647.66
+       },
+       {
+        "ano": "2022",
+        "contratos": 245,
+        "valor": 30911657.5
+       }
+      ]
+     },
+     {
+      "nome": "Amadora",
+      "geocod": "1A01115",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 112697000.0,
+      "despesas_pessoal": 37397000.0,
+      "contratos_total": 3274,
+      "contratos_valor": 387105453.81999993,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 309,
+        "valor": 30484365.049999997
+       },
+       {
+        "ano": "2025",
+        "contratos": 347,
+        "valor": 56137553.01
+       },
+       {
+        "ano": "2024",
+        "contratos": 325,
+        "valor": 46954432.34
+       },
+       {
+        "ano": "2023",
+        "contratos": 302,
+        "valor": 33633287.42
+       },
+       {
+        "ano": "2022",
+        "contratos": 279,
+        "valor": 48514378.010000005
+       }
+      ]
+     },
+     {
+      "nome": "Leiria",
+      "geocod": "1931009",
+      "distrito": "Leiria",
+      "ano_despesas": 2023,
+      "despesas_total": 110736000.0,
+      "despesas_pessoal": 23856000.0,
+      "contratos_total": 5565,
+      "contratos_valor": 606656642.02,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 607,
+        "valor": 64151987.120000005
+       },
+       {
+        "ano": "2025",
+        "contratos": 629,
+        "valor": 86150794.19
+       },
+       {
+        "ano": "2024",
+        "contratos": 528,
+        "valor": 72874389.29
+       },
+       {
+        "ano": "2023",
+        "contratos": 461,
+        "valor": 57710291.19
+       },
+       {
+        "ano": "2022",
+        "contratos": 454,
+        "valor": 41100979.86
+       }
+      ]
+     },
+     {
+      "nome": "Odivelas",
+      "geocod": "1A01116",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 108125000.0,
+      "despesas_pessoal": 35589000.0,
+      "contratos_total": 4657,
+      "contratos_valor": 406539713.67,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 290,
+        "valor": 32904638.24
+       },
+       {
+        "ano": "2025",
+        "contratos": 501,
+        "valor": 84475221.88
+       },
+       {
+        "ano": "2024",
+        "contratos": 454,
+        "valor": 60214474.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 412,
+        "valor": 47139056.16
+       },
+       {
+        "ano": "2022",
+        "contratos": 391,
+        "valor": 21519276.54
+       }
+      ]
+     },
+     {
+      "nome": "Gondomar",
+      "geocod": "11A1304",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 108069000.0,
+      "despesas_pessoal": 33201000.0,
+      "contratos_total": 3690,
+      "contratos_valor": 440381908.42,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 329,
+        "valor": 42878969.75
+       },
+       {
+        "ano": "2025",
+        "contratos": 342,
+        "valor": 45214412.67
+       },
+       {
+        "ano": "2024",
+        "contratos": 311,
+        "valor": 50315919.35
+       },
+       {
+        "ano": "2023",
+        "contratos": 332,
+        "valor": 39718691.71
+       },
+       {
+        "ano": "2022",
+        "contratos": 281,
+        "valor": 31585962.259999998
+       }
+      ]
+     },
+     {
+      "nome": "Barcelos",
+      "geocod": "1120302",
+      "distrito": "Braga",
+      "ano_despesas": 2023,
+      "despesas_total": 106376000.0,
+      "despesas_pessoal": 29005000.0,
+      "contratos_total": 3298,
+      "contratos_valor": 321649244.56,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 312,
+        "valor": 43804641.63
+       },
+       {
+        "ano": "2025",
+        "contratos": 323,
+        "valor": 54828081.89
+       },
+       {
+        "ano": "2024",
+        "contratos": 299,
+        "valor": 26219537.990000002
+       },
+       {
+        "ano": "2023",
+        "contratos": 334,
+        "valor": 37470623.38
+       },
+       {
+        "ano": "2022",
+        "contratos": 243,
+        "valor": 24247114.06
+       }
+      ]
+     },
+     {
+      "nome": "Vila Franca de Xira",
+      "geocod": "1A01114",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 104772000.0,
+      "despesas_pessoal": 35819000.0,
+      "contratos_total": 5229,
+      "contratos_valor": 423205150.25999993,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 370,
+        "valor": 42710181.800000004
+       },
+       {
+        "ano": "2025",
+        "contratos": 485,
+        "valor": 51887626.16
+       },
+       {
+        "ano": "2024",
+        "contratos": 435,
+        "valor": 48217080.21
+       },
+       {
+        "ano": "2023",
+        "contratos": 386,
+        "valor": 38226056.870000005
+       },
+       {
+        "ano": "2022",
+        "contratos": 344,
+        "valor": 21607731.16
+       }
+      ]
+     },
+     {
+      "nome": "Maia",
+      "geocod": "11A1306",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 104214000.0,
+      "despesas_pessoal": 32510000.0,
+      "contratos_total": 5263,
+      "contratos_valor": 484904869.71,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 291,
+        "valor": 58736015.8
+       },
+       {
+        "ano": "2025",
+        "contratos": 425,
+        "valor": 75357672.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 426,
+        "valor": 43975204.96
+       },
+       {
+        "ano": "2023",
+        "contratos": 410,
+        "valor": 40491750.3
+       },
+       {
+        "ano": "2022",
+        "contratos": 368,
+        "valor": 26370569.900000002
+       }
+      ]
+     },
+     {
+      "nome": "Mafra",
+      "geocod": "1A01109",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 103497000.0,
+      "despesas_pessoal": 25513000.0,
+      "contratos_total": 3795,
+      "contratos_valor": 383568180.99000007,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 368,
+        "valor": 44024519.14
+       },
+       {
+        "ano": "2025",
+        "contratos": 435,
+        "valor": 68174797.8
+       },
+       {
+        "ano": "2024",
+        "contratos": 450,
+        "valor": 61416041.59
+       },
+       {
+        "ano": "2023",
+        "contratos": 384,
+        "valor": 37008400.22
+       },
+       {
+        "ano": "2022",
+        "contratos": 294,
+        "valor": 25183880.5
+       }
+      ]
+     },
+     {
+      "nome": "Aveiro",
+      "geocod": "1910105",
+      "distrito": "Aveiro",
+      "ano_despesas": 2023,
+      "despesas_total": 102231000.0,
+      "despesas_pessoal": 21765000.0,
+      "contratos_total": 4175,
+      "contratos_valor": 392617864.77,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 297,
+        "valor": 33802149.38
+       },
+       {
+        "ano": "2025",
+        "contratos": 431,
+        "valor": 71406893.86
+       },
+       {
+        "ano": "2024",
+        "contratos": 432,
+        "valor": 27737245.31
+       },
+       {
+        "ano": "2023",
+        "contratos": 385,
+        "valor": 32938370.55
+       },
+       {
+        "ano": "2022",
+        "contratos": 390,
+        "valor": 22775887.14
+       }
+      ]
+     },
+     {
+      "nome": "Viseu",
+      "geocod": "1941823",
+      "distrito": "Viseu",
+      "ano_despesas": 2023,
+      "despesas_total": 94825000.0,
+      "despesas_pessoal": 25920000.0,
+      "contratos_total": 4184,
+      "contratos_valor": 299021335.4,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 408,
+        "valor": 42638215.36
+       },
+       {
+        "ano": "2025",
+        "contratos": 482,
+        "valor": 37260857.11
+       },
+       {
+        "ano": "2024",
+        "contratos": 355,
+        "valor": 29347296.62
+       },
+       {
+        "ano": "2023",
+        "contratos": 254,
+        "valor": 26192644.58
+       },
+       {
+        "ano": "2022",
+        "contratos": 229,
+        "valor": 15421543.41
+       }
+      ]
+     },
+     {
+      "nome": "Santa Maria da Feira",
+      "geocod": "11A0109",
+      "distrito": "Aveiro",
+      "ano_despesas": 2023,
+      "despesas_total": 92216000.0,
+      "despesas_pessoal": 26664000.0,
+      "contratos_total": 2957,
+      "contratos_valor": 355222783.86,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 217,
+        "valor": 30940116.54
+       },
+       {
+        "ano": "2025",
+        "contratos": 249,
+        "valor": 54405087.15
+       },
+       {
+        "ano": "2024",
+        "contratos": 285,
+        "valor": 40421501.94
+       },
+       {
+        "ano": "2023",
+        "contratos": 234,
+        "valor": 22941346.52
+       },
+       {
+        "ano": "2022",
+        "contratos": 236,
+        "valor": 30721994.6
+       }
+      ]
+     },
+     {
+      "nome": "Albufeira",
+      "geocod": "1500801",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 91943000.0,
+      "despesas_pessoal": 28354000.0,
+      "contratos_total": 3216,
+      "contratos_valor": 334763559.63,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 168,
+        "valor": 24091329.77
+       },
+       {
+        "ano": "2025",
+        "contratos": 353,
+        "valor": 31953662.48
+       },
+       {
+        "ano": "2024",
+        "contratos": 374,
+        "valor": 37515895.55
+       },
+       {
+        "ano": "2023",
+        "contratos": 349,
+        "valor": 37493376.47
+       },
+       {
+        "ano": "2022",
+        "contratos": 168,
+        "valor": 25060373.14
+       }
+      ]
+     },
+     {
+      "nome": "Viana do Castelo",
+      "geocod": "1111609",
+      "distrito": "Viana do Castelo",
+      "ano_despesas": 2023,
+      "despesas_total": 79408000.0,
+      "despesas_pessoal": 28385000.0,
+      "contratos_total": 3837,
+      "contratos_valor": 388261561.17,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 283,
+        "valor": 27109076.1
+       },
+       {
+        "ano": "2025",
+        "contratos": 275,
+        "valor": 54656756.83
+       },
+       {
+        "ano": "2024",
+        "contratos": 279,
+        "valor": 74786525.68
+       },
+       {
+        "ano": "2023",
+        "contratos": 289,
+        "valor": 31350603.38
+       },
+       {
+        "ano": "2022",
+        "contratos": 219,
+        "valor": 14757729.47
+       }
+      ]
+     },
+     {
+      "nome": "Paredes",
+      "geocod": "11A1310",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 76603000.0,
+      "despesas_pessoal": 21328000.0,
+      "contratos_total": 2869,
+      "contratos_valor": 263082342.64,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 249,
+        "valor": 18611371.89
+       },
+       {
+        "ano": "2025",
+        "contratos": 308,
+        "valor": 32806047.97
+       },
+       {
+        "ano": "2024",
+        "contratos": 220,
+        "valor": 21131696.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 239,
+        "valor": 19598429.169999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 189,
+        "valor": 18307606.0
+       }
+      ]
+     },
+     {
+      "nome": "Lagos",
+      "geocod": "1500807",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 76587000.0,
+      "despesas_pessoal": 20835000.0,
+      "contratos_total": 4470,
+      "contratos_valor": 283554801.09,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 280,
+        "valor": 31411009.93
+       },
+       {
+        "ano": "2025",
+        "contratos": 378,
+        "valor": 71330683.0
+       },
+       {
+        "ano": "2024",
+        "contratos": 333,
+        "valor": 22792497.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 267,
+        "valor": 20214356.13
+       },
+       {
+        "ano": "2022",
+        "contratos": 239,
+        "valor": 24940802.529999997
+       }
+      ]
+     },
+     {
+      "nome": "Vila do Conde",
+      "geocod": "11A1316",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 75391000.0,
+      "despesas_pessoal": 23830000.0,
+      "contratos_total": 5183,
+      "contratos_valor": 312682660.05,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 409,
+        "valor": 28529581.22
+       },
+       {
+        "ano": "2025",
+        "contratos": 612,
+        "valor": 38198894.64
+       },
+       {
+        "ano": "2024",
+        "contratos": 631,
+        "valor": 49165576.24
+       },
+       {
+        "ano": "2023",
+        "contratos": 530,
+        "valor": 33059495.76
+       },
+       {
+        "ano": "2022",
+        "contratos": 392,
+        "valor": 18707965.68
+       }
+      ]
+     },
+     {
+      "nome": "Palmela",
+      "geocod": "1B01508",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 74605000.0,
+      "despesas_pessoal": 27764000.0,
+      "contratos_total": 2535,
+      "contratos_valor": 178268951.22,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 119,
+        "valor": 5801304.29
+       },
+       {
+        "ano": "2025",
+        "contratos": 211,
+        "valor": 29233612.900000002
+       },
+       {
+        "ano": "2024",
+        "contratos": 237,
+        "valor": 12293632.64
+       },
+       {
+        "ano": "2023",
+        "contratos": 252,
+        "valor": 14558516.810000002
+       },
+       {
+        "ano": "2022",
+        "contratos": 222,
+        "valor": 19049909.319999997
+       }
+      ]
+     },
+     {
+      "nome": "Sesimbra",
+      "geocod": "1B01511",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 71656000.0,
+      "despesas_pessoal": 30359000.0,
+      "contratos_total": 3102,
+      "contratos_valor": 177617402.03000003,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 257,
+        "valor": 18656127.41
+       },
+       {
+        "ano": "2025",
+        "contratos": 272,
+        "valor": 20817531.88
+       },
+       {
+        "ano": "2024",
+        "contratos": 327,
+        "valor": 20672574.189999998
+       },
+       {
+        "ano": "2023",
+        "contratos": 358,
+        "valor": 18005884.84
+       },
+       {
+        "ano": "2022",
+        "contratos": 258,
+        "valor": 11030284.579999998
+       }
+      ]
+     },
+     {
+      "nome": "Portimão",
+      "geocod": "1500811",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 70750000.0,
+      "despesas_pessoal": 21108000.0,
+      "contratos_total": 3678,
+      "contratos_valor": 236800373.79,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 326,
+        "valor": 64657550.18
+       },
+       {
+        "ano": "2025",
+        "contratos": 378,
+        "valor": 17311110.43
+       },
+       {
+        "ano": "2024",
+        "contratos": 401,
+        "valor": 24368491.32
+       },
+       {
+        "ano": "2023",
+        "contratos": 356,
+        "valor": 18094586.9
+       },
+       {
+        "ano": "2022",
+        "contratos": 340,
+        "valor": 25590227.96
+       }
+      ]
+     },
+     {
+      "nome": "Valongo",
+      "geocod": "11A1315",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 70465000.0,
+      "despesas_pessoal": 22860000.0,
+      "contratos_total": 4837,
+      "contratos_valor": 313228015.18,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 384,
+        "valor": 21430735.240000002
+       },
+       {
+        "ano": "2025",
+        "contratos": 569,
+        "valor": 33615009.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 582,
+        "valor": 32879889.94
+       },
+       {
+        "ano": "2023",
+        "contratos": 591,
+        "valor": 52712976.2
+       },
+       {
+        "ano": "2022",
+        "contratos": 572,
+        "valor": 16158967.88
+       }
+      ]
+     },
+     {
+      "nome": "Torres Vedras",
+      "geocod": "1D11113",
+      "distrito": "Lisboa",
+      "ano_despesas": 2023,
+      "despesas_total": 68503000.0,
+      "despesas_pessoal": 24385000.0,
+      "contratos_total": 5720,
+      "contratos_valor": 299817895.25,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 379,
+        "valor": 29196904.419999998
+       },
+       {
+        "ano": "2025",
+        "contratos": 410,
+        "valor": 46821869.37
+       },
+       {
+        "ano": "2024",
+        "contratos": 423,
+        "valor": 25998106.319999997
+       },
+       {
+        "ano": "2023",
+        "contratos": 398,
+        "valor": 26961583.709999997
+       },
+       {
+        "ano": "2022",
+        "contratos": 390,
+        "valor": 18194246.28
+       }
+      ]
+     },
+     {
+      "nome": "Barreiro",
+      "geocod": "1B01504",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 67911000.0,
+      "despesas_pessoal": 27690000.0,
+      "contratos_total": 2649,
+      "contratos_valor": 243427574.1,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 179,
+        "valor": 32719782.95
+       },
+       {
+        "ano": "2025",
+        "contratos": 226,
+        "valor": 40601413.23
+       },
+       {
+        "ano": "2024",
+        "contratos": 233,
+        "valor": 27579059.26
+       },
+       {
+        "ano": "2023",
+        "contratos": 213,
+        "valor": 23080852.89
+       },
+       {
+        "ano": "2022",
+        "contratos": 189,
+        "valor": 13891514.139999999
+       }
+      ]
+     },
+     {
+      "nome": "Póvoa de Varzim",
+      "geocod": "11A1313",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 67742000.0,
+      "despesas_pessoal": 21093000.0,
+      "contratos_total": 3397,
+      "contratos_valor": 269748521.63,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 300,
+        "valor": 22307979.5
+       },
+       {
+        "ano": "2025",
+        "contratos": 302,
+        "valor": 32403128.15
+       },
+       {
+        "ano": "2024",
+        "contratos": 317,
+        "valor": 26803605.55
+       },
+       {
+        "ano": "2023",
+        "contratos": 348,
+        "valor": 24568680.59
+       },
+       {
+        "ano": "2022",
+        "contratos": 345,
+        "valor": 15185018.370000001
+       }
+      ]
+     },
+     {
+      "nome": "Évora",
+      "geocod": "1C40705",
+      "distrito": "Évora",
+      "ano_despesas": 2023,
+      "despesas_total": 62098000.0,
+      "despesas_pessoal": 27393000.0,
+      "contratos_total": 2119,
+      "contratos_valor": 82999064.89,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 92,
+        "valor": 9951445.1
+       },
+       {
+        "ano": "2025",
+        "contratos": 156,
+        "valor": 7281225.53
+       },
+       {
+        "ano": "2024",
+        "contratos": 246,
+        "valor": 9347271.64
+       },
+       {
+        "ano": "2023",
+        "contratos": 261,
+        "valor": 9597830.5
+       },
+       {
+        "ano": "2022",
+        "contratos": 235,
+        "valor": 8310322.71
+       }
+      ]
+     },
+     {
+      "nome": "Figueira da Foz",
+      "geocod": "1920605",
+      "distrito": "Coimbra",
+      "ano_despesas": 2023,
+      "despesas_total": 60101000.0,
+      "despesas_pessoal": 18716000.0,
+      "contratos_total": 4390,
+      "contratos_valor": 265382203.24,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 293,
+        "valor": 22965308.46
+       },
+       {
+        "ano": "2025",
+        "contratos": 491,
+        "valor": 40048221.71
+       },
+       {
+        "ano": "2024",
+        "contratos": 577,
+        "valor": 39209663.4
+       },
+       {
+        "ano": "2023",
+        "contratos": 483,
+        "valor": 28278054.169999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 406,
+        "valor": 23647526.98
+       }
+      ]
+     },
+     {
+      "nome": "Penafiel",
+      "geocod": "11C1311",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 60042000.0,
+      "despesas_pessoal": 18804000.0,
+      "contratos_total": 3617,
+      "contratos_valor": 263824666.56,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 308,
+        "valor": 19898090.66
+       },
+       {
+        "ano": "2025",
+        "contratos": 404,
+        "valor": 30765625.23
+       },
+       {
+        "ano": "2024",
+        "contratos": 342,
+        "valor": 45409930.19
+       },
+       {
+        "ano": "2023",
+        "contratos": 257,
+        "valor": 17019960.99
+       },
+       {
+        "ano": "2022",
+        "contratos": 241,
+        "valor": 13647963.49
+       }
+      ]
+     },
+     {
+      "nome": "Faro",
+      "geocod": "1500805",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 59812000.0,
+      "despesas_pessoal": 22456000.0,
+      "contratos_total": 2513,
+      "contratos_valor": 153467017.46,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 181,
+        "valor": 11387274.47
+       },
+       {
+        "ano": "2025",
+        "contratos": 266,
+        "valor": 12342767.91
+       },
+       {
+        "ano": "2024",
+        "contratos": 276,
+        "valor": 13568502.84
+       },
+       {
+        "ano": "2023",
+        "contratos": 241,
+        "valor": 26916067.38
+       },
+       {
+        "ano": "2022",
+        "contratos": 136,
+        "valor": 10365007.76
+       }
+      ]
+     },
+     {
+      "nome": "Santarém",
+      "geocod": "1D31416",
+      "distrito": "Santarém",
+      "ano_despesas": 2023,
+      "despesas_total": 58833000.0,
+      "despesas_pessoal": 19805000.0,
+      "contratos_total": 1787,
+      "contratos_valor": 181980819.53999996,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 147,
+        "valor": 26473992.509999998
+       },
+       {
+        "ano": "2025",
+        "contratos": 192,
+        "valor": 15658892.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 187,
+        "valor": 23452924.36
+       },
+       {
+        "ano": "2023",
+        "contratos": 136,
+        "valor": 13793206.86
+       },
+       {
+        "ano": "2022",
+        "contratos": 131,
+        "valor": 9014426.16
+       }
+      ]
+     },
+     {
+      "nome": "Guarda",
+      "geocod": "1960907",
+      "distrito": "Guarda",
+      "ano_despesas": 2023,
+      "despesas_total": 57292000.0,
+      "despesas_pessoal": 16154000.0,
+      "contratos_total": 2893,
+      "contratos_valor": 240368685.11,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 225,
+        "valor": 36065172.67
+       },
+       {
+        "ano": "2025",
+        "contratos": 289,
+        "valor": 36762832.69
+       },
+       {
+        "ano": "2024",
+        "contratos": 333,
+        "valor": 31213074.46
+       },
+       {
+        "ano": "2023",
+        "contratos": 341,
+        "valor": 19701727.79
+       },
+       {
+        "ano": "2022",
+        "contratos": 260,
+        "valor": 20654469.31
+       }
+      ]
+     },
+     {
+      "nome": "Felgueiras",
+      "geocod": "11C1303",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 56218000.0,
+      "despesas_pessoal": 15609000.0,
+      "contratos_total": 2796,
+      "contratos_valor": 205738439.22,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 238,
+        "valor": 10099550.48
+       },
+       {
+        "ano": "2025",
+        "contratos": 351,
+        "valor": 39244690.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 289,
+        "valor": 24868284.71
+       },
+       {
+        "ano": "2023",
+        "contratos": 212,
+        "valor": 19626062.740000002
+       },
+       {
+        "ano": "2022",
+        "contratos": 171,
+        "valor": 13416471.309999999
+       }
+      ]
+     },
+     {
+      "nome": "Lagoa",
+      "geocod": "1500806",
+      "distrito": "Faro",
+      "ano_despesas": 2023,
+      "despesas_total": 55371000.0,
+      "despesas_pessoal": 12790000.0,
+      "contratos_total": 6339,
+      "contratos_valor": 314723491.1,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 521,
+        "valor": 35810461.44
+       },
+       {
+        "ano": "2025",
+        "contratos": 558,
+        "valor": 54000064.56
+       },
+       {
+        "ano": "2024",
+        "contratos": 580,
+        "valor": 39812122.85
+       },
+       {
+        "ano": "2023",
+        "contratos": 489,
+        "valor": 31788102.409999996
+       },
+       {
+        "ano": "2022",
+        "contratos": 451,
+        "valor": 24022229.939999998
+       }
+      ]
+     },
+     {
+      "nome": "Moita",
+      "geocod": "1B01506",
+      "distrito": "Setúbal",
+      "ano_despesas": 2023,
+      "despesas_total": 54835000.0,
+      "despesas_pessoal": 23047000.0,
+      "contratos_total": 2838,
+      "contratos_valor": 142239983.82,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 237,
+        "valor": 10740804.2
+       },
+       {
+        "ano": "2025",
+        "contratos": 217,
+        "valor": 15070399.42
+       },
+       {
+        "ano": "2024",
+        "contratos": 270,
+        "valor": 22371613.46
+       },
+       {
+        "ano": "2023",
+        "contratos": 263,
+        "valor": 15268512.56
+       },
+       {
+        "ano": "2022",
+        "contratos": 203,
+        "valor": 8515613.14
+       }
+      ]
+     },
+     {
+      "nome": "Pombal",
+      "geocod": "1931015",
+      "distrito": "Leiria",
+      "ano_despesas": 2023,
+      "despesas_total": 53137000.0,
+      "despesas_pessoal": 14329000.0,
+      "contratos_total": 3112,
+      "contratos_valor": 297388055.4,
+      "contratos_ano_total": null,
+      "contratos_ano_valor": null,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 217,
+        "valor": 16250809.370000001
+       },
+       {
+        "ano": "2025",
+        "contratos": 269,
+        "valor": 30029313.27
+       },
+       {
+        "ano": "2024",
+        "contratos": 258,
+        "valor": 26805583.85
+       },
+       {
+        "ano": "2023",
+        "contratos": 242,
+        "valor": 15708687.08
+       },
+       {
+        "ano": "2022",
+        "contratos": 171,
+        "valor": 13642308.17
+       }
+      ]
+     }
+    ],
+    "ano_contratos": null,
+    "ano_despesas": 2023,
+    "despesas_somadas": 11933661000.0,
+    "contratos_somados": 41622562286.11,
+    "contratos_ano_somados": 0.0,
+    "contratos_ano_total_somados": 0,
+    "distritos": [
+     {
+      "key": "Viseu",
+      "count": 24
+     },
+     {
+      "key": "Santarém",
+      "count": 21
+     },
+     {
+      "key": "Aveiro",
+      "count": 19
+     },
+     {
+      "key": "Porto",
+      "count": 18
+     },
+     {
+      "key": "Coimbra",
+      "count": 17
+     },
+     {
+      "key": "Leiria",
+      "count": 16
+     },
+     {
+      "key": "Lisboa",
+      "count": 16
+     },
+     {
+      "key": "Região Autónoma dos Açores",
+      "count": 16
+     },
+     {
+      "key": "Faro",
+      "count": 15
+     },
+     {
+      "key": "Portalegre",
+      "count": 15
+     },
+     {
+      "key": "Beja",
+      "count": 14
+     },
+     {
+      "key": "Braga",
+      "count": 14
+     },
+     {
+      "key": "Évora",
+      "count": 14
+     },
+     {
+      "key": "Guarda",
+      "count": 13
+     },
+     {
+      "key": "Setúbal",
+      "count": 13
+     },
+     {
+      "key": "Vila Real",
+      "count": 13
+     },
+     {
+      "key": "Braganca",
+      "count": 11
+     },
+     {
+      "key": "Castelo Branco",
+      "count": 11
+     },
+     {
+      "key": "Região Autónoma da Madeira",
+      "count": 11
+     },
+     {
+      "key": "Viana do Castelo",
+      "count": 10
+     }
+    ],
+    "adjudicatarios": {
+     "ano": null,
+     "total": 15244,
+     "valor": 5494706088.639976,
+     "municipios": 200,
+     "itens": [
+      {
+       "nome": "Alexandre Barbosa Borges",
+       "contratos": 295,
+       "valor": 303027419.03,
+       "variantes": 2
+      },
+      {
+       "nome": "Alberto Couto Alves",
+       "contratos": 106,
+       "valor": 138552795.57,
+       "variantes": 2
+      },
+      {
+       "nome": "Anteros Empreitadas - Sociedade de Construções e Obras Públicas",
+       "contratos": 193,
+       "valor": 101191533.13999999,
+       "variantes": 6
+      },
+      {
+       "nome": "ATLÂNTINÍVEL - CONSTRUÇÃO CIVIL",
+       "contratos": 21,
+       "valor": 72107582.72,
+       "variantes": 6
+      },
+      {
+       "nome": "António Saraiva &amp; Filhos",
+       "contratos": 144,
+       "valor": 69946214.59,
+       "variantes": 4
+      },
+      {
+       "nome": "BrightCity",
+       "contratos": 15,
+       "valor": 67781609.36,
+       "variantes": 2
+      },
+      {
+       "nome": "AMENER - EFICIÊNCIA ENERGÉTICA",
+       "contratos": 22,
+       "valor": 58522206.410000004,
+       "variantes": 5
+      },
+      {
+       "nome": "AECI",
+       "contratos": 105,
+       "valor": 57738608.12,
+       "variantes": 1
+      },
+      {
+       "nome": "CIP Construção",
+       "contratos": 60,
+       "valor": 50800180.38,
+       "variantes": 4
+      },
+      {
+       "nome": "Baltor - Engenharia e Construção",
+       "contratos": 26,
+       "valor": 49406801.410000004,
+       "variantes": 3
+      },
+      {
+       "nome": "Amener - Eficiência Energética S.A.",
+       "contratos": 4,
+       "valor": 47002098.11,
+       "variantes": 2
+      },
+      {
+       "nome": "CLARANET II SOLUTIONS",
+       "contratos": 363,
+       "valor": 43244712.87,
+       "variantes": 2
+      },
+      {
+       "nome": "BEFEBAL II",
+       "contratos": 29,
+       "valor": 43152411.6,
+       "variantes": 2
+      },
+      {
+       "nome": "Aquino Construções",
+       "contratos": 48,
+       "valor": 39526643.01,
+       "variantes": 3
+      },
+      {
+       "nome": "ABB Alexandre Barbosa Borges",
+       "contratos": 34,
+       "valor": 37978372.65,
+       "variantes": 7
+      },
+      {
+       "nome": "Boaventura &amp; Boaventura",
+       "contratos": 77,
+       "valor": 36546110.85,
+       "variantes": 2
+      },
+      {
+       "nome": "Anteros Empreitadas",
+       "contratos": 64,
+       "valor": 34879806.32,
+       "variantes": 6
+      },
+      {
+       "nome": "António Saraiva e Filhos",
+       "contratos": 13,
+       "valor": 33881970.06,
+       "variantes": 1
+      },
+      {
+       "nome": "Armando Cunha S.A.",
+       "contratos": 77,
+       "valor": 31912762.27,
+       "variantes": 1
+      },
+      {
+       "nome": "AGS - Administração e Gestão de Sistemas de Salubridade",
+       "contratos": 104,
+       "valor": 31598656.57,
+       "variantes": 6
+      }
+     ]
+    },
+    "graficos": [
+     {
+      "id": "municipios",
+      "titulo": "Municípios do filtro",
+      "subtitulo": "Despesa total 2023",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "Lisboa",
+        "valor": 1016328000.0,
+        "nota": "2167,6 M€ contratado"
+       },
+       {
+        "rotulo": "Sintra",
+        "valor": 396378000.0,
+        "nota": "1022,0 M€ contratado"
+       },
+       {
+        "rotulo": "Porto",
+        "valor": 317577000.0,
+        "nota": "1147,2 M€ contratado"
+       },
+       {
+        "rotulo": "Cascais",
+        "valor": 300334000.0,
+        "nota": "1220,8 M€ contratado"
+       },
+       {
+        "rotulo": "Oeiras",
+        "valor": 234115000.0,
+        "nota": "1054,2 M€ contratado"
+       },
+       {
+        "rotulo": "Vila Nova de Gaia",
+        "valor": 208347000.0,
+        "nota": "605,4 M€ contratado"
+       },
+       {
+        "rotulo": "Loures",
+        "valor": 198956000.0,
+        "nota": "640,9 M€ contratado"
+       },
+       {
+        "rotulo": "Loulé",
+        "valor": 169231000.0,
+        "nota": "508,0 M€ contratado"
+       },
+       {
+        "rotulo": "Matosinhos",
+        "valor": 156980000.0,
+        "nota": "671,3 M€ contratado"
+       },
+       {
+        "rotulo": "Seixal",
+        "valor": 154008000.0,
+        "nota": "378,3 M€ contratado"
+       },
+       {
+        "rotulo": "Braga",
+        "valor": 152775000.0,
+        "nota": "429,2 M€ contratado"
+       },
+       {
+        "rotulo": "Almada",
+        "valor": 152287000.0,
+        "nota": "415,0 M€ contratado"
+       }
+      ]
+     },
+     {
+      "id": "anos_contratos",
+      "titulo": "Contratado por ano",
+      "subtitulo": "Portal BASE · contratos (adjudicante = município) · soma dos municípios do filtro",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "2022",
+        "valor": 2505570303.000001,
+        "contratos": 36591
+       },
+       {
+        "rotulo": "2023",
+        "valor": 3411638557.4200034,
+        "contratos": 42787
+       },
+       {
+        "rotulo": "2024",
+        "valor": 4705475177.100001,
+        "contratos": 47518
+       },
+       {
+        "rotulo": "2025",
+        "valor": 4971449769.480001,
+        "contratos": 48749
+       },
+       {
+        "rotulo": "2026",
+        "valor": 3379213727.6400027,
+        "contratos": 38190
+       }
+      ]
+     }
+    ],
+    "origem": "elasticsearch",
+    "gerado_em": "2026-10-13T20:41:45.133142+00:00",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://www.base.gov.pt/Base4/pt/resultados/"
+     }
+    ]
+   },
+   "capa_id": null,
+   "logo_id": null,
+   "cor": "",
+   "excerpt": "ordenado por despesa total (decrescente)",
+   "id": "pes_2545aff62c2a",
+   "created_at": "2026-10-13T20:41:45.140501+00:00",
+   "updated_at": "2026-10-13T20:42:21.956941+00:00",
+   "published_at": "2026-10-13T20:41:46.338884+00:00"
+  },
+  {
+   "title": "Maiores contratações do distrito do Porto em 2024",
+   "slug": "porto-2024",
+   "status": "publicado",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "Ranking dos municípios do distrito do Porto pela contratação pública de 2024, com a despesa do INE ao lado.\n\nOs valores vêm do Portal BASE (contratos) e do INE (despesa das câmaras municipais).",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "filtros": {
+    "q": "",
+    "distrito": "Porto",
+    "nuts": "",
+    "ano_contratos": 2024,
+    "ordenar": "contratos",
+    "ordem": "desc",
+    "min_despesas": null,
+    "limite": 25
+   },
+   "descricao_filtros": "distrito de Porto, contratação de 2024, ordenado por valor contratado (decrescente)",
+   "intro": "",
+   "blocks": [],
+   "dados": {
+    "filtros": {
+     "q": "",
+     "distrito": "Porto",
+     "nuts": "",
+     "ano_contratos": 2024,
+     "ordenar": "contratos",
+     "ordem": "desc",
+     "min_despesas": null,
+     "limite": 25
+    },
+    "descricao": "distrito de Porto, contratação de 2024, ordenado por valor contratado (decrescente)",
+    "total": 18,
+    "linhas": 18,
+    "itens": [
+     {
+      "nome": "Porto",
+      "geocod": "11A1312",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 317577000.0,
+      "despesas_pessoal": 104870000.0,
+      "contratos_total": 17759,
+      "contratos_valor": 1147236906.6499999,
+      "contratos_ano_total": 1468,
+      "contratos_ano_valor": 140360316.3,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 994,
+        "valor": 105197240.69999999
+       },
+       {
+        "ano": "2025",
+        "contratos": 1440,
+        "valor": 113903101.29
+       },
+       {
+        "ano": "2024",
+        "contratos": 1468,
+        "valor": 140360316.3
+       },
+       {
+        "ano": "2023",
+        "contratos": 1213,
+        "valor": 73617108.05
+       },
+       {
+        "ano": "2022",
+        "contratos": 1060,
+        "valor": 58609786.989999995
+       }
+      ]
+     },
+     {
+      "nome": "Matosinhos",
+      "geocod": "11A1308",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 156980000.0,
+      "despesas_pessoal": 46153000.0,
+      "contratos_total": 6159,
+      "contratos_valor": 671325398.34,
+      "contratos_ano_total": 695,
+      "contratos_ano_valor": 99039937.7,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 512,
+        "valor": 67160326.68
+       },
+       {
+        "ano": "2025",
+        "contratos": 591,
+        "valor": 95610266.24000001
+       },
+       {
+        "ano": "2024",
+        "contratos": 695,
+        "valor": 99039937.7
+       },
+       {
+        "ano": "2023",
+        "contratos": 529,
+        "valor": 42301899.239999995
+       },
+       {
+        "ano": "2022",
+        "contratos": 446,
+        "valor": 35938846.28
+       }
+      ]
+     },
+     {
+      "nome": "Vila Nova de Gaia",
+      "geocod": "11A1317",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 208347000.0,
+      "despesas_pessoal": 72947000.0,
+      "contratos_total": 4627,
+      "contratos_valor": 605437920.92,
+      "contratos_ano_total": 375,
+      "contratos_ano_valor": 98735502.72999999,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 322,
+        "valor": 33074487.08
+       },
+       {
+        "ano": "2025",
+        "contratos": 476,
+        "valor": 51004629.35
+       },
+       {
+        "ano": "2024",
+        "contratos": 375,
+        "valor": 98735502.72999999
+       },
+       {
+        "ano": "2023",
+        "contratos": 304,
+        "valor": 49823464.61
+       },
+       {
+        "ano": "2022",
+        "contratos": 318,
+        "valor": 37261099.08
+       }
+      ]
+     },
+     {
+      "nome": "Marco de Canaveses",
+      "geocod": "11C1307",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 39906000.0,
+      "despesas_pessoal": 12192000.0,
+      "contratos_total": 1965,
+      "contratos_valor": 233820168.34000003,
+      "contratos_ano_total": 220,
+      "contratos_ano_valor": 94472060.63,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 188,
+        "valor": 13033167.600000001
+       },
+       {
+        "ano": "2025",
+        "contratos": 265,
+        "valor": 23599531.36
+       },
+       {
+        "ano": "2024",
+        "contratos": 220,
+        "valor": 94472060.63
+       },
+       {
+        "ano": "2023",
+        "contratos": 217,
+        "valor": 24800521.509999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 122,
+        "valor": 5274585.98
+       }
+      ]
+     },
+     {
+      "nome": "Gondomar",
+      "geocod": "11A1304",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 108069000.0,
+      "despesas_pessoal": 33201000.0,
+      "contratos_total": 3690,
+      "contratos_valor": 440381908.42,
+      "contratos_ano_total": 311,
+      "contratos_ano_valor": 50315919.35,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 329,
+        "valor": 42878969.75
+       },
+       {
+        "ano": "2025",
+        "contratos": 342,
+        "valor": 45214412.67
+       },
+       {
+        "ano": "2024",
+        "contratos": 311,
+        "valor": 50315919.35
+       },
+       {
+        "ano": "2023",
+        "contratos": 332,
+        "valor": 39718691.71
+       },
+       {
+        "ano": "2022",
+        "contratos": 281,
+        "valor": 31585962.259999998
+       }
+      ]
+     },
+     {
+      "nome": "Vila do Conde",
+      "geocod": "11A1316",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 75391000.0,
+      "despesas_pessoal": 23830000.0,
+      "contratos_total": 5183,
+      "contratos_valor": 312682660.05,
+      "contratos_ano_total": 631,
+      "contratos_ano_valor": 49165576.24,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 409,
+        "valor": 28529581.22
+       },
+       {
+        "ano": "2025",
+        "contratos": 612,
+        "valor": 38198894.64
+       },
+       {
+        "ano": "2024",
+        "contratos": 631,
+        "valor": 49165576.24
+       },
+       {
+        "ano": "2023",
+        "contratos": 530,
+        "valor": 33059495.76
+       },
+       {
+        "ano": "2022",
+        "contratos": 392,
+        "valor": 18707965.68
+       }
+      ]
+     },
+     {
+      "nome": "Santo Tirso",
+      "geocod": "11A1314",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 50631000.0,
+      "despesas_pessoal": 16733000.0,
+      "contratos_total": 2847,
+      "contratos_valor": 269245953.95,
+      "contratos_ano_total": 272,
+      "contratos_ano_valor": 47467837.76,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 188,
+        "valor": 13779160.37
+       },
+       {
+        "ano": "2025",
+        "contratos": 227,
+        "valor": 32957757.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 272,
+        "valor": 47467837.76
+       },
+       {
+        "ano": "2023",
+        "contratos": 235,
+        "valor": 28348199.5
+       },
+       {
+        "ano": "2022",
+        "contratos": 158,
+        "valor": 15567251.290000001
+       }
+      ]
+     },
+     {
+      "nome": "Penafiel",
+      "geocod": "11C1311",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 60042000.0,
+      "despesas_pessoal": 18804000.0,
+      "contratos_total": 3617,
+      "contratos_valor": 263824666.56,
+      "contratos_ano_total": 342,
+      "contratos_ano_valor": 45409930.19,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 308,
+        "valor": 19898090.66
+       },
+       {
+        "ano": "2025",
+        "contratos": 404,
+        "valor": 30765625.23
+       },
+       {
+        "ano": "2024",
+        "contratos": 342,
+        "valor": 45409930.19
+       },
+       {
+        "ano": "2023",
+        "contratos": 257,
+        "valor": 17019960.99
+       },
+       {
+        "ano": "2022",
+        "contratos": 241,
+        "valor": 13647963.49
+       }
+      ]
+     },
+     {
+      "nome": "Maia",
+      "geocod": "11A1306",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 104214000.0,
+      "despesas_pessoal": 32510000.0,
+      "contratos_total": 5263,
+      "contratos_valor": 484904869.71,
+      "contratos_ano_total": 426,
+      "contratos_ano_valor": 43975204.96,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 291,
+        "valor": 58736015.8
+       },
+       {
+        "ano": "2025",
+        "contratos": 425,
+        "valor": 75357672.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 426,
+        "valor": 43975204.96
+       },
+       {
+        "ano": "2023",
+        "contratos": 410,
+        "valor": 40491750.3
+       },
+       {
+        "ano": "2022",
+        "contratos": 368,
+        "valor": 26370569.900000002
+       }
+      ]
+     },
+     {
+      "nome": "Paços de Ferreira",
+      "geocod": "11C1309",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 40276000.0,
+      "despesas_pessoal": 14577000.0,
+      "contratos_total": 1793,
+      "contratos_valor": 142247967.46,
+      "contratos_ano_total": 208,
+      "contratos_ano_valor": 33387559.61,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 164,
+        "valor": 7041436.43
+       },
+       {
+        "ano": "2025",
+        "contratos": 250,
+        "valor": 32900072.45
+       },
+       {
+        "ano": "2024",
+        "contratos": 208,
+        "valor": 33387559.61
+       },
+       {
+        "ano": "2023",
+        "contratos": 240,
+        "valor": 20693688.06
+       },
+       {
+        "ano": "2022",
+        "contratos": 128,
+        "valor": 7545968.149999999
+       }
+      ]
+     },
+     {
+      "nome": "Valongo",
+      "geocod": "11A1315",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 70465000.0,
+      "despesas_pessoal": 22860000.0,
+      "contratos_total": 4837,
+      "contratos_valor": 313228015.18,
+      "contratos_ano_total": 582,
+      "contratos_ano_valor": 32879889.94,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 384,
+        "valor": 21430735.240000002
+       },
+       {
+        "ano": "2025",
+        "contratos": 569,
+        "valor": 33615009.55
+       },
+       {
+        "ano": "2024",
+        "contratos": 582,
+        "valor": 32879889.94
+       },
+       {
+        "ano": "2023",
+        "contratos": 591,
+        "valor": 52712976.2
+       },
+       {
+        "ano": "2022",
+        "contratos": 572,
+        "valor": 16158967.88
+       }
+      ]
+     },
+     {
+      "nome": "Póvoa de Varzim",
+      "geocod": "11A1313",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 67742000.0,
+      "despesas_pessoal": 21093000.0,
+      "contratos_total": 3397,
+      "contratos_valor": 269748521.63,
+      "contratos_ano_total": 317,
+      "contratos_ano_valor": 26803605.55,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 300,
+        "valor": 22307979.5
+       },
+       {
+        "ano": "2025",
+        "contratos": 302,
+        "valor": 32403128.15
+       },
+       {
+        "ano": "2024",
+        "contratos": 317,
+        "valor": 26803605.55
+       },
+       {
+        "ano": "2023",
+        "contratos": 348,
+        "valor": 24568680.59
+       },
+       {
+        "ano": "2022",
+        "contratos": 345,
+        "valor": 15185018.370000001
+       }
+      ]
+     },
+     {
+      "nome": "Trofa",
+      "geocod": "11A1318",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 39150000.0,
+      "despesas_pessoal": 9535000.0,
+      "contratos_total": 2131,
+      "contratos_valor": 164053775.24,
+      "contratos_ano_total": 228,
+      "contratos_ano_valor": 25908915.759999998,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 159,
+        "valor": 10449892.71
+       },
+       {
+        "ano": "2025",
+        "contratos": 172,
+        "valor": 16351383.14
+       },
+       {
+        "ano": "2024",
+        "contratos": 228,
+        "valor": 25908915.759999998
+       },
+       {
+        "ano": "2023",
+        "contratos": 243,
+        "valor": 18165796.39
+       },
+       {
+        "ano": "2022",
+        "contratos": 232,
+        "valor": 15764583.84
+       }
+      ]
+     },
+     {
+      "nome": "Felgueiras",
+      "geocod": "11C1303",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 56218000.0,
+      "despesas_pessoal": 15609000.0,
+      "contratos_total": 2796,
+      "contratos_valor": 205738439.22,
+      "contratos_ano_total": 289,
+      "contratos_ano_valor": 24868284.71,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 238,
+        "valor": 10099550.48
+       },
+       {
+        "ano": "2025",
+        "contratos": 351,
+        "valor": 39244690.3
+       },
+       {
+        "ano": "2024",
+        "contratos": 289,
+        "valor": 24868284.71
+       },
+       {
+        "ano": "2023",
+        "contratos": 212,
+        "valor": 19626062.740000002
+       },
+       {
+        "ano": "2022",
+        "contratos": 171,
+        "valor": 13416471.309999999
+       }
+      ]
+     },
+     {
+      "nome": "Paredes",
+      "geocod": "11A1310",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 76603000.0,
+      "despesas_pessoal": 21328000.0,
+      "contratos_total": 2869,
+      "contratos_valor": 263082342.64,
+      "contratos_ano_total": 220,
+      "contratos_ano_valor": 21131696.2,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 249,
+        "valor": 18611371.89
+       },
+       {
+        "ano": "2025",
+        "contratos": 308,
+        "valor": 32806047.97
+       },
+       {
+        "ano": "2024",
+        "contratos": 220,
+        "valor": 21131696.2
+       },
+       {
+        "ano": "2023",
+        "contratos": 239,
+        "valor": 19598429.169999998
+       },
+       {
+        "ano": "2022",
+        "contratos": 189,
+        "valor": 18307606.0
+       }
+      ]
+     },
+     {
+      "nome": "Lousada",
+      "geocod": "11C1305",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 47944000.0,
+      "despesas_pessoal": 15017000.0,
+      "contratos_total": 2117,
+      "contratos_valor": 155376867.14,
+      "contratos_ano_total": 195,
+      "contratos_ano_valor": 13565740.58,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 202,
+        "valor": 15120566.47
+       },
+       {
+        "ano": "2025",
+        "contratos": 183,
+        "valor": 29175215.22
+       },
+       {
+        "ano": "2024",
+        "contratos": 195,
+        "valor": 13565740.58
+       },
+       {
+        "ano": "2023",
+        "contratos": 101,
+        "valor": 6369158.35
+       },
+       {
+        "ano": "2022",
+        "contratos": 148,
+        "valor": 11637103.34
+       }
+      ]
+     },
+     {
+      "nome": "Amarante",
+      "geocod": "11C1301",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 46325000.0,
+      "despesas_pessoal": 16224000.0,
+      "contratos_total": 2841,
+      "contratos_valor": 227398894.94,
+      "contratos_ano_total": 266,
+      "contratos_ano_valor": 12199607.83,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 229,
+        "valor": 27838955.02
+       },
+       {
+        "ano": "2025",
+        "contratos": 278,
+        "valor": 31444866.85
+       },
+       {
+        "ano": "2024",
+        "contratos": 266,
+        "valor": 12199607.83
+       },
+       {
+        "ano": "2023",
+        "contratos": 260,
+        "valor": 43361481.82
+       },
+       {
+        "ano": "2022",
+        "contratos": 216,
+        "valor": 10090035.36
+       }
+      ]
+     },
+     {
+      "nome": "Baião",
+      "geocod": "11C1302",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 24998000.0,
+      "despesas_pessoal": 8131000.0,
+      "contratos_total": 1556,
+      "contratos_valor": 86845575.07000001,
+      "contratos_ano_total": 155,
+      "contratos_ano_valor": 9130205.54,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 134,
+        "valor": 9840355.16
+       },
+       {
+        "ano": "2025",
+        "contratos": 143,
+        "valor": 10527849.88
+       },
+       {
+        "ano": "2024",
+        "contratos": 155,
+        "valor": 9130205.54
+       },
+       {
+        "ano": "2023",
+        "contratos": 133,
+        "valor": 8526169.07
+       },
+       {
+        "ano": "2022",
+        "contratos": 113,
+        "valor": 4887747.22
+       }
+      ]
+     }
+    ],
+    "ano_contratos": 2024,
+    "ano_despesas": 2023,
+    "despesas_somadas": 1590878000.0,
+    "contratos_somados": 6256580851.46,
+    "contratos_ano_somados": 868817791.5800003,
+    "contratos_ano_total_somados": 7200,
+    "distritos": [
+     {
+      "key": "Porto",
+      "count": 18
+     }
+    ],
+    "adjudicatarios": {
+     "ano": 2024,
+     "total": 3624,
+     "valor": 888105537.5899997,
+     "municipios": 18,
+     "itens": [
+      {
+       "nome": "Edilages",
+       "contratos": 42,
+       "valor": 48737249.12,
+       "variantes": 1
+      },
+      {
+       "nome": "REDE AMBIENTE - Engenharia e Serviços",
+       "contratos": 3,
+       "valor": 47941223.34,
+       "variantes": 1
+      },
+      {
+       "nome": "Construções Corte Recto - Engenharia &amp; Construção",
+       "contratos": 7,
+       "valor": 47323847.04,
+       "variantes": 1
+      },
+      {
+       "nome": "GERTAL – Companhia Geral de Restaurantes e Alimentação",
+       "contratos": 5,
+       "valor": 44989629.839999996,
+       "variantes": 3
+      },
+      {
+       "nome": "FCC Environment Portugal",
+       "contratos": 3,
+       "valor": 34378438.47,
+       "variantes": 2
+      },
+      {
+       "nome": "Eurest Portugal Lda",
+       "contratos": 14,
+       "valor": 24194477.64,
+       "variantes": 1
+      },
+      {
+       "nome": "Costeira - Engenharia e Construção",
+       "contratos": 4,
+       "valor": 22814449.15,
+       "variantes": 2
+      },
+      {
+       "nome": "SUMA - SERVIÇOS URBANOS E MEIO AMBIENTE S.A.",
+       "contratos": 2,
+       "valor": 19624498.24,
+       "variantes": 1
+      },
+      {
+       "nome": "Ecoambiente - Serviços e Meio Ambiente",
+       "contratos": 1,
+       "valor": 19549998.24,
+       "variantes": 1
+      },
+      {
+       "nome": "Casais - Engenharia e Construção",
+       "contratos": 2,
+       "valor": 13910800.26,
+       "variantes": 1
+      },
+      {
+       "nome": "EUREST (PORTUGAL)-SOCIEDADE EUROPEIA DE RESTAURANTES LDA",
+       "contratos": 6,
+       "valor": 12574581.56,
+       "variantes": 2
+      },
+      {
+       "nome": "CONSTRUÇÕES CORTE RECTO - ENGENHARIA E CONSTRUÇÃO",
+       "contratos": 1,
+       "valor": 10196199.04,
+       "variantes": 1
+      },
+      {
+       "nome": "IBERDROLA CLIENTES PORTUGAL",
+       "contratos": 5,
+       "valor": 9397361.120000001,
+       "variantes": 2
+      },
+      {
+       "nome": "Ferreira - Construção",
+       "contratos": 1,
+       "valor": 9276707.62,
+       "variantes": 1
+      },
+      {
+       "nome": "TREE ESTRUTURAS",
+       "contratos": 14,
+       "valor": 8034243.91,
+       "variantes": 1
+      },
+      {
+       "nome": "FIDELIDADE-COMPANHIA DE SEGUROS",
+       "contratos": 17,
+       "valor": 7843704.43,
+       "variantes": 5
+      },
+      {
+       "nome": "Togamil - Construções",
+       "contratos": 2,
+       "valor": 7379490.0,
+       "variantes": 1
+      },
+      {
+       "nome": "DIZconstrução Lda",
+       "contratos": 16,
+       "valor": 7127605.01,
+       "variantes": 1
+      },
+      {
+       "nome": "Matosinhoshabit-MH",
+       "contratos": 11,
+       "valor": 6508488.42,
+       "variantes": 1
+      },
+      {
+       "nome": "Sá Limpa - Facility Services",
+       "contratos": 10,
+       "valor": 6354326.34,
+       "variantes": 2
+      }
+     ]
+    },
+    "graficos": [
+     {
+      "id": "municipios",
+      "titulo": "Municípios do filtro",
+      "subtitulo": "Valor contratado em 2024",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "Porto",
+        "valor": 140360316.3,
+        "nota": "1 468 contratos"
+       },
+       {
+        "rotulo": "Matosinhos",
+        "valor": 99039937.7,
+        "nota": "695 contratos"
+       },
+       {
+        "rotulo": "Vila Nova de Gaia",
+        "valor": 98735502.72999999,
+        "nota": "375 contratos"
+       },
+       {
+        "rotulo": "Marco de Canaveses",
+        "valor": 94472060.63,
+        "nota": "220 contratos"
+       },
+       {
+        "rotulo": "Gondomar",
+        "valor": 50315919.35,
+        "nota": "311 contratos"
+       },
+       {
+        "rotulo": "Vila do Conde",
+        "valor": 49165576.24,
+        "nota": "631 contratos"
+       },
+       {
+        "rotulo": "Santo Tirso",
+        "valor": 47467837.76,
+        "nota": "272 contratos"
+       },
+       {
+        "rotulo": "Penafiel",
+        "valor": 45409930.19,
+        "nota": "342 contratos"
+       },
+       {
+        "rotulo": "Maia",
+        "valor": 43975204.96,
+        "nota": "426 contratos"
+       },
+       {
+        "rotulo": "Paços de Ferreira",
+        "valor": 33387559.61,
+        "nota": "208 contratos"
+       },
+       {
+        "rotulo": "Valongo",
+        "valor": 32879889.94,
+        "nota": "582 contratos"
+       },
+       {
+        "rotulo": "Póvoa de Varzim",
+        "valor": 26803605.55,
+        "nota": "317 contratos"
+       }
+      ]
+     },
+     {
+      "id": "anos_contratos",
+      "titulo": "Contratado por ano",
+      "subtitulo": "Portal BASE · contratos (adjudicante = município) · soma dos municípios do filtro",
+      "unidade": "euros",
+      "itens": [
+       {
+        "rotulo": "2022",
+        "valor": 355957532.41999996,
+        "contratos": 5500
+       },
+       {
+        "rotulo": "2023",
+        "valor": 562803534.0600001,
+        "contratos": 6394
+       },
+       {
+        "rotulo": "2024",
+        "valor": 868817791.5800003,
+        "contratos": 7200
+       },
+       {
+        "rotulo": "2025",
+        "valor": 765080154.14,
+        "contratos": 7338
+       },
+       {
+        "rotulo": "2026",
+        "valor": 525027882.76000005,
+        "contratos": 5600
+       }
+      ]
+     }
+    ],
+    "origem": "json-local",
+    "gerado_em": "2026-10-13T20:44:46.333142+00:00",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://www.base.gov.pt/Base4/pt/resultados/"
+     }
+    ]
+   },
+   "capa_id": "med_92dfdb9848df",
+   "logo_id": "med_03e7da0c0c10",
+   "cor": "#1d4ed8",
+   "excerpt": "Ranking dos municípios do distrito do Porto pela contratação pública de 2024, com a despesa do INE ao lado.\n\nOs valores vêm do Portal BASE (contratos) e do INE (despesa das câmaras municipais).",
+   "id": "pes_6fbe9716d6fc",
+   "created_at": "2026-10-13T20:15:36.593568+00:00",
+   "updated_at": "2026-10-13T20:44:46.338352+00:00",
+   "published_at": "2026-10-13T20:17:02.283575+00:00"
+  },
+  {
+   "title": "Despesas municipais — ordenado por despesa total (decrescente)",
+   "slug": "despesas-municipais-ordenado-por-despesa-total-decrescente",
+   "status": "rascunho",
+   "scheduled_at": null,
+   "updated_by": "teste@teste.com",
+   "seo": {
+    "title": "",
+    "description": "",
+    "keywords": [],
+    "image_id": null,
+    "noindex": false
+   },
+   "filtros": {
+    "q": "Vila Nova de Gaia",
+    "distrito": "Porto",
+    "nuts": "",
+    "ano_contratos": 2026,
+    "ordenar": "despesas",
+    "ordem": "desc",
+    "min_despesas": null,
+    "limite": 25
+   },
+   "descricao_filtros": "«Vila Nova de Gaia», distrito de Porto, contratação de 2026, ordenado por despesa total (decrescente)",
+   "intro": "",
+   "blocks": [],
+   "dados": {
+    "filtros": {
+     "q": "Vila Nova de Gaia",
+     "distrito": "Porto",
+     "nuts": "",
+     "ano_contratos": 2026,
+     "ordenar": "despesas",
+     "ordem": "desc",
+     "min_despesas": null,
+     "limite": 25
+    },
+    "descricao": "«Vila Nova de Gaia», distrito de Porto, contratação de 2026, ordenado por despesa total (decrescente)",
+    "total": 1,
+    "linhas": 1,
+    "itens": [
+     {
+      "nome": "Vila Nova de Gaia",
+      "geocod": "11A1317",
+      "distrito": "Porto",
+      "ano_despesas": 2023,
+      "despesas_total": 208347000.0,
+      "despesas_pessoal": 72947000.0,
+      "contratos_total": 4627,
+      "contratos_valor": 605437920.92,
+      "contratos_ano_total": 322,
+      "contratos_ano_valor": 33074487.08,
+      "anos_recentes": [
+       {
+        "ano": "2026",
+        "contratos": 322,
+        "valor": 33074487.08
+       },
+       {
+        "ano": "2025",
+        "contratos": 476,
+        "valor": 51004629.35
+       },
+       {
+        "ano": "2024",
+        "contratos": 375,
+        "valor": 98735502.72999999
+       },
+       {
+        "ano": "2023",
+        "contratos": 304,
+        "valor": 49823464.61
+       },
+       {
+        "ano": "2022",
+        "contratos": 318,
+        "valor": 37261099.08
+       }
+      ]
+     }
+    ],
+    "ano_contratos": 2026,
+    "ano_despesas": 2023,
+    "despesas_somadas": 208347000.0,
+    "contratos_somados": 605437920.92,
+    "contratos_ano_somados": 33074487.08,
+    "contratos_ano_total_somados": 322,
+    "distritos": [
+     {
+      "key": "Porto",
+      "count": 1
+     }
+    ],
+    "origem": "json-local",
+    "gerado_em": "2026-10-13T20:27:59.442556+00:00",
+    "fontes": [
+     {
+      "documento": "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)",
+      "url": "https://www.ine.pt/xurl/indx/0013909/PT"
+     },
+     {
+      "documento": "Portal BASE · contratos (adjudicante = município)",
+      "url": "https://www.base.gov.pt/Base4/pt/resultados/"
+     }
+    ]
+   },
+   "capa_id": null,
+   "logo_id": null,
+   "cor": "",
+   "excerpt": "ordenado por despesa total (decrescente)",
+   "id": "pes_aa02e47b2c77",
+   "created_at": "2026-10-13T20:26:58.981071+00:00",
+   "updated_at": "2026-10-13T20:27:59.447838+00:00",
+   "published_at": null
+  }
+ ],
+ "media": [
+  {
+   "id": "med_a6940fe73d55",
+   "filename": "icone-analise-medida.svg",
+   "mime": "image/svg+xml",
+   "extension": ".svg",
+   "size": 739,
+   "storage": "ficheiro",
+   "url": "/cms/media/med_a6940fe73d55/raw",
+   "title": "Ícone · análise à medida",
+   "alt": "Análise à medida: gráfico lido à lupa, resposta a uma pergunta concreta",
+   "caption": "",
+   "credit": "",
+   "tags": [],
+   "kind": "imagem",
+   "width": 96,
+   "height": 96,
+   "created_at": "2026-10-16T14:31:11.895985+00:00",
+   "updated_at": "2026-10-16T14:31:11.896014+00:00",
+   "updated_by": "sistema"
+  },
+  {
+   "id": "med_aa2933ff176b",
+   "filename": "icone-dados.svg",
+   "mime": "image/svg+xml",
+   "extension": ".svg",
+   "size": 788,
+   "storage": "ficheiro",
+   "url": "/cms/media/med_aa2933ff176b/raw",
+   "title": "Ícone · dados",
+   "alt": "Dados: base indexada, cobertura e formato do que se entrega",
+   "caption": "",
+   "credit": "",
+   "tags": [],
+   "kind": "imagem",
+   "width": 96,
+   "height": 96,
+   "created_at": "2026-10-16T14:31:11.963334+00:00",
+   "updated_at": "2026-10-16T14:31:11.963371+00:00",
+   "updated_by": "sistema"
+  },
+  {
+   "id": "med_b39eb208f327",
+   "filename": "icone-imprensa.svg",
+   "mime": "image/svg+xml",
+   "extension": ".svg",
+   "size": 834,
+   "storage": "ficheiro",
+   "url": "/cms/media/med_b39eb208f327/raw",
+   "title": "Ícone · imprensa",
+   "alt": "Imprensa: contexto, dados e a fonte primária de cada número",
+   "caption": "",
+   "credit": "",
+   "tags": [],
+   "kind": "imagem",
+   "width": 96,
+   "height": 96,
+   "created_at": "2026-10-16T14:31:11.991372+00:00",
+   "updated_at": "2026-10-16T14:31:11.991403+00:00",
+   "updated_by": "sistema"
+  },
+  {
+   "id": "med_f581b89c0319",
+   "filename": "icone-correcao.svg",
+   "mime": "image/svg+xml",
+   "extension": ".svg",
+   "size": 676,
+   "storage": "ficheiro",
+   "url": "/cms/media/med_f581b89c0319/raw",
+   "title": "Ícone · correções",
+   "alt": "Correções: número verificado na fonte e corrigido no registo",
+   "caption": "",
+   "credit": "",
+   "tags": [],
+   "kind": "imagem",
+   "width": 96,
+   "height": 96,
+   "created_at": "2026-10-16T14:31:11.931016+00:00",
+   "updated_at": "2026-10-16T14:31:11.931048+00:00",
+   "updated_by": "sistema"
+  }
+ ]
+}
