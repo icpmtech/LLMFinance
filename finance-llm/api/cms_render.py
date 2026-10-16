@@ -33,6 +33,12 @@ MD_EXTENSIONS = ["extra", "sane_lists", "nl2br", "toc"]
 #: subsídio de Natal (Lei n.º 35/2014, LTFP, artigos 149.º a 152.º).
 PAGAMENTOS_PUBLICO = 14
 
+#: Limite do `<title>` já com o sufixo da marca: acima disto os motores de busca
+#: cortam (e os resultados passam a mostrar uma frase a meio).
+LIMITE_TITULO_HEAD = 70
+#: Abaixo disto não vale a pena cortar o título para lhe colar a marca.
+MINIMO_TITULO_HEAD = 24
+
 _THEMES: Dict[str, Dict[str, str]] = {
     "claro": {
         "bg": "#f7f8fa",
@@ -106,6 +112,38 @@ def _garantir_h1(body: str, titulo: str) -> str:
     if not titulo or "<h1" in body.lower():
         return body
     return f'<section class="section"><h1>{_esc(titulo)}</h1></section>{body}'
+
+
+def _cortar_em_palavras(texto: str, limite: int) -> str:
+    """Encurta `texto` ao `limite` sem cortar uma palavra (nem deixar pontuação solta)."""
+    texto = re.sub(r"\s+", " ", str(texto or "")).strip()
+    if len(texto) <= limite:
+        return texto
+    corte = texto[:limite].rstrip()
+    espaco = corte.rfind(" ")
+    if espaco >= max(limite // 2, 1):
+        corte = corte[:espaco]
+    return corte.rstrip(" .,;:·–—-")
+
+
+def _titulo_do_head(title: str, site_name: str) -> str:
+    """`título · marca` para o `<title>` (e o `og:title`), cortado em palavras.
+
+    O título do documento pode ser tão longo quanto o autor quiser — o `<h1>` fica
+    todo. O do `<head>` é que não pode passar dos ~70 caracteres: um artigo de 79
+    caracteres virava 96 com a marca e o motor de busca mostrava uma frase cortada
+    a meio. Encurta-se o título, nunca o sufixo da marca; sem espaço para os dois,
+    fica só o título (a marca já vai no `og:site_name`).
+    """
+    titulo = re.sub(r"\s+", " ", str(title or "")).strip()
+    if not titulo:
+        return site_name
+    if not site_name or site_name in titulo:
+        return _cortar_em_palavras(titulo, LIMITE_TITULO_HEAD)
+    espaco = LIMITE_TITULO_HEAD - len(site_name) - len(" · ")
+    if espaco < MINIMO_TITULO_HEAD:
+        return _cortar_em_palavras(titulo, LIMITE_TITULO_HEAD)
+    return f"{_cortar_em_palavras(titulo, espaco)} · {site_name}"
 
 
 def _titulo_visivel(doc: Dict[str, Any], alternativa: str = "") -> str:
@@ -448,6 +486,7 @@ p {{ margin: 0 0 14px; text-wrap: pretty; }}
 .hero .actions {{ margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }}
 .hero.centro {{ text-align: center; }}
 .hero .cover {{ margin: 22px 0 0; }}
+.hero .cover img {{ width: 100%; }}
 /* Páginas de sistema (404, erro do serviço e sem ligação): texto de um lado,
    ilustração do outro; no telefone empilha, com a imagem por baixo do texto. */
 .sistema {{ display: grid; gap: 24px; align-items: center; }}
@@ -601,21 +640,39 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .hr {{ height: 1px; background: var(--border); margin: 28px 0; border: 0; }}
 .contactos {{ display: grid; gap: 10px; grid-template-columns: 1fr; }}
 .contactos div {{ padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }}
-.formulario {{ max-width: 720px; }}
+/* O formulário é o destino da página: tem caixa própria, para não se confundir
+   com o texto que o explica, e uma grelha de campos que começa numa só coluna —
+   quem manda é o telefone. */
+.formulario {{
+  max-width: 760px; padding: 20px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow);
+}}
+.formulario > h2:first-child {{ margin-top: 0; }}
 .formulario form {{ display: grid; gap: 14px; margin-top: 18px; }}
+.formulario .campos {{ display: grid; gap: 14px; grid-template-columns: 1fr; }}
 .formulario .campo {{ display: grid; gap: 6px; }}
+.formulario .campo.larga {{ grid-column: 1 / -1; }}
 .formulario label {{ font-weight: 600; font-size: .93rem; }}
+.formulario .marca {{ color: var(--accent); }}
 .formulario input, .formulario textarea {{
   width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
-  background: var(--surface); color: var(--text); font: inherit;
+  background: var(--bg); color: var(--text); font: inherit;
 }}
 .formulario input:focus, .formulario textarea:focus {{ outline: 2px solid var(--accent); outline-offset: 1px; }}
 .formulario textarea {{ resize: vertical; min-height: 140px; }}
 .formulario .erro {{ color: #b42318; font-size: .82rem; }}
+.formulario .ajuda {{ color: var(--muted); font-size: .82rem; }}
+.ajuda-formulario {{ color: var(--muted); font-size: .86rem; margin: 0; }}
 .formulario .consentimento {{ display: flex; align-items: flex-start; gap: 10px; }}
 .formulario .consentimento input {{ width: auto; min-height: 0; margin-top: 4px; }}
 .formulario .consentimento label {{ font-weight: 500; font-size: .9rem; color: var(--muted); }}
 .formulario .acao {{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }}
+/* O que acontece depois do envio fica na linha do botão: quem está a decidir se
+   escreve vê a mesma informação que quem já escreveu. */
+.nota-formulario {{ flex: 1 1 260px; color: var(--muted); font-size: .89rem; }}
+.nota-formulario p {{ margin: 0; }}
+.nota-formulario a {{ font-weight: 600; }}
+.contacto-ok .actions {{ display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }}
 /* Campo-armadilha: invisível para quem lê, apetecível para quem preenche formulários em série. */
 .hp {{ position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }}
 .steps {{ counter-reset: step; display: grid; gap: 14px; }}
@@ -682,6 +739,10 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   :root {{ --gutter: 20px; }}
   main {{ padding: 32px 0 72px; }}
   .card {{ padding: 28px; }}
+  .formulario {{ padding: 26px 28px; }}
+  /* Dois campos por linha a partir daqui: o formulário de contacto tem cinco
+     campos e, numa coluna só, era um rolo até ao botão. */
+  .formulario .campos {{ grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }}
   .section + .section {{ margin-top: 28px; }}
   .hero {{ padding: 8px 0 12px; }}
   .hero .actions {{ margin-top: 20px; }}
@@ -877,14 +938,28 @@ def _render_blog_block(data: Dict[str, Any], *, preview: bool) -> str:
 # --------------------------------------------------------------------------
 # Formulário de contacto
 # --------------------------------------------------------------------------
-#: Campos do formulário, pela ordem em que aparecem: (nome, etiqueta, tipo,
-#: obrigatório, ajuda, autocomplete, linhas).
+#: Campos do formulário, pela ordem em que aparecem. Cada campo leva: `nome`,
+#: `etiqueta`, `tipo`, `obrigatorio`, `autocomplete`, `linhas` (textarea),
+#: `ajuda` (linha de apoio, ligada ao campo por `aria-describedby`), `larga`
+#: (ocupa as duas colunas da grelha) e `sugestoes` (valores oferecidos por um
+#: `datalist` — sugerem os assuntos que tratamos sem impedir outra resposta).
 CAMPOS_CONTACTO: List[Dict[str, Any]] = [
     {"nome": "nome", "etiqueta": "Nome", "obrigatorio": True, "autocomplete": "name"},
     {"nome": "email", "etiqueta": "Email", "tipo": "email", "obrigatorio": True, "autocomplete": "email"},
     {"nome": "organizacao", "etiqueta": "Organização", "autocomplete": "organization"},
-    {"nome": "assunto", "etiqueta": "Assunto"},
-    {"nome": "mensagem", "etiqueta": "Mensagem", "obrigatorio": True, "linhas": 6},
+    {
+        "nome": "assunto",
+        "etiqueta": "Assunto",
+        "sugestoes": ("Análise à medida", "Correção de um número", "Dados e cobertura", "Imprensa"),
+    },
+    {
+        "nome": "mensagem",
+        "etiqueta": "Mensagem",
+        "obrigatorio": True,
+        "linhas": 6,
+        "larga": True,
+        "ajuda": "Diga o que quer saber, para quando e sobre que entidade ou concelho — o NIF ajuda a não trocar de empresa.",
+    },
 ]
 
 FORMULARIO_ACTION_PADRAO = "/site/contacto"
@@ -898,13 +973,30 @@ def _campo_do_formulario(campo: Dict[str, Any], valor: str = "", erro: str = "")
         atributos += ' required aria-required="true"'
     if campo.get("autocomplete"):
         atributos += f' autocomplete="{_esc(campo["autocomplete"])}"'
+    limite = store.CONTACTO_LIMITES.get(nome)
+    if limite:
+        # O mesmo limite que o servidor aplica (`cms_store.CONTACTO_LIMITES`):
+        # sem ele, um pedido longo só era recusado depois de escrito.
+        atributos += f' maxlength="{int(limite)}"'
+    ajuda = ""
+    if campo.get("ajuda"):
+        ajuda = f'<small class="ajuda" id="{ident}-ajuda">{_esc(campo["ajuda"])}</small>'
+        atributos += f' aria-describedby="{ident}-ajuda"'
+    sugestoes = "".join(f'<option value="{_esc(item)}"></option>' for item in (campo.get("sugestoes") or ()))
     if campo.get("linhas"):
         controlo = f'<textarea id="{ident}" name="{nome}" rows="{int(campo["linhas"])}"{atributos}>{_esc(valor)}</textarea>'
     else:
+        if sugestoes:
+            atributos += f' list="{ident}-sugestoes"'
         controlo = f'<input id="{ident}" name="{nome}" type="{_esc(campo.get("tipo") or "text")}" value="{_esc(valor)}"{atributos}>'
-    nota = f'<small class="erro">{_esc(erro)}</small>' if erro else ""
-    etiqueta = _esc(campo["etiqueta"]) + (" *" if campo.get("obrigatorio") else "")
-    return f'<div class="campo"><label for="{ident}">{etiqueta}</label>{controlo}{nota}</div>'
+        if sugestoes:
+            controlo += f'<datalist id="{ident}-sugestoes">{sugestoes}</datalist>'
+    nota = f'<small class="erro" role="alert">{_esc(erro)}</small>' if erro else ""
+    # A marca de obrigatório fica fora da leitura em voz alta: quem usa leitor de
+    # ecrã ouve «obrigatório» pelo próprio campo, não um asterisco.
+    etiqueta = _esc(campo["etiqueta"]) + (' <span class="marca" aria-hidden="true">*</span>' if campo.get("obrigatorio") else "")
+    classe = "campo larga" if campo.get("larga") else "campo"
+    return f'<div class="{classe}"><label for="{ident}">{etiqueta}</label>{controlo}{ajuda}{nota}</div>'
 
 
 def formulario_contacto(
@@ -914,19 +1006,31 @@ def formulario_contacto(
     erros: Optional[Dict[str, str]] = None,
     aviso: str = "",
 ) -> str:
-    """Formulário de contacto (grava em `/site/contacto`, sem depender de JS)."""
+    """Formulário de contacto (grava em `/site/contacto`, sem depender de JS).
+
+    Os campos vão em grelha — uma coluna no telefone, duas a partir de 700px — e
+    o que acontece depois do envio fica na linha do botão, não depois dele: quem
+    está a decidir se escreve vê a mesma informação que quem já escreveu.
+    """
     valores = valores or {}
     erros = erros or {}
     action = str(data.get("action") or FORMULARIO_ACTION_PADRAO)
+    ancora = str(data.get("anchor") or "").strip()
+    ident = f' id="{_esc(ancora)}"' if ancora else ""
     titulo = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
     intro = f'<p class="lead">{_esc(data.get("intro"))}</p>' if data.get("intro") else ""
+    legenda = (
+        '<p class="ajuda-formulario">Os campos com <span class="marca" aria-hidden="true">*</span> são '
+        "obrigatórios. Os restantes ajudam-nos a responder com mais precisão.</p>"
+    )
     corpo = "".join(_campo_do_formulario(campo, valores.get(str(campo["nome"]), ""), erros.get(str(campo["nome"]), "")) for campo in CAMPOS_CONTACTO)
-    erro_consentimento = f'<small class="erro">{_esc(erros["consentimento"])}</small>' if erros.get("consentimento") else ""
+    erro_consentimento = f'<small class="erro" role="alert">{_esc(erros["consentimento"])}</small>' if erros.get("consentimento") else ""
+    nota = f'<div class="nota-formulario">{_md(str(data.get("note") or ""))}</div>' if data.get("note") else ""
     return (
-        f'<div class="section formulario">{titulo}{intro}'
+        f'<div class="section formulario"{ident}>{titulo}{intro}{legenda}'
         + (f'<div class="aviso red">{_esc(aviso)}</div>' if aviso else "")
         + f'<form method="post" action="{_esc(action)}">'
-        + corpo
+        + f'<div class="campos">{corpo}</div>'
         + '<div class="campo consentimento">'
         + '<input id="contacto-consentimento" name="consentimento" type="checkbox" value="sim"'
         + (' checked' if valores.get("consentimento") else "")
@@ -938,7 +1042,7 @@ def formulario_contacto(
         + '<div class="hp"><label for="contacto-website">Não preencher</label>'
         + '<input id="contacto-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>'
         + '<div class="acao"><button class="btn" type="submit">'
-        + f'{_esc(data.get("button_label") or "Enviar mensagem")}</button>'
+        + f'{_esc(data.get("button_label") or "Enviar mensagem")}</button>{nota}'
         + "</div></form></div>"
     )
 
@@ -956,9 +1060,13 @@ def render_contacto(
     settings = settings or store.get_settings()
     if ok:
         corpo = (
-            '<div class="section"><h1>Mensagem recebida</h1>'
-            "<p class=\"lead\">Obrigado. Registámos o seu pedido e respondemos para o email indicado.</p>"
-            f'<div class="actions"><a class="btn" href="{_esc(voltar_para)}">Voltar</a></div></div>'
+            '<div class="section contacto-ok"><h1>Mensagem recebida</h1>'
+            "<p class=\"lead\">Obrigado. O pedido ficou registado e respondemos para o email indicado — "
+            "pedidos simples, em dias úteis.</p>"
+            "<p class=\"ajuda-formulario\">Se precisar de acrescentar algo, responda ao email que receber ou "
+            'escreva para <a href="mailto:geral@iqos.pt">geral@iqos.pt</a>.</p>'
+            f'<div class="actions"><a class="btn" href="{_esc(voltar_para)}">Voltar aos contactos</a>'
+            '<a class="btn ghost" href="/site/blog">Ler o blog</a></div></div>'
         )
         return _layout(
             title="Mensagem recebida",
@@ -1896,7 +2004,7 @@ def _layout(
 ) -> str:
     base_url = str(settings.get("base_url") or "")
     site_name = _esc(settings.get("site_name") or "Site")
-    full_title = title if title and site_name in title else f"{title} · {site_name}" if title else site_name
+    full_title = _titulo_do_head(title, site_name)
     canonical_url = _absolute(canonical or current_path, base_url)
     robots = "noindex, nofollow" if (noindex or preview) else str(settings.get("robots") or "index, follow")
     meta = [

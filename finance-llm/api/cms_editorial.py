@@ -224,6 +224,11 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
     ("icone-contratos-empresas.svg", "Ícone · contratos e empresas", "Contratos e empresas: contratos ligados ao cadastro", ""),
     ("icone-pesquisa-assistentes.svg", "Ícone · pesquisa e assistentes", "Pesquisa e assistentes: perguntas com resposta citada", ""),
     ("icone-visualizacao-gestao.svg", "Ícone · visualização e gestão", "Visualização e gestão: painéis, grafos e CRM", ""),
+    # Ícones das quatro razões para escrever (`/site/contactos`).
+    ("icone-analise-medida.svg", "Ícone · análise à medida", "Análise à medida: gráfico lido à lupa, resposta a uma pergunta concreta", ""),
+    ("icone-correcao.svg", "Ícone · correções", "Correções: número verificado na fonte e corrigido no registo", ""),
+    ("icone-dados.svg", "Ícone · dados", "Dados: base indexada, cobertura e formato do que se entrega", ""),
+    ("icone-imprensa.svg", "Ícone · imprensa", "Imprensa: contexto, dados e a fonte primária de cada número", ""),
 )
 
 #: Imagens dos produtos da loja (`/loja`). São a capa de cada produto do
@@ -445,8 +450,19 @@ class _Blocos:
             data["caption"] = caption
         return self.add("imagem", data)
 
-    def formulario(self, title: str, intro: str, *, button_label: str = "Enviar mensagem") -> Dict[str, Any]:
-        return self.add("formulario", {"title": title, "intro": intro, "button_label": button_label})
+    def formulario(self, title: str, intro: str, *, button_label: str = "Enviar mensagem", anchor: str = "", note: str = "") -> Dict[str, Any]:
+        """Formulário de contacto.
+
+        `anchor` dá um endereço à secção (`#pedido`), para o botão da abertura
+        trazer o leitor até ao formulário; `note` é a linha que fica ao lado do
+        botão — o sítio para dizer o que acontece a seguir ao envio.
+        """
+        data: Dict[str, Any] = {"title": title, "intro": intro, "button_label": button_label}
+        if anchor:
+            data["anchor"] = anchor
+        if note:
+            data["note"] = note
+        return self.add("formulario", data)
 
     def contactos(self, title: str, *, email: str = "", phone: str = "", address: str = "") -> Dict[str, Any]:
         return self.add("contactos", {"title": title, "email": email, "phone": phone, "address": address})
@@ -1238,6 +1254,10 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
     )
 
     # --- Contactos ---------------------------------------------------------
+    # A página existe para levar a um pedido concreto: a abertura traz a
+    # ilustração e um botão que salta para o formulário (`#pedido`), os quatro
+    # temas vão em cartões com ícone (leem-se antes do texto corrido), e o que
+    # acontece depois do envio está dito antes de o leitor clicar em «enviar».
     b = _Blocos("contactos")
     paginas.append(
         _pagina(
@@ -1248,35 +1268,89 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
             menu_order=5,
             excerpt="Escreva-nos: pedidos de análise, correções, dados e imprensa.",
             seo_title="Contactos",
-            seo_description="Fale com o Sabemos Studio: pedidos de análise à medida, correções, dados e pedidos de imprensa. Respondemos por email.",
+            seo_description=(
+                "Fale com o Sabemos Studio: pedidos de análise à medida, correções, dados e pedidos de imprensa. "
+                "Respondemos por email, em dias úteis."
+            ),
             keywords=["contactos", "Sabemos Studio", "pedido de análise", "imprensa"],
             blocks=[
                 b.hero(
                     "Fale connosco",
                     "Pedidos de análise, correções, dados ou imprensa — respondemos por email.",
+                    cta=("Escrever o pedido", "#pedido"),
+                    image=media.get("ilustracao-contactos.svg", ""),
                 ),
-                b.texto(
+                b.cartoes_com_icone(
                     "O que tratar aqui",
-                    "- **Análise à medida** — uma pergunta concreta sobre contratos, empresas ou municípios.\n"
-                    "- **Correções** — um número que não bate certo. Damos prioridade e escrevemos a correção.\n"
-                    "- **Dados** — saber o que temos, com que cobertura e em que formato.\n"
-                    "- **Imprensa** — contexto, dados e a fonte primária por trás de cada número.",
-                ),
-                b.imagem(
-                    media.get("ilustracao-contactos.svg", ""),
-                    alt="Contactos: pedido escrito e resposta por email",
+                    [
+                        (
+                            "Análise à medida",
+                            "Uma pergunta concreta sobre contratos, empresas ou municípios. Dizemos o que os dados "
+                            "abertos respondem e o que fica de fora.",
+                            media.get("icone-analise-medida.svg", ""),
+                        ),
+                        (
+                            "Correções",
+                            "Um número que não bate certo. Damos prioridade: verificamos na fonte e publicamos a "
+                            "correção com a data da leitura.",
+                            media.get("icone-correcao.svg", ""),
+                        ),
+                        (
+                            "Dados",
+                            "O que temos, com que cobertura e em que formato — para jornalistas, investigadores e "
+                            "serviços públicos que precisam dos ficheiros.",
+                            media.get("icone-dados.svg", ""),
+                        ),
+                        (
+                            "Imprensa",
+                            "Contexto, dados e a fonte primária por trás de cada número, dentro do prazo de fecho.",
+                            media.get("icone-imprensa.svg", ""),
+                        ),
+                    ],
                 ),
                 b.formulario(
                     "Pedido de contacto",
                     "Quanto mais concreta for a pergunta, mais rápida é a resposta. Se for sobre uma entidade, indique o NIF.",
+                    anchor="pedido",
+                    note=(
+                        "Se preferir escrever de fora do site, use [geral@iqos.pt](mailto:geral@iqos.pt) — "
+                        "a caixa é a mesma e a resposta também."
+                    ),
                 ),
-                b.contactos("Outros canais", email="geral@iqos.pt"),
+                b.passos(
+                    "O que acontece a seguir",
+                    [
+                        (
+                            "Recebemos o pedido",
+                            "Fica registado com a data e a hora, e chega-nos por email — não se perde numa caixa qualquer.",
+                        ),
+                        (
+                            "Verificamos na fonte",
+                            "Confirmamos o dado no registo original e escrevemos de onde vem cada campo e cada número.",
+                        ),
+                        (
+                            "Respondemos por email",
+                            "Pedidos simples, em dias úteis; análises à medida, com o prazo indicado assim que o âmbito "
+                            "estiver definido.",
+                        ),
+                    ],
+                ),
                 b.faq(
                     "Perguntas frequentes",
                     [
                         ("Quanto tempo demoram a responder?", "Pedidos simples, em dias úteis; análises à medida, dizemos o prazo quando soubermos o âmbito."),
                         ("O que fazem com os meus dados?", "Usamos o nome e o email apenas para responder a este pedido. Pode pedir a eliminação a qualquer momento, pela mesma via."),
+                        ("Posso citar os vossos números?", "Pode, com ligação à página e a data da leitura. Cada número traz a fonte primária indicada, para se conferir."),
+                        ("Fazem análises fora de Portugal?", "Temos contratos públicos de Portugal, Espanha e França. Para outros países, dizemos primeiro o que a cobertura deixa responder."),
                     ],
+                ),
+                b.cta(
+                    "Talvez já esteja cá o que procura",
+                    "O blog mostra o método em prática e os relatórios gratuitos saem com a fonte de cada linha — "
+                    "é a forma mais rápida de ver o nível de detalhe que damos antes de pedir uma análise.",
+                    "Ler o blog",
+                    "/site/blog",
+                    botoes=[("Relatórios gratuitos", "/site/relatorios-gratuitos")],
                 ),
             ],
         )

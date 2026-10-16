@@ -36,9 +36,10 @@ RSS = "/site/rss.xml"
 INDICE_BLOG = "/site/blog"
 ESPACO_SITEMAP = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
-#: O título mostrado leva o sufixo da marca («— Sabemos Studio»); a descrição
-#: acima de ~165 caracteres é cortada pelo motor de busca.
-LIMITE_TITULO = 80
+#: O título mostrado leva o sufixo da marca («· Sabemos Studio») e o site corta-o
+#: em palavras no `LIMITE_TITULO_HEAD` (`api/cms_render.py`); a descrição acima de
+#: ~165 caracteres é cortada pelo motor de busca.
+LIMITE_TITULO = 70
 LIMITE_DESCRICAO = 165
 MINIMO_DESCRICAO = 50
 #: Quantos artigos se abrem (o mais recente primeiro): a suite não pode ficar

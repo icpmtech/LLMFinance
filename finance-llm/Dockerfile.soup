@@ -14,3 +14,10 @@ FROM ${SOUP_IMAGE}
 # O cliente 9.x não fala com o servidor 8.11 do compose (mesma restrição do
 # `requirements.txt` do backend).
 RUN pip install --no-cache-dir "elasticsearch>=8.11.0,<9.0.0"
+
+# O painel (`soup ui`) faz de proxy para o servidor de inferência na página
+# *Model Chat* e importa `httpx` (`soup_cli/ui/app.py::_stream_chat`), que a imagem
+# oficial não traz — ela instala `soup-cli[train,serve,data,eval]`, e nenhum desses
+# extras depende de um cliente HTTP. Sem isto, o chat responde sempre
+# «network error» e o log mostra `ModuleNotFoundError: No module named 'httpx'`.
+RUN pip install --no-cache-dir "httpx>=0.27"

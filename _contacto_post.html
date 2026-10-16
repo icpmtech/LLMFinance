@@ -1,0 +1,551 @@
+﻿<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Fale connosco · Sabemos Studio</title><meta name="description" content="Formulário de contacto."><meta name="robots" content="noindex, nofollow"><link rel="canonical" href="https://sabemos.studio/site/contacto"><link rel="alternate" type="application/rss+xml" title="Sabemos Studio — RSS" href="/site/rss.xml"><meta property="og:type" content="website"><meta property="og:site_name" content="Sabemos Studio"><meta property="og:title" content="Fale connosco · Sabemos Studio"><meta property="og:description" content="Formulário de contacto."><meta property="og:url" content="https://sabemos.studio/site/contacto"><meta property="og:locale" content="pt_PT"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Fale connosco · Sabemos Studio"><meta name="twitter:description" content="Formulário de contacto."><link rel="icon" href="/cms/media/med_b76482fc453a/raw"><link rel="manifest" href="/site/manifest.webmanifest"><meta name="theme-color" content="#0ea5a4"><link rel="apple-touch-icon" href="/site/pwa/pwa-icone-180.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Sabemos Studio"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>
+:root {
+  --bg: #f7f8fa; --surface: #ffffff; --text: #101828;
+  --muted: #5b6472; --border: #e4e7ec; --code: #f1f3f6;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06); --accent: #0ea5a4; --radius: 14px;
+  /* Uma só margem lateral, do telefone para cima. */
+  --gutter: 16px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  /* O cabeçalho é `sticky`: sem isto, uma âncora fica escondida debaixo dele. */
+  scroll-padding-top: 84px;
+}
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  /* A mesma família da plataforma (`chat-ui/src/index.css`): a app e o site
+     ficam iguais. O «Inter» que aqui estava nunca era carregado — só fazia
+     parecer que a fonte era outra. */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.65; font-size: 1rem; overflow-wrap: break-word;
+  text-rendering: optimizeLegibility;
+}
+img, svg, video, iframe { max-width: 100%; }
+img { height: auto; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap {
+  max-width: 1100px; margin: 0 auto;
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+.site-header {
+  position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+/* Cabeçalho de telefone: marca e botão na mesma linha, menu por baixo. */
+.site-header .wrap {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding-top: 8px; padding-bottom: 8px;
+}
+.brand { display: block; font-weight: 800; font-size: 1rem; color: var(--text); letter-spacing: -.01em; }
+.brand small { display: none; font-weight: 500; font-size: .72rem; color: var(--muted); letter-spacing: 0; }
+.brand .brand-mark { display: block; height: 32px; width: auto; }
+/* Menu sem JavaScript: a caixa fica escondida e o rótulo abre o painel. */
+.menu-estado { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.menu-botao {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 9px;
+  min-height: 44px; padding: 9px 15px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); font-size: .95rem; font-weight: 700;
+  cursor: pointer; user-select: none; transition: background .15s, border-color .15s, color .15s;
+}
+.menu-botao:hover { border-color: var(--accent); }
+.menu-barras, .menu-barras::before, .menu-barras::after {
+  display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; content: "";
+  transition: transform .2s ease, opacity .2s ease;
+}
+.menu-barras { position: relative; }
+.menu-barras::before { position: absolute; top: -6px; }
+.menu-barras::after { position: absolute; top: 6px; }
+.menu-estado:checked + .menu-botao { background: var(--text); border-color: var(--text); color: var(--surface); }
+.menu-estado:checked + .menu-botao .menu-barras { background: transparent; }
+.menu-estado:checked + .menu-botao .menu-barras::before { transform: translateY(6px) rotate(45deg); }
+.menu-estado:checked + .menu-botao .menu-barras::after { transform: translateY(-6px) rotate(-45deg); }
+nav.main {
+  display: none; width: 100%; flex-direction: column; gap: 2px; margin: 6px 0 0;
+  padding: 10px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); box-shadow: 0 12px 28px rgba(16,24,40,.12);
+}
+.menu-estado:checked ~ nav.main { display: flex; }
+/* Alvos de toque com pelo menos 44px nos links do menu. O item que abre um
+   submenu é um link (quando tem página própria) ou o próprio rótulo. */
+nav.main > a, nav.main .menu-pai {
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 12px 14px;
+  border-radius: 10px; color: var(--text); font-size: 1rem; font-weight: 600;
+}
+nav.main span.menu-pai { width: 100%; cursor: pointer; }
+/* O ícone acompanha o rótulo: se a linha ficar apertada, cede o texto (muda de
+   linha) e não o desenho, que encolhido fica deformado. */
+.menu-icone { flex: none; }
+/* O submenu está fechado por omissão e quem o abre é a seta do item, no
+   telemóvel e no computador: um menu que se abre sozinho com o rato por cima
+   tapa o que se estava a ler. O rótulo continua a ser o link para a página. */
+nav.main .tem-submenu > .submenu { display: none; }
+nav.main .tem-submenu.aberto > .submenu { display: block; }
+/* A seta que abre e fecha: pequena e encostada ao rótulo (no telemóvel passa a
+   44px e vai para o canto da linha, ver o `@media (max-width: 799px)`). */
+.menu-abre {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin-left: -4px; padding: 0;
+  border: 1px solid transparent; border-radius: 999px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.menu-abre:hover, .menu-abre:focus-visible { background: var(--code); color: var(--text); }
+.menu-abre[aria-expanded="true"] { color: var(--accent); }
+.menu-abre svg { transition: transform .18s ease; }
+.menu-abre[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* Campo de pesquisa do site: vive no painel do telemóvel e na página de
+   resultados (`/site/pesquisa`), que é o mesmo formulário. */
+.pesquisa-form, .menu-pesquisa {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 6px 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface);
+}
+.pesquisa-form { margin: 0 0 18px; }
+.pesquisa-form input, .menu-pesquisa input {
+  flex: 1 1 auto; min-width: 0; min-height: 40px; border: 0; background: none;
+  color: var(--text); font: inherit;
+}
+.pesquisa-form input:focus, .menu-pesquisa input:focus { outline: none; }
+.pesquisa-form .pesquisa-icone, .menu-pesquisa .pesquisa-icone {
+  display: flex; flex: none; color: var(--muted);
+}
+.pesquisa-form button, .menu-pesquisa button {
+  flex: none; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 999px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}
+/* Entrar/criar conta: os dois botões do painel do telemóvel. Partilham a linha
+   quando ela é larga o suficiente e empilham-se quando não é — o rótulo nunca
+   muda de linha, senão o botão cresce para o dobro da altura. */
+.menu-conta { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 2px 0 4px; }
+.menu-conta .btn {
+  flex: 1 1 auto; gap: 8px; min-width: 132px; padding: 10px 14px;
+  font-size: .95rem; white-space: nowrap;
+}
+/* No telefone o submenu fica logo à vista, indentado sob o item que o abre. */
+nav.main .submenu { margin: 0 0 6px 12px; padding: 0 0 0 10px; border-left: 1px solid var(--border); list-style: none; }
+nav.main .submenu > li { list-style: none; }
+nav.main .submenu a, nav.main .submenu .menu-pai {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 9px 10px; font-size: .95rem; font-weight: 500;
+}
+nav.main a:hover, nav.main a:focus-visible, nav.main .menu-pai:hover, nav.main .menu-pai:focus-visible { background: var(--code); text-decoration: none; }
+nav.main a[aria-current="page"] { background: var(--accent); color: #fff; }
+.breadcrumb { margin: 0 0 16px; font-size: .86rem; }
+.breadcrumb ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; list-style: none; }
+.breadcrumb li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.breadcrumb li + li::before { content: "›"; color: var(--muted); opacity: .7; }
+.breadcrumb a { color: var(--muted); }
+.breadcrumb a:hover { color: var(--accent); }
+.breadcrumb [aria-current="page"] { color: var(--text); font-weight: 600; }
+/* Temas do menu público: valem para as entradas de topo (links e os rótulos que
+   abrem submenus), não para os links de dentro dos submenus. */
+.site-header.tema-central .wrap { justify-content: center; flex-direction: column; }
+.site-header.tema-central .brand { text-align: center; }
+.site-header.tema-central nav.main { margin: 8px auto 0; }
+.site-header.tema-linha nav.main > a,
+.site-header.tema-linha nav.main > .menu-item > .menu-pai { border-radius: 0; border-bottom: 2px solid transparent; padding-left: 10px; padding-right: 10px; background: none; }
+.site-header.tema-linha nav.main > a:hover,
+.site-header.tema-linha nav.main > a:focus-visible,
+.site-header.tema-linha nav.main > .menu-item > .menu-pai:hover { background: none; border-bottom-color: var(--accent); }
+.site-header.tema-linha nav.main > a[aria-current="page"] { background: none; color: var(--accent); border-bottom-color: var(--accent); }
+.site-header.template-contorno nav.main > a,
+.site-header.template-contorno nav.main > .menu-item > .menu-pai { background: transparent; border: 1px solid var(--border); }
+.site-header.template-contorno nav.main > a[aria-current="page"] { border-color: var(--accent); color: var(--accent); background: transparent; }
+.site-header.template-preenchido nav.main > a,
+.site-header.template-preenchido nav.main > .menu-item > .menu-pai { background: var(--code); }
+.site-header.template-subtil nav.main > a,
+.site-header.template-subtil nav.main > .menu-item > .menu-pai { font-weight: 500; color: var(--muted); }
+.site-header.template-subtil nav.main > a[aria-current="page"] { color: var(--text); background: none; }
+.site-header.template-grande .brand { font-size: 1.25rem; }
+.site-header.template-grande nav.main > a,
+.site-header.template-grande nav.main > .menu-item > .menu-pai { font-size: 1.05rem; padding: 10px 16px; }
+/* Menu responsivo para todos os ecrãs e equipamentos */
+@media (max-width: 799px) {
+  .site-header .wrap { flex-direction: row; align-items: center; }
+  /* A marca é um link: com o logótipo de 32px ficava com 32px de altura, abaixo
+     do alvo de toque confortável. O `min-height` dá-lhe os 44px sem mexer na
+     imagem. */
+  .brand { display: inline-flex; align-items: center; min-height: 44px; }
+  .site-header.tema-central .brand { text-align: left; }
+  .site-header.tema-central nav.main { margin-left: 0; margin-top: 6px; width: 100%; }
+  /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
+  nav.main > * + * { border-top: 1px solid var(--border); }
+  nav.main > a { width: 100%; }
+  nav.main .menu-item, nav.main .submenu > li { position: relative; }
+  nav.main .tem-submenu > .menu-pai { padding-right: 56px; }
+  /* O painel abre com os botões de entrar e criar conta: as entradas de topo do
+     CMS que levam aos mesmos sítios não se repetem aqui (no ecrã grande ficam). */
+  nav.main > .menu-igual-conta { display: none; }
+  /* A seta do painel: alvo de toque de 44px, no canto direito da linha. */
+  .menu-abre {
+    position: absolute; top: 2px; right: 4px;
+    width: 44px; height: 44px; margin: 0; border-radius: 10px;
+  }
+  /* Com submenus o painel fica mais alto que o ecrã e o cabeçalho é pegajoso:
+     sem tecto, o fim da lista ficava fora do alcance (o painel não anda com a
+     página). Aqui rola dentro do próprio painel; o `dvh` acompanha a barra do
+     browser a aparecer e a desaparecer, e o `vh` é a reserva dos mais antigos. */
+  .menu-estado:checked ~ nav.main {
+    max-height: calc(100vh - 84px); max-height: calc(100dvh - 84px);
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+  .site-header.tema-linha nav.main > a,
+  .site-header.tema-linha nav.main > .menu-item > .menu-pai { border-bottom: 0; border-radius: 10px; }
+}
+@media (min-width: 800px) {
+  .site-header.tema-central .wrap { flex-direction: row; justify-content: space-between; }
+  .site-header.tema-central .brand { text-align: left; }
+  .site-header.tema-central nav.main { margin-left: auto; margin-top: 0; width: auto; }
+  /* Submenus: painel que abre por baixo da entrada, a um clique na seta (o
+     rótulo é o link para a página do item). */
+  nav.main > .menu-item { position: relative; display: flex; align-items: center; }
+  nav.main .submenu {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+    min-width: 210px; margin: 0; padding: 8px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--surface); box-shadow: 0 14px 34px rgba(16,24,40,.18);
+  }
+  /* Um submenu dentro de outro abre ao lado, alinhado com o item que o abre. */
+  nav.main .submenu > li { display: flex; align-items: center; position: relative; }
+  nav.main .submenu .submenu { top: -8px; left: calc(100% + 4px); }
+  /* Sem espaço à direita, o submenu vira-se para a esquerda (ver o script). */
+  nav.main .submenu .submenu.abre-esquerda { left: auto; right: calc(100% + 4px); }
+  nav.main .submenu a, nav.main .submenu .menu-pai {
+    justify-content: space-between; flex: 1 1 auto; min-width: 0; min-height: 40px;
+    padding: 8px 10px; border-radius: 8px; font-size: .9rem; font-weight: 500;
+  }
+}
+main { padding: 20px 0 56px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 20px;
+}
+.section + .section { margin-top: 24px; }
+h1 { font-size: clamp(1.6rem, 6.4vw, 2.6rem); line-height: 1.14; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; }
+h2 { font-size: clamp(1.22rem, 4.4vw, 1.45rem); letter-spacing: -.01em; margin: 28px 0 10px; text-wrap: balance; }
+h3 { font-size: clamp(1.04rem, 3.2vw, 1.12rem); margin: 22px 0 8px; text-wrap: balance; }
+/* Título de uma secção que não deve crescer para o tamanho do `h2`: a marcação
+   fica certa (sem saltos de nível) e a medida do texto mantém-se. */
+.seccao-titulo { font-size: clamp(1.04rem, 3.2vw, 1.12rem); letter-spacing: 0; margin: 22px 0 8px; }
+p { margin: 0 0 14px; text-wrap: pretty; }
+.lead { font-size: 1.06rem; color: var(--muted); }
+/* O bloco de abertura é uma faixa, não um cartão: sem caixa, o título e a entrada
+   ficam alinhados com a trilha de navegação e com o resto da página (dentro de um
+   cartão ficavam recuados 33px, que é o que se via em todas as páginas). */
+.hero { padding: 4px 0 6px; }
+.hero .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+.hero.centro { text-align: center; }
+.hero .cover { margin: 22px 0 0; }
+.hero .cover img { width: 100%; }
+/* Páginas de sistema (404, erro do serviço e sem ligação): texto de um lado,
+   ilustração do outro; no telefone empilha, com a imagem por baixo do texto. */
+.sistema { display: grid; gap: 24px; align-items: center; }
+.sistema-etiqueta {
+  margin: 0 0 10px; color: var(--muted); font-size: .78rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.sistema-nota {
+  margin: 0 0 20px; padding: 13px 16px; border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0; background: var(--code);
+}
+.sistema-imagem { margin: 0; }
+.sistema-imagem svg {
+  display: block; width: 100%; height: auto; border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.sistema-imagem figcaption { margin-top: 9px; color: var(--muted); font-size: .86rem; }
+.sistema-links { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.sistema-links li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.sistema-links a { font-weight: 700; }
+.sistema-links span { color: var(--muted); font-size: .93rem; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 46px;
+  padding: 11px 20px; border-radius: 999px; font-weight: 700;
+  background: var(--accent); color: #fff; border: 1px solid transparent;
+}
+.btn.ghost { background: transparent; color: var(--accent); border-color: var(--border); }
+.btn:hover { text-decoration: none; filter: brightness(1.05); }
+/* Uma coluna no telefone; a grelha só entra quando há largura para ela. */
+.grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+.tile h3 { margin: 0 0 6px; font-size: 1rem; }
+.tile-icon { width: 42px; height: 42px; margin-bottom: 10px; display: block; }
+.tile p { margin: 0; color: var(--muted); font-size: .94rem; }
+/* Cartão que leva a algum lado: continua a parecer cartão, mas responde ao rato. */
+a.tile { display: block; color: inherit; }
+a.tile:hover { text-decoration: none; border-color: var(--accent); box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 10px 28px rgba(16,24,40,.10); }
+a.tile h3 { color: var(--accent); }
+/* Biblioteca de relatórios (`relatorios`): áreas, cartões, etiquetas de preço. */
+.library-count { color: var(--muted); font-size: .94rem; margin: -4px 0 18px; }
+.library-area + .library-area { margin-top: 26px; }
+.library-area-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+.library-area-head h3 { margin: 0; }
+.library-area-head p { margin: 0; color: var(--muted); font-size: .9rem; flex: 1 1 auto; }
+.library-area-count { margin-left: auto; font-weight: 700; color: var(--muted); font-size: .86rem; }
+.cards { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.library-card { display: flex; flex-direction: column; gap: 8px; }
+.library-card h3 { margin: 0; font-size: 1.02rem; }
+.library-card p { margin: 0; color: var(--muted); font-size: .93rem; }
+.library-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: .74rem; font-weight: 600; color: var(--muted); }
+.tag-free { border-color: #12b886; color: #0b7a5b; background: rgba(18,184,134,.10); }
+.tag-price { border-color: var(--accent); color: var(--accent); }
+.tag-auto { border-color: #f59e0b; color: #b45309; background: rgba(245,158,11,.10); }
+.library-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }
+.library-list li { margin: 2px 0; }
+.library-actions { margin-top: auto; padding-top: 6px; }
+.library-actions .btn { min-height: 44px; padding: 8px 16px; font-size: .9rem; }
+figure { margin: 20px 0; }
+figure img, .prose img { max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }
+figure > picture { display: block; }
+/* Uma figura directa da página ocupa a largura toda: é assim que o diagrama
+   ganha o espaço que precisa para se ler num telefone. */
+main > .wrap > figure > img, main > .wrap > figure > picture > img { width: 100%; }
+figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
+/* Duas colunas no telefone: uma só fazia destas páginas um rolo interminável. */
+.grid.galeria { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.grid.galeria img { width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }
+.prose ul, .prose ol { padding-left: 20px; }
+.prose blockquote {
+  margin: 20px 0; padding: 6px 18px; border-left: 3px solid var(--accent); color: var(--muted); font-style: italic;
+}
+.prose code { background: var(--code); padding: 2px 6px; border-radius: 6px; font-size: .9em; }
+.prose pre { background: var(--code); padding: 16px; border-radius: var(--radius); overflow: auto; }
+.prose pre code { background: none; padding: 0; }
+/* Tabelas: as estreitas cabem no ecrã; as de muitas colunas rolam em vez de
+   esmagarem o texto numa coluna de três letras. A largura mínima é da base
+   (telefone) — de 700px para cima a tabela já cabe e não precisa dela. */
+.tabela-rolavel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabela-rolavel.larga table { min-width: 40rem; }
+.prose table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.prose th, .prose td { border: 1px solid var(--border); padding: 9px 10px; text-align: left; }
+.prose th { background: var(--code); }
+/* Gráficos: barras horizontais em HTML/CSS puro — sem JavaScript e sem
+   bibliotecas, por isso imprimem, funcionam offline (a página é também o
+   `offline.html` do service worker) e não pesam nada. As barras crescem por
+   largura, que é o eixo que sobra num telefone: uma coluna estreita não muda
+   a leitura, muda só a escala. O valor vai sempre escrito, por isso quem usa
+   leitor de ecrã lê o número e não uma barra. */
+.grafico-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.grafico-item { display: grid; gap: 6px; }
+/* Nome à esquerda e valor à direita na mesma linha; sem largura que chegue, o
+   valor passa para a linha de baixo em vez de apertar o nome. */
+.grafico-topo { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; justify-content: space-between; }
+.grafico-nome { font-weight: 600; font-size: .95rem; min-width: 0; }
+.grafico-valores { display: flex; align-items: baseline; gap: 8px; margin-left: auto; }
+.grafico-valor { font-weight: 700; font-size: .95rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+/* Segunda série (ex.: contratos vs valor): o número fica em tom menor, atrás
+   do principal, para as duas leituras não competirem. */
+.grafico-item-regua { color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.grafico-barra { display: block; height: 10px; border-radius: 999px; background: var(--code); overflow: hidden; }
+.grafico-barra + .grafico-barra { margin-top: 5px; }
+.grafico-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.grafico-barra.secundaria > span { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+.grafico-legenda { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 14px; padding: 0; list-style: none; color: var(--muted); font-size: .84rem; }
+.grafico-legenda li { display: inline-flex; align-items: center; gap: 7px; }
+.grafico-ponto { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); flex: none; }
+.grafico-legenda li.secundaria .grafico-ponto { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+.grafico-nota { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+.grafico-item-nota { margin: 0; color: var(--muted); font-size: .84rem; }
+.grafico-fonte { color: var(--muted); font-size: .8rem; margin: 14px 0 0; }
+.cta {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  padding: 22px 20px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface));
+  box-shadow: var(--shadow);
+}
+.cta h2 { margin: 0 0 4px; }
+/* Uma faixa pode ter mais do que um botão (ex.: entrar e loja). */
+.cta .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.aviso { border-left: 4px solid var(--accent); background: var(--code); padding: 14px 16px; border-radius: 8px; }
+.aviso.amber { border-color: #f59e0b; }
+.aviso.red { border-color: #ef4444; }
+.aviso.green { border-color: #10b981; }
+.faq details { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--surface); }
+.faq summary { min-height: 46px; display: flex; align-items: center; padding: 12px 16px; font-weight: 600; cursor: pointer; }
+.faq details > div { padding: 0 16px 14px; }
+.pill {
+  display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
+.meta { color: var(--muted); font-size: .88rem; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }
+/* Ação do artigo (descarregar o relatório em PDF): entre os créditos e a capa. */
+.artigo-acao { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px; }
+.artigo-acao .btn { min-height: 44px; padding: 10px 18px; font-size: .9rem; }
+.posts { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.post-card { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.post-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+.post-card .body { padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.post-card h2 { margin: 0; font-size: 1.08rem; letter-spacing: -.01em; }
+.post-card p { margin: 0; color: var(--muted); font-size: .93rem; }
+.post-card a { color: var(--text); }
+.post-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 2px 4px rgba(16,24,40,.06), 0 12px 30px rgba(16,24,40,.10); }
+.post-card:hover h2 a { color: var(--accent); }
+.pager { display: flex; gap: 8px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }
+.pager a, .pager span {
+  min-height: 44px; display: inline-flex; align-items: center; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
+}
+.pager span.current { background: var(--accent); color: #fff; border-color: transparent; }
+.hr { height: 1px; background: var(--border); margin: 28px 0; border: 0; }
+.contactos { display: grid; gap: 10px; grid-template-columns: 1fr; }
+.contactos div { padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+/* O formulário é o destino da página: tem caixa própria, para não se confundir
+   com o texto que o explica, e uma grelha de campos que começa numa só coluna —
+   quem manda é o telefone. */
+.formulario {
+  max-width: 760px; padding: 20px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow);
+}
+.formulario > h2:first-child { margin-top: 0; }
+.formulario form { display: grid; gap: 14px; margin-top: 18px; }
+.formulario .campos { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.formulario .campo { display: grid; gap: 6px; }
+.formulario .campo.larga { grid-column: 1 / -1; }
+.formulario label { font-weight: 600; font-size: .93rem; }
+.formulario .marca { color: var(--accent); }
+.formulario input, .formulario textarea {
+  width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text); font: inherit;
+}
+.formulario input:focus, .formulario textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.formulario textarea { resize: vertical; min-height: 140px; }
+.formulario .erro { color: #b42318; font-size: .82rem; }
+.formulario .ajuda { color: var(--muted); font-size: .82rem; }
+.ajuda-formulario { color: var(--muted); font-size: .86rem; margin: 0; }
+.formulario .consentimento { display: flex; align-items: flex-start; gap: 10px; }
+.formulario .consentimento input { width: auto; min-height: 0; margin-top: 4px; }
+.formulario .consentimento label { font-weight: 500; font-size: .9rem; color: var(--muted); }
+.formulario .acao { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+/* O que acontece depois do envio fica na linha do botão: quem está a decidir se
+   escreve vê a mesma informação que quem já escreveu. */
+.nota-formulario { flex: 1 1 260px; color: var(--muted); font-size: .89rem; }
+.nota-formulario p { margin: 0; }
+.nota-formulario a { font-weight: 600; }
+.contacto-ok .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+/* Campo-armadilha: invisível para quem lê, apetecível para quem preenche formulários em série. */
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.steps { counter-reset: step; display: grid; gap: 14px; }
+.steps .step { position: relative; padding-left: 46px; }
+.steps .step::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .88rem;
+}
+.site-footer { border-top: 1px solid var(--border); background: var(--surface); padding: 26px 0; color: var(--muted); font-size: .9rem; }
+.site-footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.site-footer nav { display: flex; gap: 8px 16px; flex-wrap: wrap; }
+.site-footer a { color: var(--muted); min-height: 44px; display: inline-flex; align-items: center; }
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px 16px; }
+.kpi span { display: block; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }
+.kpi strong { display: block; margin-top: 6px; font-size: clamp(1.2rem, 5vw, 1.32rem); letter-spacing: -.02em; }
+.kpi small { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }
+.draft-banner {
+  position: sticky; top: 0; z-index: 30; background: #f59e0b; color: #1f2937;
+  text-align: center; font-size: .85rem; font-weight: 700; padding: 6px 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Tudo o que está acima é o telefone — a base. Daqui para baixo só se
+   acrescenta o que os ecrãs maiores permitem.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* A figura sai das margens laterais e ocupa o ecrã todo: num diagrama são
+     ~20% mais largura, que é a diferença entre ler e adivinhar. */
+  main > .wrap > figure {
+    margin-left: calc(var(--gutter) * -1); margin-right: calc(var(--gutter) * -1);
+  }
+  main > .wrap > figure > img, main > .wrap > figure > picture > img { border-radius: 0; }
+  main > .wrap > figure > figcaption { padding-left: var(--gutter); padding-right: var(--gutter); }
+}
+@media (min-width: 480px) {
+  .brand small { display: block; }
+  .site-footer a { min-height: 0; }
+}
+@media (min-width: 560px) {
+  .grid { gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .contactos { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .posts { gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .kpis { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .grid.galeria { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .cta { flex-direction: row; align-items: center; justify-content: space-between; padding: 24px 26px; }
+}
+@media (max-width: 899px) {
+  /* O `<img>` traz `width`/`height` do ficheiro largo — é o que reserva o espaço
+     antes de a figura carregar. No telefone quem carrega é a variante em
+     coluna, com uma proporção bem mais alta: a proporção dela vem no próprio
+     `<img>` e substitui a dos atributos, senão a caixa reservava uma faixa
+     baixa e a figura dava um salto de centenas de pixels ao aparecer. */
+  main > .wrap > figure > picture > img { aspect-ratio: var(--proporcao-movel, auto); }
+}
+@media (min-width: 641px) and (max-width: 899px) {
+  /* No intervalo em que ainda se usa a versão em coluna, ela é um vetor: sem
+     travão esticava a 1400px de altura num tablet. Fica centrada na medida de
+     leitura. */
+  main > .wrap > figure > picture > img { max-width: 560px; margin-left: auto; margin-right: auto; }
+}
+@media (min-width: 700px) {
+  :root { --gutter: 20px; }
+  main { padding: 32px 0 72px; }
+  .card { padding: 28px; }
+  .formulario { padding: 26px 28px; }
+  /* Dois campos por linha a partir daqui: o formulário de contacto tem cinco
+     campos e, numa coluna só, era um rolo até ao botão. */
+  .formulario .campos { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+  .section + .section { margin-top: 28px; }
+  .hero { padding: 8px 0 12px; }
+  .hero .actions { margin-top: 20px; }
+  .hero .cover { margin: 24px 0 0; }
+  h2 { margin: 32px 0 10px; }
+  h3 { margin: 24px 0 8px; }
+  .tile { padding: 20px; }
+  .tile-icon { width: 44px; height: 44px; margin-bottom: 12px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .steps .step { padding-left: 52px; }
+  .steps .step::before { width: 34px; height: 34px; font-size: .9rem; }
+  /* A partir daqui há largura para a tabela larga caber inteira. */
+  .tabela-rolavel.larga table { min-width: 0; }
+}
+@media (min-width: 800px) and (max-width: 1160px) {
+  /* Com 9-10 itens no menu, a fila de pastilhas encosta no logótipo em ecrãs de
+     800-1160px. Reduzir um pouco o tamanho das pastilhas e o separador evita
+     quebras de linha e mantém todos os links numa linha só. */
+  .site-header .wrap { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .brand .brand-mark { height: 30px; }
+  nav.main { gap: 2px; }
+  nav.main > a,
+  nav.main > .menu-item > .menu-pai { padding: 7px 8px; font-size: .84rem; }
+}
+@media (min-width: 800px) {
+  /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
+  .site-header .wrap { flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }
+  .brand .brand-mark { height: 34px; }
+  /* No ecrã grande não há botão de menu, nem pesquisa, nem conta, e as pastilhas
+     ficam sem ícones (da seta trata a regra própria, mais abaixo): a fila é larga
+     e já tem o «Entrar» à vista. */
+  .menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-icone { display: none; }
+  nav.main {
+    display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
+    width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+  }
+  nav.main > a,
+  nav.main > .menu-item > .menu-pai {
+    min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px;
+  }
+  /* Nas páginas de sistema a ilustração fica ao lado do texto. */
+  .sistema { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; }
+  /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
+  .prose { max-width: 760px; }
+  /* Os gráficos seguem a mesma medida: numa barra de 1100px o nome e o valor
+     ficavam a um ecrã de distância um do outro e a comparação perdia-se. */
+  .grafico-lista, .grafico-legenda, .grafico-nota, .grafico-fonte { max-width: 760px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+@media print { .site-header, .site-footer, .draft-banner, .menu-botao { display: none; } body { background: #fff; } }
+</style></head><body><header class="site-header tema-pastilhas"><div class="wrap"><a class="brand" href="/site"><img class="brand-mark" src="/cms/media/med_487d84184062/raw" alt="Sabemos Studio" width="320" height="72"><small>Inteligência financeira e contratual</small></a><input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu"><label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label><nav class="main" aria-label="Navegação principal"><form class="menu-pesquisa" action="/site/pesquisa" method="get" role="search"><span class="pesquisa-icone" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span><input type="search" name="q" value="" placeholder="Pesquisar no site" aria-label="Pesquisar no site" autocomplete="off" enterkeyhint="search"><button type="submit">Pesquisar</button></form><div class="menu-conta"><a class="btn ghost" href="/login"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Entrar</a><a class="btn" href="/register"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>Criar conta</a></div><a href="/site/"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Início</a><div class="menu-item tem-submenu nivel-0"><a class="menu-pai" href="/site/solucoes"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>Soluções</a><button type="button" class="menu-abre" aria-expanded="false" aria-label="Abrir Soluções"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><ul class="submenu nivel-1"><li><a href="/site/solucoes/benchmarks-de-produtos">Benchmarks</a></li><li><a href="/site/solucoes/contratos-publicos">Contratos públicos</a></li><li><a href="/site/solucoes/empresas-e-pessoas">Empresas e pessoas</a></li><li><a href="/site/solucoes/investigacao">Investigação assistida</a></li><li><a href="/site/solucoes/mercado-e-precos">Mercado e preços</a></li><li><a href="/site/solucoes/municipios">Municípios</a></li></ul></div><div class="menu-item tem-submenu nivel-0"><a class="menu-pai" href="/site/relatorios-gratuitos"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Relatórios</a><button type="button" class="menu-abre" aria-expanded="false" aria-label="Abrir Relatórios"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><ul class="submenu nivel-1"><li class="tem-submenu nivel-1"><span class="menu-pai" tabindex="0">Empresas e risco</span><button type="button" class="menu-abre" aria-expanded="false" aria-label="Abrir Empresas e risco"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><ul class="submenu nivel-2"><li><a href="/site/documento/rep-23eea1bd54">Concorrência — MEDTRONIC PORTUGAL</a></li><li><a href="/reports">Área de CAE — MEDTRONIC PORTUGAL</a></li></ul></li></ul></div><a href="/site/fontes"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>Fontes</a><div class="menu-item tem-submenu nivel-0"><a class="menu-pai" href="/site/benchmarks"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Benchmarks</a><button type="button" class="menu-abre" aria-expanded="false" aria-label="Abrir Benchmarks"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><ul class="submenu nivel-1"><li><a href="/site/benchmarks/livros-demo">Livros (demonstração)</a></li><li><a href="/site/benchmarks/marcas-portuguesas-lojas">Moda — marcas portuguesas e ibéricas</a></li><li><a href="/site/benchmarks/portateis-lojas">Portáteis — comparação entre lojas</a></li><li><a href="/site/benchmarks/roupa-desportiva-lojas">Roupa desportiva — comparação entre lojas</a></li><li><a href="/site/benchmarks/sapatilhas-lojas">Sapatilhas — comparação entre lojas</a></li><li><a href="/site/benchmarks/telemoveis-lojas">Telemóveis — comparação entre lojas</a></li></ul></div><a href="/site/blog"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18h-5"/><path d="M18 14h-8"/><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="10" y="6" rx="1"/></svg>Blog</a><a href="/site/contactos"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>Contactos</a><a href="/site/sobre"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Sobre</a><a class="menu-igual-conta" href="/login"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Entrar</a><a href="/loja"><svg class="menu-icone" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg>Loja</a></nav></div></header><main><div class="wrap"><div class="section formulario"><h2>Fale connosco</h2><p class="lead">Corrija o que falta e volte a enviar.</p><p class="ajuda-formulario">Os campos com <span class="marca" aria-hidden="true">*</span> são obrigatórios. Os restantes ajudam-nos a responder com mais precisão.</p><div class="aviso red">Confira os campos assinalados.</div><form method="post" action="/site/contacto"><div class="campos"><div class="campo"><label for="contacto-nome">Nome <span class="marca" aria-hidden="true">*</span></label><input id="contacto-nome" name="nome" type="text" value="" required aria-required="true" autocomplete="name" maxlength="120"><small class="erro" role="alert">Indique o seu nome.</small></div><div class="campo"><label for="contacto-email">Email <span class="marca" aria-hidden="true">*</span></label><input id="contacto-email" name="email" type="email" value="mau-email" required aria-required="true" autocomplete="email" maxlength="160"><small class="erro" role="alert">Esse email não parece válido.</small></div><div class="campo"><label for="contacto-organizacao">Organização</label><input id="contacto-organizacao" name="organizacao" type="text" value="" autocomplete="organization" maxlength="160"></div><div class="campo"><label for="contacto-assunto">Assunto</label><input id="contacto-assunto" name="assunto" type="text" value="" maxlength="160" list="contacto-assunto-sugestoes"><datalist id="contacto-assunto-sugestoes"><option value="Análise à medida"></option><option value="Correção de um número"></option><option value="Dados e cobertura"></option><option value="Imprensa"></option></datalist></div><div class="campo larga"><label for="contacto-mensagem">Mensagem <span class="marca" aria-hidden="true">*</span></label><textarea id="contacto-mensagem" name="mensagem" rows="6" required aria-required="true" maxlength="4000" aria-describedby="contacto-mensagem-ajuda"></textarea><small class="ajuda" id="contacto-mensagem-ajuda">Diga o que quer saber, para quando e sobre que entidade ou concelho — o NIF ajuda a não trocar de empresa.</small><small class="erro" role="alert">Escreva a mensagem.</small></div></div><div class="campo consentimento"><input id="contacto-consentimento" name="consentimento" type="checkbox" value="sim" required aria-required="true"><label for="contacto-consentimento">Autorizo que me contactem por email sobre este pedido. Os dados são usados só para responder e podem ser apagados a pedido.</label></div><small class="erro" role="alert">Precisa de autorizar o contacto para enviar.</small><div class="hp"><label for="contacto-website">Não preencher</label><input id="contacto-website" name="website" type="text" tabindex="-1" autocomplete="off"></div><div class="acao"><button class="btn" type="submit">Enviar mensagem</button></div></form></div></div></main><footer class="site-footer tema-pastilhas"><div class="wrap"><div><strong>Sabemos Studio</strong><br>© Sabemos Studio — todos os direitos reservados.</div><nav><a href="/site/solucoes">Soluções</a><a href="/site/relatorios-gratuitos">Relatórios</a><a href="/site/fontes">Fontes</a><a href="/site/blog">Blog</a><a href="/site/contactos">Contactos</a><a href="/site/sobre">Sobre</a></nav></div></footer><script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/site/sw.js").catch(function(){});});}</script><script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function rotulo(i){var g=i.querySelector(".menu-pai");return g?g.textContent.trim():"";}function fechar(){n.querySelectorAll(".tem-submenu.aberto").forEach(function(i){i.classList.remove("aberto");var t=i.querySelector(".menu-abre");if(t){t.setAttribute("aria-expanded","false");t.setAttribute("aria-label","Abrir "+rotulo(i));}});}function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";if(!o)fechar();}n.querySelectorAll(".menu-abre").forEach(function(t){t.addEventListener("click",function(){var i=t.parentElement,a=i.classList.toggle("aberto");t.setAttribute("aria-expanded",a?"true":"false");t.setAttribute("aria-label",(a?"Fechar ":"Abrir ")+rotulo(i));});});c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(e.target===c||n.contains(e.target)||b.contains(e.target))return;if(c.checked){c.checked=false;update();}else{fechar();}});document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar();});update();})();</script><script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();</script></body></html>

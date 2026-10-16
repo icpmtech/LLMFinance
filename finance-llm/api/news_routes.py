@@ -378,9 +378,8 @@ def _noticia_do_pedido(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _etiquetas_da_noticia(payload: Dict[str, Any], noticia: Dict[str, Any], tema: Optional[Dict[str, Any]]) -> List[str]:
     """Etiquetas do artigo: as do editor, ou as que a notícia sugere.
 
-    A última é sempre a **marca da notícia** (`noticia-<id>`): é por ela que a
-    publicação reconhece o que já foi publicado, para a mesma notícia não dar
-    dois artigos.
+    Só temas: a notícia de origem não aparece aqui (é o `news_id` do artigo) —
+    uma etiqueta interna acabaria publicada na página como se fosse um assunto.
     """
     explicitas = payload.get("tags")
     if isinstance(explicitas, str):
@@ -400,9 +399,6 @@ def _etiquetas_da_noticia(payload: Dict[str, Any], noticia: Dict[str, Any], tema
             text = _text(value)
             if text and text not in tags:
                 tags.append(text)
-    marca = _marca_da_noticia(noticia, payload)
-    if marca and marca not in tags:
-        tags.append(marca)
     return tags[:20]
 
 
@@ -411,12 +407,9 @@ def _dividir_etiquetas(value: str) -> List[str]:
     return [part.strip() for part in str(value or "").replace(";", ",").split(",") if part.strip()]
 
 
-def _marca_da_noticia(noticia: Dict[str, Any], payload: Dict[str, Any]) -> str:
-    """Etiqueta que identifica a notícia de origem (`""` quando não há `id`)."""
-    news_id = _text(noticia.get("id")) or _text(payload.get("id"))
-    if not news_id:
-        return ""
-    return f"noticia-{news_id}"[:120]
+def _id_da_noticia(noticia: Dict[str, Any], payload: Dict[str, Any]) -> str:
+    """Identificador da notícia de origem (`""` quando não há `id`)."""
+    return _text(noticia.get("id")) or _text(payload.get("id"))
 
 
 def _palavras_chave_da_noticia(noticia: Dict[str, Any], tema: Optional[Dict[str, Any]]) -> List[str]:
@@ -536,12 +529,20 @@ def _categorias_do_artigo(payload: Dict[str, Any], tema: Optional[Dict[str, Any]
     return [str(categoria["id"])] if categoria and categoria.get("id") else []
 
 
-def _artigo_existente(marca: str) -> Optional[Dict[str, Any]]:
-    """O artigo já criado a partir desta notícia (`None` se ainda não houver)."""
-    if not marca:
+def _artigo_existente(news_id: str) -> Optional[Dict[str, Any]]:
+    """O artigo já criado a partir desta notícia (`None` se ainda não houver).
+
+    Procura pelo `news_id` gravado no artigo; os artigos publicados antes deste
+    campo existir só têm a etiqueta `noticia-<id>`, que se procura depois para não
+    dar dois artigos à mesma notícia.
+    """
+    if not news_id:
         return None
     try:
-        encontrados = cms_store.list_items("posts", tag=marca, limit=1, with_blocks=False)
+        artigo = cms_store.post_by_news_id(news_id)
+        if artigo:
+            return artigo
+        encontrados = cms_store.list_items("posts", tag=f"noticia-{news_id}"[:120], limit=1, with_blocks=False)
     except Exception as exc:  # noqa: BLE001 - a falta de CMS não impede ver o erro no log
         logger.warning("Não foi possível verificar publicações anteriores: %s", exc)
         return None
@@ -604,8 +605,8 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
             if traducao.get("ia") and not ja_tinha:
                 save_news_translation(noticia.get("id"), title=novo_titulo, summary=novo_resumo)
 
-    marca = _marca_da_noticia(noticia, payload)
-    existente = _artigo_existente(marca)
+    news_id = _id_da_noticia(noticia, payload)
+    existente = _artigo_existente(news_id)
     if existente:
         return {
             "saved": False,
@@ -617,6 +618,7 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
 
     corpo = _artigo_da_noticia(noticia, payload, tema)
     corpo["category_ids"] = _categorias_do_artigo(payload, tema)
+    corpo["news_id"] = news_id
     corpo["author"] = author
     try:
         artigo = cms_store.save_item("posts", corpo, author)

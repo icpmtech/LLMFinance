@@ -905,6 +905,22 @@ def resolve_post_by_slug(slug: str, published_only: bool = True) -> Optional[Dic
     return None
 
 
+def post_by_news_id(news_id: str) -> Optional[Dict[str, Any]]:
+    """O artigo de blog criado a partir de uma notícia do índice (`news_id`).
+
+    A ligação vive no artigo e não numa etiqueta: uma etiqueta interna acaba
+    publicada na página, nas palavras-chave e nos índices de etiquetas, como se
+    fosse um tema do artigo.
+    """
+    if not news_id:
+        return None
+    store = _load()
+    for post in store["posts"]:
+        if str(post.get("news_id") or "") == str(news_id):
+            return copy.deepcopy(post)
+    return None
+
+
 def published_pages() -> List[Dict[str, Any]]:
     store = _load()
     items = [page for page in store["pages"] if page.get("status") == "publicado"]
@@ -1063,6 +1079,10 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["cover_id"] = pick("cover_id") or None
         doc["category_ids"] = [str(item) for item in (pick("category_ids", []) or []) if item]
         doc["tags"] = _keywords(pick("tags", []))
+        # Notícia do índice `finance_news` que deu origem ao artigo (vazio nos
+        # artigos escritos à mão). É por aqui que a publicação de notícias
+        # reconhece o que já publicou, sem deixar uma etiqueta interna à vista.
+        doc["news_id"] = str(pick("news_id") or "")
         doc["author"] = str(pick("author") or existing.get("author") or "")
         doc["featured"] = bool(pick("featured", False))
         doc["blocks"] = _normalise_blocks(pick("blocks", []))

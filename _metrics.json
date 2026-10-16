@@ -1,0 +1,317 @@
+﻿{
+ "desk": {
+  "w": 1280,
+  "nav": [
+   "Entrar",
+   "Criar conta",
+   "InÃ­cio",
+   "SoluÃ§Ãµes",
+   "Benchmarks",
+   "Contratos pÃºblicos",
+   "Empresas e pessoas",
+   "InvestigaÃ§Ã£o assistida",
+   "Mercado e preÃ§os",
+   "MunicÃ­pios",
+   "RelatÃ³rios",
+   "ConcorrÃªncia â€” MEDTRONIC PORTUGAL",
+   "Ãrea de CAE â€” MEDTRONIC PORTUGAL",
+   "Fontes",
+   "Benchmarks",
+   "Livros (demonstraÃ§Ã£o)",
+   "Moda â€” marcas portuguesas e ibÃ©ricas",
+   "PortÃ¡teis â€” comparaÃ§Ã£o entre lojas",
+   "Roupa desportiva â€” comparaÃ§Ã£o entre lojas",
+   "Sapatilhas â€” comparaÃ§Ã£o entre lojas",
+   "TelemÃ³veis â€” comparaÃ§Ã£o entre lojas",
+   "Blog",
+   "Contactos",
+   "Sobre",
+   "Entrar",
+   "Loja"
+  ],
+  "wrap": 1100,
+  "tilesRow": "251.5px 251.5px 251.5px 251.5px",
+  "tileIcon": {
+   "w": 44,
+   "loaded": false
+  },
+  "cover": {
+   "w": 1060,
+   "loaded": true
+  },
+  "campos": "342px 342px",
+  "campoXs": [
+   {
+    "t": "Nome *",
+    "x": 132,
+    "w": 342
+   },
+   {
+    "t": "Email *",
+    "x": 492,
+    "w": 342
+   },
+   {
+    "t": "OrganizaÃ§Ã£",
+    "x": 132,
+    "w": 342
+   },
+   {
+    "t": "Assunto",
+    "x": 492,
+    "w": 342
+   },
+   {
+    "t": "Mensagem *",
+    "x": 132,
+    "w": 702
+   }
+  ],
+  "mensagemW": 702,
+  "btnNota": {
+   "btnY": 2061,
+   "notaY": 2060,
+   "btnRight": 288,
+   "notaLeft": 302
+  },
+  "inputBg": "rgb(247, 248, 250)",
+  "overflow": -15,
+  "over": [
+   {
+    "tag": "div",
+    "cls": "hp",
+    "r": -9998
+   },
+   {
+    "tag": "label",
+    "cls": "",
+    "r": -9988
+   },
+   {
+    "tag": "input",
+    "cls": "",
+    "r": -9971
+   }
+  ]
+ },
+ "mob": {
+  "w": 390,
+  "nav": [
+   "Entrar",
+   "Criar conta",
+   "InÃ­cio",
+   "SoluÃ§Ãµes",
+   "Benchmarks",
+   "Contratos pÃºblicos",
+   "Empresas e pessoas",
+   "InvestigaÃ§Ã£o assistida",
+   "Mercado e preÃ§os",
+   "MunicÃ­pios",
+   "RelatÃ³rios",
+   "ConcorrÃªncia â€” MEDTRONIC PORTUGAL",
+   "Ãrea de CAE â€” MEDTRONIC PORTUGAL",
+   "Fontes",
+   "Benchmarks",
+   "Livros (demonstraÃ§Ã£o)",
+   "Moda â€” marcas portuguesas e ibÃ©ricas",
+   "PortÃ¡teis â€” comparaÃ§Ã£o entre lojas",
+   "Roupa desportiva â€” comparaÃ§Ã£o entre lojas",
+   "Sapatilhas â€” comparaÃ§Ã£o entre lojas",
+   "TelemÃ³veis â€” comparaÃ§Ã£o entre lojas",
+   "Blog",
+   "Contactos",
+   "Sobre",
+   "Entrar",
+   "Loja"
+  ],
+  "wrap": 375,
+  "tilesRow": "343px",
+  "tileIcon": {
+   "w": 42,
+   "loaded": false
+  },
+  "cover": {
+   "w": 343,
+   "loaded": true
+  },
+  "campos": "301px",
+  "campoXs": [
+   {
+    "t": "Nome *",
+    "x": 37,
+    "w": 301
+   },
+   {
+    "t": "Email *",
+    "x": 37,
+    "w": 301
+   },
+   {
+    "t": "OrganizaÃ§Ã£",
+    "x": 37,
+    "w": 301
+   },
+   {
+    "t": "Assunto",
+    "x": 37,
+    "w": 301
+   },
+   {
+    "t": "Mensagem *",
+    "x": 37,
+    "w": 301
+   }
+  ],
+  "mensagemW": 301,
+  "btnNota": {
+   "btnY": 2459,
+   "notaY": 2519,
+   "btnRight": 193,
+   "notaLeft": 37
+  },
+  "inputBg": "rgb(247, 248, 250)",
+  "overflow": -15,
+  "over": [
+   {
+    "tag": "div",
+    "cls": "hp",
+    "r": -9998
+   },
+   {
+    "tag": "label",
+    "cls": "",
+    "r": -9988
+   },
+   {
+    "tag": "input",
+    "cls": "",
+    "r": -9971
+   }
+  ]
+ }
+}"
+Page Title: Contactos Â· Sabemos Studio
+URL: http://localhost:4180/site/contactos
+Snapshot: 
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Sabemos Studio" [ref=e4] [cursor=pointer]:
+        - /url: /site
+        - img "Sabemos Studio" [ref=e5]
+      - checkbox "Abrir o menu"
+      - generic [ref=e6] [cursor=pointer]: Menu
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - navigation "Caminho" [ref=e10]:
+        - list [ref=e11]:
+          - listitem [ref=e12]:
+            - link "InÃ­cio" [ref=e13] [cursor=pointer]:
+              - /url: /site
+          - listitem [ref=e14]:
+            - text: â€º
+            - generic [ref=e15]: Contactos
+      - generic [ref=e16]:
+        - heading "Fale connosco" [level=1] [ref=e17]
+        - paragraph [ref=e18]: Pedidos de anÃ¡lise, correÃ§Ãµes, dados ou imprensa â€” respondemos por email.
+        - link "Escrever o pedido" [ref=e20] [cursor=pointer]:
+          - /url: "#pedido"
+        - figure [ref=e21]
+      - generic [ref=e22]:
+        - heading "O que tratar aqui" [level=2] [ref=e23]
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - heading "AnÃ¡lise Ã  medida" [level=3] [ref=e26]
+            - paragraph [ref=e27]: Uma pergunta concreta sobre contratos, empresas ou municÃ­pios. Dizemos o que os dados abertos respondem e o que fica de fora.
+          - generic [ref=e28]:
+            - heading "CorreÃ§Ãµes" [level=3] [ref=e29]
+            - paragraph [ref=e30]: "Um nÃºmero que nÃ£o bate certo. Damos prioridade: verificamos na fonte e publicamos a correÃ§Ã£o com a data da leitura."
+          - generic [ref=e31]:
+            - heading "Dados" [level=3] [ref=e32]
+            - paragraph [ref=e33]: O que temos, com que cobertura e em que formato â€” para jornalistas, investigadores e serviÃ§os pÃºblicos que precisam dos ficheiros.
+          - generic [ref=e34]:
+            - heading "Imprensa" [level=3] [ref=e35]
+            - paragraph [ref=e36]: Contexto, dados e a fonte primÃ¡ria por trÃ¡s de cada nÃºmero, dentro do prazo de fecho.
+      - generic [ref=e37]:
+        - heading "Pedido de contacto" [level=2] [ref=e38]
+        - paragraph [ref=e39]: Quanto mais concreta for a pergunta, mais rÃ¡pida Ã© a resposta. Se for sobre uma entidade, indique o NIF.
+        - paragraph [ref=e40]: Os campos com * sÃ£o obrigatÃ³rios. Os restantes ajudam-nos a responder com mais precisÃ£o.
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - generic [ref=e44]: Nome *
+              - textbox "Nome" [ref=e45]
+            - generic [ref=e46]:
+              - generic [ref=e47]: Email *
+              - textbox "Email" [ref=e48]
+            - generic [ref=e49]:
+              - generic [ref=e50]: OrganizaÃ§Ã£o
+              - textbox "OrganizaÃ§Ã£o" [ref=e51]
+            - generic [ref=e52]:
+              - generic [ref=e53]: Assunto
+              - combobox "Assunto" [ref=e54]
+            - generic [ref=e55]:
+              - generic [ref=e56]: Mensagem *
+              - textbox "Mensagem" [ref=e57]
+              - generic [ref=e58]: Diga o que quer saber, para quando e sobre que entidade ou concelho â€” o NIF ajuda a nÃ£o trocar de empresa.
+          - generic [ref=e59]:
+            - checkbox "Autorizo que me contactem por email sobre este pedido. Os dados sÃ£o usados sÃ³ para responder e podem ser apagados a pedido." [ref=e60]
+            - generic [ref=e61]: Autorizo que me contactem por email sobre este pedido. Os dados sÃ£o usados sÃ³ para responder e podem ser apagados a pedido.
+          - generic [ref=e62]:
+            - text: NÃ£o preencher
+            - textbox "NÃ£o preencher" [ref=e63]
+          - generic [ref=e64]:
+            - button "Enviar mensagem" [ref=e65]
+            - paragraph [ref=e67]:
+              - text: Se preferir escrever de fora do site, use
+              - link "geral@iqos.pt" [ref=e68] [cursor=pointer]:
+                - /url: mailto:geral@iqos.pt
+              - text: â€” a caixa Ã© a mesma e a resposta tambÃ©m.
+      - generic [ref=e69]:
+        - heading "O que acontece a seguir" [level=2] [ref=e70]
+        - generic [ref=e71]:
+          - generic [ref=e72]:
+            - heading "Recebemos o pedido" [level=3] [ref=e73]
+            - paragraph [ref=e74]: Fica registado com a data e a hora, e chega-nos por email â€” nÃ£o se perde numa caixa qualquer.
+          - generic [ref=e75]:
+            - heading "Verificamos na fonte" [level=3] [ref=e76]
+            - paragraph [ref=e77]: Confirmamos o dado no registo original e escrevemos de onde vem cada campo e cada nÃºmero.
+          - generic [ref=e78]:
+            - heading "Respondemos por email" [level=3] [ref=e79]
+            - paragraph [ref=e80]: Pedidos simples, em dias Ãºteis; anÃ¡lises Ã  medida, com o prazo indicado assim que o Ã¢mbito estiver definido.
+      - generic [ref=e81]:
+        - heading "Perguntas frequentes" [level=2] [ref=e82]
+        - group [ref=e83]:
+          - generic "Quanto tempo demoram a responder?" [ref=e84] [cursor=pointer]
+        - group [ref=e85]:
+          - generic "O que fazem com os meus dados?" [ref=e86] [cursor=pointer]
+        - group [ref=e87]:
+          - generic "Posso citar os vossos nÃºmeros?" [ref=e88] [cursor=pointer]
+        - group [ref=e89]:
+          - generic "Fazem anÃ¡lises fora de Portugal?" [ref=e90] [cursor=pointer]
+      - generic [ref=e91]:
+        - generic [ref=e92]:
+          - heading "Talvez jÃ¡ esteja cÃ¡ o que procura" [level=2] [ref=e93]
+          - paragraph [ref=e94]: O blog mostra o mÃ©todo em prÃ¡tica e os relatÃ³rios gratuitos saem com a fonte de cada linha â€” Ã© a forma mais rÃ¡pida de ver o nÃ­vel de detalhe que damos antes de pedir uma anÃ¡lise.
+        - generic [ref=e95]:
+          - link "Ler o blog" [ref=e96] [cursor=pointer]:
+            - /url: /site/blog
+          - link "RelatÃ³rios gratuitos" [ref=e97] [cursor=pointer]:
+            - /url: /site/relatorios-gratuitos
+  - contentinfo [ref=e98]:
+    - generic [ref=e99]:
+      - generic [ref=e100]:
+        - strong [ref=e101]: Sabemos Studio
+        - text: Â© Sabemos Studio â€” todos os direitos reservados.
+      - navigation [ref=e102]:
+        - link "SoluÃ§Ãµes" [ref=e103] [cursor=pointer]:
+          - /url: /site/solucoes
+        - link "RelatÃ³rios" [ref=e104] [cursor=pointer]:
+          - /url: /site/relatorios-gratuitos
+        - link "Fontes" [ref=e105] [cursor=pointer]:
+          - /url: /site/fontes
+        - link "Blog" [ref=e106] [cursor=pointer]:
+          - /url: /site/blog
+        - link "Contactos" [ref=e107] [cursor=pointer]:
+          - /url: /site/contactos
+        - link "Sobre

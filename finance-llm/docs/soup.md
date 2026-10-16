@@ -317,8 +317,49 @@ curl http://127.0.0.1:8000/v1/chat/completions \
        "max_tokens": 120, "temperature": 0.2}'
 ```
 
-No painel (secção 4), a página **Model Chat** fala com esse servidor: é preencher
-o *server URL* com `http://127.0.0.1:8000`.
+No painel (secção 4), a página **Model Chat** fala com esse servidor — mas com uma
+restrição que se descobre à primeira tentativa: o endpoint do painel só aceita
+`http://localhost` (protecção SSRF de quem faz de proxy, `soup_cli/ui/app.py`),
+e `localhost` **dentro do contentor do painel** é o próprio contentor. O
+`http://host.docker.internal:8000` é recusado com `400`. A volta é pôr o servidor
+na rede do painel:
+
+```bash
+docker run --rm --name soup-serve-ui --network container:finance-llm-soup-ui \
+  -v "$PWD:/workspace" -w /workspace iq-os-soup:latest \
+  serve --model ./model/soup-subvencoes --host 127.0.0.1 --port 8000
+```
+
+No painel, o *server URL* passa a ser `http://localhost:8000`.
+
+### A pergunta que o `soup train` não responde
+
+A perda do treino diz que o modelo se ajustou aos dados; não diz se aprendeu ou
+decorou. O [training/soup/eval_holdout.py](../training/soup/eval_holdout.py)
+compara o modelo de partida com o adaptador nos pares que **nunca** entraram no
+treino, montados com o mesmo molde:
+
+```bash
+docker run --rm -v "$PWD:/workspace" -w /workspace --entrypoint python iq-os-soup:latest \
+  training/soup/eval_holdout.py --pairs ./data/final/subvencoes_holdout.jsonl \
+  --base ./model/mistral-finance/final --adapter ./model/soup-subvencoes
+```
+
+No treino dos subsídios (794 pares, 1 época em CPU) deu:
+
+| | Perda/token | Perplexidade | Exactidão por token |
+|---|---:|---:|---:|
+| Modelo de partida | 7,786 | 2 406,7 | 1,59 % |
+| Adaptador treinado | 7,295 | **1 473,3** | **2,17 %** |
+| *azar (3 000 tokens de vocabulário)* | *8,006* | *3 000* | *0,03 %* |
+
+Ou seja: o fine-tune **generalizou** (a perda no held-out caiu tanto como no
+treino, 7,79 → 7,30 contra 7,80 → 7,31) — não decorou. Mas a qualidade absoluta
+continua fraca: perplexidade 1 473 significa que o modelo está longe de escrever
+português corrente, porque o modelo do sistema é um *toy* de 22 M parâmetros
+(512 de escondido) treinado de raiz em linhas de cotações. Para respostas a sério
+é o `soup-mistral-instruct.yaml` numa GPU — a maquinaria é a mesma, muda o modelo
+de partida.
 
 Para ter a prova de que o fine-tune acrescentou alguma coisa, compare com o modelo
 de partida pelo `infer` — que não usa molde nenhum, por isso funciona nos dois:

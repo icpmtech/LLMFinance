@@ -893,6 +893,20 @@ function BlockForm({
             wide
             hint="Campos: nome, email, organização, assunto e mensagem. As respostas ficam em «Contactos» e exigem consentimento."
           />
+          <TextInput
+            label="Âncora da secção"
+            value={text("anchor")}
+            onChange={(next) => set("anchor", next)}
+            placeholder="pedido"
+            hint="Sem cardinal (#). É o que permite a um botão de outra secção trazer o leitor até aqui."
+          />
+          <TextInput
+            label="Nota junto ao botão"
+            value={text("note")}
+            onChange={(next) => set("note", next)}
+            placeholder="Se preferir escrever de fora do site, use geral@iqos.pt."
+            hint="Markdown simples. Fica na linha do botão — o sítio para dizer o que acontece depois do envio."
+          />
         </div>
       );
     case "divisor":

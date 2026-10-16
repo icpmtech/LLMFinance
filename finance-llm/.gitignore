@@ -28,6 +28,11 @@ model/mistral-finance/checkpoints/
 model/gpt2-finance/checkpoints/
 model/mistral-finance/final/
 model/gpt2-finance/final/
+# Saídas do fine-tuning com o Soup (`docs/soup.md`): adaptadores LoRA e
+# checkpoints geram-se outra vez com `soup train`, não pertencem ao repositório.
+# Sem esta linha, de cada treino ficavam versionados o README, o
+# `chat_template.jinja` e os `rng_state.pth` dos checkpoints.
+model/soup-*/
 # Pacotes Node (qualquer projeto sob finance-llm; ver tambem chat-ui/.gitignore).
 node_modules/
 kronos_upstream/

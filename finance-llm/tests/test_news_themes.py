@@ -262,7 +262,7 @@ def test_publicacao_cria_artigo_rascunho_com_fonte_e_ligacao(cms_isolado, monkey
     assert artigo["id"] in [item["id"] for item in listagem["items"]]
 
 
-def test_publicacao_leva_etiquetas_do_tema_e_a_marca_da_noticia(cms_isolado, monkeypatch):
+def test_publicacao_leva_etiquetas_do_tema_sem_marca_interna(cms_isolado, monkeypatch):
     monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
     artigo = news_routes.news_publish(
         {"id": NOTICIA["id"], "theme": "contratacao-publica"},
@@ -270,18 +270,37 @@ def test_publicacao_leva_etiquetas_do_tema_e_a_marca_da_noticia(cms_isolado, mon
     )["artigo"]
     assert "contratação pública" in artigo["tags"]
     assert "Construção Hoje" in artigo["tags"]
-    assert f"noticia-{NOTICIA['id']}" in artigo["tags"]
+    # A notícia de origem fica no `news_id`, não numa etiqueta que o site publica.
+    assert artigo["news_id"] == NOTICIA["id"]
+    assert not [tag for tag in artigo["tags"] if tag.startswith("noticia-")]
 
 
 def test_publicacao_nao_duplica_a_mesma_noticia(cms_isolado, monkeypatch):
     monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    antes = cms_store.list_items("posts")["total"]
     primeiro = news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
     segundo = news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
     assert segundo["saved"] is False
     assert segundo["duplicado"] is True
     assert segundo["artigo"]["id"] == primeiro["artigo"]["id"]
-    marca = f"noticia-{NOTICIA['id']}"
-    assert cms_store.list_items("posts", tag=marca)["total"] == 1
+    assert cms_store.list_items("posts")["total"] == antes + 1
+
+
+def test_publicacao_reconhece_artigos_publicados_antes_do_news_id(cms_isolado, monkeypatch):
+    """Sem `news_id` no artigo, a etiqueta antiga continua a impedir o duplicado."""
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    antigo = cms_store.save_item(
+        "posts",
+        {
+            "title": "Artigo publicado antes do news_id",
+            "markdown": "Corpo.",
+            "tags": ["contratação pública", f"noticia-{NOTICIA['id']}"],
+        },
+    )
+    resposta = news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
+    assert resposta["saved"] is False
+    assert resposta["duplicado"] is True
+    assert resposta["artigo"]["id"] == antigo["id"]
 
 
 def test_publicacao_respeita_o_texto_e_as_etiquetas_do_editor(cms_isolado, monkeypatch):

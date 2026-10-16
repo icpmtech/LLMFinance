@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Dados">
+  <rect width="96" height="96" rx="24" fill="#f5f3ff"/>
+  <path d="M20 28 v32 c0 5 10.7 9 24 9 s24 -4 24 -9 V28" fill="#ffffff" stroke="#8b5cf6" stroke-width="2.5"/>
+  <ellipse cx="44" cy="28" rx="24" ry="9" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2.5"/>
+  <path d="M20 45 c0 5 10.7 9 24 9 s24 -4 24 -9" fill="none" stroke="#8b5cf6" stroke-width="2.5"/>
+  <circle cx="68" cy="68" r="17" fill="#8b5cf6"/>
+  <g fill="#ffffff">
+    <rect x="60" y="61" width="6" height="6" rx="2"/>
+    <rect x="70" y="61" width="6" height="6" rx="2"/>
+    <rect x="60" y="71" width="6" height="6" rx="2"/>
+    <rect x="70" y="71" width="6" height="6" rx="2"/>
+  </g>
+</svg>

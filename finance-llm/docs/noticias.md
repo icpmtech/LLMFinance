@@ -76,9 +76,15 @@ e uma nota de rascunho com o rasto da plataforma (tema, tom e ticker).
 
 Duas regras que evitam estragos:
 
-- **A mesma notícia não dá dois artigos.** Cada artigo fica com a etiqueta
-  `noticia-<id>`; a segunda tentativa devolve `duplicado: true` com o artigo que
-  já existe, e a interface liga para lá em vez de criar outro.
+- **A mesma notícia não dá dois artigos.** O artigo guarda o `news_id` da notícia
+  de origem; a segunda tentativa devolve `duplicado: true` com o artigo que já
+  existe, e a interface liga para lá em vez de criar outro. A ligação é um campo
+  do artigo (e não uma etiqueta): uma etiqueta interna acabaria publicada na
+  página, nas palavras-chave e nos índices de etiquetas.
+- **O `<title>` não passa dos 70 caracteres** (`api/cms_render.py`): o artigo
+  guarda o título completo (é o `<h1>` da página) e o `seo.title` já sai cortado
+  em palavras, para o sufixo da marca não empurrar o título para além do que os
+  motores de busca mostram.
 - **Escrever exige sessão.** A publicação é uma escrita no CMS: sem sessão, a
   rota responde 401.
 
