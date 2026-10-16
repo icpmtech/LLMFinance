@@ -131,7 +131,7 @@ de permissões (`main.py`), sem alargar o resto do módulo.
 8. **Email de apoio** — o contacto que sai no rodapé de todas as páginas e na
    nota final é configurável em *Definições → Email de apoio*
    (`settings.support_email`); sem valor configurado usa-se
-   `geral@iqos.pt` (`DEFAULT_SUPPORT_EMAIL`).
+   `suporte@sabemos.studio` (`DEFAULT_SUPPORT_EMAIL`).
 
 **Os dois modelos de empresa:**
 
@@ -306,7 +306,7 @@ preços e os ficheiros gerados.
 | GET | `/reports/admin/overview` · `/reports/admin/export.csv` | admin |
 
 Configuração relevante para os PDF: `support_email` (email de apoio no rodapé,
-por omissão `geral@iqos.pt`) e `vat_rate` (preços finais).
+por omissão `suporte@sabemos.studio`) e `vat_rate` (preços finais).
 
 Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios**):
 

@@ -2482,7 +2482,7 @@ def _seed(store: Dict[str, Any]) -> None:
             "title": "Contactos gerais",
             "kind": "contactos",
             "body": "Fale connosco para propostas, dados ou imprensa.",
-            "data": {"email": "geral@iqos.pt", "phone": "", "address": ""},
+            "data": {"email": "suporte@sabemos.studio", "phone": "", "address": ""},
             "tags": ["institucional"],
             "notes": "",
             "uses": 0,

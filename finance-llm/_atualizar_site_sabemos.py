@@ -18,9 +18,18 @@ from typing import Any, Dict, List, Optional
 
 from api import cms_editorial as editorial
 from api import cms_store as store
+from api import reports_store as relatorios_store
 
 AUTOR = "migracao@sabemos.studio"
 BASE_URL = "https://sabemos.studio"
+
+#: Contacto de apoio do estúdio, que substituiu o `geral@iqos.pt` da marca antiga.
+#: O endereço vive em sítios que o deploy **não** leva (o conteúdo reutilizável
+#: «Contactos gerais» e a configuração dos relatórios, de onde sai o email no
+#: rodapé dos PDF): trocar só o código deixava uma instalação em uso a responder
+#: pelo endereço antigo.
+EMAIL_DE_APOIO = "suporte@sabemos.studio"
+EMAIL_DE_APOIO_ANTIGO = "geral@iqos.pt"
 
 
 def _alterados(atual: Dict[str, Any], novo: Dict[str, Any]) -> List[str]:
@@ -261,6 +270,30 @@ def _aplicar_templates() -> None:
         print("  modelos: já estavam todos instalados")
 
 
+def _aplicar_email_de_apoio() -> None:
+    """Troca o contacto de apoio antigo pelo novo, onde ele ficou gravado."""
+    mudados: List[str] = []
+
+    try:
+        contactos = store.get_item("contents", "ctd_contactos")
+    except KeyError:
+        contactos = None
+    if contactos is not None:
+        dados = dict(contactos.get("data") or {})
+        corpo = str(contactos.get("body") or "")
+        novos = {chave: str(valor).replace(EMAIL_DE_APOIO_ANTIGO, EMAIL_DE_APOIO) for chave, valor in dados.items()}
+        novo_corpo = corpo.replace(EMAIL_DE_APOIO_ANTIGO, EMAIL_DE_APOIO)
+        if novos != dados or novo_corpo != corpo:
+            store.save_item("contents", {**contactos, "data": novos, "body": novo_corpo}, AUTOR)
+            mudados.append("conteúdo «Contactos gerais»")
+
+    if str(relatorios_store.settings().get("support_email") or "").strip() == EMAIL_DE_APOIO_ANTIGO:
+        relatorios_store.save_settings({"support_email": EMAIL_DE_APOIO}, AUTOR)
+        mudados.append("email de apoio dos relatórios")
+
+    print(f"  contacto de apoio: {'; '.join(mudados) if mudados else 'já estava atualizado'}")
+
+
 def main() -> None:
     media = store.instalar_media_de_marca()
     print(f"media de marca instalados: {len(media)} ficheiros")
@@ -317,6 +350,7 @@ def main() -> None:
     _aplicar_menus()
     _aplicar_posts(media)
     _aplicar_conteudos()
+    _aplicar_email_de_apoio()
     print("concluído")
 
 

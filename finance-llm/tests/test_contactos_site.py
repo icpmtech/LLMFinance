@@ -52,7 +52,7 @@ def test_formulario_tem_grelha_ancora_e_os_limites_do_servidor() -> None:
             "title": "Pedido de contacto",
             "intro": "Quanto mais concreta for a pergunta, mais rápida é a resposta.",
             "anchor": "pedido",
-            "note": "Se preferir, use [geral@iqos.pt](mailto:geral@iqos.pt).",
+            "note": "Se preferir, use [suporte@sabemos.studio](mailto:suporte@sabemos.studio).",
         }
     )
 
@@ -75,7 +75,7 @@ def test_formulario_tem_grelha_ancora_e_os_limites_do_servidor() -> None:
     assert 'Diga o que quer saber, para quando' in html
     # O que acontece depois do envio fica na linha do botão, não depois dele.
     assert '<div class="acao">' in html and '<div class="nota-formulario">' in html
-    assert 'mailto:geral@iqos.pt' in html
+    assert 'mailto:suporte@sabemos.studio' in html
     # O campo-armadilha continua fora do ecrã e fora da ordem de tabulação.
     assert 'name="website"' in html and 'tabindex="-1"' in html
 

@@ -1064,7 +1064,7 @@ def render_contacto(
             "<p class=\"lead\">Obrigado. O pedido ficou registado e respondemos para o email indicado — "
             "pedidos simples, em dias úteis.</p>"
             "<p class=\"ajuda-formulario\">Se precisar de acrescentar algo, responda ao email que receber ou "
-            'escreva para <a href="mailto:geral@iqos.pt">geral@iqos.pt</a>.</p>'
+            'escreva para <a href="mailto:suporte@sabemos.studio">suporte@sabemos.studio</a>.</p>'
             f'<div class="actions"><a class="btn" href="{_esc(voltar_para)}">Voltar aos contactos</a>'
             '<a class="btn ghost" href="/site/blog">Ler o blog</a></div></div>'
         )

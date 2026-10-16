@@ -851,13 +851,13 @@ export function ReportsSettingsPanel({
             id="support-email"
             value={form.support_email}
             onChange={(event) => setForm((current) => ({ ...current, support_email: event.target.value }))}
-            placeholder="geral@iqos.pt"
+            placeholder="suporte@sabemos.studio"
             inputMode="email"
             autoComplete="off"
             disabled={!canEdit}
           />
           <p className="text-[11px] text-muted-foreground">
-            Aparece no rodapé de todas as páginas do PDF e na nota final. Se ficar vazio, usa-se <code>geral@iqos.pt</code>.
+            Aparece no rodapé de todas as páginas do PDF e na nota final. Se ficar vazio, usa-se <code>suporte@sabemos.studio</code>.
           </p>
         </div>
 

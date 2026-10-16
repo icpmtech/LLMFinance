@@ -1313,7 +1313,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "Quanto mais concreta for a pergunta, mais rápida é a resposta. Se for sobre uma entidade, indique o NIF.",
                     anchor="pedido",
                     note=(
-                        "Se preferir escrever de fora do site, use [geral@iqos.pt](mailto:geral@iqos.pt) — "
+                        "Se preferir escrever de fora do site, use [suporte@sabemos.studio](mailto:suporte@sabemos.studio) — "
                         "a caixa é a mesma e a resposta também."
                     ),
                 ),

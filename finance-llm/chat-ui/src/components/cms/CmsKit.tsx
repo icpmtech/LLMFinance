@@ -904,7 +904,7 @@ function BlockForm({
             label="Nota junto ao botão"
             value={text("note")}
             onChange={(next) => set("note", next)}
-            placeholder="Se preferir escrever de fora do site, use geral@iqos.pt."
+            placeholder="Se preferir escrever de fora do site, use suporte@sabemos.studio."
             hint="Markdown simples. Fica na linha do botão — o sítio para dizer o que acontece depois do envio."
           />
         </div>

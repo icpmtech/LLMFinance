@@ -140,7 +140,7 @@ PAYMENT_METHODS: List[Dict[str, str]] = [
 MAX_TARGETS = 6
 MAX_NOTES = 2000
 #: Contacto público mostrado nos PDF (editável em Definições → Apoio).
-DEFAULT_SUPPORT_EMAIL = "geral@iqos.pt"
+DEFAULT_SUPPORT_EMAIL = "suporte@sabemos.studio"
 MAX_FILES_PER_REQUEST = 12
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_NOTIFICATIONS = 800
