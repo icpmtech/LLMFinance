@@ -992,7 +992,7 @@ form.bench-pesquisa label { display: flex; flex-direction: column; gap: 6px; fon
 .bench-cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin: 24px 0; }
 .bench-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
               box-shadow: var(--shadow); padding: 22px; }
-.bench-card h3 { margin: 0 0 18px; font-size: 1.08rem; }
+.bench-card h2 { margin: 0 0 18px; font-size: 1.08rem; letter-spacing: -.01em; }
 .bench-card .muted { color: var(--muted); font-size: .85rem; }
 .bench-bar-row { display: grid; grid-template-columns: 100px 1fr 46px; gap: 10px; align-items: center; margin-bottom: 12px; }
 .bench-bar-row .label { font-size: .88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1051,6 +1051,9 @@ form.bench-pesquisa label { display: flex; flex-direction: column; gap: 6px; fon
 @media (max-width: 760px) {
   .bench-hero h1 { font-size: 1.5rem; }
   .bench-pesquisa input, .bench-pesquisa select, .bench-pesquisa button { width: 100%; }
+  /* Alvos de toque de 44px: no telemóvel os botões pequenos da barra de
+     resultados ficavam abaixo disso (35-39px). */
+  .bench-pesquisa button, .bench-view-btn { min-height: 44px; }
   .bench-items-grid { grid-template-columns: 1fr; }
   .bench-thumb { width: 46px; height: 46px; flex-basis: 46px; }
   .bench-cards { grid-template-columns: 1fr; }
@@ -1306,17 +1309,17 @@ def html_publico(
     cards_html = f"""
 <div class="bench-cards">
   <div class="bench-card">
-    <h3>Índice de preço · 100 = média do estudo</h3>
+    <h2>Índice de preço · 100 = média do estudo</h2>
     {indice_html}
     <div class="bench-index-axis"><span>80</span><span>média</span><span>120</span></div>
   </div>
   <div class="bench-card">
-    <h3>Preço por loja</h3>
+    <h2>Preço por loja</h2>
     {preco_html}
     <p class="muted">Comparação automática entre lojas</p>
   </div>
   <div class="bench-card">
-    <h3>Ficha comparada</h3>
+    <h2>Ficha comparada</h2>
     {ficha_html}
   </div>
 </div>

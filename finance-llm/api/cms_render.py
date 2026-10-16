@@ -11,6 +11,7 @@ definições do site (`theme`, `accent`, `radius`).
 """
 from __future__ import annotations
 
+import functools
 import html
 import json
 import logging
@@ -222,8 +223,12 @@ html {{
 }}
 body {{
   margin: 0; background: var(--bg); color: var(--text);
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* A mesma família da plataforma (`chat-ui/src/index.css`): a app e o site
+     ficam iguais. O «Inter» que aqui estava nunca era carregado — só fazia
+     parecer que a fonte era outra. */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   line-height: 1.65; font-size: 1rem; overflow-wrap: break-word;
+  text-rendering: optimizeLegibility;
 }}
 img, svg, video, iframe {{ max-width: 100%; }}
 img {{ height: auto; }}
@@ -318,7 +323,7 @@ nav.main .tem-submenu.aberto > .submenu {{ display: block; }}
   display: flex; flex: none; color: var(--muted);
 }}
 .pesquisa-form button, .menu-pesquisa button {{
-  flex: none; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 999px;
+  flex: none; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 999px;
   background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
 }}
 /* Entrar/criar conta: os dois botões do painel do telemóvel. Partilham a linha
@@ -370,6 +375,10 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 /* Menu responsivo para todos os ecrãs e equipamentos */
 @media (max-width: 799px) {{
   .site-header .wrap {{ flex-direction: row; align-items: center; }}
+  /* A marca é um link: com o logótipo de 32px ficava com 32px de altura, abaixo
+     do alvo de toque confortável. O `min-height` dá-lhe os 44px sem mexer na
+     imagem. */
+  .brand {{ display: inline-flex; align-items: center; min-height: 44px; }}
   .site-header.tema-central .brand {{ text-align: left; }}
   .site-header.tema-central nav.main {{ margin-left: 0; margin-top: 6px; width: 100%; }}
   /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
@@ -424,15 +433,42 @@ main {{ padding: 20px 0 56px; }}
   box-shadow: var(--shadow); padding: 20px;
 }}
 .section + .section {{ margin-top: 24px; }}
-h1 {{ font-size: clamp(1.6rem, 6.4vw, 2.6rem); line-height: 1.14; letter-spacing: -.02em; margin: 0 0 12px; }}
-h2 {{ font-size: clamp(1.22rem, 4.4vw, 1.45rem); letter-spacing: -.01em; margin: 28px 0 10px; }}
-h3 {{ font-size: clamp(1.04rem, 3.2vw, 1.12rem); margin: 22px 0 8px; }}
-p {{ margin: 0 0 14px; }}
+h1 {{ font-size: clamp(1.6rem, 6.4vw, 2.6rem); line-height: 1.14; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; }}
+h2 {{ font-size: clamp(1.22rem, 4.4vw, 1.45rem); letter-spacing: -.01em; margin: 28px 0 10px; text-wrap: balance; }}
+h3 {{ font-size: clamp(1.04rem, 3.2vw, 1.12rem); margin: 22px 0 8px; text-wrap: balance; }}
+/* Título de uma secção que não deve crescer para o tamanho do `h2`: a marcação
+   fica certa (sem saltos de nível) e a medida do texto mantém-se. */
+.seccao-titulo {{ font-size: clamp(1.04rem, 3.2vw, 1.12rem); letter-spacing: 0; margin: 22px 0 8px; }}
+p {{ margin: 0 0 14px; text-wrap: pretty; }}
 .lead {{ font-size: 1.06rem; color: var(--muted); }}
-.hero {{ padding: 26px 20px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }}
+/* O bloco de abertura é uma faixa, não um cartão: sem caixa, o título e a entrada
+   ficam alinhados com a trilha de navegação e com o resto da página (dentro de um
+   cartão ficavam recuados 33px, que é o que se via em todas as páginas). */
+.hero {{ padding: 4px 0 6px; }}
 .hero .actions {{ margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }}
 .hero.centro {{ text-align: center; }}
 .hero .cover {{ margin: 22px 0 0; }}
+/* Páginas de sistema (404, erro do serviço e sem ligação): texto de um lado,
+   ilustração do outro; no telefone empilha, com a imagem por baixo do texto. */
+.sistema {{ display: grid; gap: 24px; align-items: center; }}
+.sistema-etiqueta {{
+  margin: 0 0 10px; color: var(--muted); font-size: .78rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+}}
+.sistema-nota {{
+  margin: 0 0 20px; padding: 13px 16px; border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0; background: var(--code);
+}}
+.sistema-imagem {{ margin: 0; }}
+.sistema-imagem svg {{
+  display: block; width: 100%; height: auto; border: 1px solid var(--border);
+  border-radius: var(--radius);
+}}
+.sistema-imagem figcaption {{ margin-top: 9px; color: var(--muted); font-size: .86rem; }}
+.sistema-links {{ display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }}
+.sistema-links li {{ display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }}
+.sistema-links a {{ font-weight: 700; }}
+.sistema-links span {{ color: var(--muted); font-size: .93rem; }}
 .btn {{
   display: inline-flex; align-items: center; justify-content: center; min-height: 46px;
   padding: 11px 20px; border-radius: 999px; font-weight: 700;
@@ -469,7 +505,7 @@ a.tile h3 {{ color: var(--accent); }}
 .library-list {{ margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }}
 .library-list li {{ margin: 2px 0; }}
 .library-actions {{ margin-top: auto; padding-top: 6px; }}
-.library-actions .btn {{ min-height: 40px; padding: 8px 16px; font-size: .9rem; }}
+.library-actions .btn {{ min-height: 44px; padding: 8px 16px; font-size: .9rem; }}
 figure {{ margin: 20px 0; }}
 figure img, .prose img {{ max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
 figure > picture {{ display: block; }}
@@ -520,8 +556,11 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .post-card {{ display: flex; flex-direction: column; overflow: hidden; padding: 0; }}
 .post-card img {{ width: 100%; aspect-ratio: 16/9; object-fit: cover; }}
 .post-card .body {{ padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }}
-.post-card h3 {{ margin: 0; font-size: 1.08rem; }}
+.post-card h2 {{ margin: 0; font-size: 1.08rem; letter-spacing: -.01em; }}
 .post-card p {{ margin: 0; color: var(--muted); font-size: .93rem; }}
+.post-card a {{ color: var(--text); }}
+.post-card:hover {{ border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 2px 4px rgba(16,24,40,.06), 0 12px 30px rgba(16,24,40,.10); }}
+.post-card:hover h2 a {{ color: var(--accent); }}
 .pager {{ display: flex; gap: 8px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }}
 .pager a, .pager span {{
   min-height: 44px; display: inline-flex; align-items: center; padding: 10px 14px; border-radius: 10px;
@@ -558,7 +597,7 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .site-footer {{ border-top: 1px solid var(--border); background: var(--surface); padding: 26px 0; color: var(--muted); font-size: .9rem; }}
 .site-footer .wrap {{ display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }}
 .site-footer nav {{ display: flex; gap: 8px 16px; flex-wrap: wrap; }}
-.site-footer a {{ color: var(--muted); min-height: 40px; display: inline-flex; align-items: center; }}
+.site-footer a {{ color: var(--muted); min-height: 44px; display: inline-flex; align-items: center; }}
 .kpis {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }}
 .kpi {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px 16px; }}
 .kpi span {{ display: block; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }}
@@ -613,7 +652,7 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   main {{ padding: 32px 0 72px; }}
   .card {{ padding: 28px; }}
   .section + .section {{ margin-top: 28px; }}
-  .hero {{ padding: 46px 32px; }}
+  .hero {{ padding: 8px 0 12px; }}
   .hero .actions {{ margin-top: 20px; }}
   .hero .cover {{ margin: 24px 0 0; }}
   h2 {{ margin: 32px 0 10px; }}
@@ -652,6 +691,8 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   nav.main > .menu-item > .menu-pai {{
     min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px;
   }}
+  /* Nas páginas de sistema a ilustração fica ao lado do texto. */
+  .sistema {{ grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; }}
   /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
   .prose {{ max-width: 760px; }}
 }}
@@ -1399,8 +1440,8 @@ def _breadcrumb(dados: Optional[List[Dict[str, str]]]) -> str:
     """Trilha de navegação («Início › Secção › Página»).
 
     O último passo é sempre o texto da página (sem link); os anteriores levam a
-    `href` quando existe (uma secção sem índice próprio, como «Municípios», não
-    leva).
+    `href` quando existe. Uma secção sem índice próprio (as pesquisas guardadas,
+    por exemplo) fica sem link — é o que o `href` em falta diz.
     """
     if not dados or len(dados) < 2:
         return ""
@@ -1674,14 +1715,25 @@ def render_service_worker(settings: Optional[Dict[str, Any]] = None) -> str:
 
 
 def render_offline(*, settings: Optional[Dict[str, Any]] = None) -> str:
-    """Página de recurso, mostrada pelo service worker quando não há ligação."""
+    """Página de recurso, mostrada pelo service worker quando não há ligação.
+
+    A ilustração vai embutida no HTML: sem rede, um `src` externo não aparecia.
+    """
     settings = settings or store.get_settings()
-    body = (
-        '<section class="section hero centro"><h1>Sem ligação</h1>'
-        '<p class="lead">Não foi possível chegar ao servidor. As páginas que já visitou '
-        "continuam a abrir sem rede.</p>"
-        '<div class="actions" style="justify-content:center">'
-        '<a class="btn" href="/site/">Voltar ao início</a></div></section>'
+    body = _pagina_de_sistema(
+        etiqueta="Sem ligação · modo offline",
+        titulo="Sem rede — o que já visitou continua aqui",
+        lead="Não foi possível chegar ao servidor. As páginas que já abriu ficaram guardadas "
+        "neste dispositivo e continuam a abrir.",
+        nota="Um arquivo a sério também não se queixa quando a luz falha: mostra o que tem. "
+        "Quando a rede voltar, os números atualizam-se sozinhos — não é preciso fazer nada.",
+        ilustracao=_ILUSTRACOES_DE_SISTEMA["sem-ligacao"],
+        legenda="Ligação interrompida entre o dispositivo e o servidor: o que está em cache "
+        "continua disponível.",
+        acoes=(
+            '<a class="btn" href="/site/">Voltar ao início</a>'
+            '<a class="btn ghost" href="/site/relatorios-gratuitos">Ver relatórios</a>'
+        ),
     )
     return _layout(
         title="Sem ligação",
@@ -1690,6 +1742,7 @@ def render_offline(*, settings: Optional[Dict[str, Any]] = None) -> str:
         current_path=OFFLINE_PATH,
         settings=settings,
         canonical=OFFLINE_PATH,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Sem ligação"}],
         noindex=True,
     )
 
@@ -2218,7 +2271,7 @@ def render_municipio(
         noindex=bool(seo.get("noindex")),
         breadcrumb=[
             {"label": "Início", "href": "/site"},
-            {"label": "Municípios"},
+            {"label": "Municípios", "href": "/site/solucoes/municipios"},
             {"label": municipio},
         ],
     )
@@ -2422,7 +2475,7 @@ def _detalhes_da_pesquisa(dados: Dict[str, Any], escolhiveis: List[str]) -> str:
             nota += f" · despesa total de {ano_despesas}: {_euros_curto(item.get('despesas_total'))}"
         paineis.append(
             f'<section class="section grafico" data-detalhe="{_esc(nome)}" hidden>'
-            f"<h3>{_esc(nome)}</h3>"
+            f'<h2 class="seccao-titulo">{_esc(nome)}</h2>'
             f'<p class="sub">{_esc(nota)}</p>'
             f"{_barras(_series_da_contratacao(item))}</section>"
         )
@@ -2580,7 +2633,7 @@ def _graficos_da_pesquisa(dados: Dict[str, Any], escolhiveis: Optional[Set[str]]
             continue
         clicaveis = escolhiveis if grafico.get("id") == "municipios" else None
         partes.append(
-            f'<section class="section grafico"><h3>{_esc(grafico.get("titulo"))}</h3>'
+            f'<section class="section grafico"><h2 class="seccao-titulo">{_esc(grafico.get("titulo"))}</h2>'
             f'<p class="sub">{_esc(grafico.get("subtitulo") or "")}</p>'
             f'{_barras(itens, unidade=grafico.get("unidade"), escolher=clicaveis)}</section>'
         )
@@ -2616,12 +2669,14 @@ def _adjudicatarios_da_pesquisa(dados: Dict[str, Any]) -> str:
         for item in itens[:12]
     ]
     return (
-        '<section class="section grafico"><h3>'
+        '<section class="section grafico"><h2 class="seccao-titulo">'
         + _esc(titulo)
-        + f'</h3><p class="sub">{_esc(subtitulo)}</p>'
+        + f'</h2><p class="sub">{_esc(subtitulo)}</p>'
         + _barras(barras)
         + "</section>"
-        + _tabela(titulo, cabecalho, linhas)
+        # A tabela é o detalhe do mesmo bloco: leva o `h2` da secção acima, não
+        # um título próprio repetido (`_tabela_nua`).
+        + f'<div class="section prose">{_tabela_nua(cabecalho, linhas)}</div>'
     )
 
 
@@ -3392,7 +3447,9 @@ def _post_card(post: Dict[str, Any]) -> str:
     return (
         f'<article class="card post-card">{image}<div class="body">'
         + (f'<span class="pill">{_esc(post.get("category"))}</span>' if post.get("category") else "")
-        + f'<h3><a href="{_esc(href)}">{_esc(post.get("title"))}</a></h3>'
+        # `h2`: o título do artigo é o primeiro nível abaixo do título da página
+        # (com `h3` havia um salto de nível e a lista não tinha cabeçalho próprio).
+        + f'<h2><a href="{_esc(href)}">{_esc(post.get("title"))}</a></h2>'
         + f'<p>{_esc(post.get("excerpt") or _plain_excerpt(post))}</p>'
         + '<div class="meta">'
         + (f"<span>{_esc(_date(post.get('published_at')))}</span>" if post.get("published_at") else "")
@@ -3744,12 +3801,106 @@ def render_index(*, preview: bool = False, settings: Optional[Dict[str, Any]] = 
     )
 
 
+#: Ilustrações das páginas de sistema. São embutidas no HTML (e não pedidas por
+#: `src`): a página «sem ligação» tem de aparecer sem rede nenhuma, e assim não
+#: depende de cache nem de um pedido que falharia.
+_ILUSTRACOES_DE_SISTEMA: Dict[str, str] = {
+    "nao-encontrada": "ilustracao-pagina-nao-encontrada.svg",
+    "erro-interno": "ilustracao-erro-interno.svg",
+    "sem-ligacao": "ilustracao-sem-ligacao.svg",
+}
+
+#: Destinos que valem a pena em qualquer página de sistema: o que a plataforma
+#: faz, o que se pode ler já e como falar com quem a mantém.
+_DESTINOS_UTEIS: Tuple[Tuple[str, str, str], ...] = (
+    ("/site/solucoes", "Soluções", "as áreas de trabalho e o que cada uma responde"),
+    ("/site/relatorios-gratuitos", "Relatórios", "documentos prontos a descarregar, sem custo"),
+    ("/site/fontes", "Fontes", "de onde vem cada número e com que cobertura"),
+    ("/site/blog", "Blog", "análises e notas de método"),
+    ("/site/contactos", "Contactos", "falar com quem faz"),
+)
+
+
+@functools.lru_cache(maxsize=8)
+def _ilustracao_de_sistema(nome: str) -> str:
+    """Markup de uma ilustração de `site_assets` (vazio se o ficheiro faltar)."""
+    caminho = store.SITE_ASSETS_DIR / nome
+    try:
+        return caminho.read_text(encoding="utf-8").strip()
+    except OSError:
+        logger.warning("Ilustração de sistema em falta: %s", caminho)
+        return ""
+
+
+def _pagina_de_sistema(
+    *,
+    etiqueta: str,
+    titulo: str,
+    lead: str,
+    nota: str,
+    ilustracao: str,
+    legenda: str,
+    acoes: str = "",
+    com_pesquisa: bool = False,
+) -> str:
+    """Corpo partilhado das páginas de sistema.
+
+    Todas dizem o mesmo em três tempos: o que aconteceu, o que se pode fazer
+    agora (as ações e, quando faz sentido, a pesquisa) e o que é a plataforma.
+    A `nota` é onde entra o humor — seco, do lado dos dados, sem troçar de quem
+    chegou aqui.
+    """
+    imagem = _ilustracao_de_sistema(ilustracao)
+    # Sem o ficheiro da ilustração, a legenda continua a explicar o que se passa.
+    alternativa = f'<p class="card">{_esc(legenda)}</p>'
+    figura = (
+        '<figure class="sistema-imagem">'
+        f"{imagem or alternativa}"
+        f"<figcaption>{_esc(legenda)}</figcaption></figure>"
+    )
+    destinos = "".join(
+        f'<li><a href="{_esc(href)}">{_esc(rotulo)}</a><span>{_esc(descricao)}</span></li>'
+        for href, rotulo, descricao in _DESTINOS_UTEIS
+    )
+    return (
+        '<section class="section sistema">'
+        '<div class="sistema-texto">'
+        f'<p class="sistema-etiqueta">{_esc(etiqueta)}</p>'
+        f"<h1>{_esc(titulo)}</h1>"
+        f'<p class="lead">{_esc(lead)}</p>'
+        f'<p class="sistema-nota">{_esc(nota)}</p>'
+        + (f'<div class="actions">{acoes}</div>' if acoes else "")
+        + (_form_de_pesquisa() if com_pesquisa else "")
+        + "</div>"
+        + figura
+        + "</section>"
+        + '<section class="section sistema-plataforma">'
+        "<h2>O que é o Sabemos Studio</h2>"
+        "<p>Contratos públicos, empresas, municípios e mercados — a partir de fontes públicas, "
+        "com a origem de cada número à vista. O site mostra o que está publicado; a plataforma "
+        "responde às perguntas que se fazem por cima disso.</p>"
+        f'<ul class="sistema-links">{destinos}</ul>'
+        "</section>"
+    )
+
+
 def render_not_found(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página 404: endereço que não existe (ou que mudou de sítio)."""
     settings = settings or store.get_settings()
-    body = (
-        '<section class="section hero centro"><h1>404</h1>'
-        '<p class="lead">Esta página não existe ou ainda não foi publicada.</p>'
-        '<div class="actions" style="justify-content:center"><a class="btn" href="/site">Voltar ao início</a></div></section>'
+    body = _pagina_de_sistema(
+        etiqueta="Erro 404 · endereço não encontrado",
+        titulo="Este endereço não consta do cadastro",
+        lead="A página que pediu não existe — ou mudou de sítio e ficou um link a apontar para o vazio.",
+        nota="Procurámos duas vezes. Ao contrário de um contrato com aditivos, este caminho não "
+        "tem versão anterior para consultar. Se chegou aqui por um link nosso, diga qual: "
+        "gostamos de saber onde é que os links se perdem.",
+        ilustracao=_ILUSTRACOES_DE_SISTEMA["nao-encontrada"],
+        legenda="Lupa sobre o registo de páginas: o endereço pedido não está lá.",
+        acoes=(
+            '<a class="btn" href="/site">Ir para o início</a>'
+            '<a class="btn ghost" href="/site/contactos">Reportar o link</a>'
+        ),
+        com_pesquisa=True,
     )
     return _layout(
         title="Página não encontrada",
@@ -3757,6 +3908,35 @@ def render_not_found(*, settings: Optional[Dict[str, Any]] = None) -> str:
         body=body,
         current_path="/site/404",
         settings=settings,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Página não encontrada"}],
+        noindex=True,
+    )
+
+
+def render_erro_interno(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página 500: falha do lado do serviço (não do utilizador)."""
+    settings = settings or store.get_settings()
+    body = _pagina_de_sistema(
+        etiqueta="Erro 500 · falha do serviço",
+        titulo="Falhou do nosso lado, não do seu",
+        lead="Alguma coisa correu mal a montar esta página. O pedido chegou, a resposta é que não.",
+        nota="Fica no registo do servidor, com hora e tudo — tratamos disto como qualquer "
+        "inconsistência nos dados: primeiro perceber, depois corrigir. Os números continuam "
+        "guardados: uma falha na montra não estraga o arquivo.",
+        ilustracao=_ILUSTRACOES_DE_SISTEMA["erro-interno"],
+        legenda="Painel do serviço com uma peça solta e a placa de aviso à vista.",
+        acoes=(
+            '<a class="btn" href="/site">Voltar ao início</a>'
+            '<a class="btn ghost" href="/site/contactos">Dizer o que se passou</a>'
+        ),
+    )
+    return _layout(
+        title="Erro do serviço",
+        description="Falha interna ao servir a página.",
+        body=body,
+        current_path="/site/erro",
+        settings=settings,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Erro do serviço"}],
         noindex=True,
     )
 

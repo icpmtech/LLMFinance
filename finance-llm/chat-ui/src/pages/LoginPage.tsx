@@ -17,12 +17,12 @@ import {
   LogIn,
   Mail,
   ShieldCheck,
-  Sparkles,
   TrendingUp,
   User,
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "../auth";
+import { PublicFooter, PublicHeader } from "../components/PublicShell";
 
 type Mode = "login" | "register";
 
@@ -101,22 +101,15 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background text-foreground">
+    <div className="relative flex min-h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <div className="orbit-bg pointer-events-none absolute inset-0 opacity-80" aria-hidden="true" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center gap-8 px-4 py-10 lg:flex-row lg:items-stretch lg:gap-12">
+      {/* Cabeçalho e rodapé da plataforma, iguais aos da landing page e editáveis
+          no backoffice (Administração → Plataforma). */}
+      <PublicHeader />
+      <main className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 px-4 py-10 lg:flex-row lg:items-stretch lg:gap-12">
         {/* Apresentação */}
         <section className="flex w-full max-w-lg flex-col justify-center lg:w-1/2">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-teal-400 via-teal-500 to-blue-600 text-white shadow-lg shadow-teal-500/25">
-              <Sparkles size={20} />
-            </span>
-            <div>
-              <p className="text-lg font-semibold leading-tight">IQ OS</p>
-              <p className="text-xs text-muted-foreground">Plataforma de inteligência financeira</p>
-            </div>
-          </div>
-
-          <h1 className="mt-8 text-3xl font-semibold leading-tight sm:text-4xl">
+          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
             Toda a informação de mercados e contratação pública,
             <span className="text-glow-teal text-teal-300"> com IA a ajudar a decidir.</span>
           </h1>
@@ -311,7 +304,8 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             </p>
           </div>
         </section>
-      </div>
+      </main>
+      <PublicFooter />
     </div>
   );
 }

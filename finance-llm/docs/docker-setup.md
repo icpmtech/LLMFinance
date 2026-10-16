@@ -154,6 +154,17 @@ funcionar; a **home** só muda com a republicação abaixo, porque `/` continua 
 nginx. Para confirmar sem browser: `python docker/smoke_test.py --ui-url http://127.0.0.1:4180`
 verifica o HTML **e** o bundle que ele referencia (um `200` no HTML, sozinho, não prova nada).
 
+Quando o **backend** é que não responde, o `location /site/` tem
+`error_page 500 502 503 504 = /erro.html`: em vez do 502 cru do nginx, quem estava a ler o site
+recebe a página de recurso (`location = /erro.html`, no mesmo ficheiro), que diz o que se passa,
+dá a saída e leva aos destinos úteis. Tem endereço próprio para poder ser vista sem derrubar
+nada (`http://127.0.0.1:4180/erro.html`) e é `no-store` para não ficar em cache. Como vive no
+`nginx.conf`, a alteração só chega a uma instalação a correr depois de reconstruir a imagem do
+frontend; para validar sem rebuild, `docker cp docker/nginx.conf finance-llm-frontend:/etc/nginx/conf.d/default.conf`
+e `docker exec finance-llm-frontend nginx -s reload`. As páginas equivalentes do lado do serviço
+(404, erro do serviço e `/site/offline`) são desenhadas pelo `api/cms_render.py` e têm teste de
+browser em `chat-ui/e2e/test_site_paginas_sistema.py`.
+
 ```powershell
 # 1) build para o nginx (o que se publica no frontend)
 $env:VITE_API_URL='/api'; npm --prefix chat-ui run build

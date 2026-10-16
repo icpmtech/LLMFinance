@@ -34,6 +34,24 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
     ("ilustracao-municipios.svg", "Ilustração · municípios", "Municípios: despesa e contratação por concelho", ""),
     ("ilustracao-investigacao.svg", "Ilustração · investigação", "Investigação assistida com evidências citadas", ""),
     ("ilustracao-benchmarks.svg", "Ilustração · benchmarks", "Benchmarks de preços por loja", ""),
+    (
+        "ilustracao-pagina-nao-encontrada.svg",
+        "Ilustração · página não encontrada",
+        "Ficha de registo aberta com um lugar vazio e uma lupa a procurar o endereço em falta",
+        "Usada na página de sistema do erro 404.",
+    ),
+    (
+        "ilustracao-erro-interno.svg",
+        "Ilustração · erro do serviço",
+        "Painel de indicadores com uma peça solta e uma placa de aviso",
+        "Usada na página de sistema do erro 500.",
+    ),
+    (
+        "ilustracao-sem-ligacao.svg",
+        "Ilustração · sem ligação",
+        "Ligação interrompida entre o dispositivo e o servidor, com o que está guardado à vista",
+        "Usada na página de sistema mostrada sem rede (service worker).",
+    ),
     ("capa-post-bemvindo.svg", "Capa · bem-vindo ao blog", "Bem-vindo ao blog do Sabemos Studio", ""),
     ("capa-post-contratos-2026.svg", "Capa · contratos públicos em 2026", "Contratos públicos em 2026: o que os dados mostram", ""),
     # Diagramas: explicam o método e a leitura dos números, página a página.

@@ -257,6 +257,7 @@ from api.auth_routes import router as auth_router, optional_session, CurrentSess
 from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
+from api.app_shell_routes import router as app_shell_router
 from api.indexnow_routes import router as indexnow_router
 from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
@@ -633,6 +634,29 @@ app = FastAPI(
 # inline (mercado, Elasticsearch, contratos, empresas, dossier, import, SPA).
 app.openapi = lambda: custom_openapi(app)  # type: ignore[method-assign]
 
+
+@app.exception_handler(Exception)
+async def _erro_nao_tratado(request: Request, exc: Exception) -> Response:
+    """Falha não tratada: o site público responde com a sua página, a API com JSON.
+
+    Sem isto, quem estava a ler o site recebia o «Internal Server Error» em texto
+    simples do Starlette — e uma página que explica o que aconteceu (e que os
+    dados continuam guardados) é melhor do que isso. A exceção volta a ser
+    levantada pelo Starlette depois da resposta, por isso o `traceback` continua
+    nos registos.
+    """
+    logging.getLogger(__name__).exception("Erro não tratado em %s %s", request.method, request.url.path)
+    if request.url.path.startswith("/site") and "text/html" in str(request.headers.get("accept") or ""):
+        from api import cms_render as render  # noqa: PLC0415 - import tardio: o site é uma peça grande
+
+        try:
+            corpo = render.render_erro_interno()
+        except Exception:  # pragma: no cover - a própria página de erro falhou
+            logging.getLogger(__name__).exception("Não foi possível desenhar a página de erro interno.")
+        else:
+            return HTMLResponse(corpo, status_code=500, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"detail": "Erro interno do servidor."}, status_code=500)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -763,6 +787,9 @@ app.include_router(permissions_router)
 app.include_router(billing_router)
 app.include_router(cli_router)
 app.include_router(admin_router)
+# Cabeçalho e rodapé das páginas públicas da plataforma: leitura aberta em
+# `/app-shell` e edição no backoffice em `/admin/app-shell`.
+app.include_router(app_shell_router)
 app.include_router(indexnow_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)

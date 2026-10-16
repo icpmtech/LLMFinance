@@ -332,7 +332,8 @@ def test_trilha_da_ficha_de_municipio(cms_limpo: Any) -> None:
         {"title": "Despesas da Câmara Municipal de Braga", "slug": "braga", "municipio": "Braga"}
     )
 
-    assert ">Municípios</span>" in html
+    # «Municípios» tem índice próprio (a página da Solução): a trilha leva lá.
+    assert '<a href="/site/solucoes/municipios">Municípios</a>' in html
     assert 'aria-current="page">Braga</span>' in html
 
 

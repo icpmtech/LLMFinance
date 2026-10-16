@@ -69,6 +69,34 @@ olham para o site publicado — painel do telemóvel, pesquisa, ícones — corr
 qualquer conta); para os correr todos, promover a conta E2E na Administração ou
 passar `E2E_TOKEN` de uma conta gestora.
 
+`test_site_paginas_sistema.py` — **páginas de sistema do site público** (não
+precisa de sessão nem de CMS): endereço que não existe (404), falta de rede
+(`/site/offline`, servida pelo service worker) e a página do proxy (`/erro.html`,
+do nginx, que substitui o 502 cru quando o backend não responde). Cada teste
+navega a sério e valida o que se vê, não só o texto:
+
+- o 404 responde **404** e mostra título, nota com humor, ilustração (com
+  `role="img"`, texto alternativo, tamanho e proporção 800×480) e legenda;
+- a plataforma e os cinco destinos úteis (Soluções, Relatórios, Fontes, Blog e
+  Contactos) estão visíveis, e a trilha de navegação tem dois passos com o
+  último marcado (`aria-current`);
+- **alinhamento**: no computador o texto e a ilustração ficam lado a lado (sem
+  sobreposição) e o título começa na mesma coordenada que a trilha; no telemóvel
+  a ilustração passa para baixo do texto e nada estoura na horizontal;
+- a pesquisa do 404 leva mesmo a `/site/pesquisa?q=…` com resultados, e as ações
+  («Ir para o início», «Reportar o link») navegam para onde dizem;
+- **sem rede** (com o service worker ativo e `context.set_offline(True)`): um
+  endereço nunca visitado mostra a página de recurso com a ilustração, e uma
+  página já visitada abre da cache em vez da página de recurso;
+- o `/erro.html` devolve 200 com `Cache-Control: no-store`, explica o que se
+  passa, dá a saída (tentar outra vez, voltar ao início) e não estoura em nenhum
+  dos ecrãs.
+
+De cada página fica uma captura em PNG no diretório temporário do teste
+(`tmp_path`) — serve para confirmar a olho; os testes comparam geometria (caixas,
+proporções, alinhamentos), não pixels, para não ficarem presos a tipos de letra
+de cada máquina.
+
 ## Preparação
 
 ```powershell

@@ -16,6 +16,8 @@
  * - **Ficheiros de log** — lista e últimas linhas dos ficheiros em `logs/`.
  * - **Menu lateral** — que módulos da solução cada perfil (papel da plataforma e
  *   perfil de CRM) vê na barra lateral, no dock e no menu Iniciar.
+ * - **Plataforma** — o cabeçalho e o rodapé das páginas públicas da plataforma
+ *   (`/`, `/login` e `/register`): marca, logótipo, navegação, botões e rodapé.
  *
  * O acesso é restrito a contas com papel `admin` (o servidor devolve 403).
  */
@@ -28,6 +30,7 @@ import {
   Clock,
   Database,
   FileText,
+  Globe2,
   HardDriveDownload,
   Info,
   KeyRound,
@@ -77,8 +80,9 @@ import { AdminServiceKeysTab } from "./AdminServiceKeys";
 import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 import { AdminReportsTab } from "./AdminReports";
 import { AdminBaseImpicTab } from "./AdminBaseImpic";
+import { AdminPlatformTab } from "./AdminPlatform";
 
-type Tab = "overview" | "users" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic";
+type Tab = "overview" | "users" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic" | "platform";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -1273,6 +1277,7 @@ export default function AdminPage() {
     { id: "payments", label: "Pagamentos", icon: <CreditCard size={13} /> },
     { id: "reports", label: "Relatórios", icon: <ReceiptText size={13} /> },
     { id: "base-impic", label: "Portal Base", icon: <HardDriveDownload size={13} /> },
+    { id: "platform", label: "Plataforma", icon: <Globe2 size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
     { id: "sidebar", label: "Menu lateral", icon: <PanelLeft size={13} /> },
     { id: "keys", label: "Chaves", icon: <KeyRound size={13} /> },
@@ -1333,6 +1338,7 @@ export default function AdminPage() {
         {tab === "payments" && <PaymentsTab onError={setError} />}
       {tab === "reports" && <AdminReportsTab onError={setError} />}
         {tab === "base-impic" && <AdminBaseImpicTab onError={setError} />}
+        {tab === "platform" && <AdminPlatformTab onError={setError} />}
         {tab === "events" && <EventsTab onError={setError} />}
         {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
         {tab === "keys" && <AdminServiceKeysTab onError={setError} />}

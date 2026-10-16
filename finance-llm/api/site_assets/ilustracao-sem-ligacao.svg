@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Ligação interrompida entre o dispositivo e o servidor: a página guardada continua a abrir, os dados atualizam-se quando a rede voltar">
+  <rect width="800" height="480" fill="#f1f5f9"/>
+  <g>
+    <rect x="64" y="120" width="248" height="240" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="96" y="152" width="120" height="12" rx="6" fill="#0ea5a4"/>
+    <g fill="#e2e8f0">
+      <rect x="96" y="186" width="184" height="12" rx="6"/>
+      <rect x="96" y="212" width="150" height="12" rx="6"/>
+      <rect x="96" y="238" width="168" height="12" rx="6"/>
+    </g>
+    <rect x="96" y="286" width="184" height="42" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="188" y="313" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">guardado no dispositivo</text>
+  </g>
+  <g>
+    <path d="M332 240 h56" stroke="#0f172a" stroke-width="14" stroke-linecap="round"/>
+    <path d="M430 240 h56" stroke="#94a3b8" stroke-width="14" stroke-linecap="round" stroke-dasharray="14 12"/>
+    <path d="M366 214 l32 52 -32 0 z" fill="#f59e0b"/>
+    <path d="M456 266 l-32 -52 32 0 z" fill="#f59e0b" opacity="0.55"/>
+  </g>
+  <g>
+    <rect x="508" y="120" width="228" height="240" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="540" y="152" width="140" height="12" rx="6" fill="#0ea5a4"/>
+    <g>
+      <rect x="540" y="192" width="164" height="58" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+      <rect x="558" y="212" width="64" height="10" rx="5" fill="#cbd5e1"/>
+      <rect x="558" y="230" width="104" height="12" rx="6" fill="#0f172a"/>
+    </g>
+    <g>
+      <rect x="540" y="264" width="164" height="58" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+      <rect x="558" y="284" width="52" height="10" rx="5" fill="#cbd5e1"/>
+      <rect x="558" y="302" width="88" height="12" rx="6" fill="#0f172a"/>
+    </g>
+    <text x="622" y="344" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b" text-anchor="middle">servidor</text>
+  </g>
+  <text x="64" y="420" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Sem ligação · os números voltam a atualizar-se quando a rede voltar</text>
+</svg>

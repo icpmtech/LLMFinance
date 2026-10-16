@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import { TawkChat } from "../components/TawkChat";
+import { PublicFooter, PublicHeader } from "../components/PublicShell";
 
 const CATEGORIES = [
   {
@@ -77,38 +78,13 @@ const FEATURES = [
 
 export function LandingPage() {
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background text-foreground">
+    <div className="relative flex min-h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <div className="orbit-bg pointer-events-none absolute inset-0 opacity-80" aria-hidden="true" />
 
       {/* Header */}
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-teal-400 via-teal-500 to-blue-600 text-white shadow-lg shadow-teal-500/25">
-            <Sparkles size={20} />
-          </span>
-          <div>
-            <p className="text-lg font-semibold leading-tight">IQ OS</p>
-            <p className="text-xs text-muted-foreground">Plataforma de inteligência financeira · Sabemos Studio</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <a
-            href="/login"
-            className="hidden rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-block"
-          >
-            Entrar
-          </a>
-          <a
-            href="/register"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
-          >
-            Criar conta
-            <ArrowRight size={15} />
-          </a>
-        </div>
-      </header>
+      <PublicHeader />
 
-      <main className="relative z-10">
+      <main className="relative z-10 flex-1">
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-4 pb-12 pt-6 sm:pb-16 sm:pt-10 lg:pb-20 lg:pt-14">
           <div className="mx-auto max-w-3xl text-center">
@@ -326,22 +302,7 @@ export function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/5 py-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 sm:flex-row">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles size={16} className="text-teal-300" />
-            <span>Sabemos Studio · IQ OS — Plataforma de Inteligência Financeira</span>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <a href="/login" className="transition hover:text-foreground">
-              Entrar
-            </a>
-            <a href="/register" className="transition hover:text-foreground">
-              Criar conta
-            </a>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
 
       {/* Apoio ao cliente (Tawk.to) — só na landing page pública. */}
       <TawkChat />

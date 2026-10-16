@@ -6,6 +6,7 @@
  * devolve 403 caso contrário).
  */
 import { API_BASE } from "./api";
+import type { AppShellState } from "./appShellApi";
 
 /* ------------------------------------------------------------------- tipos */
 
@@ -308,6 +309,28 @@ export type ServiceKeysState = {
 };
 
 export type ServiceKeyTest = { ok: boolean; mensagem: string; saldo?: string };
+
+/* ---------------------------------------------------- plataforma (cabeçalho) */
+
+/** Cabeçalho e rodapé das páginas públicas, como o painel os edita. */
+export type PlatformShellDraft = {
+  brand: { name: string; tagline: string; logo_url: string; logo_alt: string };
+  header: { items: { label: string; href: string }[]; cta: { label: string; href: string } | null; secondary: { label: string; href: string } | null };
+  footer: { text: string; items: { label: string; href: string }[]; social: Record<string, string> };
+};
+
+export function getAdminAppShell(): Promise<AppShellState> {
+  return request<AppShellState>("/admin/app-shell");
+}
+
+/** Grava a configuração (o servidor devolve o documento tal como ficou). */
+export function saveAdminAppShell(shell: PlatformShellDraft): Promise<AppShellState> {
+  return request<AppShellState>("/admin/app-shell", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(shell),
+  });
+}
 
 export function getServiceKeys(): Promise<ServiceKeysState> {
   return request<ServiceKeysState>("/admin/service-keys");
