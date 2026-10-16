@@ -9,12 +9,20 @@
 # ~15 GB de disco para os pesos base. No primeiro arranque ele descarrega o
 # modelo da HuggingFace.
 #
-# Treinar (a partir do modelo base):
-#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral-instruct.yaml
+# Passo 1 — exportar, medindo com o tokenizer deste modelo (a janela é 2 048
+# tokens e o `soup train` aborta se alguma linha ficar sem resposta):
+#   python training/export_es_dataset.py --dataset contratos --max-records 200000 \
+#       --tokenizer mistralai/Mistral-7B-Instruct-v0.3 --max-tokens 1900
+#
+# Passo 2 — treinar (o `-y` evita a pergunta de confirmação, que num
+# `docker compose run` não tem terminal):
+#   docker compose --profile train run --rm --gpus all soup train -y \
+#       --config training/soup/soup-mistral-instruct.yaml
 #
 # O resultado é um adaptador LoRA em ./model/soup-mistral-7b-lora. Para juntar ao
 # base num modelo só:
-#   docker compose --profile train run --rm soup merge --adapter ./model/soup-mistral-7b-lora
+#   docker compose --profile train run --rm soup merge \
+#       --adapter ./model/soup-mistral-7b-lora --output ./model/soup-mistral-7b-merged
 
 base: mistralai/Mistral-7B-Instruct-v0.3
 task: sft
@@ -24,6 +32,7 @@ data:
   format: alpaca
   val_split: 0.05
   max_length: 2048
+  # Nada a declarar: o Mistral-7B-Instruct traz o seu próprio `chat_template`.
 
 training:
   epochs: 2

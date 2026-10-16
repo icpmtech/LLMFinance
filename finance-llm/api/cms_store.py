@@ -460,6 +460,15 @@ def reading_minutes(text: str) -> int:
     return max(1, round(_words(text) / 200))
 
 
+def post_reading_minutes(markdown: str, blocks: Iterable[Dict[str, Any]]) -> int:
+    """Tempo de leitura de um artigo: o Markdown **e** os blocos.
+
+    Um artigo com gráficos e tabelas lê-se em mais tempo do que o texto sozinho,
+    e é este número que aparece no índice do blog.
+    """
+    return reading_minutes(f"{markdown or ''} {_blocks_text(blocks)}")
+
+
 def _excerpt(text: str, limit: int = 220) -> str:
     plain = re.sub(r"```.*?```", " ", text or "", flags=re.S)
     plain = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", plain)
@@ -1057,7 +1066,7 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["author"] = str(pick("author") or existing.get("author") or "")
         doc["featured"] = bool(pick("featured", False))
         doc["blocks"] = _normalise_blocks(pick("blocks", []))
-        doc["reading_minutes"] = reading_minutes(doc["markdown"])
+        doc["reading_minutes"] = post_reading_minutes(doc["markdown"], doc["blocks"])
 
     if entity == "municipios":
         # Ficha pública de um município: o texto e os blocos são editoriais, e o
@@ -2337,6 +2346,7 @@ def _seed(store: Dict[str, Any]) -> None:
         {"id": product_id, "name": "Produto", "slug": "produto", "description": "Novidades da plataforma.", "parent_id": None, "color": "#f59e0b", "created_at": now, "updated_at": now},
     ]
 
+    artigo_contratos = editorial.artigo_contratos_2026()
     store["posts"] = [
         {
             "id": "post_bemvindo",
@@ -2371,28 +2381,19 @@ def _seed(store: Dict[str, Any]) -> None:
         {
             "id": "post_contratos_2026",
             "title": "Contratos públicos em 2026: o que os dados mostram",
-            "slug": "contratos-publicos-2026",
-            "excerpt": "Volume, valor e concentração nos contratos já publicados este ano — e as três leituras que interessam.",
-            "markdown": (
-                "Os dados de 2026 ainda estão a fechar, mas já deixam ver três padrões.\n\n"
-                "## 1. O valor concentra-se em poucos adjudicatários\n\n"
-                "A cauda longa é grande, mas o valor não: os primeiros adjudicatários levam a maior fatia.\n\n"
-                "## 2. O procedimento explica o preço\n\n"
-                "Ajuste direto e concurso público não competem em pé de igualdade.\n\n"
-                "## 3. O território pesa\n\n"
-                "Distrito de execução continua a ser a melhor chave para ler o mercado local.\n\n"
-                "_Em preparação: a análise por CPV._"
-            ),
-            "blocks": [],
+            "slug": editorial.ARTIGO_CONTRATOS_2026_SLUG,
+            "excerpt": editorial.ARTIGO_CONTRATOS_2026_EXCERPT,
+            "markdown": artigo_contratos["markdown"],
+            "blocks": artigo_contratos["blocks"],
             "cover_id": media.get("capa-post-contratos-2026.svg"),
             "category_ids": [analytics_id, market_id],
-            "tags": ["contratos públicos", "2026", "mercado"],
+            "tags": ["contratos públicos", "2026", "mercado", "CPV"],
             "author": "Equipa Sabemos Studio",
             "status": "publicado",
             "published_at": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
             "scheduled_at": None,
             "featured": False,
-            "reading_minutes": 4,
+            "reading_minutes": post_reading_minutes(artigo_contratos["markdown"], artigo_contratos["blocks"]),
             "seo": {"title": "", "description": "", "keywords": [], "image_id": None, "noindex": False},
             "created_at": now,
             "updated_at": now,

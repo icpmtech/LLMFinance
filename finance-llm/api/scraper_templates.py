@@ -55,9 +55,10 @@ _AVISO_RECURSO = (
     "[strong[contains(., '{rotulo}')]]/text()"
 )
 
-#: O mesmo, para as fichas com `dt`/`dd` do `find-tender.service.gov.uk`.
+#: O mesmo, para as fichas com `dt`/`dd` do `find-tender.service.gov.uk`: as
+#: entradas vivem dentro de um `dl`, daí o `dl/` no início do caminho.
 _FICHA_DO_AVISO = (
-    "div[contains(@class,'search-result-entry')]"
+    "dl/div[contains(@class,'search-result-entry')]"
     "[dt[contains(., '{rotulo}')]]/dd/text()"
 )
 

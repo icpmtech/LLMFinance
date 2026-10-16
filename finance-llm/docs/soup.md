@@ -21,7 +21,7 @@ instrução/resposta e treina em cima do modelo que já existe.
               ▼
    data/final/<receita>.jsonl      (formato Alpaca: instruction / input / output)
               │
-              │  docker compose --profile train run --rm soup train --config …
+              │  docker compose --profile train run --rm soup train -y --config …
               ▼
    model/soup-*                    (adaptador LoRA ou modelo treinado)
 ```
@@ -48,7 +48,9 @@ no contentor.
 python training/export_es_dataset.py --list
 
 # contratos portugueses (índice `contratos`) → data/final/contratos.jsonl
-python training/export_es_dataset.py --dataset contratos --max-records 200000
+# (o `--tokenizer`/`--max-tokens` medem cada par — ver «Porquê medir os tokens»)
+python training/export_es_dataset.py --dataset contratos --max-records 200000 \
+    --tokenizer model/mistral-finance/final --max-tokens 950
 ```
 
 | Receita | Índice | Documentos | Instrução gerada |
@@ -75,7 +77,30 @@ Opções que valem a pena conhecer:
 | `--query '<json>'` | Filtro Elasticsearch, ex.: `--query '{"term": {"Ano": 2025}}'`. |
 | `--out <ficheiro>` | Destino (por omissão `data/final/<receita>.jsonl`). |
 | `--max-chars N` | Corte por campo (`0` = sem corte). Por omissão 4 000. |
+| `--tokenizer <dir>` | Tokenizer do modelo de destino, para medir os pares (ex.: `model/mistral-finance/final`). |
+| `--max-tokens N` | Orçamento de tokens por par (prompt + resposta). Exige `--tokenizer`. |
 | `--dry-run` | Só conta os documentos que o filtro apanha. |
+
+### Porquê medir os tokens
+
+O `soup train` **não salta** as linhas que ficam sem resposta depois da
+truncagem (`data.max_length`) — aborta a corrida com
+`no causal-loss target remains after tokenization/truncation`. Em 300 contratos
+exportados, 4 não cabiam nos 950 tokens; sem os medir, a corrida morria por causa
+deles.
+
+O corte por caracteres não resolve o problema: o tokenizer do sistema (vocabulário
+de 3 000) gasta ~1,7 caracteres por token em português e muito menos em números e
+identificadores, por isso o tamanho em tokens não é proporcional ao número de
+caracteres. Medir com o tokenizer certo é a única forma de garantir que passa:
+
+```bash
+# --max-tokens = janela do modelo (1024) com margem para o molde do chat
+python training/export_es_dataset.py --dataset contratos --max-records 200000 \
+    --tokenizer model/mistral-finance/final --max-tokens 950
+```
+
+As linhas deixadas de fora aparecem na contagem `dropped` do resumo.
 
 Índices que não têm receita própria continuam a poder ser exportados com
 moldes:
@@ -114,7 +139,8 @@ docker compose --profile train build soup
 # exportar e treinar (`-y` porque o `train` pede confirmação e o `run` não tem
 # terminal interactivo)
 docker compose --profile train run --rm --entrypoint python soup \
-  training/export_es_dataset.py --dataset contratos --max-records 200000
+  training/export_es_dataset.py --dataset contratos --max-records 200000 \
+  --tokenizer model/mistral-finance/final --max-tokens 950
 docker compose --profile train run --rm soup train -y \
   --config training/soup/soup-mistral.yaml
 ```
@@ -140,7 +166,7 @@ ver a nota no `Dockerfile.backend` —, por isso a instalação é à mão):
 
 ```powershell
 .venv\Scripts\pip install "soup-cli[train]"
-.venv\Scripts\soup.exe train --config training/soup/soup-mistral.yaml
+.venv\Scripts\soup.exe train -y --config training/soup/soup-mistral.yaml
 ```
 
 Antes de gastar horas de GPU, vale a pena perguntar ao Soup o que ele acha:
@@ -171,6 +197,36 @@ training:
 Chaves desconhecidas são **recusadas** pelo Soup desde a v0.75 — um erro de
 escrita não passa em silêncio, o config não carrega. Se acrescentar campos,
 confirme com `soup profile --config <ficheiro>` que ele ainda carrega.
+
+### O `chat_template` do modelo do sistema
+
+O modelo do IQ OS é um modelo de **continuação**, não de conversa: o
+`inference/generate_mistral.py` dá-lhe texto simples e o tokenizer não traz
+`chat_template`. Sem isso o Soup não arranca — e sem o `{% generation %}` a perda
+não sabe onde começa a resposta:
+
+```yaml
+chat_template: "{% for message in messages %}{% if message['role'] == 'assistant' %}{% generation %}### Resposta:\n{{ message['content'] }}{% endgeneration %}\n\n{% else %}### Instrução:\n{{ message['content'] }}\n\n{% endif %}{% endfor %}"
+```
+
+O molde reproduz o formato com que o modelo já foi afinado
+(`training/train_mistral_contracts.py`) — treino e inferência falam a mesma
+língua. O `soup-mistral-instruct.yaml` não precisa dele: o Mistral-7B-Instruct
+traz o seu próprio.
+
+Depois do treino, o Soup grava o molde no `tokenizer_config.json` do adaptador
+(o próprio `soup train` avisa), e o `soup merge` herda-o.
+
+### Quanto tempo leva
+
+Treinar o modelo do sistema (`soup-mistral.yaml`) corre em **CPU**: numa máquina
+sem GPU, 266 exemplos a 1 024 tokens deram 34 passos em ~7 minutos (~9 s por
+passo). Para o corpus inteiro isto são horas, não minutos — comece por um
+`--max-records` pequeno para confirmar que o fluxo corre ponta a ponta, e só
+depois alargue.
+
+O modelo grande (`soup-mistral-instruct.yaml`, 7B em QLoRA) sem GPU não é
+praticável: use a máquina com GPU e o `--gpus all`.
 
 ## 4. Depois do treino
 

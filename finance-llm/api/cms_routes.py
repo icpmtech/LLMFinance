@@ -49,6 +49,7 @@ DGAEP de um ano, com as secções editáveis, o texto, os blocos e a marca):
 
 - `GET /site` — página inicial
 - `GET /site/blog`, `/site/blog/{slug}`, `/site/categoria/{slug}`, `/site/etiqueta/{tag}`
+- `GET /site/blog/{slug}/pdf` — relatório PDF do artigo (mesmos números e fontes)
 - `GET /site/municipio/{slug}` — ficha pública de um município
 - `GET /site/pesquisa/{slug}` — página pública de uma pesquisa
 - `GET /site/rss.xml`, `/site/sitemap.xml`, `/site/robots.txt`
@@ -64,6 +65,7 @@ from typing import Annotated, Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
+from api import cms_post_report
 from api import cms_render as render
 from api import cms_store as store
 from api import municipios_publicos as publicos
@@ -827,6 +829,21 @@ def site_post(slug: str) -> HTMLResponse:
     if not post:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
     return HTMLResponse(render.render_post(post, settings=settings), headers=_PUBLIC_HEADERS)
+
+
+@router.get("/site/blog/{slug}/pdf")
+def site_post_pdf(slug: str) -> Response:
+    """Relatório PDF do artigo, com os mesmos números e a mesma fonte da página."""
+    store.get_settings()
+    post = store.resolve_post_by_slug(slug, published_only=True)
+    if not post:
+        raise HTTPException(status_code=404, detail="Artigo não encontrado.")
+    nome, conteudo, media_type = cms_post_report.artigo_pdf(post, store.get_settings())
+    return Response(
+        conteudo,
+        media_type=media_type,
+        headers={**_PUBLIC_HEADERS, "Content-Disposition": f'attachment; filename="{nome}"'},
+    )
 
 
 @router.get("/site/categoria/{slug}", response_class=HTMLResponse)

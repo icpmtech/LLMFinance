@@ -394,7 +394,10 @@ class _Blocos:
         itens = []
         for linha in series:
             item: Dict[str, Any] = {"label": linha[0], "value": linha[1]}
-            if len(linha) > 2 and linha[2] not in (None, ""):
+            # Um segundo valor vazio (`""`, `None` ou `0`) é ausência de série, não
+            # uma barra a zero: sem isto, uma linha escrita com o lugar reservado
+            # ganhava uma coluna de zeros no gráfico, na tabela e no PDF.
+            if len(linha) > 2 and linha[2]:
                 item["value2"] = linha[2]
             if len(linha) > 3 and linha[3]:
                 item["note"] = linha[3]
@@ -1354,3 +1357,252 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
     )
 
     return paginas
+
+
+# --------------------------------------------------------------------------
+# Artigos do blog
+# --------------------------------------------------------------------------
+#: Leitura dos contratos públicos publicados em 2026, com os números da base
+#: indexada (leitura de 10/10/2026) e a data escrita em cada gráfico.
+#:
+#: Vive aqui — e não só na semente do CMS — porque uma instalação já em uso
+#: precisa de receber o artigo pelo `_atualizar_site_sabemos.py`: o deploy de
+#: código não leva a pasta `data/`, e sem isto o artigo ficava a prometer uma
+#: análise por CPV que não tinha.
+ARTIGO_CONTRATOS_2026_SLUG = "contratos-publicos-2026"
+ARTIGO_CONTRATOS_2026_EXCERPT = (
+    "Volume, valor e concentração nos contratos já publicados este ano — e as três leituras que interessam."
+)
+
+#: Fonte citada em todos os gráficos e tabelas do artigo.
+_ARTIGO_FONTE = "Base de contratos públicos indexada no Sabemos Studio · leitura a 10/10/2026."
+
+
+def artigo_contratos_2026() -> Dict[str, Any]:
+    """Resumo, gráficos e tabelas do artigo «Contratos públicos em 2026».
+
+    Os valores são os declarados pelos adjudicantes no momento da publicação e
+    não incluem aditivos posteriores. O ano não está fechado: a contagem vai até
+    10 de outubro e, por isso, a comparação com 2025 é feita com o período
+    homólogo (188 725 contratos), nunca com o ano completo.
+    """
+    b = _Blocos("artigo-contratos-2026")
+    fonte = _ARTIGO_FONTE
+
+    markdown = (
+        "Foram publicados **192 955 contratos** entre 1 de janeiro e 10 de outubro de 2026, no valor de "
+        "**16,4 mil milhões de euros**. Em número, o ano segue o ritmo do anterior: no período homólogo de "
+        "2025 saíram 188 725 contratos, ou seja, **+2,2%**. Em valor médio, está mais barato — **84 840 €** "
+        "por contrato, contra **95 835 €** em 2025.\n\n"
+        "**O essencial, em três leituras:**\n\n"
+        "1. **O volume está na cauda; o valor, no topo.** 79,7% dos contratos valem menos de 50 000 €, e os "
+        "quatro maiores adjudicatários levam 414,6 M€ — 73% de tudo o que foi para os dez primeiros.\n"
+        "2. **O procedimento explica o preço.** O ajuste direto é 41,9% dos contratos e 16,6% do valor; o "
+        "concurso público é 15,8% dos contratos e 47,9% do valor.\n"
+        "3. **O medicamento manda.** Produtos farmacêuticos valem 2,60 mil M€, mais do que as onze classes de "
+        "CPV que se seguem juntas. E falta preencher a região de execução em 39,1% dos contratos.\n\n"
+        "Cada gráfico diz de onde vem e a que data pertence. Os números são os mesmos que a plataforma mostra."
+    )
+
+    blocos = [
+        b.numeros(
+            "2026 em cinco números",
+            [
+                ("192 955", "contratos publicados", "1 de janeiro a 10 de outubro de 2026"),
+                ("16,4 mil M€", "valor total declarado", "+2,2% em número face a igual período de 2025"),
+                ("84 840 €", "valor médio por contrato", "95 835 € no ano de 2025"),
+                ("79,7%", "abaixo de 50 mil €", "só 3,65% passam os 350 mil €"),
+                ("28 019", "adjudicatários distintos", "para 4 360 entidades adjudicantes"),
+            ],
+        ),
+        b.texto(
+            "1. O volume está na cauda; o valor, no topo",
+            "Dos 192 955 contratos publicados, **153 710 (79,7%) ficam abaixo dos 50 000 €** e apenas "
+            "**7 049 (3,65%) passam os 350 000 €**. O valor médio de 84 840 € diz mais sobre esses poucos "
+            "contratos grandes do que sobre o contrato típico.\n\n"
+            "Do lado de quem vende há **28 019 adjudicatários distintos** — 6,9 contratos por fornecedor, em "
+            "média. Os dez maiores somam **565,6 M€: 3,45% do valor do ano**. À escala nacional, não há um "
+            "punhado de empresas a ficar com o país.\n\n"
+            "A concentração existe, mas **dentro de cada mercado**. Os quatro primeiros da lista levam "
+            "**414,6 M€ — 73% de tudo o que foi para os dez maiores** — e são todos do medicamento: Medtronic "
+            "(dispositivos médicos), Pfizer (farmacêutica), Cencora (distribuição) e Lusopalex (produtos de "
+            "saúde). O quarto leva quase cinco vezes mais do que o décimo.",
+        ),
+        b.grafico(
+            "Onde estão os contratos",
+            [
+                ("Menos de 50 mil €", 153710, 0, "79,7% do total"),
+                ("50 a 100 mil €", 17713, 0, "9,2%"),
+                ("100 a 150 mil €", 6066, 0, "3,1%"),
+                ("150 a 200 mil €", 3395, 0, "1,8%"),
+                ("200 a 250 mil €", 2323, 0, "1,2%"),
+                ("250 a 300 mil €", 1569, 0, "0,8%"),
+                ("300 a 350 mil €", 1130, 0, "0,6%"),
+                ("350 mil € ou mais", 7049, 0, "3,65% do total, apesar de o escalão ser aberto"),
+            ],
+            note="Número de contratos por escalão de valor declarado. A cauda longa não é um detalhe: é quase todo o ano.",
+            formato="numero",
+            source=fonte,
+        ),
+        b.grafico(
+            "Os dez maiores adjudicatários",
+            [
+                ("Medtronic Portugal", 124965474.67, 0, "1 203 contratos"),
+                ("LAB. PFIZER", 100909059.32, 0, "858 contratos"),
+                ("Cencora 3PL Portugal", 97250705.90, 0, "1 291 contratos"),
+                ("Lusopalex — Produtos de Saúde", 91470541.56, 0, "1 143 contratos"),
+                ("B. Braun Medical", 37672334.23, 0, "1 617 contratos"),
+                ("Fresenius Kabi Pharma Portugal", 29523903.51, 0, "937 contratos"),
+                ("Generis — Farmacêutica", 23613047.15, 0, "1 698 contratos"),
+                ("Accord Healthcare", 21525530.63, 0, "904 contratos"),
+                ("Labesfal — Laboratórios Almiro", 19865849.43, 0, "1 146 contratos"),
+                ("Smile — Viagens e Turismo", 18758982.83, 0, "3 035 contratos"),
+            ],
+            note="Valor adjudicado em 2026. Juntos somam 565,6 M€ — 3,45% do valor total e 73% dele nos quatro primeiros.",
+            source=fonte,
+        ),
+        b.tabela(
+            "Quem compra mais: as maiores entidades adjudicantes",
+            ["Entidade adjudicante", "Contratos", "Valor"],
+            [
+                ["Unidade Local de Saúde de Santa Maria", "4 319", "531,2 M€"],
+                ["Unidade Local de Saúde de Coimbra", "4 087", "430,4 M€"],
+                ["Unidade Local de Saúde de São José", "3 272", "366,0 M€"],
+                ["Instituto Português de Oncologia do Porto", "8 940", "266,9 M€"],
+                ["Unidade Local de Saúde do Algarve", "2 778", "179,5 M€"],
+                ["Unidade Local de Saúde de Gaia/Espinho", "4 280", "158,1 M€"],
+                ["Unidade Local de Saúde de Almada-Seixal", "4 441", "128,7 M€"],
+                ["Águas do Norte", "2 342", "79,2 M€"],
+            ],
+        ),
+        b.texto(
+            "2. O procedimento explica o preço",
+            "O ajuste direto é o procedimento mais usado e o menos pesado: **80 757 contratos (41,9%)** para "
+            "**2,71 mil M€ (16,6%)** — uma média de **33 551 €** por contrato.\n\n"
+            "O concurso público faz o inverso: **15,8% dos contratos e 47,9% do valor**, 7,84 mil M€, com um "
+            "contrato médio de **257 107 €**. É **quase oito vezes** o do ajuste direto.\n\n"
+            "Pelo meio ficam os acordos-quadro: os celebrados ao abrigo do artigo 259.º valem **2,45 mil M€ "
+            "em 28 338 contratos** (média de 86 332 €). E a consulta prévia, o segundo procedimento mais usado "
+            "em número, é o que menos valor move — **31 078 contratos para 988,6 M€**, uma média de 31 811 € "
+            "que fica abaixo da do ajuste direto.",
+        ),
+        b.grafico(
+            "Peso no número e peso no valor",
+            [
+                ("Ajuste direto (regime geral)", 41.9, 16.6, "80 757 contratos · 2,71 mil M€"),
+                ("Consulta prévia", 16.1, 6.0, "31 078 contratos · 988,6 M€"),
+                ("Concurso público", 15.8, 47.9, "30 501 contratos · 7,84 mil M€"),
+                ("Acordo-quadro (art. 259.º)", 14.7, 14.9, "28 338 contratos · 2,45 mil M€"),
+                ("Contratação excluída II", 7.6, 5.6, "14 704 contratos · 918,7 M€"),
+                ("Acordo-quadro (art. 258.º)", 2.5, 3.9, "4 840 contratos · 639,2 M€"),
+            ],
+            note="Percentagem do total de contratos e do valor total, por tipo de procedimento. As barras partilham a mesma escala.",
+            formato="percentagem",
+            legend=["Contratos", "Valor"],
+            source=fonte,
+        ),
+        b.tabela(
+            "Os seis procedimentos que pesam",
+            ["Procedimento", "Contratos", "% dos contratos", "Valor", "% do valor", "Valor médio"],
+            [
+                ["Concurso público", "30 501", "15,8%", "7,84 mil M€", "47,9%", "257 107 €"],
+                ["Ajuste direto (regime geral)", "80 757", "41,9%", "2,71 mil M€", "16,6%", "33 551 €"],
+                ["Acordo-quadro (art. 259.º)", "28 338", "14,7%", "2,45 mil M€", "14,9%", "86 332 €"],
+                ["Consulta prévia", "31 078", "16,1%", "988,6 M€", "6,0%", "31 811 €"],
+                ["Contratação excluída II", "14 704", "7,6%", "918,7 M€", "5,6%", "62 483 €"],
+                ["Acordo-quadro (art. 258.º)", "4 840", "2,5%", "639,2 M€", "3,9%", "132 060 €"],
+            ],
+        ),
+        b.texto(
+            "3. O medicamento manda — e o mapa tem um buraco",
+            "Cinco das doze classes de CPV que mais valor movem são da mesma família, a 33, que junta "
+            "produtos farmacêuticos, equipamento médico e material de consumo. Somam **3,68 mil M€: 22,5% de "
+            "tudo o que foi contratado no ano**.\n\n"
+            "**Produtos farmacêuticos, sozinhos, valem 2,60 mil M€ em 25 842 contratos** — mais do que as "
+            "onze classes que se seguem, todas juntas. O resto do topo é serviço: limpeza (199,5 M€), "
+            "informática (96,0 M€ e 71,4 M€) e reparação e manutenção (71,7 M€).\n\n"
+            "Há um detalhe que vale a pena guardar: o **contrato médio de limpeza (202 909 €) é o dobro do "
+            "contrato médio de produtos farmacêuticos (100 541 €)**. O medicamento move mais dinheiro, mas em "
+            "muitos contratos pequenos; a limpeza move menos, em poucos contratos grandes.\n\n"
+            "No mapa, a **Área Metropolitana do Porto** lidera com **2,54 mil M€ em 31 286 contratos**, seguida "
+            "de Grande Lisboa (1,19 mil M€). Mas **a região de execução não está preenchida em 75 525 "
+            "contratos — 39,1% do número e 37,6% do valor**. É a maior fatia de todas, maior do que qualquer "
+            "região real: enquanto este campo estiver assim, qualquer leitura por mapa é uma leitura parcial.",
+        ),
+        b.grafico(
+            "Onde está o valor, por classe de CPV",
+            [
+                ("Produtos farmacêuticos", 2598184999.77, 0, "25 842 contratos · 100 541 € de média"),
+                ("Equipamento médico", 473913219.86, 0, "5 442 contratos · 87 084 € de média"),
+                ("Material médico de consumo", 271025534.94, 0, "8 725 contratos · 31 063 € de média"),
+                ("Produtos farmacêuticos diversos", 232246535.24, 0, "2 983 contratos · 77 857 € de média"),
+                ("Serviços de limpeza", 199459202.34, 0, "983 contratos · 202 909 € de média"),
+                ("Equipamento e material informático", 115699245.90, 0, "959 contratos · 120 646 € de média"),
+                ("Equipamento médico e medicamentos (código de divisão)", 100441855.64, 0, "11 038 contratos · 9 100 € de média"),
+                ("Serviços de informática", 95967283.99, 0, "825 contratos · 116 324 € de média"),
+                ("Serviços de saúde e ação social", 74436215.87, 0, "957 contratos · 77 781 € de média"),
+                ("Serviços de reparação e manutenção", 71687923.68, 0, "2 630 contratos · 27 258 € de média"),
+                ("Serviços de TI", 71397609.37, 0, "928 contratos · 76 937 € de média"),
+            ],
+            note="As doze maiores classes de CPV (quatro dígitos) por valor. Juntas valem 4,36 mil M€ — 26,6% do ano.",
+            source=fonte,
+        ),
+        b.tabela(
+            "As doze maiores classes de CPV",
+            ["CPV", "Classe", "Contratos", "Valor", "Valor médio"],
+            [
+                ["3360", "Produtos farmacêuticos", "25 842", "2,60 mil M€", "100 541 €"],
+                ["3310", "Equipamento médico", "5 442", "473,9 M€", "87 084 €"],
+                ["3314", "Material médico de consumo", "8 725", "271,0 M€", "31 063 €"],
+                ["3369", "Produtos farmacêuticos diversos", "2 983", "232,2 M€", "77 857 €"],
+                ["9091", "Serviços de limpeza", "983", "199,5 M€", "202 909 €"],
+                ["3020", "Equipamento e material informático", "959", "115,7 M€", "120 646 €"],
+                ["3300", "Equipamento médico, medicamentos e produtos para cuidados pessoais", "11 038", "100,4 M€", "9 100 €"],
+                ["7250", "Serviços de informática", "825", "96,0 M€", "116 324 €"],
+                ["8500", "Serviços de saúde e ação social", "957", "74,4 M€", "77 781 €"],
+                ["5000", "Serviços de reparação e manutenção", "2 630", "71,7 M€", "27 258 €"],
+                ["7200", "Serviços de TI", "928", "71,4 M€", "76 937 €"],
+                ["6351", "Serviços de agências de viagens", "2 599", "57,2 M€", "22 017 €"],
+            ],
+        ),
+        b.grafico(
+            "Valor por região de execução",
+            [
+                ("Área Metropolitana do Porto", 2543329630.19, 0, "31 286 contratos"),
+                ("Grande Lisboa", 1187352143.75, 0, "10 917 contratos"),
+                ("Extra-Regio NUTS 3", 983789597.88, 0, "5 229 contratos"),
+                ("Região Autónoma da Madeira", 682914736.17, 0, "4 227 contratos"),
+                ("Algarve", 653657583.16, 0, "8 394 contratos"),
+                ("Cávado", 497765133.78, 0, "6 941 contratos"),
+                ("Ave", 377300335.23, 0, "5 443 contratos"),
+                ("Região de Coimbra", 342003571.36, 0, "4 586 contratos"),
+                ("Douro", 331609868.30, 0, "6 508 contratos"),
+                ("Tâmega e Sousa", 313728492.06, 0, "4 637 contratos"),
+            ],
+            note="Maiores regiões NUTS 3 por valor. Ficam de fora os 75 525 contratos (39,1%) sem região preenchida — 6,15 mil M€.",
+            source=fonte,
+        ),
+        b.aviso(
+            "**Como se lê isto.** Os números são os contratos publicados entre 1 de janeiro e 10 de outubro de "
+            "2026: o ano não está fechado, por isso a comparação com 2025 é feita com o **período homólogo** "
+            "(188 725 contratos), nunca com o ano completo. Os valores são os declarados no momento da "
+            "publicação, sem aditivos posteriores. Duas reservas: a **região de execução** vem vazia em 39,1% "
+            "dos contratos, e o **CPV** é lido ao nível das classes de quatro dígitos, que agrupam vários "
+            "códigos de oito dígitos. Os mesmos números, em PDF, estão no botão no topo do artigo.",
+            tone="amber",
+        ),
+        b.cta(
+            "Quer o número de uma entidade concreta?",
+            "Diga-nos a empresa, o município ou o setor e devolvemos a leitura com a fonte de cada valor.",
+            "Falar connosco",
+            "/site/contactos",
+            [("Ver as soluções", "/site/solucoes")],
+        ),
+    ]
+
+    return {
+        "slug": ARTIGO_CONTRATOS_2026_SLUG,
+        "excerpt": ARTIGO_CONTRATOS_2026_EXCERPT,
+        "markdown": markdown,
+        "blocks": blocos,
+    }

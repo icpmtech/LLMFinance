@@ -127,14 +127,25 @@ def _assinatura(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _aplicar_posts(media: Dict[str, str]) -> None:
-    """Põe capa nos artigos de exemplo e acerta o nome da equipa autora."""
+    """Põe capa nos artigos de exemplo, acerta o autor e publica o artigo de 2026.
+
+    O artigo «Contratos públicos em 2026» é conteúdo, não código: o deploy não o
+    leva, por isso é aqui que ele entra numa instalação em uso — com o resumo, os
+    gráficos e as tabelas que vivem em `editorial.artigo_contratos_2026()`.
+    """
+    artigo = editorial.artigo_contratos_2026()
     campos_por_slug: Dict[str, Dict[str, Any]] = {
         "bem-vindo-ao-blog": {
             "cover_id": media.get("capa-post-bemvindo.svg"),
             "title": "Bem-vindo ao blog do Sabemos Studio",
         },
-        "contratos-publicos-2026": {
+        editorial.ARTIGO_CONTRATOS_2026_SLUG: {
             "cover_id": media.get("capa-post-contratos-2026.svg"),
+            "title": "Contratos públicos em 2026: o que os dados mostram",
+            "excerpt": artigo["excerpt"],
+            "markdown": artigo["markdown"],
+            "blocks": artigo["blocks"],
+            "tags": ["contratos públicos", "2026", "mercado", "CPV"],
         },
     }
     for slug, campos in campos_por_slug.items():

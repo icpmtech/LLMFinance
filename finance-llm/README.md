@@ -221,8 +221,9 @@ YAML — é o caminho para treinar em cima dos modelos existentes com os dados q
 estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias):
 
 ```bash
-# 1. exportar o dataset do Elasticsearch
-.venv\Scripts\python training/export_es_dataset.py --dataset contratos --max-records 200000
+# 1. exportar o dataset do Elasticsearch (o --tokenizer/--max-tokens garantem que
+#    cada par cabe na janela do modelo — o `soup train` aborta se não couber)
+.venv\Scripts\python training/export_es_dataset.py --dataset contratos --max-records 200000 --tokenizer model/mistral-finance/final --max-tokens 950
 
 # 2. treinar (imagem oficial do Soup + cliente do Elasticsearch, perfil `train`)
 docker compose --profile train build soup

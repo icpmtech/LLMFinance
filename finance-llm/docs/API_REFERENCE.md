@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1299 operações** em **45 grupos**.
+Versão `0.4.0` · **1305 operações** em **45 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -59,6 +59,9 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
 | `GET` | `/` | Read Root |
+| `GET` | `/admin/app-shell` | Admin App Shell |
+| `PUT` | `/admin/app-shell` | Admin Gravar App Shell |
+| `GET` | `/app-shell` | App Shell Publico |
 | `GET` | `/base-impic/amostra/{ano}` | Base Amostra |
 | `GET` | `/base-impic/anos` | Base Anos |
 | `POST` | `/base-impic/cancelar/{ano}` | Base Cancelar |
@@ -303,8 +306,10 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/municipios/despesas/{municipio}` | Ficha de um município |
 | `GET` | `/municipios/despesas/{municipio}/fornecedores` | Todos os fornecedores de um município |
 | `POST` | `/news/collect` | News Collect |
+| `POST` | `/news/publish` | News Publish |
 | `GET` | `/news/search` | News Search |
 | `GET` | `/news/stats` | News Index Stats |
+| `GET` | `/news/themes` | News Theme Catalogue |
 | `GET` | `/openapi/export` | Openapi Export |
 | `GET` | `/openapi/summary` | Openapi Summary |
 | `GET` | `/osint` | Serve Osint Spa Page |
@@ -1069,6 +1074,7 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site` | Site Home |
 | `GET` | `/site/blog` | Site Blog |
 | `GET` | `/site/blog/{slug}` | Site Post |
+| `GET` | `/site/blog/{slug}/pdf` | Site Post Pdf |
 | `GET` | `/site/categoria/{slug}` | Site Category |
 | `POST` | `/site/contacto` | Site Contacto |
 | `GET` | `/site/documento/{document_id}` | Site Documento |

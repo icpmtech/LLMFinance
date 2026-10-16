@@ -4,13 +4,19 @@
 # Corre em CPU — não tem CUDA, logo `quantization: none`. Para o modelo grande
 # (respostas muito melhores, precisa de GPU) ver `soup-mistral-instruct.yaml`.
 #
-# Antes de treinar, exporte os dados do Elasticsearch:
-#   python training/export_es_dataset.py --dataset contratos --max-records 200000
+# Antes de treinar, exporte os dados do Elasticsearch. O `--tokenizer` e o
+# `--max-tokens` não são um detalhe: o `soup train` **aborta a corrida** se
+# alguma linha ficar sem resposta depois da truncagem, e com este tokenizer
+# (≈1,7 caracteres por token) não há tamanho de ficheiro que garanta que caibam
+# nos 1 024 tokens do modelo. Medir deixa os que não cabem de fora.
+#   python training/export_es_dataset.py --dataset contratos --max-records 200000 \
+#       --tokenizer model/mistral-finance/final --max-tokens 950
 #
-# Treinar:
-#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+# Treinar (o `-y` é necessário: o `train` pede confirmação e um `docker compose
+# run` não tem terminal interactivo):
+#   docker compose --profile train run --rm soup train -y --config training/soup/soup-mistral.yaml
 #   # ou, fora do Docker, com o venv do projecto:
-#   .venv\Scripts\soup.exe train --config training/soup/soup-mistral.yaml
+#   .venv\Scripts\soup.exe train -y --config training/soup/soup-mistral.yaml
 
 # Modelo de partida: o checkpoint do sistema (o «final» do treino de contratos).
 base: ./model/mistral-finance/final
@@ -21,8 +27,15 @@ data:
   train: ./data/final/contratos.jsonl
   format: alpaca
   val_split: 0.05
-  # O tokenizer do sistema corta aos 1 024 tokens (max_position_embeddings).
+  # Janela do modelo (`max_position_embeddings` do config.json).
   max_length: 1024
+  # O tokenizer do sistema não tem `chat_template`: é um modelo de continuação,
+  # alimentado pelo `inference/generate_mistral.py` com texto simples. Este molde
+  # reproduz o formato com que ele já foi afinado
+  # (`training/train_mistral_contracts.py`: «### Instrução:» / «### Resposta:»),
+  # para o treino falar a mesma língua da inferência — e é o `{% generation %}`
+  # que diz ao Soup onde começa a resposta, para a perda ser calculada só nela.
+  chat_template: "{% for message in messages %}{% if message['role'] == 'assistant' %}{% generation %}### Resposta:\n{{ message['content'] }}{% endgeneration %}\n\n{% else %}### Instrução:\n{{ message['content'] }}\n\n{% endif %}{% endfor %}"
 
 training:
   epochs: 3

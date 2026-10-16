@@ -580,6 +580,9 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
 }}
 .meta {{ color: var(--muted); font-size: .88rem; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }}
+/* Ação do artigo (descarregar o relatório em PDF): entre os créditos e a capa. */
+.artigo-acao {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px; }}
+.artigo-acao .btn {{ min-height: 44px; padding: 10px 18px; font-size: .9rem; }}
 .posts {{ display: grid; gap: 16px; grid-template-columns: 1fr; }}
 .post-card {{ display: flex; flex-direction: column; overflow: hidden; padding: 0; }}
 .post-card img {{ width: 100%; aspect-ratio: 16/9; object-fit: cover; }}
@@ -1016,9 +1019,9 @@ def _grafico_rotulo(valor: float, formato: str) -> str:
         return f"{valor:.1f}".replace(".", ",") + " %"
     if formato == "numero":
         return _numero(round(valor))
-    # A partir dos mil milhões o «2 543,3 M€» deixa de se ler: passa a «2,5 mil M€».
+    # A partir dos mil milhões o «2 543,3 M€» deixa de se ler: passa a «2,54 mil M€».
     if abs(valor) >= 1_000_000_000:
-        return f"{valor / 1_000_000_000:.1f}".replace(".", ",") + " mil M€"
+        return f"{valor / 1_000_000_000:.2f}".replace(".", ",") + " mil M€"
     return _euros_curto(valor)
 
 
@@ -3614,17 +3617,25 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
         meta_bits.append(f"<span>{int(post['reading_minutes'])} min de leitura</span>")
     for name in names:
         meta_bits.append(f'<span class="pill">{_esc(name)}</span>')
+    path = f"/site/blog/{post.get('slug')}"
+    # O botão do PDF só aparece no site: num rascunho (pré-visualização) o
+    # artigo ainda não está publicado e a rota do relatório não o serve.
+    descarregar = (
+        ""
+        if preview
+        else f'<div class="artigo-acao"><a class="btn ghost" href="{_esc(path)}/pdf" download>Descarregar o relatório (PDF)</a></div>'
+    )
     body = (
         '<article class="section">'
         f'<h1>{_esc(post.get("title"))}</h1>'
         f'<div class="meta">{"".join(meta_bits)}</div>'
+        f'{descarregar}'
         f'{hero}'
         f'<div class="prose">{_md(str(post.get("markdown") or ""))}</div>'
         + blocks_to_html(post.get("blocks") or [], preview=preview)
         + (f'<div class="meta" style="margin-top:22px">{tags}</div>' if tags else "")
         + "</article>"
     )
-    path = f"/site/blog/{post.get('slug')}"
     base_url = str(settings.get("base_url") or "")
     json_ld = {
         "@context": "https://schema.org",

@@ -75,6 +75,8 @@ template. Os seletores foram escritos e **validados contra as páginas reais** (
 | `investing-mercados` | `investing.com/news/stock-market-news` | HTTP | não |
 | `iberinform-diretorio` | `iberinform.pt/diretorio/<distrito>/<concelho>` | HTTP | sim |
 | `racius-diretorio` | `racius.com/pesquisa/empresas/?q=<termo>` | HTTP | não (trás a **ficha** estruturada, com `sink_index`) |
+| `find-a-tender` | `find-tender.service.gov.uk/Search/Results` | HTTP | não (aviso de concurso do Reino Unido) |
+| `contracts-finder` | `contractsfinder.service.gov.uk/Search/Results` | HTTP | não (aviso de contrato do Reino Unido) |
 | `quotes-demo` | `quotes.toscrape.com` | HTTP | não (site de exemplo) |
 
 Como se cria uma fonte a partir de um template:
@@ -227,6 +229,7 @@ Ferramentas de apoio:
 | Ficheiro | Para quê |
 | --- | --- |
 | `_probe_scraper_templates.py <url…>` | Candidatos a seletor de lista e cobertura de campos numa página |
+| `_probe_contratacao_publica.py [fonte…]` | Sonda as fontes de **contratação pública** (PT, UE, RU, ES): estado, `robots.txt`, `feed`, registos e a cobertura do template, quando existe |
 | `_probe_tree.py "url\|seletor\|fetcher"` | Árvore compacta de um cartão (classes, atributos e texto) |
 | `_probe_body.py "url\|fetcher"` | Contentores com mais texto de parágrafos — encontra o corpo do artigo |
 | `_probe_titulos.py <template_id>` | Amostra larga de títulos de um template (à procura de vazios ou repetidos) |
@@ -270,6 +273,52 @@ c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q construcao --no-
 poucos pedidos (idealista/news, Expresso) precisariam do *fetcher* `stealth`, que
 muda de IP/impressão digital a cada pedido; como falham de forma intermitente,
 não entram no catálogo para não dar fontes que “às vezes funciona”.
+
+## Contratação pública (UE, Reino Unido e Portugal)
+
+A contratação pública é o caso em que a **sonda** compensa mais do que a pressa:
+metade das fontes não se recolhe por HTML, e nas que se recolhem há sítios por
+onde se recolhe melhor.
+
+### Os dois templates da galeria (Reino Unido)
+
+| Template | O que traz | Paginação |
+| --- | --- | --- |
+| `find-a-tender` | Avisos do Reino Unido **acima** dos limiares europeus: título, ligação, comprador, resumo, tipo de aviso, valor, local, prazo e data de publicação | `?page=N` |
+| `contracts-finder` | Avisos do Reino Unido **abaixo e acima** dos limiares: fase, estado, encerramento, local, valor e data de publicação | `?page=N` |
+
+Notas de manutenção:
+
+- Os rótulos das fichas mudam com o **tipo de aviso** (um aviso de adjudicação não
+  publica «Submission deadline» nem «Total value»), pelo que os campos se
+  procuram pelo **rótulo** (`xpath` com `dt[contains(…)]`/`strong[contains(…)]`) e
+  não pela posição. O campo que o aviso não traz fica vazio — é o comportamento
+  certo.
+- O `valor` fica **em texto** («£8,944,853.06»): o `cast: "float"` do motor trata
+  a vírgula como separador decimal (convenção portuguesa) e leria 8,9.
+- O resumo é o `div.wrap-text` que **não** é o sub-cabeçalho
+  (`div.wrap-text:not(.search-result-sub-header)`): o comprador também usa
+  `wrap-text` e chegava primeiro.
+
+### As fontes que ficaram de fora (e porquê)
+
+`python _probe_contratacao_publica.py` volta a correr as sondagens; o relatório
+fica em `_probe_contratacao_publica.txt`. Estado à data da última sonda:
+
+| Fonte | País | Estado | Porquê |
+| --- | --- | --- | --- |
+| Portal BASE — lista (`/Base4/pt/pesquisa/`) | PT | **sem template** | A lista vem de um AJAX (`POST /Base4/pt/resultados/`, `type=search_contratos`) que responde **200 com corpo vazio** a quem não seja browser (defesa anti-bot da F5); o CSV (`type=csv_contratos`) está atrás da mesma defesa. Caminhos: *fetcher* `stealth`, ou os ficheiros de dados abertos do portal |
+| Portal BASE — ficha de contrato | PT | **sem template** | A ficha é HTML normal (`/Base4/pt/detalhe/?type=contratos&id=`), mas só serve de `detail` se a lista for acessível |
+| Vortal — área pública | PT | integrado fora do módulo | As peças do procedimento são lidas pelo `api/vortal_service.py` a partir do token do anúncio; o `robots.txt` recusa a área pública |
+| Diário da República — pesquisa | PT | **sem template** | A resposta é uma página de aplicação (~2 kB de HTML): a lista vem de um pedido próprio do site |
+| TED — API (`POST https://api.ted.europa.eu/v3/notices/search`) | UE | **sem template** (JSON) | É a via estável: JSON sem chave, com `query` no formato do TED (`"publication-date = today(-7)"`) |
+| TED — pesquisa no site | UE | **sem template** | Aplicação Liferay: os resultados não vêm no HTML (exigiria `dynamic`) |
+| Find a Tender — dados abertos OCDS | RU | alternativa estruturada | `api/1.0/ocdsReleasePackages` devolve JSON no padrão OCDS (100 pacotes por pedido) |
+| Plataforma de Contratación del Sector Público | ES | **excluída** | O `robots.txt` é `Disallow: /`: a recolha do módulo recusa-a de propósito. Para Espanha vale o `api/contratos_es_*`, que usa a sindicação oficial |
+
+A regra que sai daqui: **primeiro o que o site publica para ser lido** (API, OCDS,
+Atom); o seletor de HTML é o plano B — e às vezes o plano C, quando o site fecha a
+porta a quem não traz um browser.
 
 ## Definição de uma fonte
 
