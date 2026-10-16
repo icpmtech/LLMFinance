@@ -1,0 +1,12 @@
+# Treino com GPU: exige uma máquina com GPU NVIDIA e o NVIDIA Container Toolkit
+# (o `vm_setup.sh` desta pasta instala-o numa VM Ubuntu).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile train run --rm soup \
+#     train -y --config training/soup/soup-mistral-instruct.yaml
+#
+# Fica separado do `docker-compose.yml` de propósito: sem GPU, `gpus: all` faz o
+# Docker recusar arrancar o contentor, e o compose principal tem de continuar a
+# servir quem treina em CPU (esta máquina). Guia da VM: docs/soup-vm.md.
+services:
+  soup:
+    gpus: all

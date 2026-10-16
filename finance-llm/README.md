@@ -232,7 +232,11 @@ docker compose --profile train run --rm soup train -y --config training/soup/sou
 ```
 
 O que se exporta, os configs disponíveis e como usar o modelo treinado (merge,
-GGUF para o Ollama): [`docs/soup.md`](docs/soup.md). O painel do Soup
+GGUF para o Ollama): [`docs/soup.md`](docs/soup.md). Esta máquina não tem GPU, por
+isso o treino de modelos a sério faz-se numa VM — o guia, com o dimensionamento, os
+fornecedores e um script que prepara a VM, está em
+[`docs/soup-vm.md`](docs/soup-vm.md) (ao correr com GPU, junte
+`-f docker-compose.gpu.yml` ao compose). O painel do Soup
 (*Dashboard*, *New Training*, *Data Explorer*, *Model Chat*) sobe com
 `docker compose --profile train up -d soup-ui` e abre em http://127.0.0.1:7860.
 

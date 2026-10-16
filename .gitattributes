@@ -1,0 +1,5 @@
+# Os scripts shell correm em Linux (imagem do Soup, VMs de treino): têm de viajar
+# com LF. Com `core.autocrlf=true` no Windows, sem esta linha o `scp` de um `.sh`
+# para uma VM levava CRLF e o bash morria em «unexpected end of file»
+# (o terminador de um heredoc passa a «SEGUINTE\r» e deixa de casar).
+*.sh text eol=lf

@@ -81,3 +81,24 @@ As secções do relatório saem dos próprios blocos
 segunda cópia dos números, e um artigo novo ou corrigido passa a ter PDF sem
 ninguém escrever nada de novo. Os gráficos entram como tabela (nome, valor,
 nota) — é o mesmo conteúdo numa forma que se imprime e se cita.
+
+O relatório é **opcional e decide-se no artigo**: a opção «Relatório em PDF» no
+editor do artigo (campo `report_pdf` do CMS) mostra ou esconde o botão. Sem ela,
+a rota responde 404 — um endereço guardado também não serve o ficheiro. Um
+artigo que não traga o campo (a semente, por exemplo) continua com relatório:
+foi assim que nasceu o artigo «Contratos públicos em 2026» e não se muda o que
+já está publicado.
+
+## Partilha do artigo
+
+Ao lado do relatório, cada artigo publicado tem um botão «Partilhar» que usa a
+**Web Share API** do sistema (`navigator.share`) com o título e o **endereço
+absoluto** do artigo (o `base_url` das definições do site). Onde a partilha do
+sistema não existe, o botão copia o endereço e diz «Ligação copiada».
+
+O botão nasce escondido e é o próprio script do artigo que o mostra, quando há
+partilha ou área de transferência para usar: num contexto sem HTTPS não há
+nenhuma das duas, e um botão que não faz nada é pior do que nenhum. Como o resto
+do site, a partilha é o único elemento que precisa de JavaScript — o artigo
+lê-se igual sem ele. Na pré-visualização de um rascunho não entra o botão nem o
+script: um rascunho não tem endereço público para partilhar.

@@ -202,12 +202,19 @@ docker compose --profile train run --rm soup train -y \
   --config training/soup/soup-mistral.yaml
 ```
 
-Numa máquina com GPU, acrescente `--gpus all` ao `run`:
+Numa máquina com GPU há um override para isso — sem ele o Docker recusa dar a GPU
+ao contentor, e sem GPU o `docker-compose.yml` principal tem de continuar a servir
+quem treina em CPU:
 
 ```bash
-docker compose --profile train run --rm --gpus all soup train -y \
-  --config training/soup/soup-mistral-instruct.yaml
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile train run --rm soup \
+  train -y --config training/soup/soup-mistral-instruct.yaml
 ```
+
+Se a máquina com GPU for uma VM (ou não for esta), o caminho completo — dimensionar,
+levantar, levar os dados e trazer o modelo de volta — está em
+[docs/soup-vm.md](soup-vm.md), com um `training/soup/vm_setup.sh` que prepara uma
+Ubuntu de raiz.
 
 Antes de treinar, os dois passos podem ser validados sem gastar tempo: o
 `--dry-run` do Soup carrega o config e o dataset sem treinar, e o exporter tem o
