@@ -186,6 +186,11 @@ def test_pagina_sem_ligacao_aparece_com_a_rede_desligada(contexto_sem_atalhos, t
     assert "Ligação interrompida" in (imagem.get_attribute("aria-label") or "")
     caixa = _caixa(imagem)
     assert caixa["width"] > 360, "a ilustração da página sem ligação não apareceu"
+    # A folha do site também vem da cache do service worker: sem ela, a página
+    # saía sem estilo — letra do browser e títulos sem peso.
+    assert "system-ui" in page.evaluate("() => getComputedStyle(document.body).fontFamily")
+    peso = page.evaluate("() => getComputedStyle(document.querySelector('main h1')).fontWeight")
+    assert peso == "700", f"título sem o peso do site (veio {peso}): a folha não chegou"
     _sem_estouro(page)
     _captura(page, tmp_path, "sem-ligacao")
 
