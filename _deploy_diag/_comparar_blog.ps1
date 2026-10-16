@@ -24,12 +24,14 @@ try {
 
 if (-not $L -or -not $V) { Write-Host "`n  sem comparacao possivel"; exit 0 }
 
-$campos = @($L.PSObject.Properties.Name) + @($V.PSObject.Properties.Name) | Sort-Object -Unique
+$pl = @($L.PSObject.Properties.Name)
+$pv = @($V.PSObject.Properties.Name)
+$campos = $pl + $pv | Sort-Object -Unique
 
 Write-Host ""
 Write-Host "=== campos ($($campos.Count)) ==="
-$soLocal = @($L.PSObject.Properties.Name) | Where-Object { $campos -notcontains $_ }
-$soVm = @($V.PSObject.Properties.Name) | Where-Object { $campos -notcontains $_ }
+$soLocal = $pl | Where-Object { $pv -notcontains $_ }
+$soVm = $pv | Where-Object { $pl -notcontains $_ }
 Write-Host "  so no local: $(if ($soLocal) { $soLocal -join ', ' } else { '(nenhum)' })"
 Write-Host "  so na VM  : $(if ($soVm) { $soVm -join ', ' } else { '(nenhum)' })"
 
