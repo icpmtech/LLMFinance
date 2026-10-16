@@ -73,9 +73,8 @@ export function PublicHeader() {
   const { brand, header } = useAppShell();
   const [aberto, setAberto] = useState(false);
   const links = header.items;
-  const ligacao = "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground";
-  const ligacaoDoPainel =
-    "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-white/5 hover:text-foreground";
+  const ligacao = "whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground";
+  const ligacaoDoPainel = "whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-white/5 hover:text-foreground";
   const alternar = () => setAberto((valor) => !valor);
   // O painel do telemóvel leva a navegação e, quando não cabem no cabeçalho, os
   // dois botões (é o único caminho para «Entrar» em ecrãs estreitos).
@@ -83,26 +82,31 @@ export function PublicHeader() {
   const temPainel = links.length > 0 || temBotoes;
 
   return (
-    <header className="relative z-30 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5">
+    <header className="relative z-30 mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-5">
       <a href="/" className="flex items-center gap-3" aria-label={`${brand.name} — início`}>
         <Marca brand={brand} />
       </a>
 
-      {links.length > 0 ? (
-        <nav aria-label="Navegação principal" className="hidden items-center gap-1 md:flex">
-          {links.map((link: ShellLink) => (
-            <a key={link.href} href={link.href} className={ligacao} {...externo(link.href)}>
-              {link.label}
-            </a>
-          ))}
-        </nav>
-      ) : null}
-
-      <div className="flex items-center gap-2">
+      {/* Navegação e ações no mesmo grupo, à direita: com o `justify-between` a
+          navegação ficava a flutuar sozinha a meio do cabeçalho, a centenas de
+          pixels de tudo. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {links.length > 0 ? (
+          // A navegação entra no cabeçalho a partir de `lg`: mais abaixo, com uma
+          // navegação comprida, o grupo passava para uma segunda linha e o
+          // cabeçalho dobrava de altura (aí os itens vão para o menu).
+          <nav aria-label="Navegação principal" className="hidden items-center gap-1.5 lg:mr-1.5 lg:flex">
+            {links.map((link: ShellLink) => (
+              <a key={link.href} href={link.href} className={ligacao} {...externo(link.href)}>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
         {header.secondary ? (
           <a
             href={header.secondary.href}
-            className="hidden rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-block"
+            className="hidden whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-block"
             {...externo(header.secondary.href)}
           >
             {header.secondary.label}
@@ -111,7 +115,7 @@ export function PublicHeader() {
         {header.cta ? (
           <a
             href={header.cta.href}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
+            className="hidden items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70 sm:inline-flex"
             {...externo(header.cta.href)}
           >
             {header.cta.label}
@@ -119,7 +123,7 @@ export function PublicHeader() {
           </a>
         ) : null}
         {links.length > 0 ? (
-          <BotaoDoMenu className="md:hidden" aberto={aberto} onToggle={alternar} />
+          <BotaoDoMenu className="lg:hidden" aberto={aberto} onToggle={alternar} />
         ) : temBotoes ? (
           // Sem navegação, o painel serve os botões que o cabeçalho não mostra em
           // ecrãs estreitos: o botão existe só onde eles faltam.
@@ -133,7 +137,7 @@ export function PublicHeader() {
         <nav
           id="menu-publico"
           aria-label="Navegação principal"
-          className="absolute inset-x-4 top-full flex flex-col gap-1 rounded-2xl border border-white/10 bg-background/95 p-2 shadow-2xl backdrop-blur-xl md:hidden"
+          className="absolute inset-x-4 top-full flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-background/95 p-2 shadow-2xl backdrop-blur-xl lg:hidden"
         >
           {links.map((link: ShellLink) => (
             <a
@@ -147,27 +151,32 @@ export function PublicHeader() {
             </a>
           ))}
 
-          {/* Os botões do cabeçalho, quando não cabem nele (abaixo de `sm`). */}
-          {header.secondary ? (
-            <a
-              href={header.secondary.href}
-              className={`sm:hidden ${ligacaoDoPainel}`}
-              onClick={() => setAberto(false)}
-              {...externo(header.secondary.href)}
-            >
-              {header.secondary.label}
-            </a>
-          ) : null}
-          {header.cta ? (
-            <a
-              href={header.cta.href}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 sm:hidden"
-              onClick={() => setAberto(false)}
-              {...externo(header.cta.href)}
-            >
-              {header.cta.label}
-              <ArrowRight size={15} />
-            </a>
+          {/* Os botões do cabeçalho, quando não cabem nele (abaixo de `sm`): o
+              rodapé do painel repete o que a barra mostra a partir daí. */}
+          {header.secondary || header.cta ? (
+            <div className="mt-1 flex flex-col gap-1 border-t border-white/10 pt-2 sm:hidden">
+              {header.secondary ? (
+                <a
+                  href={header.secondary.href}
+                  className={ligacaoDoPainel}
+                  onClick={() => setAberto(false)}
+                  {...externo(header.secondary.href)}
+                >
+                  {header.secondary.label}
+                </a>
+              ) : null}
+              {header.cta ? (
+                <a
+                  href={header.cta.href}
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110"
+                  onClick={() => setAberto(false)}
+                  {...externo(header.cta.href)}
+                >
+                  {header.cta.label}
+                  <ArrowRight size={15} />
+                </a>
+              ) : null}
+            </div>
           ) : null}
         </nav>
       ) : null}

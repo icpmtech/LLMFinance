@@ -151,6 +151,45 @@ def _verificar_geometria(pagina: Page) -> None:
     assert fundo_rodape <= altura_documento + 1, "o rodapé sai fora do documento"
 
 
+def _verificar_espacos(pagina: Page, shell: Dict[str, Any]) -> None:
+    """Os itens do cabeçalho ficam juntos e com os rótulos inteiros.
+
+    Duas coisas que já se viram mal: a navegação a flutuar sozinha a meio do
+    cabeçalho (centenas de píxeis de tudo) e o rótulo do «Criar conta» partido
+    em duas linhas num ecrã estreito — era isso que fazia o cabeçalho crescer.
+    """
+    cabecalho = pagina.locator("header").first
+    caixas = {
+        chave: cabecalho.locator(f'a[href="{shell["header"][chave]["href"]}"]').first.bounding_box()
+        for chave in ("secondary", "cta")
+        if shell["header"][chave]
+    }
+    for chave, caixa in caixas.items():
+        if caixa:
+            assert caixa["height"] <= 44, f"o botão «{chave}» tem {caixa['height']:.0f}px: o rótulo partiu-se"
+
+    # Aqui só interessa o computador: no telemóvel a navegação e os botões estão
+    # dentro do menu, que tem a sua própria verificação.
+    caixa_nav = cabecalho.locator("nav[aria-label='Navegação principal']").first.bounding_box()
+    visiveis = [caixa for caixa in caixas.values() if caixa]
+    if caixa_nav and visiveis:
+        distancia = min(caixa["x"] for caixa in visiveis) - (caixa_nav["x"] + caixa_nav["width"])
+        assert 0 <= distancia <= 32, f"a navegação está a {distancia:.0f}px das ações"
+
+
+def _verificar_linhas_do_painel(pagina: Page) -> None:
+    """Todas as linhas do menu começam e acabam na mesma vertical."""
+    linhas = pagina.locator("#menu-publico a")
+    caixas = [caixa for caixa in (linhas.nth(i).bounding_box() for i in range(linhas.count())) if caixa]
+    assert len(caixas) >= 2, "o menu precisa de pelo menos duas linhas para se poder medir"
+    esquerdas = {round(caixa["x"]) for caixa in caixas}
+    direitas = {round(caixa["x"] + caixa["width"]) for caixa in caixas}
+    assert len(esquerdas) == 1, f"linhas do menu desalinhadas à esquerda: {sorted(esquerdas)}"
+    assert len(direitas) == 1, f"linhas do menu desalinhadas à direita: {sorted(direitas)}"
+    alturas = {round(caixa["height"]) for caixa in caixas}
+    assert max(alturas) - min(alturas) <= 8, f"linhas do menu com alturas diferentes: {sorted(alturas)}"
+
+
 def test_entrada_mostra_o_cabecalho_e_o_rodape_da_api(pagina_publica: Page) -> None:
     shell = _shell_publico()
     _abrir(pagina_publica, ENTRADA, COMPUTADOR)
@@ -159,6 +198,7 @@ def test_entrada_mostra_o_cabecalho_e_o_rodape_da_api(pagina_publica: Page) -> N
 
     _verificar_cabecalho(pagina_publica, shell)
     _verificar_rodape(pagina_publica, shell)
+    _verificar_espacos(pagina_publica, shell)
     _verificar_geometria(pagina_publica)
 
 
@@ -168,6 +208,7 @@ def test_pagina_inicial_usa_o_mesmo_cabecalho_e_rodape(pagina_publica: Page) -> 
 
     _verificar_cabecalho(pagina_publica, shell)
     _verificar_rodape(pagina_publica, shell)
+    _verificar_espacos(pagina_publica, shell)
     _verificar_geometria(pagina_publica)
 
 
@@ -201,15 +242,21 @@ def _com_navegacao(shell: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def test_telemovel_leva_os_botoes_para_dentro_do_menu(pagina_publica: Page) -> None:
-    """Abaixo de `sm` o «Entrar» sai do cabeçalho e passa a estar no menu."""
+    """Abaixo de `sm` os botões saem do cabeçalho e passam a estar no menu.
+
+    É o que evita o cabeçalho espremido num ecrã estreito: com os botões lá
+    dentro, o rótulo do «Criar conta» deixa de partir-se em duas linhas.
+    """
     shell = _shell_publico()
     _abrir(pagina_publica, ENTRADA, TELEMOVEL)
     _verificar_rodape(pagina_publica, shell)
 
     cabecalho = pagina_publica.locator("header").first
-    # O «Entrar» já não cabe no cabeçalho…
-    expect(cabecalho.locator(f'a[href="{shell["header"]["secondary"]["href"]}"]').first).to_be_hidden()
-    # …por isso o menu existe e abre com ele e com o «Criar conta» dentro.
+    for chave in ("secondary", "cta"):
+        href = shell["header"][chave]["href"]
+        expect(cabecalho.locator(f'a[href="{href}"]').first).to_be_hidden()
+
+    # O menu existe (tem o que abrir) e abre com os dois botões dentro.
     botao = pagina_publica.locator("header button[aria-controls='menu-publico']")
     expect(botao).to_be_visible()
     botao.click()
@@ -221,7 +268,8 @@ def test_telemovel_leva_os_botoes_para_dentro_do_menu(pagina_publica: Page) -> N
         expect(painel.get_by_role("link", name=botao_cabecalho["label"], exact=True)).to_have_attribute(
             "href", botao_cabecalho["href"]
         )
-    # Com o painel aberto a página continua sem estouro na horizontal.
+    # O menu é uma lista alinhada, e com ele aberto a página continua sem estouro.
+    _verificar_linhas_do_painel(pagina_publica)
     _sem_estouro(pagina_publica)
 
 
@@ -233,6 +281,7 @@ def test_navegacao_do_backoffice_entra_no_painel_do_telemovel(pagina_publica: Pa
     _abrir(pagina_publica, ENTRADA, COMPUTADOR)
     cabecalho = pagina_publica.locator("header").first
     expect(cabecalho.get_by_role("link", name="Blog", exact=True)).to_be_visible()
+    _verificar_espacos(pagina_publica, shell)
 
     # No telemóvel a ligação sai do cabeçalho e aparece no menu, com os botões.
     pagina_publica.set_viewport_size(TELEMOVEL)
@@ -247,6 +296,7 @@ def test_navegacao_do_backoffice_entra_no_painel_do_telemovel(pagina_publica: Pa
         expect(painel.get_by_role("link", name=botao_cabecalho["label"], exact=True)).to_have_attribute(
             "href", botao_cabecalho["href"]
         )
+    _verificar_linhas_do_painel(pagina_publica)
     _sem_estouro(pagina_publica)
 
 
