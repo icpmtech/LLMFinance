@@ -212,7 +212,7 @@ def test_export_escreve_alpaca_e_mete_o_indice_nos_metadados(tmp_path, monkeypat
         out_path=destino,
     )
 
-    assert stats == {"index": "contratos", "matched": 2, "read": 2, "written": 1, "skipped": 1}
+    assert stats == {"index": "contratos", "matched": 2, "read": 2, "written": 1, "skipped": 1, "dropped": 0}
     rows = [json.loads(linha) for linha in destino.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
     assert set(rows[0]) == {"instruction", "input", "output", "metadata"}
@@ -244,6 +244,41 @@ def test_export_nao_deixa_ficheiro_a_meio_quando_falha(tmp_path, monkeypatch) ->
 
     assert not destino.exists()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_orcamento_de_tokens_deixa_de_fora_os_pares_compridos(tmp_path, monkeypatch) -> None:
+    """O `soup train` aborta a corrida inteira se uma linha não couber: mais vale
+    não a escrever."""
+    import elasticsearch.helpers as helpers
+
+    documentos = [
+        {"idcontrato": "1", "objectoContrato": "curto"},
+        {"idcontrato": "2", "objectoContrato": "x" * 400},
+    ]
+
+    monkeypatch.setattr(exporter, "_resolve_client", lambda es_url, timeout: _FakeClient())
+    monkeypatch.setattr(helpers, "scan", lambda *a, **kw: [{"_source": d} for d in documentos])
+
+    # Limite logo acima do par curto: o comprido tem de ficar de fora.
+    curto = exporter._build_contrato_pt(documentos[0], exporter.DEFAULT_MAX_CHARS)
+    limite = len(curto[0]) + len(curto[1]) + 10
+
+    destino = tmp_path / "contratos.jsonl"
+    stats = exporter.export(
+        index="contratos",
+        instruction="Descreve este contrato público português.",
+        includes=("idcontrato",),
+        builder=exporter._build_contrato_pt,
+        out_path=destino,
+        count_tokens=len,
+        max_tokens=limite,
+    )
+
+    assert stats["written"] == 1
+    assert stats["dropped"] == 1
+    linhas = destino.read_text(encoding="utf-8").splitlines()
+    assert len(linhas) == 1
+    assert json.loads(linhas[0])["input"].startswith("Contrato 1 ")
 
 
 def test_dry_run_nao_escreve_nada(tmp_path, monkeypatch) -> None:

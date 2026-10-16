@@ -40,11 +40,30 @@ CATEGORIES = [
     "Imprensa económica (Portugal)",
     "Imprensa económica (Espanha)",
     "Mercados (internacional)",
+    "Contratação pública (UE e Reino Unido)",
     "Sites de exemplo",
 ]
 
 #: Valores de `requires` que implicam browsers instalados (`scrapling install`).
 BROWSER_REQUIREMENTS = ("browser", "dynamic", "stealth")
+
+#: Campo das fichas de aviso do `contractsfinder.service.gov.uk`: cada entrada
+#: (`div.search-result-entry`) tem o rótulo num `strong` e o valor no texto do
+#: contentor, pelo que o seletor procura pelo rótulo e lê o texto.
+_AVISO_RECURSO = (
+    "div[contains(@class,'search-result-entry')]"
+    "[strong[contains(., '{rotulo}')]]/text()"
+)
+
+#: O mesmo, para as fichas com `dt`/`dd` do `find-tender.service.gov.uk`.
+_FICHA_DO_AVISO = (
+    "div[contains(@class,'search-result-entry')]"
+    "[dt[contains(., '{rotulo}')]]/dd/text()"
+)
+
+#: O resumo do cartão: há dois `div.wrap-text` (o comprador e a descrição) e é a
+#: descrição que interessa — a que não é o sub-cabeçalho.
+_RESUMO_DO_CARTAO = "div.wrap-text:not(.search-result-sub-header)::text"
 
 
 def _field(
@@ -57,11 +76,17 @@ def _field(
     all_: bool = False,
     max_length: int = 2000,
     selectors: Optional[List[str]] = None,
+    text_only: bool = False,
+    kind: str = "css",
 ) -> Dict[str, Any]:
     """Campo de um template (mesma forma que o módulo de recolha usa).
 
     `selectors` serve os sites que desenham o mesmo dado de duas maneiras: a
-    extração usa o primeiro seletor que devolver valor.
+    extração usa o primeiro seletor que devolver valor. `text_only` lê o **texto**
+    do elemento apontado (em vez do HTML) — é o que serve os cartões que guardam
+    o valor no próprio contentor, ao lado do rótulo. `kind` escolhe o tipo de
+    seletor (`css` por omissão; `xpath` quando o valor só se distingue pelo
+    rótulo, como nas fichas dos avisos britânicos).
     """
     alternativos = [s for s in (selectors or []) if s]
     if selector and selector not in alternativos:
@@ -70,7 +95,7 @@ def _field(
         "name": name,
         "label": label,
         "selector": alternativos[0] if alternativos else selector,
-        "type": "css",
+        "type": kind,
         "cast": cast,
         "all": all_,
         "max_length": max_length,
@@ -79,6 +104,8 @@ def _field(
         field["selectors"] = alternativos
     if attr:
         field["attr"] = attr
+    if text_only:
+        field["text_only"] = True
     return field
 
 
@@ -393,6 +420,87 @@ TEMPLATES: List[Dict[str, Any]] = [
             "tags": ["noticias", "mercados", "internacional"],
             "id_fields": ["url"],
             "title_field": "titulo",
+            "detail": _detail("", max_items=0),
+            "sentiment": _sentiment(min_chars=80),
+        },
+    },
+    {
+        "id": "find-a-tender",
+        "name": "Find a Tender · Reino Unido",
+        "site": "find-tender.service.gov.uk",
+        "category": "Contratação pública (UE e Reino Unido)",
+        "description": "Avisos de concursos do Reino Unido acima dos limiares europeus: título, ligação, comprador, tipo de aviso, valor, local, prazo e data de publicação.",
+        "tags": ["contratacao-publica", "reino-unido", "concursos", "compras-publicas"],
+        "requires": "http",
+        "notes": "Página de resultados do Gov.uk: cada aviso é `div.search-result` e os campos rotulados vivem em `dt`/`dd` dentro de `dl` — procuram-se pelo rótulo (`xpath`), porque os avisos de adjudicação trazem menos linhas do que os de concurso. 20 avisos por página, paginados por `?page=N`.",
+        "source": {
+            "name": "Find a Tender (Reino Unido)",
+            "description": "Avisos de concursos do Find a Tender Service (contratação pública do Reino Unido).",
+            "url": "https://www.find-tender.service.gov.uk/Search/Results",
+            "enabled": False,
+            "fetcher": "http",
+            "list": {"selector": "div.search-result", "type": "css"},
+            "fields": [
+                _field("titulo", "Título", "h2 a::text", max_length=400),
+                _field("url", "Ligação", "h2 a::attr(href)", max_length=1024),
+                _field("comprador", "Comprador", "div.search-result-sub-header::text", max_length=300),
+                _field("resumo", "Resumo", _RESUMO_DO_CARTAO, max_length=2000),
+                _field("tipo_aviso", "Tipo de aviso", _FICHA_DO_AVISO.format(rotulo="Notice type"), kind="xpath", max_length=200),
+                # O valor fica em texto («£8,944,853.06»): a conversão para número
+                # trataria a vírgula como separador decimal e leria 8,9.
+                _field("valor", "Valor", _FICHA_DO_AVISO.format(rotulo="Total value"), kind="xpath", max_length=120),
+                _field("local", "Local", _FICHA_DO_AVISO.format(rotulo="Contract location"), kind="xpath", max_length=200),
+                _field("prazo", "Prazo de entrega", _FICHA_DO_AVISO.format(rotulo="Submission deadline"), kind="xpath", max_length=200),
+                _field("publicado", "Publicação", _FICHA_DO_AVISO.format(rotulo="Publication date"), kind="xpath", cast="date", max_length=200),
+            ],
+            "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5},
+            "options": {"impersonate": "chrome", "timeout": 45},
+            "schedule": {"cron": "0 7 * * *", "timezone": "Europe/Lisbon"},
+            "respect_robots": True,
+            "tags": ["contratacao-publica", "reino-unido", "concursos", "compras-publicas"],
+            "id_fields": ["url"],
+            "title_field": "titulo",
+            "summary_field": "resumo",
+            "detail": _detail("", max_items=0),
+            "sentiment": _sentiment(min_chars=80),
+        },
+    },
+    {
+        "id": "contracts-finder",
+        "name": "Contracts Finder · Reino Unido",
+        "site": "contractsfinder.service.gov.uk",
+        "category": "Contratação pública (UE e Reino Unido)",
+        "description": "Avisos do Reino Unido abaixo e acima dos limiares europeus: fase do procedimento, estado, encerramento, local, valor e data de publicação.",
+        "tags": ["contratacao-publica", "reino-unido", "concursos", "compras-publicas"],
+        "requires": "http",
+        "notes": "Mesma família de páginas do Find a Tender, com outros rótulos: aqui as entradas são `div.search-result-entry` (o rótulo vive no `strong`), pelo que cada campo se procura por `xpath` pelo rótulo e lê o texto do contentor.",
+        "source": {
+            "name": "Contracts Finder (Reino Unido)",
+            "description": "Avisos de contratos públicos do Contracts Finder (Reino Unido).",
+            "url": "https://www.contractsfinder.service.gov.uk/Search/Results",
+            "enabled": False,
+            "fetcher": "http",
+            "list": {"selector": "div.search-result", "type": "css"},
+            "fields": [
+                _field("titulo", "Título", "h2 a::text", max_length=400),
+                _field("url", "Ligação", "h2 a::attr(href)", max_length=1024),
+                _field("comprador", "Comprador", "div.search-result-sub-header::text", max_length=300),
+                _field("resumo", "Resumo", _RESUMO_DO_CARTAO, max_length=2000),
+                _field("fase", "Fase", _AVISO_RECURSO.format(rotulo="Procurement stage"), kind="xpath", max_length=200),
+                _field("estado", "Estado", _AVISO_RECURSO.format(rotulo="Notice status"), kind="xpath", max_length=200),
+                _field("encerra", "Encerra", _AVISO_RECURSO.format(rotulo="Closing"), kind="xpath", cast="date", max_length=200),
+                _field("local", "Local", _AVISO_RECURSO.format(rotulo="Contract location"), kind="xpath", max_length=200),
+                _field("valor", "Valor", _AVISO_RECURSO.format(rotulo="Contract value"), kind="xpath", max_length=120),
+                _field("publicado", "Publicação", _AVISO_RECURSO.format(rotulo="Publication date"), kind="xpath", cast="date", max_length=200),
+            ],
+            "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5},
+            "options": {"impersonate": "chrome", "timeout": 45},
+            "schedule": {"cron": "0 7 * * *", "timezone": "Europe/Lisbon"},
+            "respect_robots": True,
+            "tags": ["contratacao-publica", "reino-unido", "concursos", "compras-publicas"],
+            "id_fields": ["url"],
+            "title_field": "titulo",
+            "summary_field": "resumo",
             "detail": _detail("", max_items=0),
             "sentiment": _sentiment(min_chars=80),
         },

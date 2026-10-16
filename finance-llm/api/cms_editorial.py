@@ -374,6 +374,41 @@ class _Blocos:
     def tabela(self, title: str, head: Sequence[str], rows: Sequence[Sequence[str]]) -> Dict[str, Any]:
         return self.add("tabela", {"title": title, "head": list(head), "rows": [list(row) for row in rows]})
 
+    def grafico(
+        self,
+        title: str,
+        series: Sequence[Sequence[Any]],
+        *,
+        note: str = "",
+        formato: str = "euros",
+        legend: Sequence[str] = (),
+        source: str = "",
+    ) -> Dict[str, Any]:
+        """Barras horizontais: `(nome, valor)`, `(nome, valor, 2.º valor)` ou `(nome, valor, 2.º valor, nota)`.
+
+        Basta uma linha com segundo valor para todas as barras passarem a ter
+        duas séries na **mesma escala** — é assim que se comparam pesos (número
+        de contratos contra valor) sem obrigar o leitor a saltar entre gráficos.
+        O `formato` é `euros`, `numero` ou `percentagem`.
+        """
+        itens = []
+        for linha in series:
+            item: Dict[str, Any] = {"label": linha[0], "value": linha[1]}
+            if len(linha) > 2 and linha[2] not in (None, ""):
+                item["value2"] = linha[2]
+            if len(linha) > 3 and linha[3]:
+                item["note"] = linha[3]
+            itens.append(item)
+        data: Dict[str, Any] = {"title": title, "format": formato, "series": itens}
+        if note:
+            data["note"] = note
+        rotulos = [nome for nome in legend if nome]
+        if rotulos:
+            data["legend"] = rotulos
+        if source:
+            data["source"] = source
+        return self.add("grafico", data)
+
     def faq(self, title: str, items: Sequence[Sequence[str]]) -> Dict[str, Any]:
         return self.add("faq", {"title": title, "items": [{"question": pergunta, "answer": resposta} for pergunta, resposta in items]})
 

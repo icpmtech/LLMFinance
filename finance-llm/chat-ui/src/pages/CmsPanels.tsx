@@ -898,6 +898,9 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
         slug: draft.slug,
         excerpt: draft.excerpt ?? "",
         markdown: draft.markdown ?? "",
+        // Sem os blocos no payload, guardar um artigo apagava-lhe os gráficos e
+        // as tabelas (o `_normalise_post` reconstrói a lista a partir daqui).
+        blocks: draft.blocks ?? [],
         cover_id: draft.cover_id ?? null,
         category_ids: draft.category_ids ?? [],
         tags: draft.tags ?? [],
@@ -1145,6 +1148,21 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
                 mode={mode}
                 onModeChange={setMode}
                 heightClass="h-[52vh] min-h-[320px]"
+              />
+            </div>
+
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <PanelHeader
+                title="Blocos"
+                hint="Gráficos, tabelas e destaques que entram depois do Markdown, pela ordem da lista."
+              />
+              <BlockEditor
+                blocks={(draft.blocks ?? []) as never}
+                onChange={(next) => setDraft({ ...draft, blocks: next as CmsPost["blocks"] })}
+                blockTypes={ctx.catalogue.block_types}
+                media={media}
+                contents={ctx.catalogue.contents_index}
+                categories={ctx.catalogue.categories_index}
               />
             </div>
 

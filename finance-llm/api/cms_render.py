@@ -531,6 +531,34 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .prose table {{ width: 100%; border-collapse: collapse; font-size: .9rem; }}
 .prose th, .prose td {{ border: 1px solid var(--border); padding: 9px 10px; text-align: left; }}
 .prose th {{ background: var(--code); }}
+/* Gráficos: barras horizontais em HTML/CSS puro — sem JavaScript e sem
+   bibliotecas, por isso imprimem, funcionam offline (a página é também o
+   `offline.html` do service worker) e não pesam nada. As barras crescem por
+   largura, que é o eixo que sobra num telefone: uma coluna estreita não muda
+   a leitura, muda só a escala. O valor vai sempre escrito, por isso quem usa
+   leitor de ecrã lê o número e não uma barra. */
+.grafico-lista {{ list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }}
+.grafico-item {{ display: grid; gap: 6px; }}
+/* Nome à esquerda e valor à direita na mesma linha; sem largura que chegue, o
+   valor passa para a linha de baixo em vez de apertar o nome. */
+.grafico-topo {{ display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; justify-content: space-between; }}
+.grafico-nome {{ font-weight: 600; font-size: .95rem; min-width: 0; }}
+.grafico-valores {{ display: flex; align-items: baseline; gap: 8px; margin-left: auto; }}
+.grafico-valor {{ font-weight: 700; font-size: .95rem; color: var(--accent); font-variant-numeric: tabular-nums; }}
+/* Segunda série (ex.: contratos vs valor): o número fica em tom menor, atrás
+   do principal, para as duas leituras não competirem. */
+.grafico-item-regua {{ color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }}
+.grafico-barra {{ display: block; height: 10px; border-radius: 999px; background: var(--code); overflow: hidden; }}
+.grafico-barra + .grafico-barra {{ margin-top: 5px; }}
+.grafico-barra > span {{ display: block; height: 100%; border-radius: 999px; background: var(--accent); }}
+.grafico-barra.secundaria > span {{ background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }}
+.grafico-legenda {{ display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 14px; padding: 0; list-style: none; color: var(--muted); font-size: .84rem; }}
+.grafico-legenda li {{ display: inline-flex; align-items: center; gap: 7px; }}
+.grafico-ponto {{ width: 10px; height: 10px; border-radius: 3px; background: var(--accent); flex: none; }}
+.grafico-legenda li.secundaria .grafico-ponto {{ background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }}
+.grafico-nota {{ color: var(--muted); font-size: .9rem; margin: 0 0 16px; }}
+.grafico-item-nota {{ margin: 0; color: var(--muted); font-size: .84rem; }}
+.grafico-fonte {{ color: var(--muted); font-size: .8rem; margin: 14px 0 0; }}
 .cta {{
   display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
   padding: 22px 20px; border-radius: var(--radius); border: 1px solid var(--border);
@@ -968,6 +996,101 @@ def _cta_botoes(data: Dict[str, Any]) -> str:
     return "".join(botoes)
 
 
+def _grafico_numero(valor: Any) -> Optional[float]:
+    """Valor de uma barra, ou `None` quando não há número nenhum para desenhar."""
+    if isinstance(valor, str):
+        # «1 234,5» e «1,234.5» chegam os dois: aceita-se o que o CMS gravar.
+        valor = valor.strip().replace(" ", "").replace("€", "")
+        if "," in valor and "." in valor:
+            valor = valor.replace(".", "").replace(",", ".")
+        else:
+            valor = valor.replace(",", ".")
+    try:
+        return float(valor) if valor not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _grafico_rotulo(valor: float, formato: str) -> str:
+    if formato == "percentagem":
+        return f"{valor:.1f}".replace(".", ",") + " %"
+    if formato == "numero":
+        return _numero(round(valor))
+    # A partir dos mil milhões o «2 543,3 M€» deixa de se ler: passa a «2,5 mil M€».
+    if abs(valor) >= 1_000_000_000:
+        return f"{valor / 1_000_000_000:.1f}".replace(".", ",") + " mil M€"
+    return _euros_curto(valor)
+
+
+def _grafico_barras(data: Dict[str, Any]) -> str:
+    """Barras horizontais em HTML/CSS puro — sem JavaScript nem bibliotecas.
+
+    O valor vai sempre **escrito** ao lado do nome, por isso o gráfico é legível
+    por quem usa leitor de ecrã, por quem imprime e por quem abre a página sem
+    CSS. Cada item pode ter uma segunda série (`value2`), desenhada na mesma
+    escala — é o que permite comparar, lado a lado, o peso no número de
+    contratos e o peso no valor.
+    """
+    itens: List[Dict[str, Any]] = []
+    for item in data.get("series") or []:
+        if not isinstance(item, dict):
+            continue
+        principal = _grafico_numero(item.get("value"))
+        if principal is None:
+            continue
+        itens.append({"nome": str(item.get("label") or ""), "value": principal, "value2": _grafico_numero(item.get("value2")), "nota": str(item.get("note") or "")})
+    if not itens:
+        return ""
+
+    formato = str(data.get("format") or "euros").strip().lower()
+    if formato not in ("euros", "numero", "percentagem"):
+        formato = "euros"
+    medido = [abs(item["value"]) for item in itens] + [abs(item["value2"]) for item in itens if item["value2"] is not None]
+    maximo = _grafico_numero(data.get("max"))
+    if not maximo or maximo <= 0:
+        maximo = max(medido) if medido else 0.0
+
+    def largura(valor: Optional[float]) -> int:
+        if valor is None or maximo <= 0:
+            return 0
+        return max(2, round(abs(valor) / maximo * 100))
+
+    tem_segunda = any(item["value2"] is not None for item in itens)
+
+    def linha(item: Dict[str, Any]) -> str:
+        principal, secundaria = item["value"], item["value2"]
+        barras = f'<span class="grafico-barra"><span style="width:{largura(principal)}%"></span></span>'
+        if item["value2"] is not None and tem_segunda:
+            barras += f'<span class="grafico-barra secundaria"><span style="width:{largura(secundaria)}%"></span></span>'
+        nota = f'<p class="grafico-item-nota">{_esc(item["nota"])}</p>' if item["nota"] else ""
+        regua = ""
+        if item["value2"] is not None and tem_segunda:
+            regua = f'<span class="grafico-item-regua">{_grafico_rotulo(secundaria or 0.0, formato)}</span>'
+        return (
+            f'<li class="grafico-item"><div class="grafico-topo">'
+            f'<span class="grafico-nome">{_esc(item["nome"])}</span>'
+            f'<span class="grafico-valores"><span class="grafico-valor">{_grafico_rotulo(principal, formato)}</span>{regua}</span>'
+            f"</div>{barras}{nota}</li>"
+        )
+
+    titulo = f'<h2>{_esc(data.get("title"))}</h2>' if data.get("title") else ""
+    nota = f'<p class="grafico-nota">{_esc(data.get("note"))}</p>' if data.get("note") else ""
+    legenda = ""
+    rotulos = [str(item) for item in (data.get("legend") or [])]
+    if tem_segunda and rotulos:
+        entradas = [
+            f'<li class="{classe}"><span class="grafico-ponto"></span>{_esc(nome)}</li>'
+            for classe, nome in (("", rotulos[0]), ("secundaria", rotulos[1] if len(rotulos) > 1 else ""))
+            if nome
+        ]
+        legenda = f'<ul class="grafico-legenda">{"".join(entradas)}</ul>' if entradas else ""
+    fonte = f'<p class="grafico-fonte">{_esc(data.get("source"))}</p>' if data.get("source") else ""
+    return (
+        f'<div class="section">{titulo}{nota}{legenda}'
+        f'<ul class="grafico-lista">{"".join(linha(item) for item in itens)}</ul>{fonte}</div>'
+    )
+
+
 def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
     if block.get("hidden"):
         return ""
@@ -1095,11 +1218,12 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
             f"<table><thead>{thead}</thead><tbody>{tbody}</tbody></table></div></div>"
         )
 
+    if block_type == "grafico":
+        return _grafico_barras(data)
+
     if block_type == "citacao":
         author = f"<footer>— {_esc(data.get('author'))}</footer>" if data.get("author") else ""
-        return f'<blockquote>{_esc(data.get("quote") or "")}{author}</blockquote>'
-
-    if block_type == "aviso":
+        return f'<blockquote>{_esc(data.get("quote") or "")}{author}</blockquote>'    if block_type == "aviso":
         tone = str(data.get("tone") or "")
         tone = f" {tone}" if tone in ("amber", "red", "green") else ""
         return f'<div class="aviso{tone}">{_md(str(data.get("text") or ""))}</div>'

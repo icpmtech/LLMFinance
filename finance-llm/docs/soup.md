@@ -53,11 +53,15 @@ python training/export_es_dataset.py --dataset contratos --max-records 200000
 
 | Receita | Índice | Documentos | Instrução gerada |
 |---------|--------|-----------:|------------------|
-| `contratos` | `contratos` | ~15,6 M | Descreve este contrato público português. |
-| `contratos-es` | `contratos_es` | ~7,0 M | Descreve este contrato público espanhol. |
-| `contratos-fr` | `contratos_fr` | ~190 mil | Descreve este contrato público francês. |
+| `contratos` | `contratos` | ~2,27 M | Descreve este contrato público português. |
+| `contratos-es` | `contratos_es` | ~4,05 M | Descreve este contrato público espanhol. |
+| `contratos-fr` | `contratos_fr` | ~61 mil | Descreve este contrato público francês. |
 | `empresas` | `finance_entities` | ~214 mil | Descreve esta entidade no cadastro de contratos públicos. |
-| `noticias` | `finance_news` | ~850 | Classifica o sentimento desta notícia financeira. |
+| `noticias` | `finance_news` | ~272 | Classifica o sentimento desta notícia financeira. |
+
+> As contagens são de documentos de topo (`_count`). O `docs.count` do
+> `_cat/indices` é maior — o `contratos`, por exemplo, mostra 15,6 M porque conta
+> também os documentos aninhados.
 
 O `contratos` segue a mesma redação de
 `collectors/contratos.py::build_training_corpus`, por isso o que sai daqui é
@@ -67,7 +71,7 @@ Opções que valem a pena conhecer:
 
 | Opção | Para que serve |
 |-------|----------------|
-| `--max-records N` | Teto de documentos lidos (`0` = todos). Por omissão 50 000 — o `contratos` tem 15,6 M e o ficheiro inteiro são dezenas de GB. |
+| `--max-records N` | Teto de documentos lidos (`0` = todos). Por omissão 50 000 — o `contratos` tem 2,27 M e o ficheiro inteiro são vários GB. |
 | `--query '<json>'` | Filtro Elasticsearch, ex.: `--query '{"term": {"Ano": 2025}}'`. |
 | `--out <ficheiro>` | Destino (por omissão `data/final/<receita>.jsonl`). |
 | `--max-chars N` | Corte por campo (`0` = sem corte). Por omissão 4 000. |
@@ -107,17 +111,28 @@ para dialogar).
 # construir a imagem (uma vez)
 docker compose --profile train build soup
 
-# exportar e treinar
+# exportar e treinar (`-y` porque o `train` pede confirmação e o `run` não tem
+# terminal interactivo)
 docker compose --profile train run --rm --entrypoint python soup \
   training/export_es_dataset.py --dataset contratos --max-records 200000
-docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+docker compose --profile train run --rm soup train -y \
+  --config training/soup/soup-mistral.yaml
 ```
 
 Numa máquina com GPU, acrescente `--gpus all` ao `run`:
 
 ```bash
-docker compose --profile train run --rm --gpus all soup train \
+docker compose --profile train run --rm --gpus all soup train -y \
   --config training/soup/soup-mistral-instruct.yaml
+```
+
+Antes de treinar, os dois passos podem ser validados sem gastar tempo: o
+`--dry-run` do Soup carrega o config e o dataset sem treinar, e o exporter tem o
+seu próprio `--dry-run`.
+
+```bash
+docker compose --profile train run --rm soup train --dry-run \
+  --config training/soup/soup-mistral.yaml
 ```
 
 Fora do Docker, no venv do projecto (o `requirements.txt` não é versionado —

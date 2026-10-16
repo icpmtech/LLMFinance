@@ -306,7 +306,7 @@ def _noticia_do_pedido(payload: Dict[str, Any]) -> Dict[str, Any]:
     está indexado — é a mesma liberdade que o blog dá a qualquer artigo.
     """
     news_id = _text(payload.get("id"))
-    noticia: Dict[str, Any] = get_news_item(news_id) if news_id else {}
+    noticia: Dict[str, Any] = (get_news_item(news_id) or {}) if news_id else {}
     if news_id:
         noticia.setdefault("id", news_id)
     merged = dict(noticia)
@@ -487,7 +487,7 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
             )
 
     noticia = _noticia_do_pedido(payload)
-    if not noticia.get("title") and not noticia.get("translated_title"):
+    if not (noticia.get("title") or noticia.get("translated_title") or _text(payload.get("title"))):
         raise HTTPException(
             status_code=422,
             detail="Indique a notícia (`id`) ou, no mínimo, o título do artigo.",

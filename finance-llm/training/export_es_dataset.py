@@ -20,6 +20,14 @@ com ``{campo}`` substituídos por campos de topo do documento::
         --input-template "{title}" --output-template "{summary_pt}" \
         --fields title,summary_pt
 
+O treino recusa (não corta) linhas que não cabem na janela do modelo — o
+``soup train`` aborta se alguma ficar sem resposta depois da truncagem. Com
+``--tokenizer`` e ``--max-tokens`` o exporter mede cada par com o tokenizer do
+modelo e deixa de fora os que não caibam::
+
+    python training/export_es_dataset.py --dataset contratos --max-records 200000 \
+        --tokenizer model/mistral-finance/final --max-tokens 950
+
 O ficheiro é escrito em UTF-8, uma linha por exemplo, e só substitui o destino
 no fim — nunca fica um dataset truncado a meio.
 """
@@ -429,6 +437,28 @@ def _resolve_client(es_url: Optional[str], timeout: int):
     return client
 
 
+def _make_token_counter(tokenizer_path: str) -> Callable[[str], int]:
+    """Contador de tokens do modelo de destino (``--tokenizer``).
+
+    O ``soup train`` **recusa** linhas que ficam sem resposta depois da truncagem
+    (`data.max_length`), em vez de as saltar — uma única linha comprida aborta a
+    corrida. Este contador deixa o exporter medir cada par e não escrever os que
+    não cabem na janela do modelo.
+    """
+    from transformers import AutoTokenizer
+
+    local = Path(tokenizer_path).exists()
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, local_files_only=local)
+    cache: Dict[str, int] = {}
+
+    def count(text: str) -> int:
+        if text not in cache:
+            cache[text] = len(tokenizer.encode(text, add_special_tokens=False))
+        return cache[text]
+
+    return count
+
+
 def export(
     *,
     index: str,
@@ -443,8 +473,15 @@ def export(
     es_url: Optional[str] = None,
     timeout: int = 120,
     dry_run: bool = False,
+    count_tokens: Optional[Callable[[str], int]] = None,
+    max_tokens: int = 0,
 ) -> Dict[str, Any]:
-    """Percorre o índice e escreve o JSONL. Devolve as contagens do que foi feito."""
+    """Percorre o índice e escreve o JSONL. Devolve as contagens do que foi feito.
+
+    Com ``count_tokens`` e ``max_tokens``, as linhas cujo prompt + resposta passa
+    o orçamento são contadas em ``dropped`` e não escritas — ver
+    ``_make_token_counter``.
+    """
     client = _resolve_client(es_url, timeout)
     body = query or {"match_all": {}}
 
@@ -454,7 +491,14 @@ def export(
     total = int(client.count(index=index, query=body).get("count", 0))
     logger.info("Índice «%s»: %d documentos correspondem ao filtro.", index, total)
     if dry_run:
-        return {"index": index, "matched": total, "written": 0, "skipped": 0, "dry_run": True}
+        return {
+            "index": index,
+            "matched": total,
+            "written": 0,
+            "skipped": 0,
+            "dropped": 0,
+            "dry_run": True,
+        }
 
     from elasticsearch.helpers import scan
 
@@ -464,6 +508,7 @@ def export(
 
     written = 0
     skipped = 0
+    dropped = 0
     seen = 0
     try:
         with tmp_path.open("w", encoding="utf-8") as fh:
@@ -482,16 +527,19 @@ def export(
                     skipped += 1
                 else:
                     prompt, completion, metadata = built
-                    record = {
-                        "instruction": instruction,
-                        "input": prompt,
-                        "output": completion,
-                        "metadata": {**metadata, "index": index},
-                    }
-                    fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-                    written += 1
-                    if written % 5_000 == 0:
-                        logger.info("… %d exemplos escritos (%d lidos)", written, seen)
+                    if count_tokens and max_tokens and count_tokens(prompt) + count_tokens(completion) > max_tokens:
+                        dropped += 1
+                    else:
+                        record = {
+                            "instruction": instruction,
+                            "input": prompt,
+                            "output": completion,
+                            "metadata": {**metadata, "index": index},
+                        }
+                        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                        written += 1
+                        if written % 5_000 == 0:
+                            logger.info("… %d exemplos escritos (%d lidos)", written, seen)
                 if limit and seen >= limit:
                     logger.info("Limite de %d documentos lidos atingido.", limit)
                     break
@@ -500,10 +548,17 @@ def export(
         raise
 
     tmp_path.replace(out_path)
-    stats = {"index": index, "matched": total, "read": seen, "written": written, "skipped": skipped}
+    stats = {
+        "index": index,
+        "matched": total,
+        "read": seen,
+        "written": written,
+        "skipped": skipped,
+        "dropped": dropped,
+    }
     logger.info(
-        "Guardado %s — %d exemplos (%d lidos, %d sem campos suficientes).",
-        out_path, written, seen, skipped,
+        "Guardado %s — %d exemplos (%d lidos, %d sem campos suficientes, %d acima de %s tokens).",
+        out_path, written, seen, skipped, dropped, max_tokens or "∞",
     )
     return stats
 
@@ -529,6 +584,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help=f"Corte por campo, 0 = sem corte (padrão: {DEFAULT_MAX_CHARS})")
     parser.add_argument("--es-url", help="URL do Elasticsearch (padrão: ELASTICSEARCH_URL ou http://127.0.0.1:9200)")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout dos pedidos, em segundos")
+    parser.add_argument("--tokenizer", help="Tokenizer do modelo de destino, para medir os pares (ex.: model/mistral-finance/final)")
+    parser.add_argument("--max-tokens", type=int, default=0,
+                        help="Orçamento de tokens por par (prompt + resposta); 0 = sem limite. Exige --tokenizer")
     parser.add_argument("--dry-run", action="store_true", help="Só contar os documentos que correspondem ao filtro")
     parser.add_argument("--list", action="store_true", help="Listar as receitas disponíveis")
     parser.add_argument("--verbose", action="store_true", help="Log detalhado")
@@ -581,6 +639,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     out_path = args.out or (DEFAULT_OUT_DIR / f"{default_name}.jsonl")
     logger.info("A exportar «%s» (%s) para %s", default_name, index, out_path)
 
+    if args.max_tokens and not args.tokenizer:
+        parser.error("--max-tokens exige --tokenizer (sem tokenizer não há como medir os pares)")
+    count_tokens = _make_token_counter(args.tokenizer) if args.tokenizer and args.max_tokens else None
+    if count_tokens:
+        logger.info("Orçamento de %d tokens por par, medido com %s.", args.max_tokens, args.tokenizer)
+
     stats = export(
         index=index,
         instruction=instruction,
@@ -594,6 +658,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         es_url=args.es_url,
         timeout=args.timeout,
         dry_run=args.dry_run,
+        count_tokens=count_tokens,
+        max_tokens=args.max_tokens,
     )
     print(json.dumps(stats, ensure_ascii=False, indent=2))
     return 0

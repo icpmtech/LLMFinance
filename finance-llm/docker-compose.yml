@@ -490,7 +490,10 @@ services:
   #   docker compose --profile train build soup
   #   docker compose --profile train run --rm --entrypoint python soup \
   #       training/export_es_dataset.py --dataset contratos --max-records 200000
-  #   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+  #   docker compose --profile train run --rm soup train -y --config training/soup/soup-mistral.yaml
+  #
+  # O `train` pede confirmação e o `run` não tem terminal interactivo: sem `-y`
+  # (ou `--dry-run`), aborta.
   #
   # Numa máquina com GPU, acrescente `--gpus all` ao `run` (o Soup treina também
   # em CPU, mas sem GPU o modelo grande é impraticável).

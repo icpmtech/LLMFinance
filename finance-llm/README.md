@@ -226,7 +226,7 @@ estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias):
 
 # 2. treinar (imagem oficial do Soup + cliente do Elasticsearch, perfil `train`)
 docker compose --profile train build soup
-docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+docker compose --profile train run --rm soup train -y --config training/soup/soup-mistral.yaml
 ```
 
 O que se exporta, os configs disponíveis e como usar o modelo treinado (merge,

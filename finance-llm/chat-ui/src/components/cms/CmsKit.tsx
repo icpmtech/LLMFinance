@@ -494,6 +494,36 @@ const itemFieldLabels: Record<string, string> = {
   text: "Texto",
 };
 
+/** Barras do bloco `grafico` em texto: uma linha por barra, campos por `|`.
+ *
+ * O mesmo idioma da tabela (células separadas por `|`): escrever dez barras num
+ * formulário de dez campos era mais lento do que colar dez linhas.
+ */
+function seriesToText(series: Record<string, unknown>[]): string {
+  return series
+    .map((item) =>
+      [item.label ?? "", item.value ?? "", item.value2 ?? "", item.note ?? ""]
+        .join(" | ")
+        .replace(/(\s*\|\s*)+$/, ""),
+    )
+    .join("\n");
+}
+
+function textToSeries(text: string): Record<string, unknown>[] {
+  const numero = (raw: string): number | string => (raw && Number.isFinite(Number(raw)) ? Number(raw) : raw);
+  return text
+    .split("\n")
+    .filter((line) => line.trim())
+    .map((line) => {
+      const partes = line.split("|").map((part) => part.trim());
+      const serie: Record<string, unknown> = { label: partes[0] ?? "", value: numero(partes[1] ?? "") };
+      if (partes[2]) serie.value2 = numero(partes[2]);
+      const nota = partes.slice(3).join(" | ").trim();
+      if (nota) serie.note = nota;
+      return serie;
+    });
+}
+
 /** Itens de uma lista dentro de um bloco (`destaques`, `faq`, `passos`). */
 function ItemsEditor({
   block,
@@ -680,6 +710,59 @@ function BlockForm({
             }
             rows={5}
             mono
+          />
+        </div>
+      );
+    case "grafico":
+      return (
+        <div className="grid gap-2">
+          <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
+          <TextInput
+            label="Nota de leitura"
+            value={text("note")}
+            onChange={(next) => set("note", next)}
+            wide
+            placeholder="O que o leitor deve tirar daqui"
+          />
+          <SelectInput
+            label="Formato dos valores"
+            value={text("format") || "euros"}
+            onChange={(next) => set("format", next)}
+            options={[
+              { value: "euros", label: "Euros" },
+              { value: "numero", label: "Número" },
+              { value: "percentagem", label: "Percentagem (%)" },
+            ]}
+            wide
+          />
+          <TextArea
+            label="Barras (nome | valor | 2.º valor | nota)"
+            value={seriesToText(list("series"))}
+            onChange={(next) => set("series", textToSeries(next))}
+            rows={6}
+            mono
+            placeholder={"Ajuste direto | 41,9 | 16,5 | 80 757 contratos"}
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextInput
+              label="Legenda — 1.ª série"
+              value={((data.legend as string[] | undefined) ?? [])[0] ?? ""}
+              onChange={(next) =>
+                set("legend", next ? [next, ((data.legend as string[] | undefined) ?? [])[1] ?? ""] : [])
+              }
+            />
+            <TextInput
+              label="Legenda — 2.ª série"
+              value={((data.legend as string[] | undefined) ?? [])[1] ?? ""}
+              onChange={(next) => set("legend", [((data.legend as string[] | undefined) ?? [])[0] ?? "", next])}
+            />
+          </div>
+          <TextInput
+            label="Fonte"
+            value={text("source")}
+            onChange={(next) => set("source", next)}
+            wide
+            placeholder="Base de contratos públicos (IMPIC), leitura a 10/10/2026"
           />
         </div>
       );

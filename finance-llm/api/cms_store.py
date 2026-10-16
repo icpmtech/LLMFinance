@@ -238,6 +238,12 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "faq", "label": "Perguntas frequentes", "hint": "Perguntas e respostas", "icon": "HelpCircle"},
     {"id": "passos", "label": "Passos", "hint": "Sequência numerada", "icon": "ListOrdered"},
     {"id": "tabela", "label": "Tabela", "hint": "Tabela de dados simples", "icon": "Table"},
+    {
+        "id": "grafico",
+        "label": "Gráfico",
+        "hint": "Barras horizontais a partir de uma lista de valores (opcionalmente duas séries)",
+        "icon": "BarChart3",
+    },
     {"id": "citacao", "label": "Citação", "hint": "Frase destacada com autor", "icon": "Quote"},
     {"id": "aviso", "label": "Aviso", "hint": "Nota, atenção ou sucesso", "icon": "AlertTriangle"},
     {"id": "codigo", "label": "Código", "hint": "Bloco de código ou comando", "icon": "Code2"},
