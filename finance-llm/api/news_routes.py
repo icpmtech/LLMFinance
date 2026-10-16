@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from types import SimpleNamespace
 from typing import Annotated, Any, Dict, List, Optional
 
@@ -70,6 +71,10 @@ CAMPOS_EDITAVEIS = (
     "ticker",
     "language",
 )
+
+#: Limites de SEO do artigo (o blog acrescenta o nome da marca ao título).
+LIMITE_TITULO_SEO = 60
+LIMITE_DESCRICAO_SEO = 160
 
 
 def _text(value: Any) -> Optional[str]:
@@ -414,6 +419,35 @@ def _marca_da_noticia(noticia: Dict[str, Any], payload: Dict[str, Any]) -> str:
     return f"noticia-{news_id}"[:120]
 
 
+def _palavras_chave_da_noticia(noticia: Dict[str, Any], tema: Optional[Dict[str, Any]]) -> List[str]:
+    """Palavras-chave do artigo para os motores de busca.
+
+    Saem da própria notícia — fonte, ticker e tópicos do NLP — e do tema da
+    plataforma que o editor escolheu. São as que ainda não estão no título (uma
+    palavra-chave repetida não acrescenta nada a quem procura).
+    """
+    candidatos: List[str] = []
+    for valor in (
+        noticia.get("publisher"),
+        noticia.get("ticker"),
+        *(noticia.get("topics") or []),
+        *news_themes.suggested_tags(tema["id"] if tema else None),
+    ):
+        texto = _text(valor)
+        if texto and texto not in candidatos:
+            candidatos.append(texto)
+    return candidatos[:8]
+
+
+def _cortar_em_palavras(texto: str, limite: int) -> str:
+    """Corta um texto no limite **sem partir palavras** (para título/descrição SEO)."""
+    limpo = re.sub(r"\s+", " ", str(texto or "")).strip()
+    if len(limpo) <= limite:
+        return limpo
+    corte = limpo[:limite].rsplit(" ", 1)[0].rstrip(" ,;:.-–—")
+    return f"{corte}…" if corte else limpo[:limite]
+
+
 def _artigo_da_noticia(
     noticia: Dict[str, Any],
     payload: Dict[str, Any],
@@ -477,9 +511,14 @@ def _artigo_da_noticia(
         "excerpt": resumo or titulo,
         "markdown": corpo,
         "tags": _etiquetas_da_noticia(payload, noticia, tema),
-        # O título para os motores de busca fica por preencher de propósito: o
-        # blog usa o título do artigo, que já é o título da notícia.
-        "seo": {"description": (resumo or titulo)[:180]},
+        # SEO: o título do artigo tem de caber no que os motores de busca mostram
+        # (o site acrescenta o nome da marca) e a descrição é o resumo cortado em
+        # palavras. As palavras-chave vêm da notícia e do tema escolhido.
+        "seo": {
+            "title": _cortar_em_palavras(titulo, LIMITE_TITULO_SEO),
+            "description": _cortar_em_palavras(resumo or titulo, LIMITE_DESCRICAO_SEO),
+            "keywords": _palavras_chave_da_noticia(noticia, tema),
+        },
     }
 
 
