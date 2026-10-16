@@ -620,9 +620,14 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
 }}
 .meta {{ color: var(--muted); font-size: .88rem; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }}
-/* Ação do artigo (descarregar o relatório em PDF): entre os créditos e a capa. */
+/* Ações do artigo (relatório em PDF e partilha): entre os créditos e a capa. */
 .artigo-acao {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px; }}
 .artigo-acao .btn {{ min-height: 44px; padding: 10px 18px; font-size: .9rem; }}
+/* O botão da partilha é um `<button>`: herda a letra do site (um botão não a
+   herda sozinho) e nasce escondido — quem o mostra é o script, que sabe se
+   este browser tem partilha do sistema ou área de transferência. */
+.artigo-acao button.btn {{ font-family: inherit; cursor: pointer; }}
+.artigo-acao [hidden] {{ display: none; }}
 .posts {{ display: grid; gap: 16px; grid-template-columns: 1fr; }}
 .post-card {{ display: flex; flex-direction: column; overflow: hidden; padding: 0; }}
 .post-card img {{ width: 100%; aspect-ratio: 16/9; object-fit: cover; }}
@@ -3737,6 +3742,48 @@ def _posts_with_meta(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return enriched
 
 
+def _acoes_do_artigo(post: Dict[str, Any], path: str, settings: Dict[str, Any], *, preview: bool) -> str:
+    """Ações do artigo: descarregar o relatório (PDF) e partilhar.
+
+    Valem só no site: num rascunho (pré-visualização) o artigo ainda não está
+    publicado, a rota do relatório não o serve e não há endereço público para
+    partilhar. O PDF é opcional por artigo (`report_pdf`) — um texto sem números
+    próprios não ganha um botão que descarrega o que já está à vista. A partilha
+    usa a Web Share API do sistema e, onde ela não existe, copia o endereço;
+    sem nenhuma das duas o botão não chega a aparecer.
+    """
+    if preview:
+        return ""
+    botoes = []
+    if post.get("report_pdf", True):
+        botoes.append(f'<a class="btn ghost" href="{_esc(path)}/pdf" download>Descarregar o relatório (PDF)</a>')
+    botoes.append(
+        # Nasce escondido: quem o mostra é o script, que é quem sabe se este
+        # browser partilha ou copia. Um botão que não faz nada é pior do que
+        # nenhum — e sem JavaScript a página continua legível.
+        '<button type="button" class="btn ghost" data-partilhar hidden'
+        f' data-url="{_esc(_absolute(path, str(settings.get("base_url") or "")))}"'
+        f' data-titulo="{_esc(post.get("title") or "")}">Partilhar</button>'
+    )
+    return (
+        f'<div class="artigo-acao">{"".join(botoes)}</div>'
+        # O script fica ao lado do que comanda: `currentScript.parentNode` é o
+        # artigo, e não é preciso procurar o botão no documento todo.
+        "<script>(function(){"
+        "var b=document.currentScript.parentNode.querySelector('[data-partilhar]');if(!b)return;"
+        "var u=b.getAttribute('data-url')||location.href;"
+        "var t=b.getAttribute('data-titulo')||document.title;var r=b.textContent;"
+        "var c=navigator.clipboard&&navigator.clipboard.writeText;"
+        "if(!navigator.share&&!c)return;b.hidden=false;"
+        "function dito(m){b.textContent=m;setTimeout(function(){b.textContent=r},2400)}"
+        "b.addEventListener('click',function(){"
+        "if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});return;}"
+        "navigator.clipboard.writeText(u).then(function(){dito('Ligação copiada')},"
+        "function(){dito('Não foi possível copiar')});});"
+        "})();</script>"
+    )
+
+
 def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or store.get_settings()
     seo = post.get("seo") or {}
@@ -3759,18 +3806,12 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
     for name in names:
         meta_bits.append(f'<span class="pill">{_esc(name)}</span>')
     path = f"/site/blog/{post.get('slug')}"
-    # O botão do PDF só aparece no site: num rascunho (pré-visualização) o
-    # artigo ainda não está publicado e a rota do relatório não o serve.
-    descarregar = (
-        ""
-        if preview
-        else f'<div class="artigo-acao"><a class="btn ghost" href="{_esc(path)}/pdf" download>Descarregar o relatório (PDF)</a></div>'
-    )
+    acoes = _acoes_do_artigo(post, path, settings, preview=preview)
     body = (
         '<article class="section">'
         f'<h1>{_esc(post.get("title"))}</h1>'
         f'<div class="meta">{"".join(meta_bits)}</div>'
-        f'{descarregar}'
+        f'{acoes}'
         f'{hero}'
         f'<div class="prose">{_md(str(post.get("markdown") or ""))}</div>'
         + blocks_to_html(post.get("blocks") or [], preview=preview)

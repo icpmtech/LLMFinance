@@ -33,6 +33,10 @@
 - `POST /loja/avaliacoes` — envia uma avaliação (fica pendente de moderação)
 - `GET  /loja/sitemap.xml`, `/loja/robots.txt`
 
+Os três `POST` que criam conteúdo (encomenda, avaliação e novidades por email)
+exigem o **desafio anti-robô** (`api/captcha`): a página pede-o em
+`GET /loja/desafio` e devolve `captcha` + `captcha_token` no corpo do pedido.
+
 **Loja instalável (PWA)**: manifesto, service worker, ícones e a página de
 recurso sem rede — o catálogo e as imagens ficam com cópia local no telefone.
 
@@ -47,8 +51,9 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 
+from api import captcha
 from api import shop_render as render
 from api import shop_store as store
 from api.auth_routes import CurrentSession, optional_session
@@ -627,9 +632,34 @@ def loja_order_file(number: str, file_id: str, email: str = Query("")) -> Respon
     )
 
 
+@router.get("/loja/desafio")
+def loja_desafio() -> Response:
+    """Desafio anti-robô dos formulários da vitrine (novo a cada pedido).
+
+    Os nomes dos campos vão na resposta para o JavaScript da vitrine não os ter
+    escritos à mão: o dia em que mudarem, muda só o `api/captcha`.
+    """
+    return JSONResponse(
+        {
+            **captcha.desafio(),
+            "campo": captcha.CAMPO_RESPOSTA,
+            "testemunho": captcha.CAMPO_TESTEMUNHO,
+        },
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
+def _recusar_se_o_desafio_falhar(payload: Dict[str, Any]) -> None:
+    """Trava o pedido quando o captcha não confere (é o servidor que decide)."""
+    erro = captcha.erro(payload.get(captcha.CAMPO_RESPOSTA), payload.get(captcha.CAMPO_TESTEMUNHO))
+    if erro:
+        raise HTTPException(status_code=422, detail=erro)
+
+
 @router.post("/loja/encomendas")
 def loja_checkout(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Cria a encomenda a partir do carrinho (preços e stock validados pelo servidor)."""
+    _recusar_se_o_desafio_falhar(payload)
     try:
         order = store.checkout(payload, actor="loja")
     except ValueError as exc:
@@ -667,6 +697,7 @@ def loja_validate_coupon(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 @router.post("/loja/avaliacoes")
 def loja_review(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Envia uma avaliação de produto (entra pendente de moderação)."""
+    _recusar_se_o_desafio_falhar(payload)
     try:
         review = store.create_review(payload)
     except ValueError as exc:
@@ -677,6 +708,7 @@ def loja_review(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 @router.post("/loja/newsletter")
 def loja_newsletter(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Email deixado na vitrine: fica como cliente com autorização de marketing."""
+    _recusar_se_o_desafio_falhar(payload)
     try:
         return store.newsletter_signup(payload)
     except ValueError as exc:

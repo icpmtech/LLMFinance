@@ -8,9 +8,13 @@ adivinhar a partir do testemunho — e o servidor confere-a recalculando a
 assinatura com a resposta que recebeu.
 
 Não é uma barreira forte (nada que se resolva a ler é) e não vale a pena
-apresentá-la como tal: o que trava é a soma de três coisas — responder dentro do
-prazo, não poder repetir o testemunho noutro sítio e, do lado de quem recebe, o
-limite de pedidos por IP que já existe nos formulários.
+apresentá-la como tal. O que trava é a soma de três coisas: a pergunta não se
+resolve com a expressão regular que apanha «7 + 5», a resposta certa é a chave
+da assinatura (sem testemunho nosso não há resposta), e um testemunho fora do
+prazo não serve. Um testemunho dentro do prazo pode servir mais do que um pedido
+— não se guarda estado, e é uma escolha: a diferença para um robô está em
+responder bem, não em repetir. Quem insistir passa, e é aí que entra o limite de
+pedidos por IP do lado de quem recebe.
 """
 from __future__ import annotations
 

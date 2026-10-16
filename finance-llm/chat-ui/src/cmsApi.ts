@@ -63,6 +63,8 @@ export type CmsPost = {
   published_at?: string | null;
   scheduled_at?: string | null;
   featured?: boolean;
+  /** O artigo tem relatório em PDF descarregável (`/site/blog/{slug}/pdf`). */
+  report_pdf?: boolean;
   reading_minutes?: number;
   markdown_words?: number;
   has_markdown?: boolean;

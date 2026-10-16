@@ -86,16 +86,27 @@ def test_resposta_errada_nao_passa_e_explica_se(sem_espera: None) -> None:
     assert captcha.erro("", desafio["token"]) == "Responda ao desafio, para confirmarmos que é uma pessoa."
 
 
-def test_testemunho_nao_guarda_a_resposta(sem_espera: None) -> None:
-    """O testemunho é público: se a resposta lá estivesse, não valia nada."""
+def test_testemunho_nao_guarda_a_resposta() -> None:
+    """O testemunho é público: leva o nonce e as datas, nunca a resposta.
+
+    A resposta entra só na **assinatura** — é isso que a torna conferível sem
+    guardar estado: respostas diferentes dão assinaturas diferentes sobre o
+    mesmo corpo, e do corpo não se lê nenhuma delas.
+    """
     desafio = captcha.desafio()
-    conta = resolver(desafio["pergunta"])
+    corpo = base64.urlsafe_b64encode(
+        json.dumps({"n": "abc", "iat": 1, "exp": 2}, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii").rstrip("=")
 
     dados = corpo_do_testemunho(desafio["token"])
+    assinaturas = {captcha._assinar(corpo, str(numero)) for numero in range(1, 19)}
 
     assert set(dados) == {"n", "iat", "exp"}
     assert dados["n"] and dados["exp"] > dados["iat"]
-    assert conta not in json.dumps(dados)
+    # O mesmo corpo, 18 respostas diferentes: 18 assinaturas diferentes, e o
+    # corpo (que é o que viaja à vista) continua sem nenhuma delas.
+    assert set(corpo_do_testemunho(f"{corpo}.{next(iter(assinaturas))}")) == {"n", "iat", "exp"}
+    assert len(assinaturas) == 18
 
 
 def test_testemunho_de_outro_desafio_nao_serve(sem_espera: None) -> None:

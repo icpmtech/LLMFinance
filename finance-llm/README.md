@@ -222,12 +222,13 @@ estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias, subsídios):
 
 ```bash
 # 1. exportar o dataset do Elasticsearch (o --tokenizer/--max-tokens garantem que
-#    cada par cabe na janela do modelo — o `soup train` aborta se não couber)
-.venv\Scripts\python training/export_es_dataset.py --dataset contratos --max-records 200000 --tokenizer model/mistral-finance/final --max-tokens 950
+#    cada par cabe na janela do modelo — o `soup train` aborta se não couber);
+#    o --dataset pode repetir-se e junta várias fontes no mesmo ficheiro
+.venv\Scripts\python training/export_es_dataset.py --dataset contratos --dataset empresas --max-records 400 --seed 42 --tokenizer model/mistral-finance/final --max-tokens 950 --out data/final/iqos_contratos_empresas.jsonl
 
 # 2. treinar (imagem oficial do Soup + cliente do Elasticsearch, perfil `train`)
 docker compose --profile train build soup
-docker compose --profile train run --rm soup train -y --config training/soup/soup-mistral.yaml
+docker compose --profile train run --rm soup train -y --config training/soup/soup-empresas-contratos.yaml
 ```
 
 O que se exporta, os configs disponíveis e como usar o modelo treinado (merge,

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1305 operações** em **45 grupos**.
+Versão `0.4.0` · **1307 operações** em **45 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -227,6 +227,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/loja/conta` | Loja Account |
 | `GET` | `/loja/conta/encomendas` | Loja Account Orders |
 | `POST` | `/loja/cupoes/validar` | Loja Validate Coupon |
+| `GET` | `/loja/desafio` | Loja Desafio |
 | `GET` | `/loja/encomenda/{number}` | Loja Order |
 | `GET` | `/loja/encomenda/{number}/ficheiros/{file_id}` | Loja Order File |
 | `POST` | `/loja/encomendas` | Loja Checkout |
@@ -310,6 +311,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/news/search` | News Search |
 | `GET` | `/news/stats` | News Index Stats |
 | `GET` | `/news/themes` | News Theme Catalogue |
+| `POST` | `/news/{news_id}/traduzir` | News Translate |
 | `GET` | `/openapi/export` | Openapi Export |
 | `GET` | `/openapi/summary` | Openapi Summary |
 | `GET` | `/osint` | Serve Osint Spa Page |

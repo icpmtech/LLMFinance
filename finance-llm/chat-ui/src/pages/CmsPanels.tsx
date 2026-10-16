@@ -819,6 +819,7 @@ function emptyPost(): Partial<CmsPost> {
     tags: [],
     status: "rascunho",
     featured: false,
+    report_pdf: true,
     seo: { title: "", description: "", keywords: [], image_id: null, noindex: false },
   };
 }
@@ -906,6 +907,7 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
         tags: draft.tags ?? [],
         author: draft.author ?? "",
         featured: draft.featured ?? false,
+        report_pdf: draft.report_pdf ?? true,
         status: draft.status ?? "rascunho",
         seo: draft.seo,
       };
@@ -1099,8 +1101,14 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
               <TextArea label="Resumo" value={draft.excerpt ?? ""} onChange={(next) => setDraft({ ...draft, excerpt: next })} rows={2} wide />
               <MediaPicker label="Imagem de capa" value={String(draft.cover_id ?? "")} onChange={(next) => setDraft({ ...draft, cover_id: next || null })} media={media} />
               <TagsInput label="Etiquetas" value={draft.tags ?? []} onChange={(next) => setDraft({ ...draft, tags: next })} />
-              <div className="sm:col-span-2">
+              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
                 <Toggle label="Artigo em destaque" checked={draft.featured ?? false} onChange={(next) => setDraft({ ...draft, featured: next })} />
+                <Toggle
+                  label="Relatório em PDF"
+                  hint="Botão «Descarregar o relatório (PDF)» na página do artigo."
+                  checked={draft.report_pdf ?? true}
+                  onChange={(next) => setDraft({ ...draft, report_pdf: next })}
+                />
               </div>
             </div>
 

@@ -75,6 +75,7 @@ Opções que valem a pena conhecer:
 | Opção | Para que serve |
 |-------|----------------|
 | `--max-records N` | Teto de documentos lidos (`0` = todos). Por omissão 50 000 — o `contratos` tem 2,27 M e o ficheiro inteiro são vários GB. |
+| `--dataset A --dataset B` | Várias fontes no **mesmo** ficheiro (ver «Juntar várias fontes no mesmo dataset»). O `--max-records` passa a contar **por fonte**. |
 | `--query '<json>'` | Filtro Elasticsearch, ex.: `--query '{"term": {"Ano": 2025}}'`. |
 | `--out <ficheiro>` | Destino (por omissão `data/final/<receita>.jsonl`). |
 | `--max-chars N` | Corte por campo (`0` = sem corte). Por omissão 4 000. |
@@ -119,6 +120,36 @@ python training/export_es_dataset.py --dataset contratos --max-records 200000 \
 
 As linhas deixadas de fora aparecem na contagem `dropped` do resumo.
 
+### Juntar várias fontes no mesmo dataset
+
+O `--dataset` pode repetir-se: as fontes vão todas para o **mesmo** ficheiro, e o
+modelo treina com as duas. É o que faz o
+[`soup-empresas-contratos.yaml`](../training/soup/soup-empresas-contratos.yaml) —
+contratos (dinheiro a sair) e entidades (quem contrata e quem é contratado) na
+mesma cabeça, porque a resposta a «quanto custou este contrato ao Município de
+Chaves?» precisa das duas:
+
+```bash
+python training/export_es_dataset.py --dataset contratos --dataset empresas \
+    --max-records 400 --seed 42 --tokenizer model/mistral-finance/final \
+    --max-tokens 950 --out data/final/iqos_contratos_empresas.jsonl
+```
+
+O que muda com várias fontes:
+
+* cada linha leva a instrução da **sua** receita e um `metadata.fonte` com o nome
+  dela — quem consome o dataset sabe de onde vem cada exemplo;
+* o `--max-records` conta **por fonte** (400 contratos *e* 400 entidades, não 400
+  ao todo);
+* o resumo passa a trazer os totais agregados e o detalhe por fonte;
+* o `--query` deixa de fazer sentido e o comando recusa-o — um filtro serve uma
+  fonte, não várias.
+
+O export de referência (400 leituras de cada índice) deu 794 exemplos: 394
+contratos (15 anos distintos, 2012–2026, 394 contratos diferentes) e 400
+entidades (211 NIF distintos); 6 linhas ficaram de fora pelo orçamento de 950
+tokens.
+
 Índices que não têm receita própria continuam a poder ser exportados com
 moldes:
 
@@ -142,12 +173,15 @@ docker compose --profile train run --rm --entrypoint soup soup data validate ./d
 |--------|-------------------|------------|-----------|
 | [soup-mistral.yaml](../training/soup/soup-mistral.yaml) | `model/mistral-finance/final` (modelo do sistema, 512×8, vocabulário de 3 000) | CPU ou GPU | `model/soup-mistral` |
 | [soup-subvencoes.yaml](../training/soup/soup-subvencoes.yaml) | `model/mistral-finance/final`, só com a fonte dos subsídios | CPU ou GPU | `model/soup-subvencoes` |
+| [soup-empresas-contratos.yaml](../training/soup/soup-empresas-contratos.yaml) | `model/mistral-finance/final`, com os contratos **e** as entidades no mesmo dataset | CPU ou GPU | `model/soup-empresas-contratos` |
 | [soup-mistral-instruct.yaml](../training/soup/soup-mistral-instruct.yaml) | `mistralai/Mistral-7B-Instruct-v0.3` | GPU com ≥ 8 GB de VRAM | `model/soup-mistral-7b-lora` |
 
 Há um config por objectivo: o `soup-mistral.yaml` treina o modelo do sistema com
 os contratos, o `soup-subvencoes.yaml` treina-o com **uma só fonte** (os subsídios
-de `finance_subvencoes` — dinheiro público a entrar, o espelho dos contratos) e o
-`soup-mistral-instruct.yaml` é o caminho com GPU.
+de `finance_subvencoes` — dinheiro público a entrar, o espelho dos contratos), o
+`soup-empresas-contratos.yaml` treina-o com **duas fontes no mesmo dataset**
+(contratos e o cadastro de entidades, ver «Juntar várias fontes no mesmo
+dataset») e o `soup-mistral-instruct.yaml` é o caminho com GPU.
 
 O primeiro continua o modelo que o IQ OS já usa para descrever contratos; o
 segundo parte de um modelo que já conversa e ensina-lhe o domínio — é o caminho

@@ -103,6 +103,10 @@ def test_formulario_tem_grelha_ancora_e_os_limites_do_servidor() -> None:
     # O que acontece depois do envio fica na linha do botão, não depois dele.
     assert '<div class="acao">' in html and '<div class="nota-formulario">' in html
     assert 'mailto:suporte@sabemos.studio' in html
+    # Desafio anti-robô: a pergunta é o rótulo do campo e o testemunho vai escondido.
+    assert '<div class="campo captcha">' in html
+    assert 'id="contacto-captcha"' in html and 'name="captcha_token"' in html
+    assert ">Quanto dá " in html and 'inputmode="numeric"' in html
     # O campo-armadilha continua fora do ecrã e fora da ordem de tabulação.
     assert 'name="website"' in html and 'tabindex="-1"' in html
 
@@ -162,8 +166,39 @@ def test_pedido_incompleto_volta_com_os_erros(cms_limpo: Any) -> None:
     assert "Esse email não parece válido." in resposta.text
     assert "Escreva a mensagem." in resposta.text
     assert "Precisa de autorizar o contacto para enviar." in resposta.text
+    # O desafio em falta junta-se aos outros erros, na mesma resposta.
+    assert "Responda ao desafio, para confirmarmos que é uma pessoa." in resposta.text
     # O que já estava escrito fica à espera de ser corrigido.
     assert 'value="Imprensa"' in resposta.text
+    assert store.list_items("contactos")["items"] == []
+
+
+def test_pedido_sem_desafio_nao_entra_nem_avisa(cms_limpo: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sem responder ao captcha não há registo nem email — é o ponto dele."""
+    from api import main as api_main
+
+    avisos: List[Dict[str, Any]] = []
+    monkeypatch.setattr(notification_email, "send_contact_email", lambda **campos: avisos.append(campos) or {"ok": True})
+    monkeypatch.setattr(store, "_contactos_por_ip", {})
+
+    cliente = TestClient(api_main.app, base_url="http://prova")
+    base = {
+        "nome": "Ana Silva",
+        "email": "ana@exemplo.pt",
+        "assunto": "Dados e cobertura",
+        "mensagem": "Pedido sem resposta ao desafio.",
+        "consentimento": "sim",
+    }
+    sem_resposta = cliente.post("/site/contacto", data=base)
+    resposta_errada = cliente.post(
+        "/site/contacto",
+        data={**base, **{**_desafio_resolvido(), captcha.CAMPO_TESTEMUNHO: captcha.desafio()["token"]}},
+    )
+
+    assert sem_resposta.status_code == 422
+    assert "Responda ao desafio, para confirmarmos que é uma pessoa." in sem_resposta.text
+    assert "A resposta ao desafio não confere." in resposta_errada.text
+    assert avisos == []
     assert store.list_items("contactos")["items"] == []
 
 
@@ -187,7 +222,9 @@ def test_campo_armadilha_recebe_agradecimento_e_nao_guarda_nada(cms_limpo: Any) 
     assert store.list_items("contactos")["items"] == []
 
 
-def test_pedido_valido_guarda_e_avisa_a_caixa_de_apoio(cms_limpo: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pedido_valido_guarda_e_avisa_a_caixa_de_apoio(
+    cms_limpo: Any, monkeypatch: pytest.MonkeyPatch, sem_espera: None
+) -> None:
     """O pedido fica guardado no CMS **e** sai um aviso para a caixa de apoio."""
     from api import main as api_main
     from api import reports_store
@@ -209,12 +246,15 @@ def test_pedido_valido_guarda_e_avisa_a_caixa_de_apoio(cms_limpo: Any, monkeypat
             "assunto": "Correção de um número",
             "mensagem": "O valor do Porto não bate certo com o Portal BASE.",
             "consentimento": "sim",
+            **_desafio_resolvido(),
         },
     )
 
     assert resposta.status_code == 200 and "Mensagem recebida" in resposta.text
     guardados = store.list_items("contactos")["items"]
     assert len(guardados) == 1 and guardados[0]["estado"] == "novo"
+    # O desafio não se guarda no pedido (é da sessão, não do registo).
+    assert "captcha" not in guardados[0] and "captcha_token" not in guardados[0]
     assert avisos and avisos[0]["to"] == "apoio@exemplo.pt"
     assert avisos[0]["email"] == "ana@exemplo.pt"
     assert avisos[0]["assunto"] == "Correção de um número"

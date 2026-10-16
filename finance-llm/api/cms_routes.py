@@ -841,6 +841,10 @@ def site_post_pdf(slug: str) -> Response:
     post = store.resolve_post_by_slug(slug, published_only=True)
     if not post:
         raise HTTPException(status_code=404, detail="Artigo não encontrado.")
+    if not post.get("report_pdf", True):
+        # O relatório é opcional e decide-se no artigo: sem ele não há botão na
+        # página nem ficheiro para descarregar (nem por um endereço guardado).
+        raise HTTPException(status_code=404, detail="Este artigo não tem relatório em PDF.")
     nome, conteudo, media_type = cms_post_report.artigo_pdf(post, store.get_settings())
     return Response(
         conteudo,

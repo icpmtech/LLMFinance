@@ -10,7 +10,11 @@ O que se prova aqui:
 * o **artigo** tem resumo, gráficos e tabelas, e os números que publica são os
   mesmos que as fontes citadas;
 * o **relatório PDF** (`/site/blog/{slug}/pdf`) sai do próprio artigo — secções
-  a partir dos blocos, sem uma segunda cópia dos números.
+  a partir dos blocos, sem uma segunda cópia dos números — e é **opcional por
+  artigo** (`report_pdf`);
+* a **partilha** da página usa a Web Share API do sistema (com o endereço
+  absoluto do artigo) e o botão só aparece se o browser souber partilhar ou
+  copiar.
 
 Nada aqui toca em `data/`: o CMS vive em `tmp_path`.
 """
@@ -177,6 +181,55 @@ def test_pagina_do_artigo_tem_graficos_tabelas_e_botao_de_pdf(instalacao):
     # o botão não aparece, para não levar a um 404.
     previa = cms_render.render_post(post, preview=True, settings=cms_store.get_settings())
     assert f"/site/blog/{cms_editorial.ARTIGO_CONTRATOS_2026_SLUG}/pdf" not in previa
+
+
+def test_pagina_do_artigo_partilha_pela_web_share_api(instalacao):
+    slug = cms_editorial.ARTIGO_CONTRATOS_2026_SLUG
+    post = cms_store.resolve_post_by_slug(slug, published_only=False)
+    html = cms_render.render_post(post, settings=cms_store.get_settings())
+
+    # O botão nasce escondido: quem o mostra é o script, que é quem sabe se o
+    # browser tem partilha do sistema ou área de transferência.
+    assert "data-partilhar hidden" in html
+    assert "navigator.share" in html and "navigator.clipboard.writeText" in html
+    assert f'data-url="/site/blog/{slug}"' in html
+
+    # Num rascunho não há endereço público para partilhar (nem PDF para servir).
+    previa = cms_render.render_post(post, preview=True, settings=cms_store.get_settings())
+    assert "data-partilhar" not in previa and "navigator.share" not in previa
+
+    # Com o endereço do site definido, o que se partilha é o endereço absoluto.
+    definicoes = {**cms_store.get_settings(), "base_url": "https://sabemos.studio"}
+    html = cms_render.render_post(post, settings=definicoes)
+    assert f'data-url="https://sabemos.studio/site/blog/{slug}"' in html
+
+
+def test_relatorio_pdf_e_opcional_e_decide_se_no_artigo(instalacao):
+    from fastapi.testclient import TestClient
+
+    from api import main as api_main
+
+    slug = cms_editorial.ARTIGO_CONTRATOS_2026_SLUG
+    post = cms_store.resolve_post_by_slug(slug, published_only=False)
+    # Um artigo que não traz o campo (é o caso da semente, que não passa pelo
+    # `_normalise`) continua com relatório: o que já estava publicado não muda
+    # de comportamento.
+    assert "report_pdf" not in post
+    assert f"/site/blog/{slug}/pdf" in cms_render.render_post(post, settings=cms_store.get_settings())
+
+    cms_store.save_item("posts", {"id": post["id"], "report_pdf": False}, "teste")
+    sem_relatorio = cms_store.resolve_post_by_slug(slug, published_only=False)
+    assert sem_relatorio["report_pdf"] is False
+
+    html = cms_render.render_post(sem_relatorio, settings=cms_store.get_settings())
+    assert f"/site/blog/{slug}/pdf" not in html
+    # A partilha não depende do relatório.
+    assert "data-partilhar" in html
+
+    cliente = TestClient(api_main.app, base_url="http://prova")
+    resposta = cliente.get(f"/site/blog/{slug}/pdf")
+    assert resposta.status_code == 404
+    assert "relatório em PDF" in resposta.json()["detail"]
 
 
 def test_artigo_conta_o_tempo_de_leitura_dos_blocos(instalacao):

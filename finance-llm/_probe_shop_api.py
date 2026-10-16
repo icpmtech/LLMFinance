@@ -2,11 +2,34 @@
 from __future__ import annotations
 
 import json
+import time
 
 import httpx
 
 BASE = "http://127.0.0.1:8002"
 cliente = httpx.Client(base_url=BASE, timeout=20)
+
+#: O que uma pessoa lê na pergunta do desafio anti-robô.
+NUMEROS = {
+    "um": 1, "dois": 2, "três": 3, "quatro": 4, "cinco": 5, "seis": 6, "sete": 7, "oito": 8, "nove": 9,
+    "dez": 10, "onze": 11, "doze": 12, "treze": 13, "catorze": 14, "quinze": 15, "dezasseis": 16,
+    "dezassete": 17, "dezoito": 18,
+}
+
+
+def desafio() -> dict:
+    """Pede um desafio e resolve-o como uma pessoa (a pergunta é texto).
+
+    O servidor recusa um desafio respondido num instante, por isso espera-se o
+    compasso mínimo antes de usar a resposta. O testemunho vale para os pedidos
+    todos deste guião (não é de uso único).
+    """
+    dados = cliente.get("/loja/desafio").json()
+    palavras = dados["pergunta"].rstrip("?").split()
+    primeiro, operacao, segundo = NUMEROS[palavras[2]], palavras[3], NUMEROS[palavras[4]]
+    conta = primeiro + segundo if operacao == "mais" else primeiro - segundo
+    time.sleep(2.2)
+    return {dados["campo"]: str(conta), dados["testemunho"]: dados["token"]}
 
 ok = 0
 
@@ -62,9 +85,11 @@ preview = cliente.get("/loja", params={"preview": 1})
 check("pré-visualização do editor", preview.status_code == 200 and 'data-preview="1"' in preview.text, preview.status_code)
 check("pré-visualização sem cache", "no-store" in preview.headers.get("cache-control", ""), preview.headers.get("cache-control"))
 
-check("newsletter recusa email inválido", cliente.post("/loja/newsletter", json={"email": "invalido"}).status_code == 422)
-subscricao = cliente.post("/loja/newsletter", json={"email": "probe.api@exemplo.pt"})
+check("newsletter recusa email inválido", cliente.post("/loja/newsletter", json={"email": "invalido", **desafio()}).status_code == 422)
+subscricao = cliente.post("/loja/newsletter", json={"email": "probe.api@exemplo.pt", **desafio()})
 check("newsletter aceita email válido", subscricao.status_code == 200 and subscricao.json()["subscribed"], subscricao.text[:200])
+sem_desafio = cliente.post("/loja/newsletter", json={"email": "robo@exemplo.pt"})
+check("sem desafio a newsletter é recusada", sem_desafio.status_code == 422, sem_desafio.text[:200])
 
 print("== encomendas do comprador ==")
 pagina_conta = cliente.get("/loja/conta")
@@ -107,6 +132,7 @@ resposta = cliente.post(
         "shipping_address": {"line1": "Rua de Teste 1", "postal_code": "1000-100", "city": "Lisboa"},
         "payment_method": "mbway",
         "shipping_method_id": envio["id"],
+        **desafio(),
     },
 )
 check("POST /loja/encomendas", resposta.status_code == 200, resposta.text[:400])
@@ -123,7 +149,7 @@ digital = next(item for item in dados["products_index"] if item["type"] == "digi
 fisico = next(item for item in dados["products_index"] if item["sku"] == "MAN-ICP")
 sem_morada = cliente.post(
     "/loja/encomendas",
-    json={"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "Convidado API", "email": "convidado.api@exemplo.pt"}},
+    json={"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "Convidado API", "email": "convidado.api@exemplo.pt"}, **desafio()},
 )
 check("digital sem morada é aceite", sem_morada.status_code == 200, sem_morada.text[:300])
 solta = sem_morada.json()["order"]
@@ -132,11 +158,13 @@ check("sem portes no digital", solta["shipping_total"] == 0, solta["shipping_tot
 check("cliente guardado", cliente.get("/shop/customers", params={"q": "convidado.api"}).json()["total"] == 1)
 falta_morada = cliente.post(
     "/loja/encomendas",
-    json={"items": [{"product_id": fisico["id"], "quantity": 1}], "customer": {"name": "Convidado API", "email": "convidado.api@exemplo.pt"}},
+    json={"items": [{"product_id": fisico["id"], "quantity": 1}], "customer": {"name": "Convidado API", "email": "convidado.api@exemplo.pt"}, **desafio()},
 )
 check("físico exige morada", falta_morada.status_code == 422 and "morada" in falta_morada.text.lower(), falta_morada.text[:200])
-email_ma = cliente.post("/loja/encomendas", json={"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "X", "email": "invalido"}})
+email_ma = cliente.post("/loja/encomendas", json={"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "X", "email": "invalido"}, **desafio()})
 check("email inválido recusado no checkout", email_ma.status_code == 422, email_ma.text[:200])
+sem_desafio_checkout = cliente.post("/loja/encomendas", json={"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "X", "email": "x@exemplo.pt"}})
+check("checkout sem desafio é recusado", sem_desafio_checkout.status_code == 422 and "desafio" in sem_desafio_checkout.text.lower(), sem_desafio_checkout.text[:200])
 
 print("== limpeza ==")
 import subprocess  # noqa: E402

@@ -1,0 +1,45 @@
+# Fine-tuning do modelo do sistema com DUAS fontes no mesmo dataset: os contratos
+# públicos (`contratos`, dinheiro a sair) e o cadastro de entidades
+# (`finance_entities`, quem contrata e quem é contratado).
+#
+# É um dataset misto, e é de propósito: quem pergunta «quanto custou este contrato
+# ao Município de Chaves?» precisa das duas fontes na mesma cabeça. Um dataset de
+# uma só fonte ensina metade da resposta.
+#
+# Passo 1 — exportar (800 leituras, 400 de cada índice; `--seed` porque os
+# primeiros documentos de um índice vêm todos do mesmo ficheiro de origem):
+#   python training/export_es_dataset.py --dataset contratos --dataset empresas \
+#       --max-records 400 --seed 42 --tokenizer model/mistral-finance/final \
+#       --max-tokens 950 --out data/final/iqos_contratos_empresas.jsonl
+#
+# Passo 2 — treinar:
+#   docker compose --profile train run --rm soup train -y \
+#       --config training/soup/soup-empresas-contratos.yaml
+#
+# Corre em CPU (sem CUDA, logo `quantization: none`): ~800 registos, 1 época,
+# dezenas de minutos neste hardware. Para os índices completos (2,27 M contratos,
+# 214 mil entidades), use uma GPU — ver a receita QLoRA em `soup-mistral-instruct.yaml`.
+
+base: ./model/mistral-finance/final
+task: sft
+
+data:
+  train: ./data/final/iqos_contratos_empresas.jsonl
+  format: alpaca
+  val_split: 0.05
+  max_length: 1024
+  # Mesmo molde do `soup-mistral.yaml`: o tokenizer do sistema não tem
+  # `chat_template` e é o `{% generation %}` que marca a resposta para a perda.
+  chat_template: "{% for message in messages %}{% if message['role'] == 'assistant' %}{% generation %}### Resposta:\n{{ message['content'] }}{% endgeneration %}\n\n{% else %}### Instrução:\n{{ message['content'] }}\n\n{% endif %}{% endfor %}"
+
+training:
+  epochs: 1
+  lr: 2e-5
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: none
+
+output: ./model/soup-empresas-contratos

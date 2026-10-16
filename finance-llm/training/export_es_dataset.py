@@ -12,6 +12,15 @@ Exemplos:
     python training/export_es_dataset.py --dataset noticias --out data/final/sentimento.jsonl
     python training/export_es_dataset.py --dataset empresas --query '{"term": {"country_code": "PT"}}'
 
+O ``--dataset`` pode repetir-se para juntar várias fontes **no mesmo** ficheiro —
+é assim que se treina um só modelo sobre contratos e empresas:::
+
+    python training/export_es_dataset.py --dataset contratos --dataset empresas \
+        --max-records 400 --seed 42 --out data/final/iqos_contratos_empresas.jsonl
+
+Com várias fontes, o ``--max-records`` conta por fonte (400 de contratos **e** 400
+de empresas) e cada linha fica com ``metadata.fonte`` a dizer de onde veio.
+
 Índice à medida (sem receita): dá-se a instrução e os moldes de entrada/saída,
 com ``{campo}`` substituídos por campos de topo do documento::
 
@@ -41,13 +50,14 @@ no fim — nunca fica um dataset truncado a meio.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import logging
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -80,10 +90,14 @@ logger = logging.getLogger("export_es_dataset")
 # Normalização dos campos do Elasticsearch
 # ---------------------------------------------------------------------------
 def _clean(value: Any) -> str:
-    """Colapsa espaços (os documentos trazem quebras de linha e tabulações)."""
+    """Colapsa espaços (os documentos trazem quebras de linha e tabulações).
+
+    Desfaz também entidades HTML: os nomes no Elasticsearch vêm com ``&amp;``,
+    e sem isto o modelo aprendia a escrever ``OLIVEIRA &amp; PIRES``.
+    """
     if value is None:
         return ""
-    return re.sub(r"\s+", " ", str(value)).strip()
+    return re.sub(r"\s+", " ", html.unescape(str(value))).strip()
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -532,6 +546,62 @@ def _make_token_counter(tokenizer_path: str) -> Callable[[str], int]:
     return count
 
 
+@dataclass(frozen=True)
+class Source:
+    """Uma fonte do dataset: que índice ler, com que instrução e como montar o par."""
+
+    index: str
+    instruction: str
+    includes: Tuple[str, ...]
+    builder: Callable[[Dict[str, Any], int], Optional[Tuple[str, str, Dict[str, Any]]]]
+    query: Optional[Dict[str, Any]] = None
+    label: str = ""
+
+    def nome(self) -> str:
+        return self.label or self.index
+
+
+def _body_for(source: Source, seed: Optional[int]) -> Dict[str, Any]:
+    """Corpo da pesquisa de uma fonte, com a amostra dispersa (``--seed``), se pedida."""
+    body = source.query or {"match_all": {}}
+    if seed is not None:
+        # Sem isto, os primeiros N documentos de um índice vêm todos do mesmo
+        # ficheiro de origem — um export de `finance_subvencoes` deu 800 registos
+        # do mesmo organismo e do mesmo ano.
+        body = {
+            "function_score": {
+                "query": body,
+                "random_score": {"seed": seed, "field": "_seq_no"},
+            }
+        }
+    return body
+
+
+def _stats(por_fonte: List[Dict[str, Any]], *, dry_run: bool = False) -> Dict[str, Any]:
+    """Resumo de uma ou várias fontes.
+
+    Com uma só fonte mantém-se a forma plana de sempre (``index``/``matched``/…),
+    que é o contrato do CLI e dos testes; com várias, ficam os totais agregados e o
+    detalhe por fonte em ``fontes``.
+    """
+    resumo: Dict[str, Any] = {
+        "index": "+".join(fonte["index"] for fonte in por_fonte),
+        "matched": sum(fonte["matched"] for fonte in por_fonte),
+        "written": sum(fonte["written"] for fonte in por_fonte),
+        "skipped": sum(fonte["skipped"] for fonte in por_fonte),
+        "dropped": sum(fonte["dropped"] for fonte in por_fonte),
+    }
+    if len(por_fonte) == 1:
+        resumo["index"] = por_fonte[0]["index"]
+    else:
+        resumo["fontes"] = por_fonte
+    if dry_run:
+        resumo["dry_run"] = True
+    else:
+        resumo["read"] = sum(fonte["read"] for fonte in por_fonte)
+    return resumo
+
+
 def export(
     *,
     index: str,
@@ -550,104 +620,131 @@ def export(
     max_tokens: int = 0,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Percorre o índice e escreve o JSONL. Devolve as contagens do que foi feito.
+    """Exporta **uma** fonte — ver :func:`export_many` (é ele que trata das várias)."""
+    return export_many(
+        sources=[Source(index=index, instruction=instruction, includes=includes, builder=builder, query=query)],
+        out_path=out_path,
+        max_records=max_records,
+        max_chars=max_chars,
+        batch_size=batch_size,
+        es_url=es_url,
+        timeout=timeout,
+        dry_run=dry_run,
+        count_tokens=count_tokens,
+        max_tokens=max_tokens,
+        seed=seed,
+    )
+
+
+def export_many(
+    *,
+    sources: Sequence[Source],
+    out_path: Path,
+    max_records: int = DEFAULT_MAX_RECORDS,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    batch_size: int = 1_000,
+    es_url: Optional[str] = None,
+    timeout: int = 120,
+    dry_run: bool = False,
+    count_tokens: Optional[Callable[[str], int]] = None,
+    max_tokens: int = 0,
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Percorre as fontes e escreve um JSONL por par, todas no mesmo ficheiro.
+
+    É o que permite treinar um só modelo sobre várias fontes
+    (``--dataset contratos --dataset empresas``): cada fonte é lida por inteiro e o
+    teto de ``max_records`` conta por fonte, não pelo total. O destino só é escrito
+    no fim (``<out>.tmp`` renomeado), por isso uma falha a meio não deixa um
+    dataset truncado a fazer de conta que está bom.
 
     Com ``count_tokens`` e ``max_tokens``, as linhas cujo prompt + resposta passa
     o orçamento são contadas em ``dropped`` e não escritas — ver
     ``_make_token_counter``. Com ``seed``, os documentos vêm por ordem aleatória
     (amostra dispersa pelo índice) em vez da ordem do índice.
     """
+    if not sources:
+        raise ValueError("é preciso pelo menos uma fonte")
+
     client = _resolve_client(es_url, timeout)
-    body = query or {"match_all": {}}
-    if seed is not None:
-        # Sem isto, os primeiros N documentos de um índice vêm todos do mesmo
-        # ficheiro de origem — um export de `finance_subvencoes` deu 800 registos
-        # do mesmo organismo e do mesmo ano.
-        body = {
-            "function_score": {
-                "query": body,
-                "random_score": {"seed": seed, "field": "_seq_no"},
-            }
-        }
-
-    if not client.indices.exists(index=index):
-        raise SystemExit(f"Índice «{index}» não existe no Elasticsearch.")
-
-    total = int(client.count(index=index, query=body).get("count", 0))
-    logger.info("Índice «%s»: %d documentos correspondem ao filtro.", index, total)
-    if dry_run:
-        return {
-            "index": index,
-            "matched": total,
-            "written": 0,
-            "skipped": 0,
-            "dropped": 0,
-            "dry_run": True,
-        }
-
-    from elasticsearch.helpers import scan
-
     limit = max_records if max_records and max_records > 0 else None
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = out_path.with_name(out_path.name + ".tmp")
 
-    written = 0
-    skipped = 0
-    dropped = 0
-    seen = 0
+    por_fonte: List[Dict[str, Any]] = []
+    for source in sources:
+        body = _body_for(source, seed)
+        if not client.indices.exists(index=source.index):
+            raise SystemExit(f"Índice «{source.index}» não existe no Elasticsearch.")
+        total = int(client.count(index=source.index, query=body).get("count", 0))
+        logger.info("Fonte «%s» (índice «%s»): %d documentos no filtro.", source.nome(), source.index, total)
+        por_fonte.append({
+            "index": source.index,
+            "label": source.nome(),
+            "matched": total,
+            "read": 0,
+            "written": 0,
+            "skipped": 0,
+            "dropped": 0,
+        })
+
+    if dry_run:
+        return _stats(por_fonte, dry_run=True)
+
+    from elasticsearch.helpers import scan
+
     try:
         with tmp_path.open("w", encoding="utf-8") as fh:
-            for doc in scan(
-                client,
-                index=index,
-                query={"query": body},
-                scroll="15m",
-                size=batch_size,
-                request_timeout=timeout,
-                # O `scan` injecta `sort: _doc` (ordem do índice) e isso anularia a
-                # pontuação aleatória do `random_score`. Com `preserve_order` a
-                # ordem passa a ser a da pontuação — que, com a semente, é aleatória.
-                preserve_order=seed is not None,
-                _source_includes=list(includes) if includes else None,
-            ):
-                seen += 1
-                built = builder(doc.get("_source") or {}, max_chars)
-                if built is None:
-                    skipped += 1
-                else:
-                    prompt, completion, metadata = built
-                    if count_tokens and max_tokens and count_tokens(prompt) + count_tokens(completion) > max_tokens:
-                        dropped += 1
+            for source, contagens in zip(sources, por_fonte):
+                for doc in scan(
+                    client,
+                    index=source.index,
+                    query={"query": _body_for(source, seed)},
+                    scroll="15m",
+                    size=batch_size,
+                    request_timeout=timeout,
+                    # O `scan` injecta `sort: _doc` (ordem do índice) e isso anularia a
+                    # pontuação aleatória do `random_score`. Com `preserve_order` a
+                    # ordem passa a ser a da pontuação — que, com a semente, é aleatória.
+                    preserve_order=seed is not None,
+                    _source_includes=list(source.includes) if source.includes else None,
+                ):
+                    contagens["read"] += 1
+                    built = source.builder(doc.get("_source") or {}, max_chars)
+                    if built is None:
+                        contagens["skipped"] += 1
                     else:
-                        record = {
-                            "instruction": instruction,
-                            "input": prompt,
-                            "output": completion,
-                            "metadata": {**metadata, "index": index},
-                        }
-                        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        written += 1
-                        if written % 5_000 == 0:
-                            logger.info("… %d exemplos escritos (%d lidos)", written, seen)
-                if limit and seen >= limit:
-                    logger.info("Limite de %d documentos lidos atingido.", limit)
-                    break
+                        prompt, completion, metadata = built
+                        if count_tokens and max_tokens and count_tokens(prompt) + count_tokens(completion) > max_tokens:
+                            contagens["dropped"] += 1
+                        else:
+                            record = {
+                                "instruction": source.instruction,
+                                "input": prompt,
+                                "output": completion,
+                                "metadata": {**metadata, "index": source.index, "fonte": source.nome()},
+                            }
+                            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            contagens["written"] += 1
+                            if contagens["written"] % 5_000 == 0:
+                                logger.info(
+                                    "… %d exemplos escritos (%s: %d de %d lidos)",
+                                    sum(fonte["written"] for fonte in por_fonte),
+                                    source.nome(), contagens["written"], contagens["read"],
+                                )
+                    if limit and contagens["read"] >= limit:
+                        logger.info("Fonte «%s»: limite de %d documentos lidos atingido.", source.nome(), limit)
+                        break
     except Exception:
         tmp_path.unlink(missing_ok=True)
         raise
 
     tmp_path.replace(out_path)
-    stats = {
-        "index": index,
-        "matched": total,
-        "read": seen,
-        "written": written,
-        "skipped": skipped,
-        "dropped": dropped,
-    }
+    stats = _stats(por_fonte)
     logger.info(
-        "Guardado %s — %d exemplos (%d lidos, %d sem campos suficientes, %d acima de %s tokens).",
-        out_path, written, seen, skipped, dropped, max_tokens or "∞",
+        "Guardado %s — %d exemplos de %d fonte(s) (%d lidos, %d sem campos suficientes, %d acima de %s tokens).",
+        out_path, stats["written"], len(sources), stats["read"], stats["skipped"], stats["dropped"],
+        max_tokens or "∞",
     )
     return stats
 
@@ -658,14 +755,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--dataset", choices=sorted(RECIPES), help="Receita a exportar")
+    parser.add_argument("--dataset", action="append", choices=sorted(RECIPES), metavar="RECEITA",
+                        help="Receita a exportar; pode repetir-se (--dataset A --dataset B) para juntar fontes no mesmo ficheiro (ver --list)")
     parser.add_argument("--index", help="Índice à medida (usa --instruction/--input-template/--output-template)")
     parser.add_argument("--instruction", help="Instrução do índice à medida")
     parser.add_argument("--input-template", help="Molde da entrada, com {campo}")
     parser.add_argument("--output-template", help="Molde da resposta, com {campo}")
     parser.add_argument("--fields", help="Campos a ler do índice à medida (lista separada por vírgulas)")
     parser.add_argument("--out", type=Path, help=f"Ficheiro de saída (padrão: {DEFAULT_OUT_DIR}\\<dataset>.jsonl)")
-    parser.add_argument("--query", help='Filtro Elasticsearch em JSON, ex.: \'{"term": {"Ano": 2025}}\'')
+    parser.add_argument("--query", help='Filtro Elasticsearch em JSON, ex.: \'{"term": {"Ano": 2025}}\' (só com uma fonte)')
     parser.add_argument("--max-records", type=int, default=DEFAULT_MAX_RECORDS,
                         help=f"Máximo de documentos a ler, 0 = todos (padrão: {DEFAULT_MAX_RECORDS})")
     parser.add_argument("--batch-size", type=int, default=1_000, help="Documentos por pedido ao Elasticsearch")
@@ -695,6 +793,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"  {name:<14} {recipe.index:<16} {recipe.instruction}")
         return 0
 
+    query = None
+    if args.query:
+        try:
+            query = json.loads(args.query)
+        except json.JSONDecodeError as exc:
+            parser.error(f"--query não é JSON válido: {exc}")
+
     if args.index:
         missing = [flag for flag, value in (
             ("--instruction", args.instruction),
@@ -703,32 +808,46 @@ def main(argv: Optional[List[str]] = None) -> int:
         ) if not value]
         if missing:
             parser.error("com --index são obrigatórios: " + ", ".join(missing))
-        index = args.index
         includes = tuple(part.strip() for part in (args.fields or "").split(",") if part.strip())
-        instruction = args.instruction
-        builder = _make_custom_builder(args.input_template, args.output_template)
-        default_name = f"es_{index}"
+        sources = [Source(
+            index=args.index,
+            instruction=args.instruction,
+            includes=includes,
+            builder=_make_custom_builder(args.input_template, args.output_template),
+            query=query,
+            label=args.index,
+        )]
+        default_name = f"es_{args.index}"
     elif args.dataset:
-        recipe = RECIPES[args.dataset]
-        index = recipe.index
-        includes = recipe.includes
-        instruction = recipe.instruction
-        builder = recipe.build
-        default_name = args.dataset
-        if args.query is None and recipe.query is not None:
-            args.query = json.dumps(recipe.query)
+        nomes = list(dict.fromkeys(args.dataset))
+        if len(nomes) != len(args.dataset):
+            parser.error("--dataset repetido: " + ", ".join(sorted(args.dataset)))
+        sources = [
+            Source(
+                index=RECIPES[nome].index,
+                instruction=RECIPES[nome].instruction,
+                includes=RECIPES[nome].includes,
+                builder=RECIPES[nome].build,
+                query=RECIPES[nome].query,
+                label=nome,
+            )
+            for nome in nomes
+        ]
+        if query is not None:
+            # Sem receita única não há como decidir a que fonte o filtro se aplica.
+            if len(sources) > 1:
+                parser.error("--query só se aplica a uma fonte (indique um só --dataset)")
+            sources = [replace(sources[0], query=query)]
+        default_name = "_".join(nomes)
     else:
         parser.error("indique --dataset (ver --list) ou --index")
 
-    query = None
-    if args.query:
-        try:
-            query = json.loads(args.query)
-        except json.JSONDecodeError as exc:
-            parser.error(f"--query não é JSON válido: {exc}")
-
     out_path = args.out or (DEFAULT_OUT_DIR / f"{default_name}.jsonl")
-    logger.info("A exportar «%s» (%s) para %s", default_name, index, out_path)
+    logger.info(
+        "A exportar %s para %s",
+        ", ".join(f"{source.nome()} ({source.index})" for source in sources),
+        out_path,
+    )
 
     if args.max_tokens and not args.tokenizer:
         parser.error("--max-tokens exige --tokenizer (sem tokenizer não há como medir os pares)")
@@ -736,13 +855,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if count_tokens:
         logger.info("Orçamento de %d tokens por par, medido com %s.", args.max_tokens, args.tokenizer)
 
-    stats = export(
-        index=index,
-        instruction=instruction,
-        includes=includes,
-        builder=builder,
+    stats = export_many(
+        sources=sources,
         out_path=out_path,
-        query=query,
         max_records=args.max_records,
         max_chars=args.max_chars,
         batch_size=args.batch_size,

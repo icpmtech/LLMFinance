@@ -14,6 +14,7 @@ Cobrem o que é fácil de partir sem se dar por isso:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -57,6 +58,12 @@ def test_money_formata_em_portugues() -> None:
 
 def test_clean_colapsa_espacos() -> None:
     assert exporter._clean("Serviços de\n  mesa\te restauração ") == "Serviços de mesa e restauração"
+
+
+def test_clean_desfaz_entidades_html() -> None:
+    """Os nomes vêm com ``&amp;`` do Elasticsearch e isso ia direto para o treino."""
+    assert exporter._clean("OLIVEIRA &amp; PIRES") == "OLIVEIRA & PIRES"
+    assert exporter._clean("Construções &quot;Dois Irmãos&quot;") == 'Construções "Dois Irmãos"'
 
 
 # ------------------------------------------------------------------ contratos PT
@@ -376,3 +383,60 @@ def test_dry_run_nao_escreve_nada(tmp_path, monkeypatch) -> None:
     assert stats["dry_run"] is True
     assert stats["matched"] == 2
     assert not destino.exists()
+
+
+# --------------------------------------------------------------- várias fontes
+def test_export_many_junta_fontes_num_so_ficheiro(tmp_path, monkeypatch) -> None:
+    """Um dataset pode misturar índices — é o que permite treinar um só modelo
+    sobre contratos e empresas, cada linha com a sua instrução."""
+    import elasticsearch.helpers as helpers
+
+    por_indice = {
+        "contratos": [{"idcontrato": "1", "objectoContrato": "Um contrato"}],
+        "finance_entities": [{"name": "Município de Chaves", "nif": "501205551"}],
+    }
+
+    monkeypatch.setattr(exporter, "_resolve_client", lambda es_url, timeout: _FakeClient())
+    monkeypatch.setattr(helpers, "scan", lambda client, index, **kw: [{"_source": d} for d in por_indice[index]])
+
+    destino = tmp_path / "iqos.jsonl"
+    stats = exporter.export_many(
+        sources=[
+            exporter.Source(index="contratos", instruction="Descreve este contrato.",
+                            includes=(), builder=exporter._build_contrato_pt, label="contratos"),
+            exporter.Source(index="finance_entities", instruction="Descreve esta entidade.",
+                            includes=(), builder=exporter._build_entidade, label="empresas"),
+        ],
+        out_path=destino,
+    )
+
+    assert stats["index"] == "contratos+finance_entities"
+    assert stats["read"] == 2
+    assert stats["written"] == 2
+    assert [(fonte["label"], fonte["written"]) for fonte in stats["fontes"]] == [("contratos", 1), ("empresas", 1)]
+
+    linhas = [json.loads(linha) for linha in destino.read_text(encoding="utf-8").splitlines()]
+    assert [linha["metadata"]["fonte"] for linha in linhas] == ["contratos", "empresas"]
+    assert [linha["instruction"] for linha in linhas] == ["Descreve este contrato.", "Descreve esta entidade."]
+
+
+def test_export_many_exige_fontes() -> None:
+    with pytest.raises(ValueError):
+        exporter.export_many(sources=[], out_path=Path("nao.jsonl"))
+
+
+def test_cli_aceita_varios_datasets_e_recusa_query_com_mais_que_um(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(exporter, "_resolve_client", lambda es_url, timeout: _FakeClient())
+
+    codigo = exporter.main([
+        "--dataset", "contratos", "--dataset", "empresas",
+        "--out", str(tmp_path / "iqos.jsonl"), "--dry-run",
+    ])
+
+    assert codigo == 0
+    stats = json.loads(capsys.readouterr().out)
+    assert stats["index"] == "contratos+finance_entities"
+    assert stats["dry_run"] is True
+
+    with pytest.raises(SystemExit):
+        exporter.main(["--dataset", "contratos", "--dataset", "empresas", "--query", '{"match_all": {}}'])

@@ -1085,6 +1085,10 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["news_id"] = str(pick("news_id") or "")
         doc["author"] = str(pick("author") or existing.get("author") or "")
         doc["featured"] = bool(pick("featured", False))
+        # O relatório em PDF é opcional e decide-se no próprio artigo: um texto
+        # sem números próprios não ganha um botão que descarrega o que já está à
+        # vista. Os artigos que não trazem o campo continuam a ter relatório.
+        doc["report_pdf"] = bool(pick("report_pdf", True))
         doc["blocks"] = _normalise_blocks(pick("blocks", []))
         doc["reading_minutes"] = post_reading_minutes(doc["markdown"], doc["blocks"])
 

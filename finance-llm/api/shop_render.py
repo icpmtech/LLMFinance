@@ -284,6 +284,11 @@ select:focus,input:focus,textarea:focus{border-color:var(--accent)}
 label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted)}
 .field-grid{display:grid;gap:12px;grid-template-columns:1fr}
 .field-grid .wide{grid-column:1/-1}
+/* Desafio anti-robô: pergunta legível e resposta curta, num bloco próprio. */
+.captcha{display:grid;gap:7px;border:1px solid var(--border);border-radius:12px;background:var(--code);padding:11px 13px}
+.captcha label{font-size:13.5px;font-weight:600;color:var(--text)}
+.captcha input{max-width:130px}
+.captcha small{font-size:12px;color:var(--muted)}
 /* secções da montra (editor de vitrine) */
 .grid.cols{grid-template-columns:repeat(2,minmax(0,1fr))}
 .cats{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -923,13 +928,14 @@ _CART_JS = r"""
         name: data.get("name") || "", line1: data.get("line1") || "", line2: data.get("line2") || "",
         postal_code: data.get("postal_code") || "", city: data.get("city") || "", country: data.get("country") || "Portugal"
       },
-      marketing: data.get("marketing") ? true : false
+      marketing: data.get("marketing") ? true : false,
+      captcha: data.get("captcha"), captcha_token: data.get("captcha_token")
     };
     fetch(DATA.urls.checkout, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)})
       .then(function(response){ return response.json().then(function(body){ return {ok: response.ok, body: body}; }); })
       .then(function(result){
         if(button) button.disabled = false;
-        if(!result.ok){ var detail = (result.body && result.body.detail) || "Não foi possível concluir a encomenda."; toast(detail); var box = document.getElementById("loja-aviso"); if(box){ box.textContent = detail; box.className = "notice error"; box.hidden = false; } return; }
+        if(!result.ok){ var detail = (result.body && result.body.detail) || "Não foi possível concluir a encomenda."; toast(detail); var box = document.getElementById("loja-aviso"); if(box){ box.textContent = detail; box.className = "notice error"; box.hidden = false; } pedirDesafio(); return; }
         write([]);
         couponState = null; couponCode = "";
         showReceipt(result.body.order, result.body);
@@ -966,6 +972,46 @@ _CART_JS = r"""
   document.addEventListener("change", function(event){
     if(event.target.name === "shipping_method_id") renderCart();
   });
+  // Desafio anti-robô: um bloco por formulário, com a mesma pergunta e o mesmo
+  // testemunho (só muda o campo onde entra a resposta). Pede-se um novo quando
+  // o servidor recusa — um testemunho que falhou não se repete.
+  function desenharDesafio(alvo, dados){
+    var form = alvo.closest("form");
+    var base = (form && form.id) || "loja";
+    alvo.innerHTML = "";
+    var campo = document.createElement("label");
+    var pergunta = document.createElement("span");
+    pergunta.textContent = dados.pergunta || "";
+    var resposta = document.createElement("input");
+    resposta.type = "text";
+    resposta.name = dados.campo || "captcha";
+    resposta.id = base + "-captcha";
+    resposta.inputMode = "numeric";
+    resposta.autocomplete = "off";
+    resposta.maxLength = 4;
+    resposta.required = true;
+    var ajuda = document.createElement("small");
+    ajuda.textContent = "Responda em algarismos. É só para confirmar que é uma pessoa.";
+    var testemunho = document.createElement("input");
+    testemunho.type = "hidden";
+    testemunho.name = dados.testemunho || "captcha_token";
+    testemunho.value = dados.token || "";
+    campo.appendChild(pergunta);
+    campo.appendChild(resposta);
+    campo.appendChild(ajuda);
+    alvo.appendChild(campo);
+    alvo.appendChild(testemunho);
+    alvo.hidden = false;
+  }
+  function pedirDesafio(){
+    var alvos = document.querySelectorAll("[data-captcha]");
+    if(!alvos.length || !window.fetch) return;
+    fetch("/loja/desafio", {headers: {"Accept": "application/json"}})
+      .then(function(response){ return response.json(); })
+      .then(function(dados){ alvos.forEach(function(alvo){ desenharDesafio(alvo, dados); }); })
+      .catch(function(){ toast("Não foi possível preparar o desafio. Tente outra vez."); });
+  }
+  pedirDesafio();
   document.addEventListener("submit", function(event){
     if(event.target.id === "loja-form") submitOrder(event);
     if(event.target.id === "loja-avaliacao") submitReview(event);
@@ -978,14 +1024,15 @@ _CART_JS = r"""
       body: JSON.stringify({
         product_id: data.get("product_id"), customer_name: data.get("customer_name"),
         email: data.get("email"), rating: Number(data.get("rating"))||5,
-        title: data.get("title"), body: data.get("body")
+        title: data.get("title"), body: data.get("body"),
+        captcha: data.get("captcha"), captcha_token: data.get("captcha_token")
       })})
       .then(function(response){ return response.json().then(function(body){ return {ok: response.ok, body: body}; }); })
       .then(function(result){
         var box = document.getElementById("loja-avaliacao-aviso");
         if(!box) return;
         if(result.ok){ box.textContent = "Obrigado! A sua avaliação vai ser publicada depois de revista."; box.className = "notice ok"; form.reset(); }
-        else { box.textContent = (result.body && result.body.detail) || "Não foi possível enviar a avaliação."; box.className = "notice error"; }
+        else { box.textContent = (result.body && result.body.detail) || "Não foi possível enviar a avaliação."; box.className = "notice error"; pedirDesafio(); }
         box.hidden = false;
       })
       .catch(function(){ toast("Falha de rede ao enviar a avaliação."); });
@@ -1018,7 +1065,7 @@ _CART_JS = r"""
       event.preventDefault();
       var campo = newsletter.querySelector("input[name=email]");
       var aviso = document.getElementById("loja-newsletter-aviso");
-      fetch("/loja/newsletter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({email: campo.value})})
+      fetch("/loja/newsletter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({email: campo.value, captcha: (newsletter.querySelector("input[name=captcha]")||{}).value, captcha_token: (newsletter.querySelector("input[name=captcha_token]")||{}).value})})
         .then(function(response){ return response.json().then(function(body){ return {ok: response.ok, body: body}; }); })
         .then(function(result){
           if(!aviso) return;
@@ -1026,6 +1073,7 @@ _CART_JS = r"""
           aviso.className = "notice " + (result.ok ? "ok" : "error");
           aviso.textContent = result.ok ? "Obrigado! Vai receber as nossas novidades." : ((result.body && result.body.detail) || "Não foi possível registar o email.");
           if(result.ok) newsletter.reset();
+          else pedirDesafio();
         })
         .catch(function(){ toast("Falha de rede ao registar o email."); });
     });
@@ -1671,6 +1719,18 @@ def _reviews_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
     return _section(str(section.get("id")), _section_head(str(section.get("title") or "")) + f'<div class="review-wall">{cards}</div>')
 
 
+def _campo_do_desafio(*, larga: bool = False) -> str:
+    """Sítio do desafio anti-robô na vitrine, que o JavaScript preenche.
+
+    A vitrine já não funciona sem JavaScript (o carrinho vive no browser), por
+    isso o desafio segue a mesma regra: o espaço vai vazio no HTML e a página
+    pede-o a `GET /loja/desafio`, que devolve a pergunta e o testemunho assinado.
+    Sem JavaScript o formulário não é submetido e o servidor não aceita nada.
+    """
+    classe = "wide captcha" if larga else "captcha"
+    return f'<div class="{classe}" data-captcha hidden></div>'
+
+
 def _newsletter_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
     label = str(section.get("button_label") or "").strip() or "Subscrever"
     title = str(section.get("title") or "").strip() or "Receba as novidades"
@@ -1678,7 +1738,8 @@ def _newsletter_section(section: Dict[str, Any], settings: Dict[str, Any]) -> st
     form = (
         '<form id="loja-newsletter">'
         '<input type="email" name="email" required placeholder="o.seu@email.pt" aria-label="O seu email">'
-        f'<button class="btn" type="submit">{_esc(label)}</button></form>'
+        f'<button class="btn" type="submit">{_esc(label)}</button>'
+        f"{_campo_do_desafio()}</form>"
         '<div id="loja-newsletter-aviso" class="notice" hidden></div>'
     )
     inner = f'<div class="newsletter"><div><h2>{_esc(title)}</h2>' + (f'<p class="muted">{_esc(text)}</p>' if text else "") + f"</div>{form}</div>"
@@ -1960,6 +2021,7 @@ def render_product(
             '<option value="3">3 — Razoável</option><option value="2">2 — Fraco</option><option value="1">1 — Mau</option></select></label>'
             '<label>Título<input type="text" name="title"></label>'
             '<label class="wide">Comentário<textarea name="body" rows="4"></textarea></label>'
+            f'{_campo_do_desafio(larga=True)}'
             '<div class="wide"><button class="btn" type="submit">Enviar avaliação</button></div>'
             "</form>"
             '<div id="loja-avaliacao-aviso" class="notice" hidden></div></section>'
@@ -2068,6 +2130,7 @@ def render_cart(*, settings: Optional[Dict[str, Any]] = None, products: Optional
         f'<div class="wide"><p class="muted" style="margin:14px 0 6px">Pagamento</p><div class="pay">{payment_options}</div></div>'
         '<label class="wide">Notas para a loja<textarea name="notes" rows="3"></textarea></label>'
         '<label class="wide"><span><input type="checkbox" name="marketing"> Quero receber novidades por email</span></label>'
+        f'{_campo_do_desafio(larga=True)}'
         '<div class="wide"><button class="btn" type="submit" id="loja-submeter">Finalizar encomenda</button></div>'
         "</form>"
         '<div id="loja-aviso" class="notice" hidden></div>'
