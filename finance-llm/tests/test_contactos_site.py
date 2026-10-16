@@ -16,10 +16,35 @@ from typing import Any, Dict, Iterator, List, Optional
 import pytest
 from fastapi.testclient import TestClient
 
+from api import captcha
 from api import cms_editorial as editorial
 from api import cms_render as render
 from api import cms_store as store
 from api import notification_email
+
+#: O que uma pessoa lê na pergunta do desafio anti-robô. Escrito de novo de
+#: propósito: o teste resolve o captcha como quem o lê, e não a perguntar a
+#: resposta a quem o fez.
+_NUMEROS = {
+    "um": 1, "dois": 2, "três": 3, "quatro": 4, "cinco": 5, "seis": 6, "sete": 7, "oito": 8, "nove": 9,
+    "dez": 10, "onze": 11, "doze": 12, "treze": 13, "catorze": 14, "quinze": 15, "dezasseis": 16,
+    "dezassete": 17, "dezoito": 18,
+}
+
+
+def _desafio_resolvido() -> Dict[str, str]:
+    """Um desafio novo, já respondido (como uma pessoa o responderia)."""
+    desafio = captcha.desafio()
+    palavras = desafio["pergunta"].rstrip("?").split()
+    primeiro, operacao, segundo = _NUMEROS[palavras[2]], palavras[3], _NUMEROS[palavras[4]]
+    conta = primeiro + segundo if operacao == "mais" else primeiro - segundo
+    return {captcha.CAMPO_RESPOSTA: str(conta), captcha.CAMPO_TESTEMUNHO: desafio["token"]}
+
+
+@pytest.fixture()
+def sem_espera(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sem o compasso de dois segundos do desafio (um teste não deve dormir)."""
+    monkeypatch.setattr(captcha, "DEMORA_MINIMA_SEGUNDOS", 0)
 
 
 @pytest.fixture()

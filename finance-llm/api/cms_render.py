@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 import markdown as markdown_lib
 
+from api import captcha
 from api import cms_store as store
 
 logger = logging.getLogger(__name__)
@@ -662,6 +663,9 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .formulario textarea {{ resize: vertical; min-height: 140px; }}
 .formulario .erro {{ color: #b42318; font-size: .82rem; }}
 .formulario .ajuda {{ color: var(--muted); font-size: .82rem; }}
+/* O desafio anti-robô: um campo como os outros, com a pergunta no rótulo e uma
+   caixa própria — para não se confundir com os campos do pedido. */
+.formulario .captcha {{ background: var(--code); border-radius: 10px; padding: 12px 14px; gap: 8px; }}
 .ajuda-formulario {{ color: var(--muted); font-size: .86rem; margin: 0; }}
 .formulario .consentimento {{ display: flex; align-items: flex-start; gap: 10px; }}
 .formulario .consentimento input {{ width: auto; min-height: 0; margin-top: 4px; }}
@@ -999,21 +1003,46 @@ def _campo_do_formulario(campo: Dict[str, Any], valor: str = "", erro: str = "")
     return f'<div class="{classe}"><label for="{ident}">{etiqueta}</label>{controlo}{ajuda}{nota}</div>'
 
 
+def _campo_do_captcha(desafio: Dict[str, str], erro: str = "") -> str:
+    """Desafio anti-robô: a pergunta é legível e o testemunho vai escondido.
+
+    A pergunta é o próprio rótulo do campo — quem usa leitor de ecrã ouve «Quanto
+    dá sete mais cinco?» antes de responder, sem precisar de uma imagem (que não
+    se ouve) nem de JavaScript (que o site não pede).
+    """
+    ident = f"contacto-{captcha.CAMPO_RESPOSTA}"
+    nota = f'<small class="erro" role="alert">{_esc(erro)}</small>' if erro else ""
+    return (
+        '<div class="campo captcha">'
+        f'<label for="{ident}">{_esc(desafio.get("pergunta") or "")}</label>'
+        f'<input id="{ident}" name="{captcha.CAMPO_RESPOSTA}" type="text" value="" inputmode="numeric"'
+        f' autocomplete="off" required aria-required="true" aria-describedby="{ident}-ajuda" maxlength="4">'
+        f'<small class="ajuda" id="{ident}-ajuda">Responda em algarismos. É só para confirmar que é uma pessoa.</small>'
+        f'<input type="hidden" name="{captcha.CAMPO_TESTEMUNHO}" value="{_esc(desafio.get("token") or "")}">'
+        f"{nota}</div>"
+    )
+
+
 def formulario_contacto(
     data: Dict[str, Any],
     *,
     valores: Optional[Dict[str, str]] = None,
     erros: Optional[Dict[str, str]] = None,
     aviso: str = "",
+    desafio: Optional[Dict[str, str]] = None,
 ) -> str:
     """Formulário de contacto (grava em `/site/contacto`, sem depender de JS).
 
     Os campos vão em grelha — uma coluna no telefone, duas a partir de 700px — e
     o que acontece depois do envio fica na linha do botão, não depois dele: quem
     está a decidir se escreve vê a mesma informação que quem já escreveu.
+
+    O `desafio` anti-robô é sempre novo a cada renderização: um testemunho que
+    falhou não se repete, e quem volta à página responde a outra conta.
     """
     valores = valores or {}
     erros = erros or {}
+    desafio = desafio or captcha.desafio()
     action = str(data.get("action") or FORMULARIO_ACTION_PADRAO)
     ancora = str(data.get("anchor") or "").strip()
     ident = f' id="{_esc(ancora)}"' if ancora else ""
@@ -1039,6 +1068,7 @@ def formulario_contacto(
         + "Os dados são usados só para responder e podem ser apagados a pedido.</label>"
         + "</div>"
         + erro_consentimento
+        + _campo_do_captcha(desafio, erros.get(captcha.CAMPO_RESPOSTA, ""))
         + '<div class="hp"><label for="contacto-website">Não preencher</label>'
         + '<input id="contacto-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>'
         + '<div class="acao"><button class="btn" type="submit">'

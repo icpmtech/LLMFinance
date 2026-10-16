@@ -251,6 +251,24 @@ depois alargue.
 O modelo grande (`soup-mistral-instruct.yaml`, 7B em QLoRA) sem GPU não é
 praticável: use a máquina com GPU e o `--gpus all`.
 
+> **E a receita do `soup init --template chat`** (`base:
+> meta-llama/Llama-3.1-8B-Instruct`, `quantization: 4bit`)? Está **certa** — é a
+> mesma forma dos configs de GPU daqui, com outro modelo de partida — e não é a
+> receita que falta, é o hardware: `4bit` é QLoRA, QLoRA precisa de CUDA, e aqui
+> `torch.cuda.is_available()` é `False`. O próprio Soup diz o que falta:
+>
+> ```
+> soup profile --config <receita>
+> ? No GPU detected: would fit in an assumed 24 GB (need ~14 GB)
+> Compatible GPUs: RTX4060TI (16 GB), RTX4080 (16 GB), ...
+> ```
+>
+> Em CPU, um 8B são dezenas de segundos por passo (a estimativa de velocidade do
+> `profile` assume uma A100); numa época de 800 exemplos isso são centenas de
+> horas. **Numa GPU a receita corre tal e qual** — só tem de apontar
+> `data.train` para `./data/final/contratos.jsonl` (ou outro dataset exportado) e
+> manter `format: alpaca`.
+
 ## 4. O painel de treinos (Web UI)
 
 A mesma imagem traz um painel — *Dashboard* (corridas e curvas de perda),
@@ -331,6 +349,37 @@ docker run --rm --name soup-serve-ui --network container:finance-llm-soup-ui \
 ```
 
 No painel, o *server URL* passa a ser `http://localhost:8000`.
+
+### Alternativa: o Gemma local (Ollama) em vez de um modelo treinado
+
+O painel aceita qualquer servidor compatível com a OpenAI — o Ollama do *host*
+incluído. Dois detalhes obrigam a uma peça extra (o serviço
+`soup-ollama-bridge`):
+
+- o painel só aceita `http://localhost`, e o Ollama não está no Docker;
+- no dialeto da OpenAI o Ollama **ignora** o `think`: um modelo que pensa gasta
+  todos os tokens no campo `reasoning` e devolve `content` vazio — no painel, o
+  chat ficava sem resposta (era o `[Error: Connection failed]`). A ponte traduz o
+  pedido para a API nativa (`/api/chat`), onde `think: false` pega.
+
+```bash
+docker compose --profile train up -d soup-ollama-bridge
+```
+
+No painel: *server URL* `http://localhost:11434`, *Adapter* `gemma4:e4b` (é esse
+campo que o proxy manda como `model`) e `max_tokens` até 256 — o proxy do painel
+corta aos 120 s e, a ~4 tokens/s nesta CPU, 256 tokens são cerca de um minuto.
+
+O mesmo registo de subsídio que o modelo pequeno respondia com «`day-day-day`»
+passa a ter resposta, em ~30 s:
+
+> *O subsídio atribuído foi de 1341.85 EUR, concedido pela FUNDACAO PARA A CIENCIA
+> E A TECNOLOGIA, I. P., em 27/01/2024, com a finalidade de Bolsas.*
+
+Com o registo do Elasticsearch passado no *system prompt*, o modelo responde
+**com os nossos dados**; sem contexto, responde do que sabe — é a diferença entre
+ter fluência e ter conhecimento do domínio (o domínio vem do RAG, ou de um
+fine-tune num modelo com capacidade para o aprender).
 
 ### A pergunta que o `soup train` não responde
 

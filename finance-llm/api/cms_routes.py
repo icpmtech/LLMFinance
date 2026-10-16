@@ -62,9 +62,10 @@ import logging
 import re
 from typing import Annotated, Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
+from api import captcha
 from api import cms_post_report
 from api import cms_render as render
 from api import cms_store as store
@@ -907,11 +908,13 @@ def site_remuneracoes(slug: str) -> HTMLResponse:
 
 
 @router.post("/site/contacto", response_class=HTMLResponse)
-async def site_contacto(request: Request) -> HTMLResponse:
-    """Recebe o formulário de contacto do site e guarda a mensagem no CMS.
+async def site_contacto(request: Request, background: BackgroundTasks) -> HTMLResponse:
+    """Recebe o formulário do site: guarda a mensagem no CMS e avisa a caixa de apoio.
 
     Responde sempre com HTML do próprio site (sem JavaScript): agradecimento,
-    ou o formulário outra vez com os erros assinalados.
+    ou o formulário outra vez com os erros assinalados. O aviso por email sai
+    **depois** da resposta (`BackgroundTasks`, numa thread): o SMTP pode demorar
+    segundos e quem escreveu não fica à espera dele.
     """
     settings = store.get_settings()
     sem_cache = {"Cache-Control": "no-store, must-revalidate"}
@@ -931,6 +934,11 @@ async def site_contacto(request: Request) -> HTMLResponse:
         )
         return HTMLResponse(html, status_code=429, headers=sem_cache)
     erros = store.validar_contacto({**valores, "consentimento": bool(valores["consentimento"])})
+    # O desafio anti-robô junta-se aos erros dos campos: quem falhou os dois vê
+    # os dois, em vez de corrigir um para descobrir o outro à segunda tentativa.
+    desafio_erro = captcha.erro(form.get(captcha.CAMPO_RESPOSTA), form.get(captcha.CAMPO_TESTEMUNHO))
+    if desafio_erro:
+        erros[captcha.CAMPO_RESPOSTA] = desafio_erro
     if erros:
         html = render.render_contacto(
             ok=False,
@@ -954,7 +962,8 @@ async def site_contacto(request: Request) -> HTMLResponse:
     # aviso; o pedido já está guardado, por isso um problema de correio não o
     # pode perder — `send_contact_email` registra o erro e devolve `ok: False`.
     base_url = str(settings.get("base_url") or "").rstrip("/")
-    notification_email.send_contact_email(
+    background.add_task(
+        notification_email.send_contact_email,
         to=str(relatorios_store.settings().get("support_email") or "").strip() or relatorios_store.DEFAULT_SUPPORT_EMAIL,
         nome=valores["nome"],
         email=valores["email"],

@@ -576,6 +576,39 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Ponte para o Ollama — dá à página *Model Chat* um modelo a sério.
+  #
+  # O painel só aceita `http://localhost` como endpoint do chat (protecção SSRF em
+  # `soup_cli/ui/app.py`) e o Ollama corre no *host*, fora do Docker: apontar o
+  # campo para `http://host.docker.internal:11434` devolve `400`. Este serviço
+  # partilha a rede do `soup-ui` (`network_mode: service:soup-ui`) e abre lá dentro
+  # um `localhost:11434` que encaminha para o Ollama — ver
+  # `training/soup/ollama_bridge.py`.
+  #
+  # No painel: *server URL* `http://localhost:11434`, e o campo *Adapter* com o
+  # nome do modelo (`gemma4:e4b`) — é esse campo que o proxy manda como `model`.
+  #
+  # Arranca com: docker compose --profile train up -d soup-ollama-bridge
+  # ---------------------------------------------------------------------------
+  soup-ollama-bridge:
+    image: iq-os-soup:latest
+    container_name: finance-llm-soup-ollama-bridge
+    profiles: ["train"]
+    # Sem portas próprias: a rede é a do `soup-ui`, é isso que faz o `localhost`.
+    network_mode: "service:soup-ui"
+    entrypoint: ["python", "/bridge/ollama_bridge.py"]
+    volumes:
+      - ./training/soup:/bridge:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_BRIDGE_TARGET_HOST=${OLLAMA_BRIDGE_TARGET_HOST:-host.docker.internal}
+      - OLLAMA_BRIDGE_TARGET_PORT=${OLLAMA_BRIDGE_TARGET_PORT:-11434}
+    depends_on:
+      soup-ui:
+        condition: service_started
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # OSIF — OSINT Framework v2 (https://github.com/fr4nc1stein/osint-framework).
   #
   # Plataforma de investigação OSINT: FastAPI + Vue 3, com PostgreSQL (casos,
