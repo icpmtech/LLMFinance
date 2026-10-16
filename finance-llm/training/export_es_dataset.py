@@ -28,6 +28,13 @@ modelo e deixa de fora os que não caibam::
     python training/export_es_dataset.py --dataset contratos --max-records 200000 \
         --tokenizer model/mistral-finance/final --max-tokens 950
 
+Um índice não está baralhado: os primeiros N documentos costumam vir todos do
+mesmo ficheiro de origem (o mesmo organismo, o mesmo ano). Para treinar com uma
+amostra representativa use ``--seed``, que pede ao Elasticsearch uma amostra
+dispersa::
+
+    python training/export_es_dataset.py --dataset subvencoes --max-records 800 --seed 42
+
 O ficheiro é escrito em UTF-8, uma linha por exemplo, e só substitui o destino
 no fim — nunca fica um dataset truncado a meio.
 """
@@ -51,6 +58,7 @@ from api.elasticsearch_client import (  # noqa: E402
     CONTRATOS_ES_INDEX,
     CONTRATOS_FR_INDEX,
     ENTITIES_INDEX,
+    SUBVENCOES_INDEX,
     get_es_client,
 )
 
@@ -314,6 +322,53 @@ def _build_entidade(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, 
     )
 
 
+def _build_subvencao(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+    """Subsídios públicos (``finance_subvencoes``, do Portal da Transparência).
+
+    Cada registo é uma atribuição: quem dá, quem recebe, quanto, para quê e ao
+    abrigo de que norma — dinheiro público a entrar, o espelho dos contratos (que
+    é dinheiro a sair).
+    """
+    beneficiario = _clean(doc.get("beneficiario"))
+    montante_raw = doc.get("montante")
+    if not beneficiario or montante_raw in (None, ""):
+        return None
+    entidade = _clean(doc.get("entidade")) or "não identificada"
+    nif_beneficiario = _clean(doc.get("nif_beneficiario"))
+    nif_entidade = _clean(doc.get("nif_entidade"))
+    montante = _money(montante_raw)
+    finalidade = _truncate(_clean(doc.get("finalidade")), max_chars) or "não especificada"
+    data = _clean(doc.get("data_decisao")) or "data desconhecida"
+    base_legal = _truncate(_clean(doc.get("fundamento_legal")), max_chars) or "não especificado"
+    tipo_beneficiario = _clean(doc.get("beneficiario_tipo")) or "não especificado"
+
+    prompt = (
+        f"Beneficiário: {beneficiario}\n"
+        f"NIF do beneficiário: {nif_beneficiario or 'não especificado'}\n"
+        f"Tipo de beneficiário: {tipo_beneficiario}\n"
+        f"Entidade que atribui: {entidade}\n"
+        f"Montante: {montante_raw}\n"
+        f"Finalidade: {finalidade}\n"
+        f"Data da decisão: {data}\n"
+        f"Enquadramento legal: {base_legal}"
+    )
+    completion = (
+        f"O subsídio de {montante}, atribuído por {entidade} a {beneficiario} em {data}, "
+        f"teve como finalidade {finalidade}. O enquadramento legal é {base_legal}."
+    )
+    return (
+        _truncate(prompt, max_chars) if max_chars else prompt,
+        completion,
+        {
+            "beneficiario": beneficiario,
+            "nif_beneficiario": nif_beneficiario,
+            "nif_entidade": nif_entidade,
+            "ano": doc.get("ano"),
+            "montante": montante_raw,
+        },
+    )
+
+
 def _build_noticia(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, str, Dict[str, Any]]]:
     titulo = _truncate(_clean(doc.get("title")), max_chars)
     sentimento = _clean(doc.get("sentiment"))
@@ -380,6 +435,24 @@ RECIPES: Dict[str, Recipe] = {
             "as_adjudicante_value",
         ),
         build=_build_entidade,
+    ),
+    "subvencoes": Recipe(
+        index=SUBVENCOES_INDEX,
+        instruction="Descreve este subsídio público português.",
+        includes=(
+            "entidade", "nif_entidade", "beneficiario", "nif_beneficiario",
+            "beneficiario_tipo", "montante", "finalidade", "data_decisao", "ano",
+            "tipo_ato", "numero_ato", "fundamento_legal",
+        ),
+        build=_build_subvencao,
+        query={
+            "bool": {
+                "must": [
+                    {"exists": {"field": "beneficiario"}},
+                    {"exists": {"field": "montante"}},
+                ]
+            }
+        },
     ),
     "noticias": Recipe(
         index=NEWS_INDEX,
@@ -475,15 +548,27 @@ def export(
     dry_run: bool = False,
     count_tokens: Optional[Callable[[str], int]] = None,
     max_tokens: int = 0,
+    seed: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Percorre o índice e escreve o JSONL. Devolve as contagens do que foi feito.
 
     Com ``count_tokens`` e ``max_tokens``, as linhas cujo prompt + resposta passa
     o orçamento são contadas em ``dropped`` e não escritas — ver
-    ``_make_token_counter``.
+    ``_make_token_counter``. Com ``seed``, os documentos vêm por ordem aleatória
+    (amostra dispersa pelo índice) em vez da ordem do índice.
     """
     client = _resolve_client(es_url, timeout)
     body = query or {"match_all": {}}
+    if seed is not None:
+        # Sem isto, os primeiros N documentos de um índice vêm todos do mesmo
+        # ficheiro de origem — um export de `finance_subvencoes` deu 800 registos
+        # do mesmo organismo e do mesmo ano.
+        body = {
+            "function_score": {
+                "query": body,
+                "random_score": {"seed": seed, "field": "_seq_no"},
+            }
+        }
 
     if not client.indices.exists(index=index):
         raise SystemExit(f"Índice «{index}» não existe no Elasticsearch.")
@@ -519,6 +604,10 @@ def export(
                 scroll="15m",
                 size=batch_size,
                 request_timeout=timeout,
+                # O `scan` injecta `sort: _doc` (ordem do índice) e isso anularia a
+                # pontuação aleatória do `random_score`. Com `preserve_order` a
+                # ordem passa a ser a da pontuação — que, com a semente, é aleatória.
+                preserve_order=seed is not None,
                 _source_includes=list(includes) if includes else None,
             ):
                 seen += 1
@@ -587,6 +676,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--tokenizer", help="Tokenizer do modelo de destino, para medir os pares (ex.: model/mistral-finance/final)")
     parser.add_argument("--max-tokens", type=int, default=0,
                         help="Orçamento de tokens por par (prompt + resposta); 0 = sem limite. Exige --tokenizer")
+    parser.add_argument("--seed", type=int,
+                        help="Amostra dispersa pelo índice com esta semente (sem ele, a ordem do índice agrupa por ficheiro de origem)")
     parser.add_argument("--dry-run", action="store_true", help="Só contar os documentos que correspondem ao filtro")
     parser.add_argument("--list", action="store_true", help="Listar as receitas disponíveis")
     parser.add_argument("--verbose", action="store_true", help="Log detalhado")
@@ -660,6 +751,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dry_run=args.dry_run,
         count_tokens=count_tokens,
         max_tokens=args.max_tokens,
+        seed=args.seed,
     )
     print(json.dumps(stats, ensure_ascii=False, indent=2))
     return 0

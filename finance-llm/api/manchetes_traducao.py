@@ -118,11 +118,12 @@ def _extrair_array(resposta: str) -> Optional[List[str]]:
     return None
 
 
-def _lotes(textos: List[str]) -> Iterable[List[str]]:
+def _lotes(textos: List[str], max_itens: int = MAX_ITENS, max_chars: int = MAX_CHARS) -> Iterable[List[str]]:
+    """Parte os textos em lotes do tamanho pedido (por omissão, o das manchetes)."""
     lote: List[str] = []
     tamanho = 0
     for texto in textos:
-        if lote and (len(lote) >= MAX_ITENS or tamanho + len(texto) > MAX_CHARS):
+        if lote and (len(lote) >= max_itens or tamanho + len(texto) > max_chars):
             yield lote
             lote, tamanho = [], 0
         lote.append(texto)
@@ -138,14 +139,20 @@ def _traduzir_lote(
     spec: Dict[str, Any],
     model_id: Optional[str],
     api_key: Optional[str],
+    prompt: Optional[str] = None,
 ) -> Optional[List[str]]:
-    """Traduz um lote; devolve `None` quando o modelo não devolveu o array esperado."""
+    """Traduz um lote; devolve `None` quando o modelo não devolveu o array esperado.
+
+    `prompt` permite reutilizar este caminho (lotes, JSON tolerante, ciclo de
+    eventos) noutros textos — as notícias traduzem título e resumo com as suas
+    próprias regras (`api.news_traducao`).
+    """
     import asyncio
 
     from api import cloud_chat
 
     mensagens = [
-        {"role": "system", "content": PROMPT},
+        {"role": "system", "content": prompt or PROMPT},
         {"role": "user", "content": json.dumps(lote, ensure_ascii=False)},
     ]
 

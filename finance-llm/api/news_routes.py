@@ -33,6 +33,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from api import cms_store
 from api import news_themes
+from api import news_traducao
 from api import sentiment_market as market
 from api.auth_routes import CurrentSession, optional_session
 from api.elasticsearch_client import (
@@ -40,6 +41,7 @@ from api.elasticsearch_client import (
     index_analyzed_news_items,
     index_news_items,
     news_stats,
+    save_news_translation,
     search_all_news,
 )
 from api.tools import search_news_terms
@@ -295,6 +297,54 @@ async def news_collect(payload: Dict[str, Any] = Body(default={}), session: Sess
     }
 
 
+@router.post("/{news_id}/traduzir")
+def news_translate(
+    news_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Traduz a notícia para PT com o **fornecedor de IA configurado**.
+
+    Traduz o título e o resumo (o que a notícia não tiver já em português) e, por
+    omissão, guarda-os na ficha da notícia — a partir daí o cartão mostra a
+    tradução e a pesquisa encontra-a, sem repetir a chamada ao modelo (a cache é
+    persistente). Sem fornecedor configurado responde 409 com a instrução para o
+    definir: nunca devolve o original a passar por tradução.
+    """
+    if not session:
+        raise HTTPException(status_code=401, detail="Entrar na plataforma para traduzir notícias.")
+    noticia = get_news_item(news_id)
+    if not noticia:
+        raise HTTPException(status_code=404, detail="Notícia não encontrada no índice.")
+
+    resultado = news_traducao.traduzir_noticia(
+        noticia,
+        user_id=getattr(session.user, "id", None) or session.user.email,
+        provider=_text(payload.get("provider")),
+        model=_text(payload.get("model")),
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=409, detail=resultado["error"])
+
+    guardada = False
+    if payload.get("guardar", True):
+        guardada = save_news_translation(
+            news_id,
+            title=resultado.get("titulo"),
+            summary=resultado.get("resumo"),
+        )
+    return {
+        "id": news_id,
+        **resultado,
+        "guardada": guardada,
+        "resumo_curto": (
+            f"Notícia traduzida para português ({resultado.get('ia', {}).get('provider_label') or 'IA'})."
+            if resultado.get("traduzido")
+            else "A notícia já estava em português."
+        ),
+    }
+
+
 # ==========================================================================
 # Publicar uma notícia como artigo de blog
 # ==========================================================================
@@ -493,6 +543,28 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
             detail="Indique a notícia (`id`) ou, no mínimo, o título do artigo.",
         )
 
+    # Tradução: o artigo nasce em português sem o editor ter de pedir a tradução
+    # primeiro. Só acontece quando a notícia ainda não tem texto em PT (o NLP da
+    # recolha já traduz as notícias de ticker) e nunca impede a publicação — se o
+    # fornecedor de IA falhar, o artigo sai com o original e o aviso.
+    traducao: Dict[str, Any] = {}
+    if payload.get("traduzir", True):
+        traducao = news_traducao.traduzir_noticia(
+            noticia,
+            user_id=getattr(session.user, "id", None) or session.user.email,
+            provider=_text(payload.get("provider")),
+            model=_text(payload.get("model")),
+        )
+        if not traducao.get("error"):
+            novo_titulo = str(traducao.get("titulo") or "").strip()
+            novo_resumo = str(traducao.get("resumo") or "").strip()
+            ja_tinha = novo_titulo == str(noticia.get("translated_title") or "").strip() and novo_resumo == str(
+                noticia.get("translated_summary") or ""
+            ).strip()
+            noticia = {**noticia, "translated_title": novo_titulo, "translated_summary": novo_resumo}
+            if traducao.get("ia") and not ja_tinha:
+                save_news_translation(noticia.get("id"), title=novo_titulo, summary=novo_resumo)
+
     marca = _marca_da_noticia(noticia, payload)
     existente = _artigo_existente(marca)
     if existente:
@@ -517,5 +589,8 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
         "artigo": artigo,
         "url": f"/cms/blog?id={artigo['id']}",
         "tema": tema["id"] if tema else None,
+        "traduzido": bool(traducao.get("traduzido")),
+        "ia": traducao.get("ia") or {},
+        "aviso": traducao.get("error") or "",
         "resumo": f"Notícia publicada como artigo «{artigo['title']}» (rascunho no blog).",
     }

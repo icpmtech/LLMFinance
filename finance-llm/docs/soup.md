@@ -60,6 +60,7 @@ python training/export_es_dataset.py --dataset contratos --max-records 200000 \
 | `contratos-fr` | `contratos_fr` | ~61 mil | Descreve este contrato público francês. |
 | `empresas` | `finance_entities` | ~214 mil | Descreve esta entidade no cadastro de contratos públicos. |
 | `noticias` | `finance_news` | ~272 | Classifica o sentimento desta notícia financeira. |
+| `subvencoes` | `finance_subvencoes` | ~415 mil | Descreve este subsídio público português. |
 
 > As contagens são de documentos de topo (`_count`). O `docs.count` do
 > `_cat/indices` é maior — o `contratos`, por exemplo, mostra 15,6 M porque conta
@@ -79,7 +80,23 @@ Opções que valem a pena conhecer:
 | `--max-chars N` | Corte por campo (`0` = sem corte). Por omissão 4 000. |
 | `--tokenizer <dir>` | Tokenizer do modelo de destino, para medir os pares (ex.: `model/mistral-finance/final`). |
 | `--max-tokens N` | Orçamento de tokens por par (prompt + resposta). Exige `--tokenizer`. |
+| `--seed N` | Amostra **dispersa** pelo índice (ver «Porquê usar `--seed`»). Sem ele, a ordem é a do índice. |
 | `--dry-run` | Só conta os documentos que o filtro apanha. |
+
+### Porquê usar `--seed`
+
+Um índice não está baralhado: os primeiros N documentos vêm quase sempre do mesmo
+ficheiro de origem. Exportar 800 subsídios sem `--seed` deu **um** organismo e
+**um** ano (todos do IGFSS, todos de 2025) — o modelo aprendia uma fatia, não a
+fonte. Com `--seed 42`, os mesmos 800 deram 138 organismos, 734 beneficiários e os
+dois anos:
+
+```bash
+python training/export_es_dataset.py --dataset subvencoes --max-records 800 --seed 42
+```
+
+Por dentro é um `random_score` com semente do próprio Elasticsearch (`_seq_no`),
+por isso a amostra é reproduzível: a mesma semente dá o mesmo dataset.
 
 ### Porquê medir os tokens
 
@@ -124,7 +141,13 @@ docker compose --profile train run --rm --entrypoint soup soup data validate ./d
 | Config | Modelo de partida | Onde corre | Resultado |
 |--------|-------------------|------------|-----------|
 | [soup-mistral.yaml](../training/soup/soup-mistral.yaml) | `model/mistral-finance/final` (modelo do sistema, 512×8, vocabulário de 3 000) | CPU ou GPU | `model/soup-mistral` |
+| [soup-subvencoes.yaml](../training/soup/soup-subvencoes.yaml) | `model/mistral-finance/final`, só com a fonte dos subsídios | CPU ou GPU | `model/soup-subvencoes` |
 | [soup-mistral-instruct.yaml](../training/soup/soup-mistral-instruct.yaml) | `mistralai/Mistral-7B-Instruct-v0.3` | GPU com ≥ 8 GB de VRAM | `model/soup-mistral-7b-lora` |
+
+Há um config por objectivo: o `soup-mistral.yaml` treina o modelo do sistema com
+os contratos, o `soup-subvencoes.yaml` treina-o com **uma só fonte** (os subsídios
+de `finance_subvencoes` — dinheiro público a entrar, o espelho dos contratos) e o
+`soup-mistral-instruct.yaml` é o caminho com GPU.
 
 O primeiro continua o modelo que o IQ OS já usa para descrever contratos; o
 segundo parte de um modelo que já conversa e ensina-lhe o domínio — é o caminho
@@ -275,7 +298,44 @@ O `serve` fica em `127.0.0.1:8000` por omissão; dentro do contentor é preciso
 `--host 0.0.0.0` (e, fora do loopback, um `--tool-auth-token`, que só é exigido
 nas rotas de ferramentas).
 
-## 6. Notas
+## 6. Testar o modelo num chat
+
+Depois do treino, o adaptador fica em `model/<nome>` **com o `chat_template` que
+lhe demos** — e é isso que o torna conversável: o modelo de partida do IQ OS é um
+modelo de continuação e, sem molde, o servidor recusa mensagens de chat (responde
+`HTTP 400`, mesmo com o modelo carregado).
+
+```bash
+# servidor com API compatível com a OpenAI
+docker compose --profile train run --rm -p 8000:8000 soup serve \
+  --model ./model/soup-subvencoes --host 0.0.0.0 --port 8000
+
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "soup-subvencoes",
+       "messages": [{"role": "user", "content": "Beneficiário: ...\nMontante: 1341.85\nFinalidade: Bolsas"}],
+       "max_tokens": 120, "temperature": 0.2}'
+```
+
+No painel (secção 4), a página **Model Chat** fala com esse servidor: é preencher
+o *server URL* com `http://127.0.0.1:8000`.
+
+Para ter a prova de que o fine-tune acrescentou alguma coisa, compare com o modelo
+de partida pelo `infer` — que não usa molde nenhum, por isso funciona nos dois:
+
+```bash
+# um ficheiro de perguntas em formato {"prompt": "..."} por linha
+docker compose --profile train run --rm soup infer \
+  --model ./model/mistral-finance/final --input ./probes_in.jsonl --output ./depois_base.jsonl
+docker compose --profile train run --rm soup infer \
+  --model ./model/soup-subvencoes --input ./probes_in.jsonl --output ./depois_ft.jsonl
+```
+
+Escolha as perguntas **fora** do conjunto de treino (exporte com um
+`--max-records` maior e use as linhas que sobraram) — perguntar o que já está no
+treino só mostra memorização.
+
+## 7. Notas
 
 - O dataset exportado (`data/final/*.jsonl`) e os modelos (`model/soup-*`) estão
   no `.gitignore` — são artefactos de dados, geram-se outra vez com os comandos

@@ -25,6 +25,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Languages,
   Loader2,
   Newspaper,
   RefreshCw,
@@ -41,6 +42,7 @@ import {
   getNewsThemes,
   publishNewsAsPost,
   searchNews,
+  translateNews,
   type NewsCollectResult,
   type NewsCollectTarget,
   type NewsDoc,
@@ -48,6 +50,7 @@ import {
   type NewsSearchResult,
   type NewsStats,
   type NewsTheme,
+  type NewsTranslationResult,
 } from "../newsApi";
 import { getSentimentMarketWatchlist } from "../sentimentApi";
 
@@ -850,27 +853,65 @@ function NewsCard({
   onPickTicker: (code: string) => void;
   onPickPublisher: (value: string) => void;
 }) {
-  const title = item.title || "(sem título)";
-  const translated = item.translated_title && item.translated_title !== item.title ? item.translated_title : null;
-  const summary = item.summary_pt || item.translated_summary || item.summary || null;
+  const [traducao, setTraducao] = useState<NewsTranslationResult | null>(null);
+  const [traduzindo, setTraduzindo] = useState(false);
   const [publicacao, setPublicacao] = useState<{ busy: boolean; url?: string; nota?: string; erro?: string }>({
     busy: false,
   });
 
+  const titulo = item.title || "(sem título)";
+  const tituloPt = traducao?.titulo || item.translated_title || null;
+  const traduzido = tituloPt && tituloPt !== titulo ? tituloPt : null;
+  const resumo = traducao?.resumo || item.summary_pt || item.translated_summary || item.summary || null;
+
   /**
-   * Publicar no blog: o servidor lê a notícia pelo `id` e cria o artigo
-   * **rascunho**, com o tema ativo a sugerir etiquetas e categoria. Se a notícia
-   * já tiver artigo, a resposta traz o que existe — nunca se duplica.
+   * Traduzir para PT: usa o **fornecedor de IA configurado** (Definições →
+   * Fornecedores de IA). O que a notícia já tiver em português não vai ao
+   * modelo, e a tradução fica guardada na ficha da notícia.
+   */
+  const traduzir = useCallback(async () => {
+    setTraduzindo(true);
+    setPublicacao((current) => ({ ...current, erro: undefined }));
+    try {
+      const resultado = await translateNews(item.id);
+      setTraducao(resultado);
+      if (!resultado.traduzido) {
+        setPublicacao((current) => ({ ...current, nota: resultado.resumo_curto }));
+      }
+    } catch (err) {
+      setPublicacao((current) => ({
+        ...current,
+        erro: err instanceof Error ? err.message : "Falha ao traduzir a notícia.",
+      }));
+    } finally {
+      setTraduzindo(false);
+    }
+  }, [item.id]);
+
+  /**
+   * Publicar no blog: o servidor lê a notícia pelo `id`, traduz o que faltar (com
+   * o fornecedor de IA configurado) e cria o artigo **rascunho**, com o tema ativo
+   * a sugerir etiquetas e categoria. Se a notícia já tiver artigo, a resposta traz
+   * o que existe — nunca se duplica. O texto que está à vista é o que é publicado.
    */
   const publicar = useCallback(async () => {
-    setPublicacao({ busy: true });
+    setPublicacao((current) => ({ ...current, busy: true, erro: undefined }));
     try {
-      const resposta = await publishNewsAsPost({ id: item.id, theme: theme || undefined });
+      const resposta = await publishNewsAsPost({
+        id: item.id,
+        theme: theme || undefined,
+        title: traducao?.titulo,
+        excerpt: traducao?.resumo,
+      });
       setPublicacao({ busy: false, url: resposta.url, nota: resposta.resumo });
     } catch (err) {
-      setPublicacao({ busy: false, erro: err instanceof Error ? err.message : "Falha ao publicar no blog." });
+      setPublicacao((current) => ({
+        ...current,
+        busy: false,
+        erro: err instanceof Error ? err.message : "Falha ao publicar no blog.",
+      }));
     }
-  }, [item.id, theme]);
+  }, [item.id, theme, traducao]);
 
   return (
     <article className="glass-card rounded-2xl p-4">
@@ -904,9 +945,14 @@ function NewsCard({
         </span>
       </div>
 
-      <h3 className="mt-2 text-sm font-semibold leading-snug">{title}</h3>
-      {translated ? <p className="mt-0.5 text-xs text-muted-foreground">{translated}</p> : null}
-      {summary ? <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{summary}</p> : null}
+      <h3 className="mt-2 text-sm font-semibold leading-snug">{titulo}</h3>
+      {traduzido ? (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {traduzido}
+          {traducao?.traduzido ? <span className="ml-1 text-teal-300/80">· PT (IA)</span> : null}
+        </p>
+      ) : null}
+      {resumo ? <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{resumo}</p> : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         {(item.topics ?? []).slice(0, 5).map((topic) => (
@@ -933,6 +979,16 @@ function NewsCard({
 
       {canPublish ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2 text-[10px]">
+          {!traduzido || traducao?.traduzido ? null : (
+            <button
+              onClick={() => void traduzir()}
+              disabled={traduzindo}
+              title="Traduz o título e o resumo para português com o fornecedor de IA configurado"
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10 disabled:opacity-40"
+            >
+              {traduzindo ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />} Traduzir para PT
+            </button>
+          )}
           {publicacao.url ? (
             <>
               <span className="inline-flex items-center gap-1 text-emerald-300">
@@ -948,7 +1004,7 @@ function NewsCard({
           ) : (
             <button
               onClick={() => void publicar()}
-              disabled={publicacao.busy}
+              disabled={publicacao.busy || traduzindo}
               title={
                 theme
                   ? "Cria um artigo rascunho no blog, com as etiquetas e a categoria deste assunto"
@@ -959,6 +1015,15 @@ function NewsCard({
               {publicacao.busy ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />} Publicar no blog
             </button>
           )}
+          {traducao?.traduzido && traducao.ia?.provider_label ? (
+            <span className="text-muted-foreground/80">
+              traduzido por {traducao.ia.provider_label}
+              {traducao.ia.model ? ` (${traducao.ia.model})` : ""}
+            </span>
+          ) : null}
+          {publicacao.nota && !publicacao.url ? (
+            <span className="text-muted-foreground">{publicacao.nota}</span>
+          ) : null}
           {publicacao.erro ? (
             <span className="inline-flex items-center gap-1 text-rose-300">
               <AlertTriangle size={11} /> {publicacao.erro}

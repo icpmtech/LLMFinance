@@ -142,6 +142,40 @@ def test_noticia_exige_sentimento() -> None:
     assert exporter._build_noticia({"sentiment": "positivo"}, exporter.DEFAULT_MAX_CHARS) is None
 
 
+DOC_SUBVENCAO = {
+    "entidade": "INSTITUTO DE GESTÃO FINANCEIRA DA SEGURANÇA SOCIAL, IP",
+    "nif_entidade": "501205551",
+    "beneficiario": "SOL DO AVE - ASSOCIAÇÃO PARA O DESENVOLVIMENTO INTEGRADO DO VALE DO AVE",
+    "nif_beneficiario": "501234567",
+    "beneficiario_tipo": "pessoa_coletiva",
+    "montante": 238715.89,
+    "finalidade": "Abordagens territoriais para a inclusão",
+    "data_decisao": "2024-11-08",
+    "ano": 2025,
+    "tipo_ato": "Decreto-Lei",
+    "numero_ato": "5",
+    "fundamento_legal": "Decreto-Lei n.º 5",
+}
+
+
+def test_subvencao_gera_o_par_completo() -> None:
+    prompt, completion, metadata = exporter._build_subvencao(DOC_SUBVENCAO, exporter.DEFAULT_MAX_CHARS)
+
+    assert "Beneficiário: SOL DO AVE" in prompt
+    assert "Entidade que atribui: INSTITUTO DE GESTÃO FINANCEIRA" in prompt
+    assert "Montante: 238715.89" in prompt
+    assert "Abordagens territoriais para a inclusão" in completion
+    assert "238 715,89 €" in completion
+    assert metadata["nif_beneficiario"] == "501234567"
+    assert metadata["ano"] == 2025
+
+
+@pytest.mark.parametrize("campo", ["beneficiario", "montante"])
+def test_subvencao_sem_beneficiario_ou_montante_e_descartada(campo: str) -> None:
+    """Sem quem recebeu nem quanto, o par não ensina nada."""
+    assert exporter._build_subvencao({**DOC_SUBVENCAO, campo: None}, exporter.DEFAULT_MAX_CHARS) is None
+
+
 def test_entidade_precisa_de_nome_ou_nif() -> None:
     documento = {"name": "Município de Chaves", "nif": "501205551", "country": "Portugal", "contracts_count": 12,
                  "as_adjudicante_count": 12, "as_adjudicatario_count": 0, "total_value": 1000.5}
@@ -153,7 +187,14 @@ def test_entidade_precisa_de_nome_ou_nif() -> None:
 
 
 def test_todas_as_receitas_apontam_para_um_indice() -> None:
-    assert sorted(exporter.RECIPES) == ["contratos", "contratos-es", "contratos-fr", "empresas", "noticias"]
+    assert sorted(exporter.RECIPES) == [
+        "contratos",
+        "contratos-es",
+        "contratos-fr",
+        "empresas",
+        "noticias",
+        "subvencoes",
+    ]
     for nome, receita in exporter.RECIPES.items():
         assert receita.index, nome
         assert receita.includes, nome
@@ -279,6 +320,44 @@ def test_orcamento_de_tokens_deixa_de_fora_os_pares_compridos(tmp_path, monkeypa
     linhas = destino.read_text(encoding="utf-8").splitlines()
     assert len(linhas) == 1
     assert json.loads(linhas[0])["input"].startswith("Contrato 1 ")
+
+
+def test_seed_pede_amostra_aleatoria_ao_elasticsearch(tmp_path, monkeypatch) -> None:
+    """Sem `preserve_order` o `scan` repõe `sort: _doc` e a semente não faz nada."""
+    import elasticsearch.helpers as helpers
+
+    capturado = {}
+
+    def _scan(client, **kwargs):
+        capturado.update(kwargs)
+        return []
+
+    monkeypatch.setattr(exporter, "_resolve_client", lambda es_url, timeout: _FakeClient())
+    monkeypatch.setattr(helpers, "scan", _scan)
+
+    exporter.export(
+        index="finance_subvencoes",
+        instruction="Descreve este subsídio público português.",
+        includes=("beneficiario",),
+        builder=exporter._build_subvencao,
+        out_path=tmp_path / "subvencoes.jsonl",
+        seed=42,
+    )
+
+    assert capturado["preserve_order"] is True
+    assert capturado["query"]["query"]["function_score"]["random_score"] == {"seed": 42, "field": "_seq_no"}
+
+    capturado.clear()
+    exporter.export(
+        index="finance_subvencoes",
+        instruction="Descreve este subsídio público português.",
+        includes=("beneficiario",),
+        builder=exporter._build_subvencao,
+        out_path=tmp_path / "subvencoes.jsonl",
+    )
+
+    assert capturado["preserve_order"] is False
+    assert "function_score" not in capturado["query"]["query"]
 
 
 def test_dry_run_nao_escreve_nada(tmp_path, monkeypatch) -> None:

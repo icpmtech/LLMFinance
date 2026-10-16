@@ -4084,12 +4084,50 @@ def get_news_item(doc_id: str, es: Optional[Elasticsearch] = None) -> Optional[D
     except Exception as exc:  # noqa: BLE001 - a publicação segue sem o documento
         logger.warning("Não foi possível ler a notícia %s: %s", wanted, exc)
         return None
-    document = hit.get("_source") if isinstance(hit, dict) else None
+    # O cliente do Elasticsearch devolve `ObjectApiResponse` (um `Mapping`, não um
+    # `dict`): testar `isinstance(..., dict)` rejeitava todas as notícias.
+    document = hit.get("_source") if hasattr(hit, "get") else None
     if not isinstance(document, dict):
         return None
     source = dict(document)
     source["id"] = hit.get("_id") or wanted
     return source
+
+
+def save_news_translation(
+    doc_id: str,
+    *,
+    title: Optional[str] = None,
+    summary: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> bool:
+    """Guarda a tradução PT na notícia (os campos que o NLP já usa na recolha).
+
+    Escreve `translated_title`/`translated_summary` — os mesmos campos que o
+    módulo de notícias mostra e pesquisa —, para a tradução feita a pedido ficar
+    na ficha da notícia em vez de se perder no fim do pedido. Não toca em
+    `analyzed_at`: traduzir não é passar pelo NLP da recolha, e o filtro
+    «com/sem análise» da pesquisa tem de continuar a dizer a verdade.
+    """
+    wanted = str(doc_id or "").strip()
+    documento: Dict[str, Any] = {}
+    if title and str(title).strip():
+        documento["translated_title"] = str(title).strip()
+    if summary and str(summary).strip():
+        documento["translated_summary"] = str(summary).strip()
+    if not wanted or not documento:
+        return False
+    client = es or get_es_client()
+    if not client:
+        return False
+    try:
+        client.update(index="finance_news", id=wanted, doc=documento)
+    except NotFoundError:
+        return False
+    except Exception as exc:  # noqa: BLE001 - a tradução devolvida vale por si
+        logger.warning("Não foi possível guardar a tradução da notícia %s: %s", wanted, exc)
+        return False
+    return True
 
 
 def news_stats(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:

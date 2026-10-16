@@ -110,7 +110,35 @@ export type NewsPublishResult = {
   /** Caminho do editor do blog (`/cms/blog?id=…`). */
   url: string;
   tema?: string | null;
+  /** Verdadeiro quando o artigo ficou em português por tradução de IA. */
+  traduzido?: boolean;
+  ia?: NewsAiInfo;
+  /** Aviso quando a tradução não foi possível (o artigo sai com o original). */
+  aviso?: string;
   resumo: string;
+};
+
+/** Fornecedor/modelo de IA que fez a tradução (o configurado na plataforma). */
+export type NewsAiInfo = {
+  provider?: string;
+  provider_label?: string;
+  model?: string;
+};
+
+/** Resultado de traduzir uma notícia para PT. */
+export type NewsTranslationResult = {
+  id: string;
+  /** Título em português (igual ao original quando já estava em PT). */
+  titulo: string;
+  resumo: string;
+  original_titulo: string;
+  original_resumo: string;
+  traduzido: boolean;
+  /** Verdadeiro quando a tradução ficou guardada na ficha da notícia. */
+  guardada: boolean;
+  ia?: NewsAiInfo;
+  status?: { cached?: number; path?: string };
+  resumo_curto: string;
 };
 
 /** Campos que a publicação aceita (o `id` da notícia chega; o resto é opcional). */
@@ -122,6 +150,10 @@ export type NewsPublishPayload = {
   markdown?: string;
   tags?: string[];
   category_ids?: string[];
+  /** Traduzir para PT antes de escrever o artigo (por omissão, sim). */
+  traduzir?: boolean;
+  provider?: string;
+  model?: string;
 };
 
 /** Resultado da recolha de um alvo (um ticker ou um tema). */
@@ -192,11 +224,31 @@ export function getNewsThemes() {
 }
 
 /**
+ * Traduz uma notícia para português com o **fornecedor de IA configurado**.
+ *
+ * O que a notícia já tiver em PT (tradução do NLP da recolha) não volta ao
+ * modelo. Com `guardar` (por omissão), a tradução fica na ficha da notícia — o
+ * cartão passa a mostrá-la sem repetir a chamada. Sem fornecedor configurado a
+ * resposta é 409 com a instrução para o definir em Definições → Fornecedores de IA.
+ */
+export function translateNews(
+  id: string,
+  payload: { provider?: string; model?: string; guardar?: boolean } = {},
+) {
+  return request<NewsTranslationResult>(`/news/${encodeURIComponent(id)}/traduzir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
  * Publica uma notícia no blog como **artigo rascunho**.
  *
- * Basta o `id` da notícia: o servidor lê-a do índice e escreve o título, o
- * resumo, a fonte e a ligação para o original. A mesma notícia não dá dois
- * artigos — a segunda chamada devolve o que já existe (`duplicado: true`).
+ * Basta o `id` da notícia: o servidor lê-a do índice, **traduz para PT** com o
+ * fornecedor de IA configurado quando ela ainda não tiver tradução, e escreve o
+ * título, o resumo, a fonte e a ligação para o original. A mesma notícia não dá
+ * dois artigos — a segunda chamada devolve o que já existe (`duplicado: true`).
  */
 export function publishNewsAsPost(payload: NewsPublishPayload) {
   return request<NewsPublishResult>("/news/publish", {

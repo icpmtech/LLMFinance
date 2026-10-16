@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Uma ficha de registo aberta com um lugar vazio e uma lupa a procurar o endereço em falta">
+  <rect width="800" height="480" fill="#f1f5f9"/>
+  <rect x="72" y="56" width="360" height="368" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <rect x="108" y="92" width="152" height="14" rx="7" fill="#0ea5a4"/>
+  <text x="108" y="140" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Registo de páginas</text>
+  <g fill="#e2e8f0">
+    <rect x="108" y="168" width="288" height="14" rx="7"/>
+    <rect x="108" y="202" width="232" height="14" rx="7"/>
+  </g>
+  <rect x="108" y="246" width="288" height="58" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="252" y="281" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#94a3b8" text-anchor="middle">sem registo</text>
+  <g fill="#e2e8f0">
+    <rect x="108" y="326" width="268" height="14" rx="7"/>
+    <rect x="108" y="360" width="196" height="14" rx="7"/>
+  </g>
+  <g>
+    <circle cx="516" cy="236" r="96" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="516" cy="236" r="76" fill="#f8fafc" stroke="#0f172a" stroke-width="10"/>
+    <text x="516" y="266" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#0ea5a4" text-anchor="middle">?</text>
+    <path d="M568 288 L646 366" stroke="#0f172a" stroke-width="22" stroke-linecap="round"/>
+    <path d="M646 366 L672 392" stroke="#0ea5a4" stroke-width="22" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="432" y="352" width="196" height="72" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="530" y="384" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">404</text>
+    <text x="530" y="408" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b" text-anchor="middle">endereço não encontrado</text>
+  </g>
+</svg>

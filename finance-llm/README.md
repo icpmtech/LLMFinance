@@ -218,7 +218,7 @@ Por defeito os treinos usam todo o corpus (`8070` exemplos de treino), o que pod
 
 O [Soup](https://github.com/MakazhanAlpamys/Soup) faz o fine-tuning a partir de um
 YAML — é o caminho para treinar em cima dos modelos existentes com os dados que já
-estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias):
+estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias, subsídios):
 
 ```bash
 # 1. exportar o dataset do Elasticsearch (o --tokenizer/--max-tokens garantem que

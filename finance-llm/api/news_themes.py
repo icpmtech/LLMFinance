@@ -258,6 +258,20 @@ def suggested_category(theme_id: Optional[str]) -> str:
 
 
 def slugify(value: str, limit: int = 60) -> str:
-    """Endereço do artigo a partir do título da notícia (sem acentos)."""
-    text = re.sub(r"[^a-z0-9]+", "-", _sem_acentos(str(value or "")).lower()).strip("-")
-    return text[:limit].strip("-")
+    """Endereço do artigo a partir do título da notícia (sem acentos).
+
+    O corte é feito **em palavras inteiras**: um endereço como
+    `…-por-anuncios-que-j` (cortado a meio de uma palavra) fica feio e não se lê.
+    """
+    texto = re.sub(r"[^a-z0-9]+", "-", _sem_acentos(str(value or "")).lower()).strip("-")
+    if not texto or len(texto) <= limit:
+        return texto
+    partes: List[str] = []
+    usado = 0
+    for parte in texto.split("-"):
+        custo = len(parte) + (1 if partes else 0)
+        if usado + custo > limit:
+            break
+        partes.append(parte)
+        usado += custo
+    return "-".join(partes) if partes else texto[:limit].strip("-")

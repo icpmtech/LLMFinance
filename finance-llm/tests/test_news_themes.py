@@ -11,6 +11,7 @@ Cobre as três peças novas do módulo de notícias:
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -126,6 +127,16 @@ def test_etiquetas_e_categoria_sugeridas_pelo_tema():
 
 def test_endereco_do_artigo_sai_do_titulo_sem_acentos():
     assert news_themes.slugify("Contratação pública: 12 ajustes diretos!") == "contratacao-publica-12-ajustes-diretos"
+
+
+def test_endereco_do_artigo_corta_em_palavras_inteiras():
+    titulo = "Trump se protege sobre pagar governo de volta por anúncios que já foram ao ar"
+    endereco = news_themes.slugify(titulo, limit=64)
+    assert len(endereco) <= 64
+    assert not endereco.endswith("-")
+    # Todas as palavras ficaram completas: nenhuma aparece truncada no fim.
+    palavras = titulo.lower().split()
+    assert endereco.split("-")[-1] in [re.sub(r"[^a-z0-9]+", "", p) for p in palavras]
 
 
 # -------------------------------------------------------- pesquisa com tema
@@ -320,6 +331,45 @@ def test_publicacao_sem_elasticsearch_usa_o_que_o_pedido_traz(cms_isolado, monke
     )["artigo"]
     assert artigo["title"] == "Nota de mercado"
     assert artigo["markdown"] == "Corpo escrito à mão."
+
+
+def test_leitura_da_noticia_aceita_a_resposta_mapeada_do_elasticsearch():
+    """O cliente do Elasticsearch devolve um `Mapping`, não um `dict`.
+
+    Testar `isinstance(resposta, dict)` fazia `get_news_item` devolver `None` para
+    notícias que existem — e a publicação respondia «Indique a notícia».
+    """
+    from collections.abc import Mapping
+
+    class RespostaMapeada(Mapping):
+        def __init__(self, dados: Dict[str, Any]) -> None:
+            self._dados = dados
+
+        def __getitem__(self, chave: str) -> Any:
+            return self._dados[chave]
+
+        def __iter__(self):
+            return iter(self._dados)
+
+        def __len__(self) -> int:
+            return len(self._dados)
+
+    class ClienteDeLeitura:
+        def get(self, **_kwargs: Any) -> Any:
+            return RespostaMapeada({"_id": NOTICIA["id"], "_source": dict(NOTICIA)})
+
+    lida = es_client.get_news_item(NOTICIA["id"], es=ClienteDeLeitura())
+    assert lida is not None
+    assert lida["id"] == NOTICIA["id"]
+    assert lida["title"] == NOTICIA["title"]
+
+    class SemFonte:
+        """Resposta sem `_source` (documento vazio)."""
+
+        def get(self, **_kwargs: Any) -> Any:
+            return {"_id": "qualquer"}
+
+    assert es_client.get_news_item("qualquer", es=SemFonte()) is None
 
 
 def test_rota_de_publicacao_responde_com_o_artigo_e_o_caminho_do_editor(cms_isolado, monkeypatch):

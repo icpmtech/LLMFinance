@@ -1,0 +1,42 @@
+# Fine-tuning do modelo do sistema com UMA fonte: os subsídios públicos
+# (`finance_subvencoes`, do Portal da Transparência), a par dos contratos.
+#
+# Os subsídios são dinheiro público a **entrar** (quem recebeu, quanto, para quê e
+# ao abrigo de que norma); os contratos são dinheiro a **sair**. O modelo de
+# contratos não sabe nada disto — este config é o que lhe ensina a segunda fonte.
+#
+# Passo 1 — exportar (os 950 tokens são o orçamento que cabe nos 1 024 do modelo
+# com o molde do chat; os registos de subsídio são curtos e não gastam o orçamento):
+#   python training/export_es_dataset.py --dataset subvencoes --max-records 800 \
+#       --tokenizer model/mistral-finance/final --max-tokens 950
+#
+# Passo 2 — treinar:
+#   docker compose --profile train run --rm soup train -y --config training/soup/soup-subvencoes.yaml
+#
+# Corre em CPU (sem CUDA, logo `quantization: none`). Uma época em ~800 registos
+# são dezenas de minutos neste hardware; para a fonte inteira (414 mil registos),
+# use uma GPU.
+
+base: ./model/mistral-finance/final
+task: sft
+
+data:
+  train: ./data/final/subvencoes.jsonl
+  format: alpaca
+  val_split: 0.05
+  max_length: 1024
+  # Mesmo molde do `soup-mistral.yaml`: o tokenizer do sistema não tem
+  # `chat_template` e o `{% generation %}` é o que marca a resposta para a perda.
+  chat_template: "{% for message in messages %}{% if message['role'] == 'assistant' %}{% generation %}### Resposta:\n{{ message['content'] }}{% endgeneration %}\n\n{% else %}### Instrução:\n{{ message['content'] }}\n\n{% endif %}{% endfor %}"
+
+training:
+  epochs: 1
+  lr: 2e-5
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: none
+
+output: ./model/soup-subvencoes
