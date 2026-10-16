@@ -726,6 +726,9 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .sistema {{ grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; }}
   /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
   .prose {{ max-width: 760px; }}
+  /* Os gráficos seguem a mesma medida: numa barra de 1100px o nome e o valor
+     ficavam a um ecrã de distância um do outro e a comparação perdia-se. */
+  .grafico-lista, .grafico-legenda, .grafico-nota, .grafico-fonte {{ max-width: 760px; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
   html {{ scroll-behavior: auto; }}

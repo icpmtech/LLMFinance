@@ -231,7 +231,9 @@ docker compose --profile train run --rm soup train -y --config training/soup/sou
 ```
 
 O que se exporta, os configs disponíveis e como usar o modelo treinado (merge,
-GGUF para o Ollama): [`docs/soup.md`](docs/soup.md).
+GGUF para o Ollama): [`docs/soup.md`](docs/soup.md). O painel do Soup
+(*Dashboard*, *New Training*, *Data Explorer*, *Model Chat*) sobe com
+`docker compose --profile train up -d soup-ui` e abre em http://127.0.0.1:7860.
 
 ## Executar
 

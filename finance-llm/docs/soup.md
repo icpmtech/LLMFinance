@@ -228,7 +228,33 @@ depois alargue.
 O modelo grande (`soup-mistral-instruct.yaml`, 7B em QLoRA) sem GPU não é
 praticável: use a máquina com GPU e o `--gpus all`.
 
-## 4. Depois do treino
+## 4. O painel de treinos (Web UI)
+
+A mesma imagem traz um painel — *Dashboard* (corridas e curvas de perda),
+*New Training*, *Data Explorer* e *Model Chat*:
+
+```bash
+docker compose --profile train up -d soup-ui
+docker compose --profile train logs soup-ui     # o endereço e o token saem aqui
+```
+
+Abre em `http://127.0.0.1:7860/?token=<token>` (a porta muda-se com
+`SOUP_UI_PORT`). O token é gerado a cada arranque; para um endereço fixo,
+acrescente `"--auth-token", "<16-128 caracteres urlsafe>"` ao `command` do serviço.
+
+O `soup-ui` partilha com o `soup` o volume `soup-state` (`~/.soup`), por isso as
+corridas lançadas no serviço `soup` aparecem no *Dashboard*. O `--public` do
+`command` é o que faz a porta publicada funcionar (o encaminhamento do Docker não
+chega ao loopback do contentor); o token é o que fecha o painel a quem esteja na
+mesma rede.
+
+O *Data Explorer* lê os ficheiros do contentor: `./data/final/contratos.jsonl`
+aparece com as chaves `instruction`/`input`/`output` detetadas como `alpaca`. Ele
+conta as linhas todas, por isso abrir o corpus de 2,2 GB
+(`contratos_train.jsonl`, 2,1 M linhas) demora — para explorar, aponte aos
+datasets exportados (`--max-records`) em vez do corpus inteiro.
+
+## 5. Depois do treino
 
 ```bash
 # juntar o adaptador LoRA ao modelo base, num modelo só
@@ -249,7 +275,7 @@ O `serve` fica em `127.0.0.1:8000` por omissão; dentro do contentor é preciso
 `--host 0.0.0.0` (e, fora do loopback, um `--tool-auth-token`, que só é exigido
 nas rotas de ferramentas).
 
-## 5. Notas
+## 6. Notas
 
 - O dataset exportado (`data/final/*.jsonl`) e os modelos (`model/soup-*`) estão
   no `.gitignore` — são artefactos de dados, geram-se outra vez com os comandos

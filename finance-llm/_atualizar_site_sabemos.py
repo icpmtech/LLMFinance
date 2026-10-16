@@ -13,6 +13,7 @@ estejam iguais não voltam a ser gravadas e os menus não ganham itens repetidos
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from api import cms_editorial as editorial
@@ -106,8 +107,18 @@ def _aplicar_menus() -> None:
         # Itens que já existem e não estão na ordem editorial (ex.: uma página
         # própria, como «Benchmarks» numa instalação que a tenha criado) ficam
         # no fim, para a migração não apagar trabalho de ninguém. Links directos
-        # também são comparados pela assinatura, por isso ajustam-se automaticamente.
-        extras = [item for item in atuais if str(item.get("page_id") or "") not in pagina_por_id]
+        # também são comparados pela assinatura — não têm `page_id`, e sem isto
+        # cada passagem voltava a acrescentá-los («Entrar» e «Loja» a dobrar).
+        vistas = {_chave(item) for item in desejados}
+        extras: List[Dict[str, Any]] = []
+        for item in atuais:
+            if str(item.get("page_id") or "") in pagina_por_id:
+                continue
+            marca = _chave(item)
+            if marca in vistas:
+                continue
+            vistas.add(marca)
+            extras.append(item)
         items = desejados + extras
         if _comparavel([_assinatura(item) for item in atuais]) == _comparavel([_assinatura(item) for item in items]):
             print(f"  menu {localizacao}: já estava atualizado")
@@ -124,6 +135,11 @@ def _assinatura(item: Dict[str, Any]) -> Dict[str, Any]:
         "page_id": item.get("page_id"),
         "new_tab": bool(item.get("new_tab")),
     }
+
+
+def _chave(item: Dict[str, Any]) -> str:
+    """Assinatura em texto, para comparar itens numa lista (dicts não são `hashable`)."""
+    return json.dumps(_assinatura(item), sort_keys=True, ensure_ascii=False)
 
 
 def _aplicar_posts(media: Dict[str, str]) -> None:

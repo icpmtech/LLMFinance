@@ -6,7 +6,8 @@
 # Serviços "agents":                  hermes-agent -> agente autónomo + dashboard (profile: agents)
 # Serviços "mirofish":                mirofish -> previsão por enxame de agentes (profile: mirofish)
 # Serviços "osif":                    osif-* -> OSINT Framework v2 do fr4nc1stein (profile: osif)
-# Serviços "train":                   soup -> fine-tuning dos modelos com os dados do Elasticsearch (profile: train)
+# Serviços "train":                   soup -> fine-tuning com os dados do Elasticsearch (profile: train)
+#                                     soup-ui -> painel dos treinos em http://127.0.0.1:7860 (profile: train)
 #
 # Uso:
 #   docker compose up --build -d                     # núcleo da solução
@@ -14,7 +15,8 @@
 #   docker compose --profile agents up -d            # + Hermes Agent (dashboard na página iframe)
 #   docker compose --profile mirofish up -d          # + MiroFish (precisa de chaves LLM + Zep)
 #   docker compose --profile osif up -d --build      # + OSIF (página «OSINT Framework»)
-#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml   # + Soup
+#   docker compose --profile train run --rm soup train -y --config training/soup/soup-mistral.yaml   # + Soup
+#   docker compose --profile train up -d soup-ui     # painel dos treinos (http://127.0.0.1:7860)
 #   docker compose --profile test run --rm tests     # testes de dentro do container
 
 # ---------------------------------------------------------------------------
@@ -513,6 +515,9 @@ services:
       # Pesos descarregados da HuggingFace (o Mistral-7B são ~15 GB): sem este
       # volume, cada `run` voltava a descarregá-los.
       - soup-cache:/root/.cache/huggingface
+      # Registo das corridas (~/.soup). É o mesmo volume do `soup-ui`: o painel
+      # lista aqui os treinos lançados por este serviço.
+      - soup-state:/root/.soup
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/workspace
@@ -523,6 +528,52 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Soup Web UI — painel dos treinos (Dashboard, New Training, Data Explorer,
+  # Model Chat).
+  #
+  # Usa a mesma imagem do `soup` (não a reconstrói, como o `mcp` faz com a do
+  # backend) e partilha com ele o volume do estado — os treinos lançados pelo
+  # `soup` aparecem no painel.
+  #
+  # Arranca com:
+  #   docker compose --profile train up -d soup-ui
+  #
+  # O endereço é http://127.0.0.1:7860/?token=<token>; o token é gerado no
+  # arranque e sai nos logs (`docker compose logs soup-ui | findstr token`). Para
+  # um endereço fixo, acrescente ao `command`:
+  #   "--auth-token", "${SOUP_UI_TOKEN}"   # 16 a 128 caracteres urlsafe
+  #
+  # O `--public` é obrigatório para a porta publicada funcionar (o encaminhamento
+  # do Docker não chega ao loopback do container); o token é o que fecha a porta
+  # a quem esteja na mesma rede.
+  # ---------------------------------------------------------------------------
+  soup-ui:
+    image: iq-os-soup:latest
+    container_name: finance-llm-soup-ui
+    profiles: ["train"]
+    ports:
+      - "${SOUP_UI_PORT:-7860}:7860"
+    volumes:
+      - ./:/workspace
+      - soup-cache:/root/.cache/huggingface
+      - soup-state:/root/.soup
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace
+      - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+    command: ["ui", "--public", "--no-browser", "--port", "7860"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # OSIF — OSINT Framework v2 (https://github.com/fr4nc1stein/osint-framework).
@@ -674,6 +725,9 @@ volumes:
   playwright-cache:
   # Pesos base do fine-tuning (Mistral-7B e afins), descarregados pelo Soup.
   soup-cache:
+  # Registo das corridas de treino do Soup (~/.soup), partilhado entre o `soup` e
+  # o `soup-ui`.
+  soup-state:
   mirofish-uploads:
   osif-postgres-data:
   osif-redis-data:

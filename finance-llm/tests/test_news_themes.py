@@ -320,3 +320,29 @@ def test_publicacao_sem_elasticsearch_usa_o_que_o_pedido_traz(cms_isolado, monke
     )["artigo"]
     assert artigo["title"] == "Nota de mercado"
     assert artigo["markdown"] == "Corpo escrito à mão."
+
+
+def test_rota_de_publicacao_responde_com_o_artigo_e_o_caminho_do_editor(cms_isolado, monkeypatch):
+    """A rota, de ponta a ponta: corpo do pedido → artigo no CMS → resposta."""
+    from fastapi.testclient import TestClient
+
+    from api import main as api_main
+    from api.auth_routes import optional_session
+
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    api_main.app.dependency_overrides[optional_session] = lambda: _sessao()
+    try:
+        cliente = TestClient(api_main.app, base_url="http://prova")
+        resposta = cliente.post("/news/publish", json={"id": NOTICIA["id"], "theme": "contratacao-publica"})
+        repetida = cliente.post("/news/publish", json={"id": NOTICIA["id"]})
+    finally:
+        api_main.app.dependency_overrides.pop(optional_session, None)
+
+    assert resposta.status_code == 200, resposta.text
+    corpo = resposta.json()
+    assert corpo["saved"] is True and corpo["duplicado"] is False
+    assert corpo["tema"] == "contratacao-publica"
+    assert corpo["url"] == f"/cms/blog?id={corpo['artigo']['id']}"
+    assert repetida.status_code == 200
+    assert repetida.json()["duplicado"] is True
+    assert repetida.json()["artigo"]["id"] == corpo["artigo"]["id"]
