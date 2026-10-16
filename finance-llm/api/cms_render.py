@@ -517,7 +517,7 @@ p {{ margin: 0 0 14px; text-wrap: pretty; }}
 .btn.ghost {{ background: transparent; color: var(--accent); border-color: var(--border); }}
 .btn:hover {{ text-decoration: none; filter: brightness(1.05); }}
 /* Uma coluna no telefone; a grelha só entra quando há largura para ela. */
-.grid {{ display: grid; gap: 14px; grid-template-columns: 1fr; }}
+.grelha {{ display: grid; gap: 14px; grid-template-columns: 1fr; }}
 .tile {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }}
 .tile h3 {{ margin: 0 0 6px; font-size: 1rem; }}
 .tile-icon {{ width: 42px; height: 42px; margin-bottom: 10px; display: block; }}
@@ -554,8 +554,8 @@ figure > picture {{ display: block; }}
 main > .wrap > figure > img, main > .wrap > figure > picture > img {{ width: 100%; }}
 figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 /* Duas colunas no telefone: uma só fazia destas páginas um rolo interminável. */
-.grid.galeria {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
-.grid.galeria img {{ width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
+.grelha.galeria {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
+.grelha.galeria img {{ width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
 .prose ul, .prose ol {{ padding-left: 20px; }}
 .prose blockquote {{
   margin: 20px 0; padding: 6px 18px; border-left: 3px solid var(--accent); color: var(--muted); font-style: italic;
@@ -723,11 +723,11 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .site-footer a {{ min-height: 0; }}
 }}
 @media (min-width: 560px) {{
-  .grid {{ gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
+  .grelha {{ gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
   .contactos {{ grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
   .posts {{ gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }}
   .kpis {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }}
-  .grid.galeria {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
+  .grelha.galeria {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
   .cta {{ flex-direction: row; align-items: center; justify-content: space-between; padding: 24px 26px; }}
 }}
 @media (max-width: 899px) {{
@@ -1289,7 +1289,7 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         if not urls:
             return ""
         images = "".join(f'<img src="{_esc(url)}" alt="" loading="lazy">' for url in urls)
-        return f'<div class="grid galeria">{images}</div>'
+        return f'<div class="grelha galeria">{images}</div>'
 
     if block_type == "destaques":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -1312,7 +1312,7 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
             else:
                 tiles.append(f'<div class="tile">{corpo}</div>')
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
-        return f'<div class="section">{title}<div class="grid">{"".join(tiles)}</div></div>'
+        return f'<div class="section">{title}<div class="grelha">{"".join(tiles)}</div></div>'
 
     if block_type == "numeros":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -4105,7 +4105,7 @@ def render_index(*, preview: bool = False, settings: Optional[Dict[str, Any]] = 
     body = (
         f'<section class="section hero"><h1>{_esc(settings.get("site_name"))}</h1>'
         f'<p class="lead">{_esc(settings.get("description"))}</p></section>'
-        + (f'<section class="section"><h2>Páginas</h2><div class="grid">{tiles}</div></section>' if tiles else "")
+        + (f'<section class="section"><h2>Páginas</h2><div class="grelha">{tiles}</div></section>' if tiles else "")
         + f'<section class="section"><h2>Blog</h2><div class="posts">{"".join(_post_card(post) for post in posts)}</div></section>'
     )
     return _layout(

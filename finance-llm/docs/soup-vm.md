@@ -100,7 +100,7 @@ rsync -avz --relative data/final/iqos_contratos_empresas.jsonl ubuntu@<ip>:~/LLM
 O `--tokenizer` mede os pares com o tokenizer do modelo **de destino**: na VM, se
 for treinar um 7B, exporte com o tokenizer do 7B (`--tokenizer
 mistralai/Mistral-7B-Instruct-v0.3`) — e aí o orçamento de tokens é a janela dele
-(24 000), não os 1 024 do modelo de 22 M.
+(32 768), não os 1 024 do modelo de 22 M.
 
 Não vale a pena expor o Elasticsearch desta rede para a VM: exportar aqui (é onde
 o índice está) e enviar o ficheiro é mais simples e mais seguro.
