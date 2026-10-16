@@ -891,7 +891,7 @@ function BlockForm({
             onChange={(next) => set("action", next)}
             placeholder="/site/contacto"
             wide
-            hint="Campos: nome, email, organização, assunto e mensagem. As respostas ficam em «Contactos» e exigem consentimento."
+            hint="Campos: nome, email, organização, assunto e mensagem. As respostas ficam em «Contactos» e exigem consentimento; cada pedido avisa também o contacto de apoio por email."
           />
           <TextInput
             label="Âncora da secção"

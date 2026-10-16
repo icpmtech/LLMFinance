@@ -4,13 +4,14 @@ A página de contactos tem uma função só: levar a um pedido concreto. A abert
 aponta ao formulário pela âncora `#pedido`, os quatro temas vão em cartões (que
 se leem antes do texto corrido) e cada campo obrigatório diz que o é sem
 depender do asterisco — quem usa leitor de ecrã ouve «obrigatório» pelo próprio
-campo. Estes testes fixam isso e o caminho de erro, que é onde se perde quem
-escreve.
+campo. Estes testes fixam isso, o caminho de erro (que é onde se perde quem
+escreve) e o aviso à caixa de apoio, que é o que evita que um pedido fique
+fechado na plataforma sem ninguém saber.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterator
+from typing import Any, Dict, Iterator, List, Optional
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from api import cms_editorial as editorial
 from api import cms_render as render
 from api import cms_store as store
+from api import notification_email
 
 
 @pytest.fixture()
@@ -158,3 +160,93 @@ def test_campo_armadilha_recebe_agradecimento_e_nao_guarda_nada(cms_limpo: Any) 
     assert resposta.status_code == 200
     assert "Mensagem recebida" in resposta.text
     assert store.list_items("contactos")["items"] == []
+
+
+def test_pedido_valido_guarda_e_avisa_a_caixa_de_apoio(cms_limpo: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O pedido fica guardado no CMS **e** sai um aviso para a caixa de apoio."""
+    from api import main as api_main
+    from api import reports_store
+
+    avisos: List[Dict[str, Any]] = []
+    monkeypatch.setattr(notification_email, "send_contact_email", lambda **campos: avisos.append(campos) or {"ok": True})
+    # O endereço de apoio é o configurado nos Relatórios; aqui fixa-se para o
+    # teste não depender do que estiver gravado na instalação.
+    monkeypatch.setattr(reports_store, "settings", lambda: {"support_email": "apoio@exemplo.pt"})
+    monkeypatch.setattr(store, "_contactos_por_ip", {})
+
+    cliente = TestClient(api_main.app, base_url="http://prova")
+    resposta = cliente.post(
+        "/site/contacto",
+        data={
+            "nome": "Ana Silva",
+            "email": "ana@exemplo.pt",
+            "organizacao": "Jornal do Norte",
+            "assunto": "Correção de um número",
+            "mensagem": "O valor do Porto não bate certo com o Portal BASE.",
+            "consentimento": "sim",
+        },
+    )
+
+    assert resposta.status_code == 200 and "Mensagem recebida" in resposta.text
+    guardados = store.list_items("contactos")["items"]
+    assert len(guardados) == 1 and guardados[0]["estado"] == "novo"
+    assert avisos and avisos[0]["to"] == "apoio@exemplo.pt"
+    assert avisos[0]["email"] == "ana@exemplo.pt"
+    assert avisos[0]["assunto"] == "Correção de um número"
+    assert avisos[0]["organizacao"] == "Jornal do Norte"
+    assert "Portal BASE" in avisos[0]["mensagem"]
+
+
+def test_aviso_do_pedido_responde_a_quem_escreveu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O aviso diz o que interessa e responde ao pedido: `Reply-To` do autor."""
+    enviados: Dict[str, Any] = {}
+
+    def falso(to: str, subject: str, text: str, html: Optional[str] = None, reply_to: str = "") -> Dict[str, Any]:
+        enviados.update({"to": to, "subject": subject, "text": text, "reply_to": reply_to})
+        return {"ok": True}
+
+    monkeypatch.setattr(notification_email, "_send", falso)
+    resultado = notification_email.send_contact_email(
+        to="suporte@sabemos.studio",
+        nome="Ana Silva",
+        email="ana@exemplo.pt",
+        organizacao="Jornal do Norte",
+        assunto="Dados e cobertura",
+        mensagem="Queria os ficheiros de 2025, por concelho.",
+        registo_url="https://sabemos.studio/cms/contactos",
+    )
+
+    assert resultado == {"ok": True}
+    assert enviados["to"] == "suporte@sabemos.studio"
+    assert enviados["reply_to"] == "ana@exemplo.pt"
+    assert "Dados e cobertura" in enviados["subject"] and "Ana Silva" in enviados["subject"]
+    for pedaco in (
+        "ana@exemplo.pt",
+        "Jornal do Norte",
+        "Queria os ficheiros de 2025, por concelho.",
+        "https://sabemos.studio/cms/contactos",
+    ):
+        assert pedaco in enviados["text"]
+
+
+def test_email_leva_reply_to_so_quando_e_pedido() -> None:
+    """Sem `reply_to` (aprovações, avisos internos) o cabeçalho não sai."""
+    sem_reply = notification_email.build_message(
+        sender_name="IQ OS",
+        sender_address="no-reply@sabemos.studio",
+        to="alguem@exemplo.pt",
+        subject="Conta aprovada",
+        text="Corpo",
+    )
+    com_reply = notification_email.build_message(
+        sender_name="IQ OS",
+        sender_address="no-reply@sabemos.studio",
+        to="suporte@sabemos.studio",
+        subject="Pedido do site: Dados e cobertura — Ana Silva",
+        text="Corpo",
+        reply_to="ana@exemplo.pt",
+    )
+
+    assert sem_reply["Reply-To"] is None
+    assert com_reply["Reply-To"] == "ana@exemplo.pt"
+    assert com_reply["To"] == "suporte@sabemos.studio"

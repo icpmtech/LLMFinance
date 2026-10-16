@@ -41,7 +41,10 @@ logótipo, «Sabemos Studio», o produto e a ligação para o site. O bloco est�
 só sítio, `api/email_signature.py`, e é usado pelos dois caminhos:
 
 - **Email transacional** (`api/notification_email.py`) — aprovação de conta, fim
-  de trial, subscrição ativada. A assinatura entra em `build_message`, pelo que
+  de trial, subscrição ativada e o aviso de cada **pedido do formulário de
+  contacto do site** (vai para o email de apoio configurado nos Relatórios,
+  `settings.support_email`, com o email de quem escreveu no `Reply-To`). A
+  assinatura entra em `build_message`, pelo que
   não se repete em cada mensagem (o texto continua a ser só o texto).
 - **Correio da plataforma** (`api/platform_mail_service.build_message`) — uma
   caixa **sem assinatura própria** usa a de marca. Se a caixa tiver assinatura

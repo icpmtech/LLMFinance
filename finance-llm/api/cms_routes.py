@@ -69,8 +69,10 @@ from api import cms_post_report
 from api import cms_render as render
 from api import cms_store as store
 from api import municipios_publicos as publicos
+from api import notification_email
 from api import pesquisas_publicas as pesquisas
 from api import remuneracoes_publicas as remuneracoes_publicas
+from api import reports_store as relatorios_store
 from api.auth_routes import CurrentSession, optional_session
 
 logger = logging.getLogger(__name__)
@@ -947,6 +949,19 @@ async def site_contacto(request: Request) -> HTMLResponse:
             "origem": str(request.headers.get("referer") or "")[:120],
         },
         "",
+    )
+    # A caixa de apoio (a que o «Correio da plataforma» lê por IMAP) recebe o
+    # aviso; o pedido já está guardado, por isso um problema de correio não o
+    # pode perder — `send_contact_email` registra o erro e devolve `ok: False`.
+    base_url = str(settings.get("base_url") or "").rstrip("/")
+    notification_email.send_contact_email(
+        to=str(relatorios_store.settings().get("support_email") or "").strip() or relatorios_store.DEFAULT_SUPPORT_EMAIL,
+        nome=valores["nome"],
+        email=valores["email"],
+        organizacao=valores["organizacao"],
+        assunto=valores["assunto"],
+        mensagem=valores["mensagem"],
+        registo_url=f"{base_url}/cms/contactos" if base_url else "",
     )
     logger.info("Contacto recebido pelo site.")
     return HTMLResponse(render.render_contacto(ok=True, settings=settings), headers=sem_cache)

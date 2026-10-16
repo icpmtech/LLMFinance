@@ -74,16 +74,20 @@ def build_message(
     subject: str,
     text: str,
     html: Optional[str] = None,
+    reply_to: str = "",
 ) -> EmailMessage:
     """Compõe a mensagem transacional, com a assinatura de marca já aplicada.
 
     Está separado do envio para se poder verificar (em teste) o que sai daqui sem
-    precisar de um servidor de correio.
+    precisar de um servidor de correio. O `reply_to` é o endereço de quem pediu o
+    contacto: responder ao aviso responde ao pedido, sem copiar endereços à mão.
     """
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = formataddr((sender_name, sender_address)) if sender_name else sender_address
     msg["To"] = to.strip()
+    if reply_to.strip():
+        msg["Reply-To"] = reply_to.strip()
     # `Date` e `Message-ID` não são opcionais na prática: um `EmailMessage` do
     # `smtplib` não os acrescenta sozinho, e a falta deles é pontuação de spam em
     # qualquer filtro (o RFC 5322 exige a data). O domínio do `Message-ID` sai do
@@ -102,6 +106,7 @@ def _send(
     subject: str,
     text: str,
     html: Optional[str] = None,
+    reply_to: str = "",
 ) -> Dict[str, Any]:
     """Envia um email transacional. Devolve {"ok": bool, ...}."""
     cfg = _smtp_config()
@@ -122,6 +127,7 @@ def _send(
         subject=subject,
         text=text,
         html=html,
+        reply_to=reply_to,
     )
 
     try:
@@ -218,3 +224,37 @@ Pode consultar os detalhes em Definições → Perfil → Billing.
 </html>
 """
     return _send(to, subject, text, html)
+
+
+def send_contact_email(
+    *,
+    to: str,
+    nome: str,
+    email: str,
+    organizacao: str = "",
+    assunto: str = "",
+    mensagem: str = "",
+    registo_url: str = "",
+) -> Dict[str, Any]:
+    """Avisa a caixa de apoio de um pedido enviado pelo formulário do site.
+
+    O pedido já ficou guardado no CMS («Contactos»); isto é só o aviso, para não
+    ser preciso abrir a plataforma para saber que alguém escreveu. O `Reply-To` é
+    o email de quem escreveu, para responder ao pedido a partir da caixa.
+    """
+    titulo = f"Pedido do site: {assunto.strip() or 'sem assunto'} — {nome.strip() or email.strip()}"
+    linhas = [
+        "Pedido enviado pelo formulário de contacto do site.",
+        "",
+        f"Nome: {nome}",
+        f"Email: {email}",
+    ]
+    if organizacao.strip():
+        linhas.append(f"Organização: {organizacao.strip()}")
+    if assunto.strip():
+        linhas.append(f"Assunto: {assunto.strip()}")
+    linhas += ["", "Mensagem:", mensagem.strip() or "(sem texto)"]
+    if registo_url.strip():
+        linhas += ["", f"Ver o pedido na plataforma: {registo_url.strip()}"]
+    linhas += ["", "Responda a este email para responder ao pedido."]
+    return _send(to=to, subject=titulo, text="\n".join(linhas), reply_to=email)

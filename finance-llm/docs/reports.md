@@ -131,7 +131,8 @@ de permissões (`main.py`), sem alargar o resto do módulo.
 8. **Email de apoio** — o contacto que sai no rodapé de todas as páginas e na
    nota final é configurável em *Definições → Email de apoio*
    (`settings.support_email`); sem valor configurado usa-se
-   `suporte@sabemos.studio` (`DEFAULT_SUPPORT_EMAIL`).
+   `suporte@sabemos.studio` (`DEFAULT_SUPPORT_EMAIL`). É também para este
+   endereço que vai o aviso de cada pedido do formulário de contacto do site.
 
 **Os dois modelos de empresa:**
 
