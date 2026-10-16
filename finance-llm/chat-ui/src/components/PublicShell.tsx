@@ -45,11 +45,42 @@ function Marca({ brand }: { brand: AppShell["brand"] }) {
   );
 }
 
+/** Botão que abre o painel do telemóvel (o `className` decide em que ecrãs existe). */
+function BotaoDoMenu({
+  className,
+  aberto,
+  onToggle,
+}: {
+  className: string;
+  aberto: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={aberto}
+      aria-controls="menu-publico"
+      aria-label={aberto ? "Fechar o menu" : "Abrir o menu"}
+      className={`rounded-xl border border-white/10 bg-white/5 p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70 ${className}`}
+    >
+      {aberto ? <X size={18} /> : <Menu size={18} />}
+    </button>
+  );
+}
+
 export function PublicHeader() {
   const { brand, header } = useAppShell();
   const [aberto, setAberto] = useState(false);
   const links = header.items;
   const ligacao = "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground";
+  const ligacaoDoPainel =
+    "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-white/5 hover:text-foreground";
+  const alternar = () => setAberto((valor) => !valor);
+  // O painel do telemóvel leva a navegação e, quando não cabem no cabeçalho, os
+  // dois botões (é o único caminho para «Entrar» em ecrãs estreitos).
+  const temBotoes = Boolean(header.secondary || header.cta);
+  const temPainel = links.length > 0 || temBotoes;
 
   return (
     <header className="relative z-30 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5">
@@ -88,21 +119,17 @@ export function PublicHeader() {
           </a>
         ) : null}
         {links.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setAberto((valor) => !valor)}
-            aria-expanded={aberto}
-            aria-controls="menu-publico"
-            aria-label={aberto ? "Fechar o menu" : "Abrir o menu"}
-            className="rounded-xl border border-white/10 bg-white/5 p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70 md:hidden"
-          >
-            {aberto ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          <BotaoDoMenu className="md:hidden" aberto={aberto} onToggle={alternar} />
+        ) : temBotoes ? (
+          // Sem navegação, o painel serve os botões que o cabeçalho não mostra em
+          // ecrãs estreitos: o botão existe só onde eles faltam.
+          <BotaoDoMenu className="sm:hidden" aberto={aberto} onToggle={alternar} />
         ) : null}
       </div>
 
-      {/* Painel do telemóvel: a lista de links que no ecrã grande está ao lado. */}
-      {aberto && links.length > 0 ? (
+      {/* Painel do telemóvel: a navegação que no ecrã grande está ao lado e, abaixo
+          de `sm`, os dois botões (que aí não cabem no cabeçalho). */}
+      {aberto && temPainel ? (
         <nav
           id="menu-publico"
           aria-label="Navegação principal"
@@ -112,13 +139,36 @@ export function PublicHeader() {
             <a
               key={link.href}
               href={link.href}
-              className="rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+              className={ligacaoDoPainel}
               onClick={() => setAberto(false)}
               {...externo(link.href)}
             >
               {link.label}
             </a>
           ))}
+
+          {/* Os botões do cabeçalho, quando não cabem nele (abaixo de `sm`). */}
+          {header.secondary ? (
+            <a
+              href={header.secondary.href}
+              className={`sm:hidden ${ligacaoDoPainel}`}
+              onClick={() => setAberto(false)}
+              {...externo(header.secondary.href)}
+            >
+              {header.secondary.label}
+            </a>
+          ) : null}
+          {header.cta ? (
+            <a
+              href={header.cta.href}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 sm:hidden"
+              onClick={() => setAberto(false)}
+              {...externo(header.cta.href)}
+            >
+              {header.cta.label}
+              <ArrowRight size={15} />
+            </a>
+          ) : null}
         </nav>
       ) : null}
     </header>

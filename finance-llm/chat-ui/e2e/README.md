@@ -97,6 +97,30 @@ De cada página fica uma captura em PNG no diretório temporário do teste
 proporções, alinhamentos), não pixels, para não ficarem presos a tipos de letra
 de cada máquina.
 
+`test_plataforma_cabecalho_publico.py` — **cabeçalho e rodapé das páginas
+públicas da plataforma** (`/login`, `/register` e a página inicial `/`), a
+definição que se edita em Administração → **Plataforma** (separada da do site
+público, que é o CMS → Aparência). Corre **sem sessão** — é o que o visitante vê
+antes de entrar, e com sessão a `/login` abre a aplicação em vez do formulário —
+e num contexto próprio, sem o token que o `conftest.py` injeta:
+
+- o que a página mostra é o que `/api/app-shell` responde (marca, frase de topo,
+  navegação, botões, frase do rodapé, ligações e redes sociais): o texto não é
+  copiado para o teste, é lido da API (e dois testes servem um cabeçalho próprio
+  com `page.route`, para exercitar uma navegação configurada sem passar pelo
+  backoffice);
+- a entrada e a página inicial usam **o mesmo** cabeçalho e rodapé;
+- a entrada abre **mesmo com a API do cabeçalho em falta** (pedido abortado): o
+  visitante vê a marca por omissão, não um ecrã vazio;
+- no telemóvel (390×844) o que não cabe no cabeçalho **não se perde**: a
+  navegação e os dois botões («Entrar» e «Criar conta») passam para dentro do
+  menu, e uma ligação configurada no backoffice acompanha-os (no computador fica
+  ao lado, e aí o botão do menu desaparece);
+- sem navegação e sem botões não há menu nenhum — o botão só existe quando há o
+  que abrir;
+- geometria: cabeçalho no topo, conteúdo no meio, rodapé no fim do documento e
+  nada a estourar na horizontal, com o menu fechado e aberto.
+
 ## Preparação
 
 ```powershell

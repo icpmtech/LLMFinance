@@ -12,8 +12,13 @@ O que aqui se fixa:
 - a entrada e a página inicial usam o **mesmo** cabeçalho e rodapé;
 - a entrada abre **mesmo com a API do cabeçalho em falta** (pedido abortado): o
   visitante vê a marca por omissão, não um ecrã vazio;
-- o cabeçalho fica no topo, o rodapé no fim da página, e nada estoura na
-  horizontal — no computador e no telemóvel.
+- no telemóvel o que não cabe no cabeçalho não se perde: a navegação **e os dois
+  botões** («Entrar» e «Criar conta») passam para dentro do menu — e uma ligação
+  configurada no backoffice acompanha-os (ao lado, no computador);
+- sem navegação e sem botões não há menu nenhum (o botão só existe quando há o
+  que abrir);
+- o cabeçalho fica no topo, o rodapé no fim do documento, e nada estoura na
+  horizontal — no computador e no telemóvel, com o menu fechado e aberto.
 
     e2e-venv\\Scripts\\python.exe -m pytest e2e/test_plataforma_cabecalho_publico.py -v
 """
@@ -91,20 +96,8 @@ def _sem_estouro(pagina: Page) -> None:
     assert estouro <= 1, f"a página estoura {estouro}px na horizontal"
 
 
-def _ligacao_do_cabecalho(cabecalho, link: Dict[str, str], visivel: bool):
-    """Localiza uma ligação do cabeçalho (pelo papel, ou pelo endereço).
-
-    No telemóvel parte do cabeçalho está escondida pelo CSS (não cabe no ecrã):
-    a ligação continua no documento, mas sai da árvore de acessibilidade e o
-    `get_by_role` deixa de a encontrar — aí procura-se pelo endereço.
-    """
-    if visivel:
-        return cabecalho.get_by_role("link", name=link["label"], exact=True)
-    return cabecalho.locator(f'a[href="{link["href"]}"]').first
-
-
-def _verificar_cabecalho(pagina: Page, shell: Dict[str, Any], *, tudo_visivel: bool = True) -> None:
-    """O cabeçalho mostra a marca, a navegação e os botões que a API definiu."""
+def _verificar_cabecalho(pagina: Page, shell: Dict[str, Any]) -> None:
+    """O cabeçalho (no computador) mostra a marca, a navegação e os botões da API."""
     cabecalho = pagina.locator("header").first
     expect(cabecalho).to_be_visible()
 
@@ -115,15 +108,13 @@ def _verificar_cabecalho(pagina: Page, shell: Dict[str, Any], *, tudo_visivel: b
         expect(marca).to_contain_text(shell["brand"]["tagline"])
 
     for item in shell["header"]["items"]:
-        expect(_ligacao_do_cabecalho(cabecalho, item, tudo_visivel)).to_have_attribute("href", item["href"])
+        expect(cabecalho.get_by_role("link", name=item["label"], exact=True)).to_have_attribute("href", item["href"])
 
     for chave in ("cta", "secondary"):
         botao = shell["header"][chave]
         if not botao:
             continue
-        # O botão principal cabe sempre; o secundário é o que cede no telemóvel.
-        visivel = tudo_visivel or chave == "cta"
-        expect(_ligacao_do_cabecalho(cabecalho, botao, visivel)).to_have_attribute("href", botao["href"])
+        expect(cabecalho.get_by_role("link", name=botao["label"], exact=True)).to_have_attribute("href", botao["href"])
 
 
 def _verificar_rodape(pagina: Page, shell: Dict[str, Any]) -> None:
@@ -192,18 +183,79 @@ def test_entrada_abre_mesmo_sem_a_api_do_cabecalho(pagina_publica: Page) -> None
     expect(pagina_publica.locator("footer").first).to_be_visible()
 
 
-def test_telemovel_sem_navegacao_nao_tem_botao_de_menu(pagina_publica: Page) -> None:
+def _fixar_shell(pagina: Page, shell: Dict[str, Any]) -> None:
+    """Serve um cabeçalho próprio, sem tocar no backoffice nem precisar de sessão."""
+    pagina.route(
+        "**/api/app-shell*",
+        lambda rota: rota.fulfill(status=200, content_type="application/json", body=json.dumps(shell)),
+    )
+
+
+def _com_navegacao(shell: Dict[str, Any]) -> Dict[str, Any]:
+    """O cabeçalho da API com duas ligações de navegação (como as do backoffice)."""
+    shell["header"]["items"] = [
+        {"label": "Blog", "href": "/site/blog"},
+        {"label": "Fontes", "href": "/site/fontes"},
+    ]
+    return shell
+
+
+def test_telemovel_leva_os_botoes_para_dentro_do_menu(pagina_publica: Page) -> None:
+    """Abaixo de `sm` o «Entrar» sai do cabeçalho e passa a estar no menu."""
     shell = _shell_publico()
     _abrir(pagina_publica, ENTRADA, TELEMOVEL)
-
-    # No telemóvel o botão secundário e a navegação cedem o lugar (não cabem),
-    # mas continuam no documento.
-    _verificar_cabecalho(pagina_publica, shell, tudo_visivel=False)
     _verificar_rodape(pagina_publica, shell)
-    _verificar_geometria(pagina_publica)
-    # O botão do menu só existe quando há ligações de navegação para abrir.
+
+    cabecalho = pagina_publica.locator("header").first
+    # O «Entrar» já não cabe no cabeçalho…
+    expect(cabecalho.locator(f'a[href="{shell["header"]["secondary"]["href"]}"]').first).to_be_hidden()
+    # …por isso o menu existe e abre com ele e com o «Criar conta» dentro.
     botao = pagina_publica.locator("header button[aria-controls='menu-publico']")
-    if shell["header"]["items"]:
-        expect(botao).to_be_visible()
-    else:
-        expect(botao).to_have_count(0)
+    expect(botao).to_be_visible()
+    botao.click()
+
+    painel = pagina_publica.locator("#menu-publico")
+    expect(painel).to_be_visible()
+    for chave in ("secondary", "cta"):
+        botao_cabecalho = shell["header"][chave]
+        expect(painel.get_by_role("link", name=botao_cabecalho["label"], exact=True)).to_have_attribute(
+            "href", botao_cabecalho["href"]
+        )
+    # Com o painel aberto a página continua sem estouro na horizontal.
+    _sem_estouro(pagina_publica)
+
+
+def test_navegacao_do_backoffice_entra_no_painel_do_telemovel(pagina_publica: Page) -> None:
+    """Uma ligação configurada fica ao lado no computador e no menu no telemóvel."""
+    shell = _com_navegacao(_shell_publico())
+    _fixar_shell(pagina_publica, shell)
+
+    _abrir(pagina_publica, ENTRADA, COMPUTADOR)
+    cabecalho = pagina_publica.locator("header").first
+    expect(cabecalho.get_by_role("link", name="Blog", exact=True)).to_be_visible()
+
+    # No telemóvel a ligação sai do cabeçalho e aparece no menu, com os botões.
+    pagina_publica.set_viewport_size(TELEMOVEL)
+    expect(cabecalho.get_by_role("link", name="Blog", exact=True)).to_be_hidden()
+    pagina_publica.locator("header button[aria-controls='menu-publico']").click()
+
+    painel = pagina_publica.locator("#menu-publico")
+    expect(painel.get_by_role("link", name="Blog", exact=True)).to_have_attribute("href", "/site/blog")
+    expect(painel.get_by_role("link", name="Fontes", exact=True)).to_have_attribute("href", "/site/fontes")
+    for chave in ("secondary", "cta"):
+        botao_cabecalho = shell["header"][chave]
+        expect(painel.get_by_role("link", name=botao_cabecalho["label"], exact=True)).to_have_attribute(
+            "href", botao_cabecalho["href"]
+        )
+    _sem_estouro(pagina_publica)
+
+
+def test_sem_navegacao_nem_botoes_nao_ha_menu(pagina_publica: Page) -> None:
+    """Sem ligações e sem botões não há nada para abrir: o botão não aparece."""
+    shell = _shell_publico()
+    shell["header"] = {"items": [], "cta": None, "secondary": None}
+    _fixar_shell(pagina_publica, shell)
+
+    _abrir(pagina_publica, ENTRADA, TELEMOVEL)
+    expect(pagina_publica.locator("header button[aria-controls='menu-publico']")).to_have_count(0)
+    expect(pagina_publica.locator("#menu-publico")).to_have_count(0)
