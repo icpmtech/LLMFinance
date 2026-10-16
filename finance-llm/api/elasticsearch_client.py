@@ -3837,6 +3837,40 @@ NEWS_SEARCH_FIELDS = [
 ]
 
 
+def _news_theme_clause(terms: List[str]) -> Optional[Dict[str, Any]]:
+    """Notícias que falam de **um tema da plataforma**.
+
+    Cada expressão do tema (``api.news_themes``) é procurada nos mesmos campos da
+    pesquisa livre, com **todas as palavras obrigatórias** (`operator: and`), e
+    também no **tema exato** com que a notícia foi recolhida — é o que faz
+    aparecer uma notícia recolhida por «contratação pública» mesmo quando o
+    título não repete as palavras.
+
+    Sem expressões (ou só vazias) devolve `None`: o tema não filtra nada.
+    """
+    should: List[Dict[str, Any]] = []
+    for term in terms or []:
+        text = str(term or "").strip()
+        if not text:
+            continue
+        should.append(
+            {
+                "multi_match": {
+                    "query": text,
+                    "fields": NEWS_SEARCH_FIELDS,
+                    "type": "best_fields",
+                    "operator": "and",
+                    "lenient": True,
+                }
+            }
+        )
+        should.append({"term": {"topic": text.lower()}})
+    if not should:
+        return None
+    return {"bool": {"should": should, "minimum_should_match": 1}}
+
+
+
 def search_all_news(
     q: Optional[str] = None,
     tickers: Optional[List[str]] = None,
@@ -3846,6 +3880,8 @@ def search_all_news(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     analyzed: Optional[bool] = None,
+    theme_terms: Optional[List[str]] = None,
+    theme_buckets: Optional[List[Dict[str, Any]]] = None,
     sort: str = "recent",
     page: int = 1,
     size: int = 20,
@@ -3857,6 +3893,12 @@ def search_all_news(
     dias) calculadas sobre o **mesmo** conjunto filtrado, para os números dos
     filtros corresponderem sempre ao que está à vista. `sort` aceita `recent`
     (mais recentes), `oldest` e `relevance` (só faz sentido com `q`).
+
+    Com `theme_terms` (as expressões de um tema da plataforma, ver
+    `api/news_themes`) a pesquisa fica limitada a esse tema. Com `theme_buckets`
+    (todos os temas) a resposta traz também `facets["themes"]` — a contagem de
+    cada tema **sem** o filtro do tema ativo, para se poder saltar de um para o
+    outro sem os restantes aparecerem a zero.
     """
     client = es or get_es_client()
     if not client:
@@ -3910,6 +3952,14 @@ def search_all_news(
     elif analyzed is False:
         filters.append({"bool": {"must_not": [{"exists": {"field": "analyzed_at"}}]}})
 
+    # O filtro do tema entra **depois** de guardar os filtros anteriores: a
+    # contagem por tema não pode ser feita já dentro do tema ativo (daria zero em
+    # todos os outros).
+    previous_filters = list(filters)
+    theme_clause = _news_theme_clause(theme_terms or [])
+    if theme_clause:
+        filters.append(theme_clause)
+
     query: Dict[str, Any] = {"match_all": {}}
     if must or filters:
         query = {"bool": {}}
@@ -3942,6 +3992,15 @@ def search_all_news(
             }
         },
     }
+
+    theme_filter_aggs: Dict[str, Any] = {}
+    for entry in theme_buckets or []:
+        clause = _news_theme_clause(entry.get("terms") or [])
+        key = str(entry.get("id") or "").strip()
+        if clause and key:
+            theme_filter_aggs[key] = {"bool": {"filter": [*previous_filters, clause]}}
+    if theme_filter_aggs:
+        aggs["themes"] = {"filters": {"filters": theme_filter_aggs}}
 
     try:
         resp = client.search(
@@ -3986,6 +4045,15 @@ def search_all_news(
             for bucket in (((aggregations.get("by_day") or {}).get("buckets")) or [])
         ],
     }
+    if theme_filter_aggs:
+        counts = {
+            str(key): int((bucket or {}).get("doc_count") or 0)
+            for key, bucket in (((aggregations.get("themes") or {}).get("buckets")) or {}).items()
+        }
+        # A ordem é a do catálogo (o Elasticsearch devolve os baldes por nome).
+        facets["themes"] = [
+            {"value": key, "count": counts.get(key, 0)} for key in theme_filter_aggs
+        ]
     return {
         "total": total,
         "page": safe_page,
@@ -3994,6 +4062,34 @@ def search_all_news(
         "items": items,
         "facets": facets,
     }
+
+
+def get_news_item(doc_id: str, es: Optional[Elasticsearch] = None) -> Optional[Dict[str, Any]]:
+    """Uma notícia do índice pelo seu `_id` (o `id` que a pesquisa devolve).
+
+    Serve para reconstruir a notícia inteira a partir do que a interface tem à
+    mão (o cartão traz o `id`), sem depender de o cliente reenviar todos os
+    campos. Devolve `None` quando o documento já não existe.
+    """
+    wanted = str(doc_id or "").strip()
+    if not wanted:
+        return None
+    client = es or get_es_client()
+    if not client:
+        return None
+    try:
+        hit = client.get(index="finance_news", id=wanted)
+    except NotFoundError:
+        return None
+    except Exception as exc:  # noqa: BLE001 - a publicação segue sem o documento
+        logger.warning("Não foi possível ler a notícia %s: %s", wanted, exc)
+        return None
+    document = hit.get("_source") if isinstance(hit, dict) else None
+    if not isinstance(document, dict):
+        return None
+    source = dict(document)
+    source["id"] = hit.get("_id") or wanted
+    return source
 
 
 def news_stats(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:

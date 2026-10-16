@@ -1,0 +1,38 @@
+# Fine-tuning com um modelo instrutivo da HuggingFace (7B, QLoRA 4 bits).
+#
+# É o caminho para «melhorar as respostas»: o Mistral pequeno do sistema
+# (`model/mistral-finance`) tem 512 de escondido e 3 000 tokens de vocabulário —
+# dá para classificar e descrever, mas não para conversar. Este config continua
+# a partir de um modelo que já fala e ensina-lhe o domínio dos contratos.
+#
+# Requisitos: GPU NVIDIA com >= 8 GB de VRAM (a imagem do Soup traz o CUDA) e
+# ~15 GB de disco para os pesos base. No primeiro arranque ele descarrega o
+# modelo da HuggingFace.
+#
+# Treinar (a partir do modelo base):
+#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral-instruct.yaml
+#
+# O resultado é um adaptador LoRA em ./model/soup-mistral-7b-lora. Para juntar ao
+# base num modelo só:
+#   docker compose --profile train run --rm soup merge --adapter ./model/soup-mistral-7b-lora
+
+base: mistralai/Mistral-7B-Instruct-v0.3
+task: sft
+
+data:
+  train: ./data/final/contratos.jsonl
+  format: alpaca
+  val_split: 0.05
+  max_length: 2048
+
+training:
+  epochs: 2
+  lr: 2e-4
+  batch_size: auto
+  lora:
+    r: 64
+    alpha: 16
+    target_modules: auto
+  quantization: 4bit
+
+output: ./model/soup-mistral-7b-lora

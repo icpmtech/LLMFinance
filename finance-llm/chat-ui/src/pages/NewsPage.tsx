@@ -19,9 +19,11 @@ import {
   AlertTriangle,
   Building2,
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  FileText,
   Filter,
   Loader2,
   Newspaper,
@@ -36,6 +38,8 @@ import { useAuth } from "../auth";
 import {
   collectNews,
   getNewsStats,
+  getNewsThemes,
+  publishNewsAsPost,
   searchNews,
   type NewsCollectResult,
   type NewsCollectTarget,
@@ -43,8 +47,10 @@ import {
   type NewsFacetBucket,
   type NewsSearchResult,
   type NewsStats,
+  type NewsTheme,
 } from "../newsApi";
 import { getSentimentMarketWatchlist } from "../sentimentApi";
+
 
 const SORTS = [
   { id: "recent", label: "Mais recentes" },
@@ -64,6 +70,7 @@ type Filters = {
   q: string;
   tickers: string[];
   topic: string;
+  theme: string;
   publisher: string;
   sentiment: string;
   start: string;
@@ -78,6 +85,7 @@ const EMPTY_FILTERS: Filters = {
   q: "",
   tickers: [],
   topic: "",
+  theme: "",
   publisher: "",
   sentiment: "",
   start: "",
@@ -116,6 +124,7 @@ export default function NewsPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState<NewsStats | null>(null);
   const [result, setResult] = useState<NewsSearchResult | null>(null);
+  const [themes, setThemes] = useState<NewsTheme[]>([]);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [queryDraft, setQueryDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -139,6 +148,14 @@ export default function NewsPage() {
     }
   }, []);
 
+  const loadThemes = useCallback(async () => {
+    try {
+      setThemes((await getNewsThemes()).items ?? []);
+    } catch {
+      /* sem catálogo não há atalhos por tema: a pesquisa livre continua a funcionar */
+    }
+  }, []);
+
   const runSearch = useCallback(async (active: Filters, silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -146,6 +163,7 @@ export default function NewsPage() {
         q: active.q || undefined,
         tickers: active.tickers.length ? active.tickers : undefined,
         topic: active.topic || undefined,
+        theme: active.theme || undefined,
         publisher: active.publisher || undefined,
         sentiment: active.sentiment || undefined,
         start: active.start || undefined,
@@ -167,7 +185,8 @@ export default function NewsPage() {
 
   useEffect(() => {
     void loadStats();
-  }, [loadStats]);
+    void loadThemes();
+  }, [loadStats, loadThemes]);
 
   useEffect(() => {
     void runSearch(filters);
@@ -196,6 +215,7 @@ export default function NewsPage() {
     if (filters.q) total += 1;
     total += filters.tickers.length;
     if (filters.topic) total += 1;
+    if (filters.theme) total += 1;
     if (filters.publisher) total += 1;
     if (filters.sentiment) total += 1;
     if (filters.start) total += 1;
@@ -203,6 +223,24 @@ export default function NewsPage() {
     if (filters.analyzed) total += 1;
     return total;
   }, [filters]);
+
+  /** Notícias por tema: as que o servidor contou, pela ordem do catálogo. */
+  const themeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const bucket of result?.facets?.themes ?? []) {
+      if (bucket.value) counts.set(String(bucket.value), bucket.count);
+    }
+    return counts;
+  }, [result]);
+
+  const activeTheme = useMemo(
+    () => themes.find((theme) => theme.id === filters.theme) ?? null,
+    [themes, filters.theme],
+  );
+
+  const toggleTheme = useCallback((id: string) => {
+    setFilters((current) => ({ ...current, theme: current.theme === id ? "" : id, page: 1 }));
+  }, []);
 
   /* ------------------------------------------------------------ recolher */
   const useFavourites = useCallback(async () => {
@@ -535,6 +573,14 @@ export default function NewsPage() {
                   tema: {filters.topic} <X size={10} />
                 </button>
               ) : null}
+              {filters.theme ? (
+                <button
+                  onClick={() => patch({ theme: "" })}
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-200"
+                >
+                  assunto: {activeTheme?.label ?? filters.theme} <X size={10} />
+                </button>
+              ) : null}
               {filters.publisher ? (
                 <button
                   onClick={() => patch({ publisher: "" })}
@@ -574,6 +620,35 @@ export default function NewsPage() {
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           {/* Facetas / filtros */}
           <aside className={`${facetsOpen ? "block" : "hidden"} lg:block space-y-4`}>
+            {themes.length ? (
+              <div className="glass-card rounded-2xl p-4">
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Sparkles size={12} /> Assuntos da plataforma
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {themes.map((theme) => {
+                    const on = filters.theme === theme.id;
+                    const count = themeCounts.get(theme.id);
+                    return (
+                      <button
+                        key={theme.id}
+                        onClick={() => toggleTheme(theme.id)}
+                        title={theme.description}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                          on
+                            ? "border-amber-400/40 bg-amber-400/15 text-amber-100"
+                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                        }`}
+                      >
+                        <span className="max-w-[160px] truncate">{theme.label}</span>
+                        {count !== undefined ? <span className="text-muted-foreground">{count}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeTheme ? <p className="mt-2 text-[10px] text-muted-foreground">{activeTheme.description}</p> : null}
+              </div>
+            ) : null}
             <FacetCard title="Tickers" buckets={facets?.tickers} onPick={toggleTicker} active={filters.tickers} />
             <FacetCard
               title="Temas recolhidos"
@@ -696,7 +771,14 @@ export default function NewsPage() {
             ) : null}
 
             {items.map((item) => (
-              <NewsCard key={item.id} item={item} onPickTicker={toggleTicker} onPickPublisher={(value) => patch({ publisher: value })} />
+              <NewsCard
+                key={item.id}
+                item={item}
+                canPublish={Boolean(user)}
+                theme={filters.theme}
+                onPickTicker={toggleTicker}
+                onPickPublisher={(value) => patch({ publisher: value })}
+              />
             ))}
 
             {!loading && !items.length && !error ? (
@@ -757,16 +839,38 @@ function FacetCard({
 /** Cartão de uma notícia: título (traduzido quando existe), fonte, tom e ligações. */
 function NewsCard({
   item,
+  canPublish,
+  theme,
   onPickTicker,
   onPickPublisher,
 }: {
   item: NewsDoc;
+  canPublish: boolean;
+  theme: string;
   onPickTicker: (code: string) => void;
   onPickPublisher: (value: string) => void;
 }) {
   const title = item.title || "(sem título)";
   const translated = item.translated_title && item.translated_title !== item.title ? item.translated_title : null;
   const summary = item.summary_pt || item.translated_summary || item.summary || null;
+  const [publicacao, setPublicacao] = useState<{ busy: boolean; url?: string; nota?: string; erro?: string }>({
+    busy: false,
+  });
+
+  /**
+   * Publicar no blog: o servidor lê a notícia pelo `id` e cria o artigo
+   * **rascunho**, com o tema ativo a sugerir etiquetas e categoria. Se a notícia
+   * já tiver artigo, a resposta traz o que existe — nunca se duplica.
+   */
+  const publicar = useCallback(async () => {
+    setPublicacao({ busy: true });
+    try {
+      const resposta = await publishNewsAsPost({ id: item.id, theme: theme || undefined });
+      setPublicacao({ busy: false, url: resposta.url, nota: resposta.resumo });
+    } catch (err) {
+      setPublicacao({ busy: false, erro: err instanceof Error ? err.message : "Falha ao publicar no blog." });
+    }
+  }, [item.id, theme]);
 
   return (
     <article className="glass-card rounded-2xl p-4">
@@ -826,6 +930,42 @@ function NewsCard({
           </a>
         ) : null}
       </div>
+
+      {canPublish ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2 text-[10px]">
+          {publicacao.url ? (
+            <>
+              <span className="inline-flex items-center gap-1 text-emerald-300">
+                <Check size={11} /> {publicacao.nota}
+              </span>
+              <a
+                href={publicacao.url}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-emerald-100 hover:bg-emerald-400/20"
+              >
+                <FileText size={11} /> abrir no blog
+              </a>
+            </>
+          ) : (
+            <button
+              onClick={() => void publicar()}
+              disabled={publicacao.busy}
+              title={
+                theme
+                  ? "Cria um artigo rascunho no blog, com as etiquetas e a categoria deste assunto"
+                  : "Cria um artigo rascunho no blog a partir desta notícia"
+              }
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10 disabled:opacity-40"
+            >
+              {publicacao.busy ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />} Publicar no blog
+            </button>
+          )}
+          {publicacao.erro ? (
+            <span className="inline-flex items-center gap-1 text-rose-300">
+              <AlertTriangle size={11} /> {publicacao.erro}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

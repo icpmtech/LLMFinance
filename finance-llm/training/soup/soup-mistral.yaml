@@ -1,0 +1,37 @@
+# Fine-tuning do modelo do IQ OS (o Mistral pequeno treinado de raiz em
+# `training/train_mistral.py`, com o tokenizer próprio de 3 000 tokens).
+#
+# Corre em CPU — não tem CUDA, logo `quantization: none`. Para o modelo grande
+# (respostas muito melhores, precisa de GPU) ver `soup-mistral-instruct.yaml`.
+#
+# Antes de treinar, exporte os dados do Elasticsearch:
+#   python training/export_es_dataset.py --dataset contratos --max-records 200000
+#
+# Treinar:
+#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+#   # ou, fora do Docker, com o venv do projecto:
+#   .venv\Scripts\soup.exe train --config training/soup/soup-mistral.yaml
+
+# Modelo de partida: o checkpoint do sistema (o «final» do treino de contratos).
+base: ./model/mistral-finance/final
+task: sft
+
+data:
+  # Dataset exportado do Elasticsearch (índice `contratos`) pelo exporter.
+  train: ./data/final/contratos.jsonl
+  format: alpaca
+  val_split: 0.05
+  # O tokenizer do sistema corta aos 1 024 tokens (max_position_embeddings).
+  max_length: 1024
+
+training:
+  epochs: 3
+  lr: 2e-5
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: none
+
+output: ./model/soup-mistral

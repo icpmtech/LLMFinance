@@ -5,10 +5,14 @@
 - `GET  /news/stats`  — volume do índice, tickers, fontes, janela temporal e análise
 - `GET  /news/search` — pesquisa livre com filtros e facetas (tickers, fontes, temas,
   sentimentos e dias), calculadas sobre o **mesmo** conjunto filtrado
+- `GET  /news/themes` — temas da plataforma (contratação pública, contratos, fundos
+  europeus…) com o vocabulário com que filtram as notícias
 
-**Escrita** (requer sessão — a recolha escreve no índice):
+**Escrita** (requer sessão):
 
 - `POST /news/collect` — vai ao Yahoo buscar notícias por **ticker** e por **tema** e indexa-as
+- `POST /news/publish` — cria no blog um **artigo rascunho** a partir de uma notícia
+  do índice (a mesma notícia não é publicada duas vezes)
 
 Tudo fica no índice `finance_news`, o mesmo que o sentimento de mercado, a Pesquisa
 total e o RAG usam: recolher aqui alimenta também esses módulos.
@@ -27,9 +31,12 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
+from api import cms_store
+from api import news_themes
 from api import sentiment_market as market
 from api.auth_routes import CurrentSession, optional_session
 from api.elasticsearch_client import (
+    get_news_item,
     index_analyzed_news_items,
     index_news_items,
     news_stats,
@@ -45,6 +52,22 @@ Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
 
 MAX_COLLECT_TICKERS = 12
 MAX_COLLECT_TOPICS = 6
+
+#: Campos da notícia que o editor pode corrigir no pedido de publicação: o que
+#: vier no corpo do pedido sobrepõe-se ao que está no índice.
+CAMPOS_EDITAVEIS = (
+    "title",
+    "translated_title",
+    "summary",
+    "summary_pt",
+    "translated_summary",
+    "publisher",
+    "published",
+    "url",
+    "sentiment",
+    "ticker",
+    "language",
+)
 
 
 def _text(value: Any) -> Optional[str]:
@@ -87,11 +110,25 @@ def news_index_stats() -> Dict[str, Any]:
     return news_stats()
 
 
+@router.get("/themes")
+def news_theme_catalogue() -> Dict[str, Any]:
+    """Temas da plataforma — o vocabulário com que as notícias se filtram.
+
+    São os assuntos que a plataforma cobre (contratação pública, contratos,
+    fundos europeus, subvenções, insolvências, Administração Pública, empresas e
+    fiscalidade). O catálogo é fixo (vive em `api/news_themes.py`): o que a
+    interface mostra em botões é exatamente o que a pesquisa filtra.
+    """
+    items = news_themes.list_themes()
+    return {"total": len(items), "items": items}
+
+
 @router.get("/search")
 def news_search(
     q: Optional[str] = Query(None, description="Texto livre (título, resumo, fonte, temas)."),
     tickers: Optional[str] = Query(None, description="Tickers separados por vírgula."),
     topic: Optional[str] = Query(None, description="Tema exato com que a notícia foi recolhida."),
+    theme: Optional[str] = Query(None, description="Tema da plataforma (ver `/news/themes`)."),
     publisher: Optional[str] = Query(None, description="Fonte (publicador)."),
     sentiment: Optional[str] = Query(None, pattern="^(positivo|negativo|neutro)$"),
     start: Optional[str] = Query(None, description="Data inicial (YYYY-MM-DD)."),
@@ -101,8 +138,22 @@ def news_search(
     page: int = Query(1, ge=1, le=500),
     size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
-    """Pesquisa nas notícias indexadas, com facetas sobre o mesmo filtro."""
+    """Pesquisa nas notícias indexadas, com facetas sobre o mesmo filtro.
+
+    Com `theme`, a pesquisa fica limitada às expressões desse tema (e ao tema
+    exato com que a notícia foi recolhida); as facetas passam a incluir
+    `themes` — a contagem de **todos** os temas da plataforma, calculada sem o
+    filtro do tema ativo, para se poder saltar de um para o outro.
+    """
     codes = [part.strip() for part in (tickers or "").replace(";", ",").split(",") if part.strip()]
+    chosen = None
+    if _text(theme):
+        chosen = news_themes.get_theme(theme)
+        if not chosen:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Tema «{theme}» não existe. Válidos: {', '.join(news_themes.theme_ids())}.",
+            )
     return search_all_news(
         q=_text(q),
         tickers=codes,
@@ -112,6 +163,8 @@ def news_search(
         start_date=_text(start),
         end_date=_text(end),
         analyzed=analyzed,
+        theme_terms=news_themes.match_terms(chosen["id"]) if chosen else None,
+        theme_buckets=news_themes.theme_buckets(),
         sort=sort,
         page=page,
         size=size,
@@ -239,4 +292,230 @@ async def news_collect(payload: Dict[str, Any] = Body(default={}), session: Sess
         "analyzed": analyzed_total,
         "results": results,
         "stats": news_stats(),
+    }
+
+
+# ==========================================================================
+# Publicar uma notícia como artigo de blog
+# ==========================================================================
+def _noticia_do_pedido(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A notícia do índice (quando o pedido traz o `id`) com as correções do editor.
+
+    O cartão da interface traz o `id` da notícia, pelo que o pedido pode limitar-se
+    a ele; os campos que o editor escrever no corpo do pedido sobrepõem-se ao que
+    está indexado — é a mesma liberdade que o blog dá a qualquer artigo.
+    """
+    news_id = _text(payload.get("id"))
+    noticia: Dict[str, Any] = get_news_item(news_id) if news_id else {}
+    if news_id:
+        noticia.setdefault("id", news_id)
+    merged = dict(noticia)
+    for field in CAMPOS_EDITAVEIS:
+        value = payload.get(field)
+        if isinstance(value, str) and value.strip():
+            merged[field] = value.strip()
+    topics = payload.get("topics")
+    if isinstance(topics, list) and topics:
+        merged["topics"] = [str(item).strip() for item in topics if str(item).strip()]
+    return merged
+
+
+def _etiquetas_da_noticia(payload: Dict[str, Any], noticia: Dict[str, Any], tema: Optional[Dict[str, Any]]) -> List[str]:
+    """Etiquetas do artigo: as do editor, ou as que a notícia sugere.
+
+    A última é sempre a **marca da notícia** (`noticia-<id>`): é por ela que a
+    publicação reconhece o que já foi publicado, para a mesma notícia não dar
+    dois artigos.
+    """
+    explicitas = payload.get("tags")
+    if isinstance(explicitas, str):
+        explicitas = _dividir_etiquetas(explicitas)
+    tags: List[str] = []
+    if isinstance(explicitas, list):
+        tags = [str(item).strip() for item in explicitas if str(item).strip()]
+    if not tags:
+        for value in (noticia.get("publisher"), noticia.get("ticker")):
+            text = _text(value)
+            if text and text not in tags:
+                tags.append(text)
+        for value in news_themes.suggested_tags(tema["id"] if tema else None):
+            if value not in tags:
+                tags.append(value)
+        for value in noticia.get("topics") or []:
+            text = _text(value)
+            if text and text not in tags:
+                tags.append(text)
+    marca = _marca_da_noticia(noticia, payload)
+    if marca and marca not in tags:
+        tags.append(marca)
+    return tags[:20]
+
+
+def _dividir_etiquetas(value: str) -> List[str]:
+    """Divide uma lista de etiquetas escrita à mão (`a, b; c`)."""
+    return [part.strip() for part in str(value or "").replace(";", ",").split(",") if part.strip()]
+
+
+def _marca_da_noticia(noticia: Dict[str, Any], payload: Dict[str, Any]) -> str:
+    """Etiqueta que identifica a notícia de origem (`""` quando não há `id`)."""
+    news_id = _text(noticia.get("id")) or _text(payload.get("id"))
+    if not news_id:
+        return ""
+    return f"noticia-{news_id}"[:120]
+
+
+def _artigo_da_noticia(
+    noticia: Dict[str, Any],
+    payload: Dict[str, Any],
+    tema: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Rascunho do artigo de blog a partir de uma notícia (título, resumo e fonte).
+
+    O que se publica é a **notícia**, não o índice: o corpo traz o resumo em
+    português (quando existe), o crédito da fonte com a ligação para o original e
+    uma nota de rascunho com o rasto da plataforma (tema, tom e ticker). O texto
+    e o título são editáveis no blog como em qualquer artigo — isto são os
+    valores de partida.
+    """
+    titulo_original = _text(noticia.get("title")) or ""
+    titulo = (
+        _text(payload.get("title"))
+        or _text(noticia.get("translated_title"))
+        or titulo_original
+        or "Notícia sem título"
+    )
+    resumo = (
+        _text(payload.get("excerpt"))
+        or _text(noticia.get("summary_pt"))
+        or _text(noticia.get("translated_summary"))
+        or _text(noticia.get("summary"))
+        or ""
+    )
+    fonte = _text(noticia.get("publisher"))
+    url = _text(noticia.get("url"))
+    dia = (_text(noticia.get("published")) or "")[:10]
+    ticker = _text(noticia.get("ticker"))
+    tom = _text(noticia.get("sentiment"))
+
+    paragrafos: List[str] = []
+    if resumo:
+        paragrafos += [resumo, ""]
+    credito = " · ".join(part for part in (fonte, dia) if part)
+    if url:
+        paragrafos.append((f"**Fonte:** {credito} — " if credito else "") + f"[ler a notícia original]({url})")
+    elif credito:
+        paragrafos.append(f"**Fonte:** {credito}")
+    rasto = [
+        texto
+        for texto in (
+            f"tema «{tema['label']}»" if tema else "",
+            f"tom {tom}" if tom else "",
+            f"ticker {ticker}" if ticker else "",
+        )
+        if texto
+    ]
+    nota = "_Rascunho criado a partir de uma notícia do índice `finance_news`"
+    nota += f" ({'; '.join(rasto)})" if rasto else ""
+    nota += ". Revise o texto e acrescente a análise antes de publicar._"
+    paragrafos += ["", nota]
+
+    corpo = _text(payload.get("markdown")) or "\n".join(paragrafos)
+    return {
+        "title": titulo,
+        "slug": _text(payload.get("slug")) or news_themes.slugify(titulo, limit=64),
+        "status": "rascunho",
+        "excerpt": resumo or titulo,
+        "markdown": corpo,
+        "tags": _etiquetas_da_noticia(payload, noticia, tema),
+        # O título para os motores de busca fica por preencher de propósito: o
+        # blog usa o título do artigo, que já é o título da notícia.
+        "seo": {"description": (resumo or titulo)[:180]},
+    }
+
+
+def _categorias_do_artigo(payload: Dict[str, Any], tema: Optional[Dict[str, Any]]) -> List[str]:
+    """Categorias do artigo: as do editor, ou a que o tema sugere (quando existe)."""
+    explicitas = payload.get("category_ids")
+    if isinstance(explicitas, list):
+        ids = [str(item).strip() for item in explicitas if str(item).strip()]
+        if ids:
+            return ids
+    slug = news_themes.suggested_category(tema["id"] if tema else None)
+    if not slug:
+        return []
+    categoria = cms_store.category_by_slug(slug)
+    return [str(categoria["id"])] if categoria and categoria.get("id") else []
+
+
+def _artigo_existente(marca: str) -> Optional[Dict[str, Any]]:
+    """O artigo já criado a partir desta notícia (`None` se ainda não houver)."""
+    if not marca:
+        return None
+    try:
+        encontrados = cms_store.list_items("posts", tag=marca, limit=1, with_blocks=False)
+    except Exception as exc:  # noqa: BLE001 - a falta de CMS não impede ver o erro no log
+        logger.warning("Não foi possível verificar publicações anteriores: %s", exc)
+        return None
+    items = encontrados.get("items") or []
+    return items[0] if items else None
+
+
+@router.post("/publish")
+def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: Session = None) -> Dict[str, Any]:
+    """Publica uma notícia do índice como **artigo de blog** (rascunho).
+
+    O artigo nasce **rascunho** — publica-se no editor do blog — com o título, o
+    resumo e a fonte da notícia, as etiquetas do tema e a ligação para o
+    original. A mesma notícia não dá dois artigos: a segunda tentativa devolve o
+    artigo que já existe (`duplicado: true`), e a interface liga para lá.
+
+    Basta o `id` da notícia (é o que o cartão da lista traz); os campos escritos
+    no pedido — `title`, `excerpt`, `markdown`, `tags`, `category_ids` — passam à
+    frente do que está indexado.
+    """
+    if not session:
+        raise HTTPException(status_code=401, detail="Entrar na plataforma para publicar notícias no blog.")
+    author = session.user.email
+
+    tema = None
+    if _text(payload.get("theme")):
+        tema = news_themes.get_theme(payload.get("theme"))
+        if not tema:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Tema «{payload.get('theme')}» não existe. Válidos: {', '.join(news_themes.theme_ids())}.",
+            )
+
+    noticia = _noticia_do_pedido(payload)
+    if not noticia.get("title") and not noticia.get("translated_title"):
+        raise HTTPException(
+            status_code=422,
+            detail="Indique a notícia (`id`) ou, no mínimo, o título do artigo.",
+        )
+
+    marca = _marca_da_noticia(noticia, payload)
+    existente = _artigo_existente(marca)
+    if existente:
+        return {
+            "saved": False,
+            "duplicado": True,
+            "artigo": existente,
+            "url": f"/cms/blog?id={existente['id']}",
+            "resumo": f"A notícia já tinha sido publicada como «{existente.get('title')}» (rascunho no blog).",
+        }
+
+    corpo = _artigo_da_noticia(noticia, payload, tema)
+    corpo["category_ids"] = _categorias_do_artigo(payload, tema)
+    corpo["author"] = author
+    try:
+        artigo = cms_store.save_item("posts", corpo, author)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {
+        "saved": True,
+        "duplicado": False,
+        "artigo": artigo,
+        "url": f"/cms/blog?id={artigo['id']}",
+        "tema": tema["id"] if tema else None,
+        "resumo": f"Notícia publicada como artigo «{artigo['title']}» (rascunho no blog).",
     }

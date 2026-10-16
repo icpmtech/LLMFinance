@@ -50,9 +50,11 @@ finance-llm/
 │   ├── gpt2-finance/
 │   ├── mistral-finance/
 │   └── bloomberg-finance/
-├── training/            # Fine-tuning manual em PyTorch
+├── training/            # Fine-tuning (loops PyTorch próprios + Soup)
 │   ├── train.py
-│   └── train_mistral.py
+│   ├── train_mistral.py
+│   ├── export_es_dataset.py   # Elasticsearch → dataset (formato Alpaca)
+│   └── soup/                  # configs de fine-tuning do Soup
 ├── inference/           # Geração de texto
 │   ├── generate.py
 │   └── generate_mistral.py
@@ -211,6 +213,24 @@ Por defeito os treinos usam todo o corpus (`8070` exemplos de treino), o que pod
 # Mistral
 .venv\Scripts\python training/train_mistral.py --max_samples 500 --epochs 2 --batch_size 4
 ```
+
+### Fine-tuning com o Soup
+
+O [Soup](https://github.com/MakazhanAlpamys/Soup) faz o fine-tuning a partir de um
+YAML — é o caminho para treinar em cima dos modelos existentes com os dados que já
+estão no Elasticsearch (contratos PT/ES/FR, entidades, notícias):
+
+```bash
+# 1. exportar o dataset do Elasticsearch
+.venv\Scripts\python training/export_es_dataset.py --dataset contratos --max-records 200000
+
+# 2. treinar (imagem oficial do Soup + cliente do Elasticsearch, perfil `train`)
+docker compose --profile train build soup
+docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+```
+
+O que se exporta, os configs disponíveis e como usar o modelo treinado (merge,
+GGUF para o Ollama): [`docs/soup.md`](docs/soup.md).
 
 ## Executar
 

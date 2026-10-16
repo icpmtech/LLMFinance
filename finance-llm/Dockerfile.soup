@@ -1,0 +1,16 @@
+# Fine-tuning do IQ OS com o Soup (https://github.com/MakazhanAlpamys/Soup).
+#
+# O Soup publica por release uma imagem oficial — CUDA + `soup-cli[train,serve,
+# data,eval]`, com entrypoint `soup` — em `ghcr.io/makazhanalpamys/soup`. Não vale
+# a pena repetir essa build (é torch + CUDA, vários GB): esta imagem parte dela e
+# acrescenta-lhe apenas o cliente do Elasticsearch, que é o que o exporter
+# (`training/export_es_dataset.py`) precisa para ler os dados do IQ OS.
+#
+# A versão da base é fixável pela variável `SOUP_IMAGE`
+# (ver `docker-compose.yml`, serviço `soup`).
+ARG SOUP_IMAGE=ghcr.io/makazhanalpamys/soup:latest
+FROM ${SOUP_IMAGE}
+
+# O cliente 9.x não fala com o servidor 8.11 do compose (mesma restrição do
+# `requirements.txt` do backend).
+RUN pip install --no-cache-dir "elasticsearch>=8.11.0,<9.0.0"

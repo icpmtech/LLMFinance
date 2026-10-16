@@ -6,6 +6,7 @@
 # Serviços "agents":                  hermes-agent -> agente autónomo + dashboard (profile: agents)
 # Serviços "mirofish":                mirofish -> previsão por enxame de agentes (profile: mirofish)
 # Serviços "osif":                    osif-* -> OSINT Framework v2 do fr4nc1stein (profile: osif)
+# Serviços "train":                   soup -> fine-tuning dos modelos com os dados do Elasticsearch (profile: train)
 #
 # Uso:
 #   docker compose up --build -d                     # núcleo da solução
@@ -13,6 +14,7 @@
 #   docker compose --profile agents up -d            # + Hermes Agent (dashboard na página iframe)
 #   docker compose --profile mirofish up -d          # + MiroFish (precisa de chaves LLM + Zep)
 #   docker compose --profile osif up -d --build      # + OSIF (página «OSINT Framework»)
+#   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml   # + Soup
 #   docker compose --profile test run --rm tests     # testes de dentro do container
 
 # ---------------------------------------------------------------------------
@@ -473,6 +475,53 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
+  # Soup — fine-tuning dos modelos do IQ OS com os dados do Elasticsearch.
+  #
+  # Corre a imagem oficial do Soup (`ghcr.io/makazhanalpamys/soup`) com o cliente
+  # do Elasticsearch por cima — ver `Dockerfile.soup`. O fluxo tem dois passos:
+  # exportar o dataset dos índices do IQ OS e treinar com um config de
+  # `training/soup/`.
+  #
+  # O directório do projecto é montado em /workspace, como no compose do próprio
+  # Soup: os caminhos dos configs (`./data/final/...`, `./model/...`) são iguais
+  # aos de uma corrida no host, e o modelo treinado fica logo visível em `model/`.
+  #
+  # Uso:
+  #   docker compose --profile train build soup
+  #   docker compose --profile train run --rm --entrypoint python soup \
+  #       training/export_es_dataset.py --dataset contratos --max-records 200000
+  #   docker compose --profile train run --rm soup train --config training/soup/soup-mistral.yaml
+  #
+  # Numa máquina com GPU, acrescente `--gpus all` ao `run` (o Soup treina também
+  # em CPU, mas sem GPU o modelo grande é impraticável).
+  # ---------------------------------------------------------------------------
+  soup:
+    build:
+      context: .
+      dockerfile: Dockerfile.soup
+      args:
+        # Versão da imagem base, fixável para reproduzir um treino antigo.
+        SOUP_IMAGE: ${SOUP_IMAGE:-ghcr.io/makazhanalpamys/soup:latest}
+    image: iq-os-soup:latest
+    container_name: finance-llm-soup
+    profiles: ["train"]
+    volumes:
+      - ./:/workspace
+      # Pesos descarregados da HuggingFace (o Mistral-7B são ~15 GB): sem este
+      # volume, cada `run` voltava a descarregá-los.
+      - soup-cache:/root/.cache/huggingface
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace
+      # Nome do serviço do compose, não 127.0.0.1 (dentro do container o host é outro)
+      - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+      # Só é preciso para modelos fechados da HuggingFace.
+      - HF_TOKEN=${HF_TOKEN:-}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
   # OSIF — OSINT Framework v2 (https://github.com/fr4nc1stein/osint-framework).
   #
   # Plataforma de investigação OSINT: FastAPI + Vue 3, com PostgreSQL (casos,
@@ -620,6 +669,8 @@ volumes:
   whisper-cache:
   # Browsers do Playwright (fetchers `dynamic` e `stealth` da sonda de produtos).
   playwright-cache:
+  # Pesos base do fine-tuning (Mistral-7B e afins), descarregados pelo Soup.
+  soup-cache:
   mirofish-uploads:
   osif-postgres-data:
   osif-redis-data:

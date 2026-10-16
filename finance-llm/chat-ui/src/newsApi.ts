@@ -43,6 +43,8 @@ export type NewsFacets = {
   topics: NewsFacetBucket[];
   labels: NewsFacetBucket[];
   days: NewsFacetBucket[];
+  /** Contagem por tema da plataforma (`value` = id do tema). */
+  themes?: NewsFacetBucket[];
 };
 
 export type NewsSearchResult = {
@@ -77,6 +79,8 @@ export type NewsSearchFilters = {
   q?: string;
   tickers?: string[];
   topic?: string;
+  /** Tema da plataforma (contratação pública, contratos, fundos europeus…). */
+  theme?: string;
   publisher?: string;
   sentiment?: string;
   start?: string;
@@ -85,6 +89,39 @@ export type NewsSearchFilters = {
   sort?: "recent" | "oldest" | "relevance";
   page?: number;
   size?: number;
+};
+
+/** Um tema da plataforma: o que a pesquisa filtra e o que os botões mostram. */
+export type NewsTheme = {
+  id: string;
+  label: string;
+  description: string;
+  terms: string[];
+  tags: string[];
+  category: string;
+};
+
+/** O que a publicação de uma notícia no blog devolve. */
+export type NewsPublishResult = {
+  saved: boolean;
+  /** Verdadeiro quando a notícia já tinha artigo: o `artigo` é o que existe. */
+  duplicado: boolean;
+  artigo: { id: string; title: string; slug: string; status: string };
+  /** Caminho do editor do blog (`/cms/blog?id=…`). */
+  url: string;
+  tema?: string | null;
+  resumo: string;
+};
+
+/** Campos que a publicação aceita (o `id` da notícia chega; o resto é opcional). */
+export type NewsPublishPayload = {
+  id: string;
+  theme?: string;
+  title?: string;
+  excerpt?: string;
+  markdown?: string;
+  tags?: string[];
+  category_ids?: string[];
 };
 
 /** Resultado da recolha de um alvo (um ticker ou um tema). */
@@ -129,13 +166,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /**
  * Pesquisa nas notícias indexadas. As facetas vêm calculadas sobre o **mesmo**
- * filtro, pelo que os números dos filtros correspondem sempre ao que está à vista.
+ * filtro — incluindo `themes`, a contagem de cada tema da plataforma, calculada
+ * sem o tema ativo (para se poder saltar de um para o outro).
  */
 export function searchNews(filters: NewsSearchFilters = {}) {
   const query = new URLSearchParams();
   if (filters.q) query.set("q", filters.q);
   if (filters.tickers?.length) query.set("tickers", filters.tickers.join(","));
   if (filters.topic) query.set("topic", filters.topic);
+  if (filters.theme) query.set("theme", filters.theme);
   if (filters.publisher) query.set("publisher", filters.publisher);
   if (filters.sentiment) query.set("sentiment", filters.sentiment);
   if (filters.start) query.set("start", filters.start);
@@ -145,6 +184,26 @@ export function searchNews(filters: NewsSearchFilters = {}) {
   query.set("page", String(filters.page ?? 1));
   query.set("size", String(filters.size ?? 20));
   return request<NewsSearchResult>(`/news/search?${query.toString()}`);
+}
+
+/** Temas da plataforma (contratação pública, contratos, fundos europeus…). */
+export function getNewsThemes() {
+  return request<{ total: number; items: NewsTheme[] }>("/news/themes");
+}
+
+/**
+ * Publica uma notícia no blog como **artigo rascunho**.
+ *
+ * Basta o `id` da notícia: o servidor lê-a do índice e escreve o título, o
+ * resumo, a fonte e a ligação para o original. A mesma notícia não dá dois
+ * artigos — a segunda chamada devolve o que já existe (`duplicado: true`).
+ */
+export function publishNewsAsPost(payload: NewsPublishPayload) {
+  return request<NewsPublishResult>("/news/publish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Panorama do índice de notícias (volume, tickers, fontes, janela, análise). */
