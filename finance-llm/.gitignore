@@ -35,6 +35,12 @@ model/gpt2-finance/final/
 model/soup-*/
 # Pacotes Node (qualquer projeto sob finance-llm; ver tambem chat-ui/.gitignore).
 node_modules/
+# O `*.json` acima apanharia os manifestos do `site-css/` (o CSS do site publico):
+# sem eles, de um clone nao se volta a compilar a folha (`npm install && npm run build`).
+# `build/` e a saida do `npm run check` — nao e servida a ninguem.
+!site-css/package.json
+!site-css/package-lock.json
+site-css/build/
 kronos_upstream/
 data/forecasting/*.png
 .vite/

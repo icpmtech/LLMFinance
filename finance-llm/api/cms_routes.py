@@ -58,6 +58,7 @@ DGAEP de um ano, com as secções editáveis, o texto, os blocos e a marca):
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from typing import Annotated, Any, Dict, Optional
@@ -1043,6 +1044,31 @@ def site_pwa_icon(ficheiro: str) -> Response:
 def site_offline() -> HTMLResponse:
     """Página de recurso, mostrada pelo service worker quando não há ligação."""
     return HTMLResponse(render.render_offline(settings=store.get_settings()), headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/site/site.css")
+def site_css(request: Request) -> Response:
+    """Folha de estilo do site, compilada pelo Tailwind (`site-css/`).
+
+    Vive fora do HTML porque é a mesma em todas as páginas: assim é descarregada
+    uma vez e reaproveitada. O `ETag` é o resumo do conteúdo — quando nada mudou,
+    o browser fica com a cópia que já tem e leva um `304` sem corpo. O
+    `must-revalidate` evita que uma versão antiga fique presa depois de uma
+    publicação nova.
+    """
+    caminho = store.SITE_ASSETS_DIR / "site.css"
+    if not caminho.is_file():
+        raise HTTPException(status_code=404, detail="Folha de estilo em falta.")
+    dados = caminho.read_bytes()
+    etiqueta = '"' + hashlib.sha256(dados).hexdigest()[:32] + '"'
+    cabecalhos = {
+        "ETag": etiqueta,
+        "Cache-Control": "public, max-age=600, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if request.headers.get("if-none-match") == etiqueta:
+        return Response(status_code=304, headers=cabecalhos)
+    return Response(dados, media_type="text/css; charset=utf-8", headers=cabecalhos)
 
 
 @router.get("/site/documento/{document_id}")

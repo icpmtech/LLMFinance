@@ -182,6 +182,32 @@ curl.exe -s http://127.0.0.1:4180/ | Select-String -Pattern 'assets/index-[^"]+\
 docker compose exec -T frontend sh -c 'grep -c "Palavra de ativa" /usr/share/nginx/html/assets/index-*.js'
 ```
 
+### 3.2 CSS do site público (Tailwind)
+
+O site público (`/site/...`) não passa pelo `chat-ui`: o HTML é escrito pelo
+`api/cms_render.py` e o CSS vive em `site-css/` (Tailwind v4), compilado para
+`api/site_assets/site.css` **versionado**.
+
+```powershell
+cd site-css; npm install   # só na primeira vez
+npm run build              # escreve ../api/site_assets/site.css
+docker restart finance-llm-backend
+curl.exe -s http://127.0.0.1:4180/site/site.css | Select-String -Pattern 'font-weight:700'
+```
+
+A folha é servida em `/site/site.css` (rota própria, com `ETag` e
+`Cache-Control: public, max-age=600, must-revalidate`: o browser reutiliza a cópia
+e leva um `304` sem corpo quando nada mudou). O que fica em linha, nas páginas, é
+só o bloco `:root` com as **variáveis do tema** (tema, cor de destaque e raio, que
+vêm das definições do CMS) — mudar a cor da marca no CMS não pede recompilação; o
+resto do CSS pede. Não é preciso Node para servir o site: o ficheiro compilado vai
+no repositório, e sem ele a rota responde `404` e as páginas ficam sem estilo.
+
+O `site-css/README.md` tem as regras a manter — a principal é que nenhuma classe do
+site pode ter o nome de um utilitário do Tailwind (`.grid`, `.block`, `.flex`), que
+os testes verificam. As páginas de pesquisa e de remunerações mantêm um `extra_css`
+em linha, que ainda não passou pelo compilador.
+
 ### 4. Parar
 
 ```powershelldocker compose down

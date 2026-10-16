@@ -37,6 +37,49 @@
    Só o que o preflight do Tailwind não faz: a tipografia da casa, a ligação do
    tema, o `scroll-padding` do cabeçalho pegajoso e os elementos incorporados. */
 @layer base {
+  /* O preflight apaga o que o site contava receber do browser: o peso dos
+     títulos (`h1`-`h3` têm tamanho próprio, mas não peso), os marcadores das
+     listas, a margem delas e os 40px de indentação (uma `ul` do texto corrido
+     perde-os, e a barra dos gráficos deslocava-se 40px). Devolve-se o mesmo
+     valor na camada de base: as regras do site continuam a ganhar, por estarem
+     na camada seguinte. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 700;
+  }
+  /* Tamanhos dos títulos que o site não desenha (`h4`-`h6`): os do browser. */
+  h4 {
+    font-size: 1rem;
+  }
+  h5 {
+    font-size: 0.83em;
+  }
+  h6 {
+    font-size: 0.67em;
+  }
+  ul,
+  ol {
+    list-style-type: disc;
+    margin: 1em 0;
+    padding-left: 40px;
+  }
+  ol {
+    list-style-type: decimal;
+  }
+  ul ul,
+  ol ul {
+    list-style-type: circle;
+  }
+  ul ul ul,
+  ol ul ul,
+  ul ol ul,
+  ol ol ul {
+    list-style-type: square;
+  }
   :root {
     --gutter: 16px;
   }

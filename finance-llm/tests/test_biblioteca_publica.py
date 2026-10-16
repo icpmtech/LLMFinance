@@ -60,6 +60,28 @@ def instalacao(tmp_path, monkeypatch):
     studio.reset_for_tests()
 
 
+def _minificado(css: str) -> str:
+    """O CSS como o browser o lê, sem os espaços que não significam nada.
+
+    Um espaço entre seletores é descendência (`nav.main .submenu`) e não pode
+    desaparecer; à volta de `{};:,>` nunca quer dizer nada.
+    """
+    texto = re.sub(r"\s+", " ", css)
+    return re.sub(r"\s*([{};:,>~+])\s*", r"\1", texto)
+
+
+def _css_do_site() -> str:
+    """A folha de estilo do site, tal como o browser a descarrega.
+
+    O CSS saiu do HTML (é igual em todas as páginas e vive num ficheiro
+    compilado pelo Tailwind, ver `site-css/`), por isso as regras procuram-se
+    aqui, na forma minificada.
+    """
+    caminho = cms_store.SITE_ASSETS_DIR / "site.css"
+    assert caminho.is_file(), f"falta {caminho} — compilar com `cd site-css && npm run build`"
+    return _minificado(caminho.read_text(encoding="utf-8"))
+
+
 def _documento(titulo: str, *, preco: float, tags: list[str], publicar: bool = True, com_pdf: bool = True) -> Dict[str, Any]:
     """Relatório do Estúdio com PDF gerado (e, por omissão, publicado)."""
     criado = studio.save_report(
@@ -445,19 +467,20 @@ def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
         nav,
         re.S,
     )
-    # No ecrã grande nada disto aparece…
-    assert (
-        ".menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-icone { display: none; }" in html
-    )
+    # No ecrã grande nada disto aparece… (a folha do site é um ficheiro: é lá que
+    # as regras vivem, e o HTML só tem de a ligar).
+    assert '<link rel="stylesheet" href="/site/site.css">' in html
+    css = _css_do_site()
+    assert ".menu-estado,.menu-botao,.menu-pesquisa,.menu-conta,.menu-icone{display:none}" in css
     # … e no telemóvel a lista começa fechada: quem abre é a seta.
-    assert "nav.main .tem-submenu > .submenu { display: none; }" in html
+    assert "nav.main .tem-submenu>.submenu{display:none}" in css
     assert "classList.toggle" in html
     # Ícones e botões não se deformam com a linha apertada: o desenho não encolhe
     # e os botões de conta passam para a linha seguinte em vez de crescerem para
     # o dobro da altura (o rótulo nunca muda de linha).
-    assert ".menu-icone { flex: none; }" in html
-    assert ".menu-conta { display: flex; flex-wrap: wrap;" in html
-    assert "white-space: nowrap;" in html
+    assert ".menu-icone{flex:none}" in css
+    assert ".menu-conta{flex-wrap:wrap" in css
+    assert "white-space:nowrap" in css
 
 
 def test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato(instalacao):
@@ -469,11 +492,12 @@ def test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato(instalacao):
 
     # A seta existe nos dois layouts (não está na lista do que o ecrã grande esconde).
     assert '<button type="button" class="menu-abre"' in nav
-    assert ".menu-abre { display: none; }" not in html
+    css = _css_do_site()
+    assert ".menu-abre{display:none}" not in css
     # O estado é o da classe `aberto` (posto pelo clique), não o do rato ou do foco.
-    assert "nav.main .tem-submenu.aberto > .submenu { display: block; }" in html
-    assert ":hover > .submenu" not in html
-    assert ":focus-within" not in html
+    assert "nav.main .tem-submenu.aberto>.submenu{display:block}" in css
+    assert ":hover>.submenu" not in css
+    assert ":focus-within" not in css
     # Uma seta por item com submenu, com o rótulo a continuar a ser o link, e sem
     # a seta antiga (feita em CSS) ao lado.
     assert nav.count('class="menu-abre"') >= 1
@@ -503,6 +527,6 @@ def test_painel_do_telemovel_nao_repete_o_que_o_bloco_de_conta_ja_da(instalacao)
     assert '<a class="menu-igual-conta" href="/login">' in nav
     assert '<a class="menu-igual-conta" href="/register/">' in nav
     assert nav.count('class="menu-igual-conta"') == 2
-    assert "nav.main > .menu-igual-conta { display: none; }" in html
+    assert "nav.main>.menu-igual-conta{display:none}" in _css_do_site()
     # E quem não vai para lá fica sem marca nenhuma.
     assert '<a href="/site/blog">' in nav

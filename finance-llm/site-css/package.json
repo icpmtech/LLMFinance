@@ -1,0 +1,15 @@
+{
+  "name": "sabemos-site-css",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CSS do site público (Sabemos Studio), escrito em Tailwind e compilado para api/site_assets/site.css",
+  "scripts": {
+    "build": "tailwindcss -i ./src/site.css -o ../api/site_assets/site.css --minify",
+    "watch": "tailwindcss -i ./src/site.css -o ../api/site_assets/site.css --watch",
+    "check": "tailwindcss -i ./src/site.css -o ./build/site.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}
