@@ -68,6 +68,39 @@ interface e na pesquisa sem mais nenhuma alteração.
 | `title`, `excerpt` | Substituem o título e o resumo da notícia |
 | `markdown` | Corpo escrito à mão (por omissão é gerado: resumo, crédito da fonte e ligação para o original) |
 | `tags`, `category_ids` | Etiquetas e categorias explícitas |
+| `imagem` | `false` deixa o artigo **sem capa** (por omissão vai buscar a imagem da notícia) |
+| `cover_url` | Imagem de capa escolhida à mão (manda sobre a da notícia) |
+
+### Capa do artigo
+
+O índice `finance_news` **não** guarda imagens: a fotografia está na página da
+notícia, anunciada em `og:image`. Ao publicar, `api/news_imagem.py` abre a página
+original (a mesma pilha de leitura do módulo das redes sociais — `Scrapling` com
+impressão digital de Chrome, `httpx` como alternativa), lê o `og:image` (ou o
+`twitter:image`) e **descarrega a imagem para a biblioteca de media do CMS**.
+
+Guardar a imagem em vez de apontar para o site de origem é deliberado: as
+ligações diretas são bloqueadas, mudam de caminho e desaparecem quando a notícia
+sai do ar — e o `og:image` do artigo ficaria pendurado num endereço de terceiros.
+
+O que é recusado (e porquê, no `aviso_capa` da resposta):
+
+| Verificação | Motivo |
+| --- | --- |
+| Endereço que não é `http(s)` | não há nada para descarregar |
+| `content-type` que não é `image/*` | a página devolveu HTML (bloqueio, erro, *paywall*) |
+| Menos de 3 KB | é um pixel de contagem ou um espaço reservado |
+| Menos de 200×100 | não é uma fotografia de notícia |
+| Ficheiro que não abre com o PIL | imagem corrompida ou formato exótico |
+| Mais de 8 MB | não vale o tráfego |
+
+A capa fica também como `seo.image_id`, pelo que o `og:image` e o `twitter:image`
+do artigo passam a ser a fotografia da notícia. O editor do blog mostra o campo
+**Imagem de capa** com um botão de carregar imagem do computador (o ficheiro entra
+na biblioteca de media), para se poder trocar a capa sem sair do artigo.
+
+Um artigo que nasce sem capa não perde nada: o site usa a imagem de partilha das
+definições (ou nenhuma) e o cartão da notícia diz porquê.
 
 O que o servidor escreve, quando o editor não escreve: título **em português**
 (`translated_title` quando existe), resumo (`summary_pt` → `translated_summary` →

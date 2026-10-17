@@ -460,6 +460,27 @@ def test_hero_imagem_usa_a_fotografia_como_fundo(cms_limpo: Any) -> None:
     assert "https://exemplo.test/capa.jpg" in html
 
 
+def test_catalogo_expoe_e_guarda_as_variantes_do_hero(cms_limpo: Any) -> None:
+    """O editor recebe as opções do servidor e o bloco guarda-as como estão."""
+    catalogo = store.catalogue()
+
+    assert {item["id"] for item in catalogo["hero_styles"]} == {"simples", "cartao", "destaque", "imagem", "lateral"}
+    assert "azul" in {item["id"] for item in catalogo["hero_tones"]}
+
+    pagina = store.save_item(
+        "pages",
+        {
+            "title": "Sobre o projeto",
+            "slug": "sobre",
+            "blocks": [{"type": "hero", "data": {"title": "Inteligência financeira", "style": "cartao", "tone": "violeta"}}],
+        },
+        "qa@teste.pt",
+    )
+
+    assert pagina["blocks"][0]["data"]["style"] == "cartao"
+    assert pagina["blocks"][0]["data"]["tone"] == "violeta"
+
+
 def test_pagina_sem_hero_tem_h1_com_o_titulo(cms_limpo: Any) -> None:
     html = cms_render.render_page(
         {
