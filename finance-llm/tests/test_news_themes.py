@@ -361,6 +361,7 @@ def test_publicacao_usa_a_imagem_da_noticia_como_capa(cms_isolado, monkeypatch):
     assert media["kind"] == "imagem"
     assert media["alt"] == artigo["title"]
     assert media["credit"] == NOTICIA["publisher"]
+    assert artigo["seo"]["image_id"] == artigo["cover_id"], "a capa devia ser também a imagem de partilha"
     assert resposta["capa"] == {"id": artigo["cover_id"], "origem": "https://exemplo.pt/obra.png"}
     assert resposta["aviso_capa"] == ""
 

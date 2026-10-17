@@ -552,6 +552,98 @@ const itemFieldLabels: Record<string, string> = {
   text: "Texto",
 };
 
+/** Variantes e cores do hero — os mesmos ids que o site público renderiza. */
+export type HeroStyleOption = { id: string; label: string };
+export type HeroToneOption = { id: string; label: string; color: string };
+
+const HERO_STYLE_FALLBACK: HeroStyleOption[] = [
+  { id: "simples", label: "Simples (faixa)" },
+  { id: "cartao", label: "Cartão" },
+  { id: "destaque", label: "Destaque (fundo tingido)" },
+  { id: "imagem", label: "Imagem de fundo" },
+  { id: "lateral", label: "Lateral (texto e imagem)" },
+];
+
+const HERO_TONE_FALLBACK: HeroToneOption[] = [
+  { id: "acento", label: "Acento do site", color: "#0ea5a4" },
+  { id: "azul", label: "Azul", color: "#2563eb" },
+  { id: "violeta", label: "Violeta", color: "#7c3aed" },
+  { id: "esmeralda", label: "Esmeralda", color: "#059669" },
+  { id: "ambar", label: "Âmbar", color: "#d97706" },
+  { id: "rosa", label: "Rosa", color: "#db2777" },
+  { id: "neutro", label: "Neutro", color: "#475569" },
+];
+
+/** Aproximação do hero no editor — o site usa o tema real da Aparência. */
+function HeroPreview({ data, media, tones }: { data: Record<string, unknown>; media: MediaOption[]; tones: HeroToneOption[] }) {
+  const style = HERO_STYLE_FALLBACK.some((item) => item.id === String(data.style)) ? String(data.style) : "simples";
+  const tone = tones.find((item) => item.id === String(data.tone || "acento"))?.color ?? "#0ea5a4";
+  const centered = String(data.align || "") === "centro";
+  const imageUrl = media.find((item) => item.id === String(data.image_id ?? ""))?.url ?? "";
+
+  const copy = (
+    <div className={["relative z-10", centered ? "text-center" : "", style === "imagem" ? "text-white" : "text-foreground"].join(" ")}>
+      <p className="text-[15px] font-bold leading-tight">{String(data.title || "Título do destaque")}</p>
+      <p className={["mt-1 text-[11px]", style === "imagem" ? "text-white/80" : "text-muted-foreground"].join(" ")}>
+        {String(data.subtitle || "Uma frase que diz o essencial.")}
+      </p>
+      {Boolean(data.cta_label) && (
+        <span
+          className="mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold"
+          style={style === "imagem" ? { background: "#fff", color: "#0b1220" } : { background: tone, color: "#fff" }}
+        >
+          {String(data.cta_label)}
+        </span>
+      )}
+    </div>
+  );
+
+  let frame = "rounded-xl border border-dashed border-white/12 p-3";
+  const fundo: Record<string, string> = {};
+  let extra: ReactNode = null;
+
+  if (style === "cartao") {
+    frame = "rounded-xl border border-white/10 bg-white/[0.05] p-3";
+    fundo.borderTop = `3px solid ${tone}`;
+    if (imageUrl) extra = <img src={imageUrl} alt="" className="mt-2 h-20 w-full rounded-lg object-cover" />;
+  } else if (style === "destaque") {
+    frame = "rounded-xl border p-3";
+    fundo.borderColor = `${tone}66`;
+    fundo.background = `linear-gradient(135deg, ${tone}22, transparent 70%)`;
+    if (imageUrl) extra = <img src={imageUrl} alt="" className="mt-2 h-20 w-full rounded-lg object-cover" />;
+  } else if (style === "imagem") {
+    frame = "relative overflow-hidden rounded-xl border border-white/10 p-3";
+    if (imageUrl) {
+      extra = (
+        <>
+          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+          <span className="absolute inset-0 bg-slate-950/50" />
+        </>
+      );
+    } else {
+      fundo.background = `linear-gradient(135deg, ${tone}, #0b1220)`;
+    }
+  } else if (style === "lateral") {
+    frame = ["grid items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3", imageUrl ? "grid-cols-2" : ""].join(" ");
+    if (imageUrl) extra = <img src={imageUrl} alt="" className="h-20 w-full rounded-lg object-cover" />;
+  } else if (imageUrl) {
+    extra = <img src={imageUrl} alt="" className="mt-2 h-20 w-full rounded-lg object-cover" />;
+  }
+
+  return (
+    <div>
+      <div className={frame} style={fundo}>
+        {copy}
+        {extra}
+      </div>
+      <p className="mt-1 text-[10.5px] text-muted-foreground/70">
+        Aproximação do bloco; no site usa o tema e a cor definidos em Aparência.
+      </p>
+    </div>
+  );
+}
+
+
 /** Barras do bloco `grafico` em texto: uma linha por barra, campos por `|`.
  *
  * O mesmo idioma da tabela (células separadas por `|`): escrever dez barras num
@@ -645,12 +737,16 @@ function BlockForm({
   media,
   contents,
   categories,
+  heroStyles = HERO_STYLE_FALLBACK,
+  heroTones = HERO_TONE_FALLBACK,
 }: {
   block: CmsBlockLike;
   onChange: (data: Record<string, unknown>) => void;
   media: MediaOption[];
   contents: { id: string; title: string; kind: string }[];
   categories: { id: string; name: string }[];
+  heroStyles?: HeroStyleOption[];
+  heroTones?: HeroToneOption[];
 }) {
   const data = block.data ?? {};
   const set = (key: string, value: unknown) => onChange({ ...data, [key]: value });
@@ -663,7 +759,21 @@ function BlockForm({
         <div className="grid gap-2 sm:grid-cols-2">
           <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
           <TextInput label="Subtítulo" value={text("subtitle")} onChange={(next) => set("subtitle", next)} wide />
-          <MediaPicker label="Imagem de fundo" value={text("image_id")} onChange={(next) => set("image_id", next)} media={media} wide />
+          <MediaPicker label="Imagem" value={text("image_id")} onChange={(next) => set("image_id", next)} media={media} wide />
+          <SelectInput
+            label="Formato"
+            value={text("style") || "simples"}
+            onChange={(next) => set("style", next)}
+            options={heroStyles.map((item) => ({ value: item.id, label: item.label }))}
+            hint="Com «Imagem de fundo» a fotografia cobre o bloco; nas restantes aparece junto ao texto."
+          />
+          <SelectInput
+            label="Cor"
+            value={text("tone") || "acento"}
+            onChange={(next) => set("tone", next)}
+            options={heroTones.map((item) => ({ value: item.id, label: item.label }))}
+            hint="«Acento» segue a cor de realce definida em Aparência."
+          />
           <TextInput label="Botão — texto" value={text("cta_label")} onChange={(next) => set("cta_label", next)} />
           <TextInput label="Botão — ligação" value={text("cta_href")} onChange={(next) => set("cta_href", next)} placeholder="/site/blog" />
           <SelectInput
@@ -676,6 +786,12 @@ function BlockForm({
             ]}
             wide
           />
+          <div className="sm:col-span-2">
+            <p className={labelClass}>Pré-visualização</p>
+            <div className="mt-1">
+              <HeroPreview data={data} media={media} tones={heroTones} />
+            </div>
+          </div>
         </div>
       );
     case "texto":
@@ -979,6 +1095,8 @@ export function BlockEditor({
   blocks,
   onChange,
   blockTypes,
+  heroStyles,
+  heroTones,
   media = [],
   contents = [],
   categories = [],
@@ -986,6 +1104,8 @@ export function BlockEditor({
   blocks: CmsBlockLike[];
   onChange: (next: CmsBlockLike[]) => void;
   blockTypes: BlockTypeInfo[];
+  heroStyles?: HeroStyleOption[];
+  heroTones?: HeroToneOption[];
   media?: MediaOption[];
   contents?: { id: string; title: string; kind: string }[];
   categories?: { id: string; name: string }[];
@@ -1055,7 +1175,7 @@ export function BlockEditor({
             </button>
           </header>
           <div className="px-3 py-3">
-            <BlockForm block={block} onChange={(data) => patch(index, data)} media={media} contents={contents} categories={categories} />
+            <BlockForm block={block} onChange={(data) => patch(index, data)} media={media} contents={contents} categories={categories} heroStyles={heroStyles} heroTones={heroTones} />
           </div>
         </section>
       ))}

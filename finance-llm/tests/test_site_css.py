@@ -145,6 +145,19 @@ def test_compensacoes_do_preflight_do_tailwind(css: str) -> None:
     assert "ol{list-style-type:decimal}" in css
 
 
+def test_hero_tem_variantes_e_cores_compiladas(css: str) -> None:
+    """As variantes escolhidas no editor têm de chegar à folha servida."""
+    for seletor in (
+        ".hero.hero--cartao",
+        ".hero.hero--destaque",
+        ".hero.hero--imagem",
+        ".hero.hero--lateral",
+        ".hero.hero--tom-azul",
+        ".hero.hero--tom-neutro",
+    ):
+        assert seletor in css
+
+
 def test_nenhuma_classe_do_site_tem_nome_de_utilitario(css: str) -> None:
     """Os utilitários ganham à camada do site: nomes iguais trocavam o desenho."""
     componentes = _classes(_camada(css, "components"))

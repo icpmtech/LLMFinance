@@ -705,16 +705,34 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         title = _esc(data.get("title") or "")
         subtitle = _esc(data.get("subtitle") or "")
         image = _media_url(data.get("image_id"))
-        cover = f'<figure class="cover"><img src="{_esc(image)}" alt=""></figure>' if image else ""
+        style = str(data.get("style") or "simples").strip().lower()
+        if style not in store.HERO_STYLE_IDS:
+            style = "simples"
+        tone = str(data.get("tone") or "acento").strip().lower()
+        if tone not in store.HERO_TONE_IDS:
+            tone = "acento"
+        classes = [f"hero hero--{style}", f"hero--tom-{tone}"]
+        if str(data.get("align") or "") == "centro":
+            classes.append("centro")
+        if not image:
+            classes.append("sem-imagem")
         actions = ""
         if data.get("cta_label"):
             actions = (
                 f'<div class="actions"><a class="btn" href="{_esc(data.get("cta_href") or "#")}">'
                 f'{_esc(data.get("cta_label"))}</a></div>'
             )
-        align = "centro" if str(data.get("align") or "") == "centro" else ""
         heading = f"<h1>{title}</h1>" if title else ""
-        return f'<div class="hero {align}">{heading}<p class="lead">{subtitle}</p>{actions}{cover}</div>'
+        copy = f'<div class="hero-copy">{heading}<p class="lead">{subtitle}</p>{actions}</div>'
+        # Com «imagem de fundo» a fotografia cobre o bloco, com um véu por cima.
+        if style == "imagem" and image:
+            return (
+                f'<div class="{" ".join(classes)}">'
+                f'<img class="hero-bg" src="{_esc(image)}" alt="" aria-hidden="true">'
+                f"{copy}</div>"
+            )
+        cover = f'<figure class="cover"><img src="{_esc(image)}" alt=""></figure>' if image else ""
+        return f'<div class="{" ".join(classes)}">{copy}{cover}</div>'
 
     if block_type == "texto":
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""

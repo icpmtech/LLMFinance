@@ -789,6 +789,8 @@ export function CmsPagesPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
                 blocks={(draft.blocks ?? []) as never}
                 onChange={(next) => setDraft({ ...draft, blocks: next as CmsPage["blocks"] })}
                 blockTypes={ctx.catalogue.block_types}
+                heroStyles={ctx.catalogue.hero_styles}
+                heroTones={ctx.catalogue.hero_tones}
                 media={media}
                 contents={ctx.catalogue.contents_index}
                 categories={ctx.catalogue.categories_index}
@@ -1174,6 +1176,8 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
                 blocks={(draft.blocks ?? []) as never}
                 onChange={(next) => setDraft({ ...draft, blocks: next as CmsPost["blocks"] })}
                 blockTypes={ctx.catalogue.block_types}
+                heroStyles={ctx.catalogue.hero_styles}
+                heroTones={ctx.catalogue.hero_tones}
                 media={media}
                 contents={ctx.catalogue.contents_index}
                 categories={ctx.catalogue.categories_index}

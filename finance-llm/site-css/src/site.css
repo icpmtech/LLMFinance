@@ -331,12 +331,85 @@ p { margin: 0 0 14px; text-wrap: pretty; }
 .lead { font-size: 1.06rem; color: var(--muted); }
 /* O bloco de abertura é uma faixa, não um cartão: sem caixa, o título e a entrada
    ficam alinhados com a trilha de navegação e com o resto da página (dentro de um
-   cartão ficavam recuados 33px, que é o que se via em todas as páginas). */
-.hero { padding: 4px 0 6px; }
-.hero .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+   cartão ficavam recuados 33px, que é o que se via em todas as páginas).
+   As variantes (`cartao`, `destaque`, `imagem`, `lateral`) e a cor
+   (`--hero-tone`) são configuradas por bloco no editor de páginas do CMS. */
+.hero { --hero-tone: var(--accent); position: relative; padding: 4px 0 6px; }
+.hero .actions { @apply mt-[18px] flex flex-wrap gap-[10px]; }
 .hero.centro { text-align: center; }
+.hero.centro .actions { @apply justify-center; }
 .hero .cover { margin: 22px 0 0; }
 .hero .cover img { width: 100%; }
+.hero .lead { max-width: 62ch; }
+.hero.centro .lead { @apply mx-auto; }
+
+/* Cartão: o destaque inteiro dentro de um cartão do tema. */
+.hero.hero--cartao {
+  @apply border border-line bg-surface shadow-card;
+  padding: 22px;
+  border-top: 3px solid var(--hero-tone);
+  border-radius: calc(var(--radius) + 2px);
+}
+.hero.hero--cartao .cover { @apply mt-[18px]; }
+
+/* Destaque: fundo tingido com a cor escolhida. */
+.hero.hero--destaque {
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--hero-tone) 30%, var(--border));
+  border-radius: calc(var(--radius) + 2px);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--hero-tone) 24%, transparent), transparent 62%),
+    color-mix(in srgb, var(--hero-tone) 8%, var(--surface));
+}
+.hero.hero--cartao .actions .btn,
+.hero.hero--destaque .actions .btn { background: var(--hero-tone); }
+
+/* Imagem: a fotografia cobre o bloco e um véu escuro mantém o texto legível. */
+.hero.hero--imagem {
+  @apply overflow-hidden text-white;
+  padding: 34px 24px;
+  border-radius: calc(var(--radius) + 2px);
+  background: #0b1220;
+}
+.hero.hero--imagem .hero-bg {
+  @apply absolute inset-0 h-full w-full object-cover;
+  z-index: 0;
+}
+.hero.hero--imagem::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, rgba(6, 12, 20, .88), rgba(6, 12, 20, .45));
+}
+.hero.hero--imagem .hero-copy { position: relative; z-index: 2; }
+.hero.hero--imagem .lead { color: rgba(255, 255, 255, .86); }
+.hero.hero--imagem .actions .btn { background: #fff; color: #0b1220; }
+.hero.hero--imagem.sem-imagem {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--hero-tone) 72%, #0b1220), #0b1220);
+}
+
+/* Lateral: texto e imagem lado a lado; sem imagem fica numa coluna só. */
+.hero.hero--lateral {
+  @apply grid items-center gap-5 border border-line bg-surface shadow-card;
+  padding: 22px;
+  border-radius: calc(var(--radius) + 2px);
+}
+.hero.hero--lateral .cover { margin: 0; }
+.hero.hero--lateral .cover img {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+}
+.hero.hero--lateral.sem-imagem { grid-template-columns: minmax(0, 1fr); }
+
+/* Cores do hero: o «acento» segue a cor de realce da Aparência do site. */
+.hero.hero--tom-azul { --hero-tone: #2563eb; }
+.hero.hero--tom-violeta { --hero-tone: #7c3aed; }
+.hero.hero--tom-esmeralda { --hero-tone: #059669; }
+.hero.hero--tom-ambar { --hero-tone: #d97706; }
+.hero.hero--tom-rosa { --hero-tone: #db2777; }
+.hero.hero--tom-neutro { --hero-tone: #475569; }
 /* Páginas de sistema (404, erro do serviço e sem ligação): texto de um lado,
    ilustração do outro; no telefone empilha, com a imagem por baixo do texto. */
 .sistema { display: grid; gap: 24px; align-items: center; }
@@ -605,6 +678,14 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   .hero { padding: 8px 0 12px; }
   .hero .actions { margin-top: 20px; }
   .hero .cover { margin: 24px 0 0; }
+  .hero.hero--cartao,
+  .hero.hero--destaque { padding: 28px; }
+  .hero.hero--imagem { padding: 46px 40px; }
+  .hero.hero--lateral { padding: 26px; }
+  .hero.hero--lateral:not(.sem-imagem) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 28px;
+  }
   h2 { margin: 32px 0 10px; }
   h3 { margin: 24px 0 8px; }
   .tile { padding: 20px; }

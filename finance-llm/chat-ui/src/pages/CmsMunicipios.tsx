@@ -477,6 +477,8 @@ export function CmsMunicipiosPanel({
                 blocks={(draft.blocks ?? []) as never}
                 onChange={(next) => setDraft({ ...draft, blocks: next as CmsBlock[] })}
                 blockTypes={ctx.catalogue.block_types}
+                heroStyles={ctx.catalogue.hero_styles}
+                heroTones={ctx.catalogue.hero_tones}
                 media={ctx.catalogue.media_index}
                 contents={ctx.catalogue.contents_index}
                 categories={ctx.catalogue.categories_index}

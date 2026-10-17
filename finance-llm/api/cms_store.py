@@ -228,7 +228,12 @@ STATUS_STYLE: Dict[str, str] = {
 
 # Tipos de bloco que o editor de páginas sabe desenhar (e o site sabe renderizar).
 BLOCK_TYPES: List[Dict[str, Any]] = [
-    {"id": "hero", "label": "Destaque (hero)", "hint": "Título grande, subtítulo, imagem e botão", "icon": "Sparkles"},
+    {
+        "id": "hero",
+        "label": "Destaque (hero)",
+        "hint": "Título, subtítulo, imagem e botão, em variantes de cartão, destaque, imagem ou lateral",
+        "icon": "Sparkles",
+    },
     {"id": "texto", "label": "Texto", "hint": "Parágrafos em Markdown", "icon": "AlignLeft"},
     {"id": "imagem", "label": "Imagem", "hint": "Uma imagem com legenda", "icon": "Image"},
     {"id": "galeria", "label": "Galeria", "hint": "Conjunto de imagens em grelha", "icon": "Images"},
@@ -260,6 +265,29 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "divisor", "label": "Divisor", "hint": "Linha de separação", "icon": "Minus"},
 ]
 BLOCK_IDS = {block["id"] for block in BLOCK_TYPES}
+
+#: Variantes visuais do bloco «hero». `simples` é a faixa de sempre (sem caixa);
+#: as restantes são escolhidas por página no editor de blocos.
+HERO_STYLES: List[Dict[str, str]] = [
+    {"id": "simples", "label": "Simples (faixa)"},
+    {"id": "cartao", "label": "Cartão"},
+    {"id": "destaque", "label": "Destaque (fundo tingido)"},
+    {"id": "imagem", "label": "Imagem de fundo"},
+    {"id": "lateral", "label": "Lateral (texto e imagem)"},
+]
+HERO_STYLE_IDS = {style["id"] for style in HERO_STYLES}
+
+#: Cores do hero. `acento` usa a cor de realce definida em «Aparência».
+HERO_TONES: List[Dict[str, str]] = [
+    {"id": "acento", "label": "Acento do site", "color": "#0ea5a4"},
+    {"id": "azul", "label": "Azul", "color": "#2563eb"},
+    {"id": "violeta", "label": "Violeta", "color": "#7c3aed"},
+    {"id": "esmeralda", "label": "Esmeralda", "color": "#059669"},
+    {"id": "ambar", "label": "Âmbar", "color": "#d97706"},
+    {"id": "rosa", "label": "Rosa", "color": "#db2777"},
+    {"id": "neutro", "label": "Neutro", "color": "#475569"},
+]
+HERO_TONE_IDS = {tone["id"] for tone in HERO_TONES}
 
 # Tipos de conteúdo reutilizável («conteúdos»).
 CONTENT_KINDS: List[Dict[str, str]] = [
@@ -2019,6 +2047,8 @@ def catalogue() -> Dict[str, Any]:
     settings = get_settings()
     return {
         "block_types": BLOCK_TYPES,
+        "hero_styles": HERO_STYLES,
+        "hero_tones": HERO_TONES,
         "content_kinds": CONTENT_KINDS,
         "template_kinds": TEMPLATES_KINDS,
         "menu_locations": MENU_LOCATIONS,

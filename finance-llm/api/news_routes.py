@@ -657,6 +657,9 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
                 capa = {"error": str(exc)}
             else:
                 corpo["cover_id"] = media["id"]
+                # A mesma imagem é a de partilha: o `og:image` do artigo passa a
+                # ser a fotografia da notícia e não a imagem genérica do site.
+                corpo.setdefault("seo", {})["image_id"] = media["id"]
 
     try:
         artigo = cms_store.save_item("posts", corpo, author)

@@ -67,6 +67,12 @@ def test_ignora_imagem_que_nao_e_um_endereco():
     assert news_imagem.url_da_imagem(_html(og_image="data:image/png;base64,AAAA"), PAGINA) == ""
 
 
+def test_descodifica_o_url_escapado_no_html():
+    """`&amp;` no `content` da meta tem de virar `&` antes de se pedir a imagem."""
+    html = _html(og_image="https://exemplo.pt/img/obra.jpg?w=1920&amp;h=1080")
+    assert news_imagem.url_da_imagem(html, PAGINA) == "https://exemplo.pt/img/obra.jpg?w=1920&h=1080"
+
+
 # ------------------------------------------------------------- o que se aceita
 def test_capa_valida_sai_em_base64_pronta_para_o_cms(monkeypatch):
     blob = _imagem()

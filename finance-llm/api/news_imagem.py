@@ -24,6 +24,7 @@ import base64
 import io
 import logging
 import re
+from html import unescape
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import urlparse
@@ -55,10 +56,15 @@ _NAO_UTILIZAVEIS = re.compile(r"[^\w.\-]+")
 
 
 def url_da_imagem(html: str, base: str) -> str:
-    """URL absoluto da imagem que a página anuncia (`""` quando não anuncia nenhuma)."""
+    """URL absoluto da imagem que a página anuncia (`""` quando não anuncia nenhuma).
+
+    O `content` da meta vem escapado no HTML (`&amp;` nas query strings), pelo que
+    se descodifica antes de o usar: um `&amp;w=1920` no pedido é um parâmetro
+    inválido e a imagem vem no tamanho errado (ou não vem).
+    """
     metas = _page_metas(html)
     for chave in _CHAVES_DA_IMAGEM:
-        absoluto = _absolutize(metas.get(chave) or "", base)
+        absoluto = _absolutize(unescape(metas.get(chave) or ""), base)
         if absoluto.lower().startswith(("http://", "https://")):
             return absoluto
     return ""

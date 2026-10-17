@@ -483,6 +483,8 @@ export type CmsSettings = {
 
 export type CmsCatalogue = {
   block_types: { id: string; label: string; hint: string; icon: string }[];
+  hero_styles: { id: string; label: string }[];
+  hero_tones: { id: string; label: string; color: string }[];
   content_kinds: { id: string; label: string }[];
   template_kinds: { id: string; label: string }[];
   menu_locations: { id: string; label: string }[];

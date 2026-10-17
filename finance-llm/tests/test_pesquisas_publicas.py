@@ -411,6 +411,55 @@ def test_pagina_com_hero_nao_ganha_um_segundo_h1(cms_limpo: Any) -> None:
     assert "<h1>Inteligência financeira</h1>" in html
 
 
+@pytest.mark.parametrize("style", ["cartao", "destaque", "imagem", "lateral"])
+def test_hero_configura_variante_e_cor(cms_limpo: Any, style: str) -> None:
+    """O editor escolhe o formato e a cor sem mudar o `<h1>` da página."""
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [
+                {
+                    "type": "hero",
+                    "data": {"title": "Inteligência financeira", "style": style, "tone": "azul"},
+                }
+            ],
+        }
+    )
+
+    assert f"hero--{style}" in html
+    assert "hero--tom-azul" in html
+    assert html.count("<h1") == 1
+
+
+def test_hero_com_variante_desconhecida_volta_ao_simples(cms_limpo: Any) -> None:
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [{"type": "hero", "data": {"title": "Inteligência financeira", "style": "inexistente", "tone": "inexistente"}}],
+        }
+    )
+
+    assert "hero--simples" in html
+    assert "hero--tom-acento" in html
+
+
+def test_hero_imagem_usa_a_fotografia_como_fundo(cms_limpo: Any) -> None:
+    capa = store.save_media({"title": "Capa", "url": "https://exemplo.test/capa.jpg"}, "qa@teste.pt")
+
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [{"type": "hero", "data": {"title": "Inteligência financeira", "style": "imagem", "image_id": capa["id"]}}],
+        }
+    )
+
+    assert 'class="hero-bg"' in html
+    assert "https://exemplo.test/capa.jpg" in html
+
+
 def test_pagina_sem_hero_tem_h1_com_o_titulo(cms_limpo: Any) -> None:
     html = cms_render.render_page(
         {
