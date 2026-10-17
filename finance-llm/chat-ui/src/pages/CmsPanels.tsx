@@ -440,13 +440,17 @@ function buildTree(pages: CmsPage[]): PageNode[] {
   return roots;
 }
 
+function blocksFromTemplate(template?: cms.CmsTemplate): CmsPage["blocks"] {
+  return (template?.blocks ?? []).map((block) => ({ ...block, id: `blk_${Math.random().toString(36).slice(2, 10)}` })) as CmsPage["blocks"];
+}
+
 function emptyPage(template?: cms.CmsTemplate): Partial<CmsPage> {
   return {
     title: "",
     status: "rascunho",
     show_in_menu: true,
     menu_order: 0,
-    blocks: template?.blocks ? template.blocks.map((block) => ({ ...block, id: `blk_${Math.random().toString(36).slice(2, 10)}` })) : [],
+    blocks: blocksFromTemplate(template),
     seo: { title: "", description: "", keywords: [], image_id: null, noindex: false },
     excerpt: "",
     parent_id: null,
@@ -680,6 +684,35 @@ export function CmsPagesPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
     .filter((page) => page.id !== draft?.id)
     .map((page) => ({ value: page.id, label: page.path ? `/${page.path}` : `${page.title} (raiz do site)` }));
 
+  /** Escolher um modelo numa página nova copia logo os blocos (hero incluído). */
+  const applyTemplate = (templateId: string) => {
+    if (!draft) return;
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) {
+      setDraft({ ...draft, template: templateId });
+      return;
+    }
+    const atuais = draft.blocks?.length ?? 0;
+    if (!draft.id && atuais > 0 && !window.confirm(`Substituir os ${atuais} bloco(s) atuais pelos ${(template.blocks ?? []).length} do modelo «${template.name}»?`)) {
+      setDraft({ ...draft, template: templateId });
+      return;
+    }
+    setDraft({
+      ...draft,
+      template: templateId,
+      blocks: draft.id ? draft.blocks ?? [] : blocksFromTemplate(template),
+    });
+  };
+
+  /** Numa página já existente, substituir os blocos tem de ser explícito. */
+  const applyTemplateBlocks = () => {
+    if (!draft) return;
+    const template = templates.find((item) => item.id === String(draft.template ?? ""));
+    if (!template) return;
+    if (!window.confirm(`Substituir os ${draft.blocks?.length ?? 0} bloco(s) atuais pelos do modelo «${template.name}»?`)) return;
+    setDraft({ ...draft, blocks: blocksFromTemplate(template) });
+  };
+
   return (
     <div className="space-y-3">
       <PanelHeader
@@ -745,10 +778,18 @@ export function CmsPagesPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
               <SelectInput
                 label="Modelo de partida"
                 value={String(draft.template ?? "")}
-                onChange={(next) => setDraft({ ...draft, template: next })}
+                onChange={applyTemplate}
                 options={templates.filter((item) => item.kind === "page").map((item) => ({ value: item.id, label: item.name }))}
                 placeholder="— página padrão —"
+                hint="Numa página nova, os blocos do modelo (incluindo o hero) são copiados logo."
               />
+              {draft.id && draft.template && (
+                <div className="flex items-end pb-1">
+                  <Button size="sm" variant="secondary" icon={<Copy size={13} />} onClick={applyTemplateBlocks}>
+                    Aplicar blocos do modelo
+                  </Button>
+                </div>
+              )}
               <TextArea label="Resumo (usado em listagens e SEO)" value={draft.excerpt ?? ""} onChange={(next) => setDraft({ ...draft, excerpt: next })} rows={2} wide />
             </div>
 

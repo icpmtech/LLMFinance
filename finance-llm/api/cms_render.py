@@ -885,8 +885,70 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
     return ""
 
 
+def _acrescentar_classes(html_text: str, classes: str) -> str:
+    """Acrescenta classes à raiz do bloco, sem tocar no resto da marcação."""
+    match = re.match(r"<([A-Za-z][\w:-]*)([^>]*)>", html_text)
+    if not match:
+        return html_text
+    tag, attrs = match.group(1), match.group(2)
+    class_match = re.search(r'class="([^"]*)"', attrs)
+    if class_match:
+        attrs = (
+            f'{attrs[: class_match.start()]}class="{class_match.group(1)} {classes}"'
+            f"{attrs[class_match.end() :]}"
+        )
+    else:
+        attrs = f'{attrs} class="{classes}"'
+    return f"<{tag}{attrs}>" + html_text[match.end() :]
+
+
+_APARENCIA_FUNDOS = frozenset({"sem", "cartao", "destaque", "suave"})
+_APARENCIA_ESPACAMENTOS = frozenset({"normal", "compacto", "amplo"})
+
+
+def _aplicar_aparencia(block: Dict[str, Any], html_text: str) -> str:
+    """Veste um bloco com o fundo, a cor, o alinhamento e o espaçamento do CMS.
+
+    A configuração vive em `data.appearance` para não colidir com campos
+    próprios dos blocos (`tone` do «aviso», `align` do hero, etc.).
+    """
+    if not html_text or block.get("type") == "hero":
+        return html_text
+    data = block.get("data") or {}
+    aparencia = data.get("appearance")
+    if not isinstance(aparencia, dict):
+        return html_text
+    fundo = str(aparencia.get("surface") or "sem").strip().lower()
+    tom = str(aparencia.get("tone") or "acento").strip().lower()
+    alinhamento = str(aparencia.get("align") or "esquerda").strip().lower()
+    espacamento = str(aparencia.get("density") or "normal").strip().lower()
+    if fundo not in _APARENCIA_FUNDOS:
+        fundo = "sem"
+    if tom not in store.HERO_TONE_IDS:
+        tom = "acento"
+    if espacamento not in _APARENCIA_ESPACAMENTOS:
+        espacamento = "normal"
+    classes = ["bloco"]
+    if fundo != "sem":
+        classes.append(f"bloco--{fundo}")
+    if tom != "acento":
+        classes.append(f"bloco--tom-{tom}")
+    if alinhamento == "centro":
+        classes.append("bloco--centro")
+    if espacamento != "normal":
+        classes.append(f"bloco--{espacamento}")
+    if len(classes) == 1:
+        return html_text
+    return _acrescentar_classes(html_text, " ".join(classes))
+
+
 def blocks_to_html(blocks: Iterable[Dict[str, Any]], *, preview: bool = False) -> str:
-    return "".join(_render_block(block, preview=preview) for block in (blocks or []))
+    parts = []
+    for block in blocks or []:
+        html_text = _render_block(block, preview=preview)
+        if html_text:
+            parts.append(_aplicar_aparencia(block, html_text))
+    return "".join(parts)
 
 
 # --------------------------------------------------------------------------

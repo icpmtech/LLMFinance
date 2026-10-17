@@ -730,8 +730,8 @@ function ItemsEditor({
   );
 }
 
-/** Formulário de um bloco, por tipo. */
-function BlockForm({
+/** Campos próprios de cada tipo de bloco. */
+function BlockSpecificFields({
   block,
   onChange,
   media,
@@ -1088,6 +1088,78 @@ function BlockForm({
     default:
       return <p className="text-[12px] text-muted-foreground">Este bloco não tem campos configuráveis.</p>;
   }
+}
+
+const BLOCK_SURFACE_OPTIONS = [
+  { value: "sem", label: "Sem fundo" },
+  { value: "cartao", label: "Cartão" },
+  { value: "destaque", label: "Destaque (tingido)" },
+  { value: "suave", label: "Suave" },
+];
+
+const BLOCK_DENSITY_OPTIONS = [
+  { value: "normal", label: "Normal" },
+  { value: "compacto", label: "Compacto" },
+  { value: "amplo", label: "Amplo" },
+];
+
+/** Aparência comum a todos os blocos (guardada em `data.appearance`). */
+function BlockAppearance({
+  data,
+  onChange,
+  tones,
+}: {
+  data: Record<string, unknown>;
+  onChange: (data: Record<string, unknown>) => void;
+  tones: HeroToneOption[];
+}) {
+  const appearance = (data.appearance && typeof data.appearance === "object" ? data.appearance : {}) as Record<string, unknown>;
+  const set = (key: string, value: string) => onChange({ ...data, appearance: { ...appearance, [key]: value } });
+  return (
+    <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2.5">
+      <p className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Aparência do bloco</p>
+      <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+        <SelectInput label="Fundo" value={String(appearance.surface || "sem")} onChange={(next) => set("surface", next)} options={BLOCK_SURFACE_OPTIONS} />
+        <SelectInput
+          label="Cor"
+          value={String(appearance.tone || "acento")}
+          onChange={(next) => set("tone", next)}
+          options={tones.map((item) => ({ value: item.id, label: item.label }))}
+        />
+        <SelectInput
+          label="Alinhamento"
+          value={String(appearance.align || "esquerda")}
+          onChange={(next) => set("align", next)}
+          options={[
+            { value: "esquerda", label: "Esquerda" },
+            { value: "centro", label: "Centro" },
+          ]}
+        />
+        <SelectInput label="Espaçamento" value={String(appearance.density || "normal")} onChange={(next) => set("density", next)} options={BLOCK_DENSITY_OPTIONS} />
+      </div>
+    </div>
+  );
+}
+
+/** Formulário de um bloco: campos do tipo + aparência comum. */
+function BlockForm(props: {
+  block: CmsBlockLike;
+  onChange: (data: Record<string, unknown>) => void;
+  media: MediaOption[];
+  contents: { id: string; title: string; kind: string }[];
+  categories: { id: string; name: string }[];
+  heroStyles?: HeroStyleOption[];
+  heroTones?: HeroToneOption[];
+}) {
+  if (props.block.type === "hero") {
+    return <BlockSpecificFields {...props} />;
+  }
+  return (
+    <div className="space-y-3">
+      <BlockSpecificFields {...props} />
+      <BlockAppearance data={props.block.data ?? {}} onChange={props.onChange} tones={props.heroTones ?? HERO_TONE_FALLBACK} />
+    </div>
+  );
 }
 
 /** Lista de blocos de uma página, com mover/ocultar/duplicar/apagar. */

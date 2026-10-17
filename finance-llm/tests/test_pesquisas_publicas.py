@@ -481,6 +481,72 @@ def test_catalogo_expoe_e_guarda_as_variantes_do_hero(cms_limpo: Any) -> None:
     assert pagina["blocks"][0]["data"]["tone"] == "violeta"
 
 
+def test_qualquer_bloco_aceita_a_aparencia_comum(cms_limpo: Any) -> None:
+    """Fundo, cor, alinhamento e espaçamento valem para todos os blocos."""
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [
+                {
+                    "type": "texto",
+                    "data": {
+                        "markdown": "Texto corrido.",
+                        "appearance": {"surface": "cartao", "tone": "azul", "align": "centro", "density": "amplo"},
+                    },
+                },
+                {
+                    "type": "cta",
+                    "data": {"title": "Fale connosco", "appearance": {"surface": "destaque", "tone": "rosa"}},
+                },
+                {
+                    "type": "citacao",
+                    "data": {"quote": "Uma frase.", "appearance": {"surface": "suave", "density": "compacto"}},
+                },
+            ],
+        }
+    )
+
+    assert 'class="section prose bloco bloco--cartao bloco--tom-azul bloco--centro bloco--amplo"' in html
+    assert 'class="section cta bloco bloco--destaque bloco--tom-rosa"' in html
+    assert '<blockquote class="bloco bloco--suave bloco--compacto">' in html
+
+
+def test_aparencia_com_valores_desconhecidos_nao_estraga_o_bloco(cms_limpo: Any) -> None:
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [
+                {
+                    "type": "texto",
+                    "data": {
+                        "markdown": "Texto corrido.",
+                        "appearance": {"surface": "inexistente", "tone": "inexistente", "density": "inexistente"},
+                    },
+                }
+            ],
+        }
+    )
+
+    assert 'class="section prose"' in html
+    assert "bloco--" not in html
+
+
+def test_hero_ignora_a_aparencia_generica(cms_limpo: Any) -> None:
+    """O hero tem variantes próprias: a aparência comum não se sobrepõe."""
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [{"type": "hero", "data": {"title": "Inteligência financeira", "appearance": {"surface": "cartao"}}}],
+        }
+    )
+
+    assert "bloco--cartao" not in html
+    assert "hero--simples" in html
+
+
 def test_pagina_sem_hero_tem_h1_com_o_titulo(cms_limpo: Any) -> None:
     html = cms_render.render_page(
         {

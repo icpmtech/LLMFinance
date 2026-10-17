@@ -158,6 +158,19 @@ def test_hero_tem_variantes_e_cores_compiladas(css: str) -> None:
         assert seletor in css
 
 
+def test_aparencia_comum_dos_blocos_esta_compilada(css: str) -> None:
+    for seletor in (
+        ".bloco--cartao",
+        ".bloco--destaque",
+        ".bloco--suave",
+        ".bloco--centro",
+        ".bloco--compacto",
+        ".bloco--amplo",
+        ".bloco.bloco--tom-azul",
+    ):
+        assert seletor in css
+
+
 def test_nenhuma_classe_do_site_tem_nome_de_utilitario(css: str) -> None:
     """Os utilitários ganham à camada do site: nomes iguais trocavam o desenho."""
     componentes = _classes(_camada(css, "components"))
