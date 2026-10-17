@@ -33,6 +33,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from api import cms_store
+from api import news_imagem
 from api import news_themes
 from api import news_traducao
 from api import sentiment_market as market
@@ -562,6 +563,11 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
     Basta o `id` da notícia (é o que o cartão da lista traz); os campos escritos
     no pedido — `title`, `excerpt`, `markdown`, `tags`, `category_ids` — passam à
     frente do que está indexado.
+
+    A **capa** do artigo é a imagem da própria notícia (o `og:image` da página
+    original), copiada para o CMS; `cover_url` escolhe outra imagem e
+    `imagem: false` deixa o artigo sem capa. Se a imagem não vier, o artigo é
+    criado na mesma e o motivo vai em `aviso_capa`.
     """
     if not session:
         raise HTTPException(status_code=401, detail="Entrar na plataforma para publicar notícias no blog.")
@@ -620,6 +626,38 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
     corpo["category_ids"] = _categorias_do_artigo(payload, tema)
     corpo["news_id"] = news_id
     corpo["author"] = author
+
+    # Capa: a imagem com que a própria notícia se anuncia (`og:image` na página
+    # original), copiada para o CMS. Um `cover_url` no pedido manda; `imagem:
+    # false` dispensa-a. Falhar aqui nunca impede a publicação — o artigo nasce
+    # sem capa e o motivo vai no `aviso_capa`.
+    capa: Dict[str, Any] = {}
+    if payload.get("imagem", True) is not False:
+        imagem = _text(payload.get("cover_url")) or _text(noticia.get("url"))
+        capa = (
+            news_imagem.capa_da_url(imagem)
+            if _text(payload.get("cover_url"))
+            else news_imagem.capa_da_noticia(imagem)
+        )
+        if capa.get("data"):
+            try:
+                media = cms_store.save_media(
+                    {
+                        "filename": capa["filename"],
+                        "mime": capa["mime"],
+                        "data": capa["data"],
+                        "title": corpo["title"],
+                        "alt": corpo["title"],
+                        "credit": _text(noticia.get("publisher")) or "Imagem da notícia original",
+                        "tags": corpo["tags"][:4],
+                    },
+                    author,
+                )
+            except (ValueError, KeyError) as exc:
+                capa = {"error": str(exc)}
+            else:
+                corpo["cover_id"] = media["id"]
+
     try:
         artigo = cms_store.save_item("posts", corpo, author)
     except (ValueError, KeyError) as exc:
@@ -632,6 +670,8 @@ def news_publish(payload: Dict[str, Any] = Body(default_factory=dict), session: 
         "tema": tema["id"] if tema else None,
         "traduzido": bool(traducao.get("traduzido")),
         "ia": traducao.get("ia") or {},
+        "capa": {"id": artigo["cover_id"], "origem": capa.get("origem") or ""} if artigo.get("cover_id") else None,
+        "aviso_capa": capa.get("error") or "",
         "aviso": traducao.get("error") or "",
         "resumo": f"Notícia publicada como artigo «{artigo['title']}» (rascunho no blog).",
     }

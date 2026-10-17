@@ -3,9 +3,15 @@
 Suporta três dialectos, cobrindo os fornecedores do catálogo:
 
 - **OpenAI-compatible** (`/chat/completions`): OpenAI, DeepSeek, xAI, Groq,
-  Mistral, OpenRouter e Ollama local;
+  Mistral, OpenRouter e Ollama **cloud**;
 - **Anthropic** (`/messages` com cabeçalho `x-api-key`);
-- **Google Gemini** (`/models/<modelo>:streamGenerateContent`).
+- **Google Gemini** (`/models/<modelo>:streamGenerateContent`);
+- **Ollama nativo** (`/api/chat`, NDJSON): Ollama local e Ollama cloud.
+
+O Ollama não usa o dialecto OpenAI de propósito: nos modelos que «pensam»
+(gemma4, deepseek-r1, …) esse dialecto **ignora** o `think` e a resposta vem
+toda no campo `reasoning`, com `content` vazio — na plataforma, uma resposta em
+branco. Pela API nativa o `think: false` pega, e é o que `_ollama_body` manda.
 
 Tudo é exposto como *stream* assíncrono de pedaços de texto (`stream_answer`),
 o que permite reutilizar o mesmo caminho para o chat em direto da plataforma e,
@@ -17,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
@@ -150,6 +157,15 @@ def _build_openai_body(model: str, system: str, conversation: List[Dict[str, str
     return body
 
 
+def _ollama_root(base_url: str) -> str:
+    """Raiz da instância Ollama.
+
+    O `OLLAMA_BASE_URL` do compose traz `/v1` (é o dialecto OpenAI); a API nativa
+    (`/api/chat`, `/api/tags`) vive na raiz.
+    """
+    return re.sub(r"/v1$", "", (base_url or "").rstrip("/"))
+
+
 def _ollama_body(
     model: str,
     system: str,
@@ -163,7 +179,15 @@ def _ollama_body(
     if system:
         messages.append({"role": "system", "content": system})
     messages.extend(conversation)
-    body: Dict[str, Any] = {"model": model, "messages": messages, "stream": stream}
+    body: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "stream": stream,
+        # Medido com o gemma4:e4b: sem isto a resposta vem inteira em `reasoning`
+        # e o `content` volta vazio (o dialecto OpenAI, que também ignora o
+        # parâmetro, dá o mesmo resultado). Com `think: false` responde em ~11 s.
+        "think": False,
+    }
     options: Dict[str, Any] = {}
     if temperature is not None:
         options["temperature"] = float(temperature)
@@ -265,7 +289,7 @@ async def stream_answer(
         body = _google_body(system, conversation, temperature, max_tokens)
         extract = _google_delta
     elif kind == "ollama":
-        url = f"{base_url}/api/chat"
+        url = f"{_ollama_root(base_url)}/api/chat"
         body = _ollama_body(model, system, conversation, temperature, max_tokens, True)
         extract = _ollama_delta
     else:
@@ -380,7 +404,7 @@ async def complete_answer(
 
 async def list_ollama_models(base_url: str, api_key: Optional[str] = None) -> List[str]:
     """Devolve os modelos disponíveis numa instância Ollama via /api/tags."""
-    url = f"{base_url.rstrip('/')}/api/tags"
+    url = f"{_ollama_root(base_url)}/api/tags"
     headers: Dict[str, str] = {"content-type": "application/json"}
     if api_key:
         headers["authorization"] = f"Bearer {api_key}"

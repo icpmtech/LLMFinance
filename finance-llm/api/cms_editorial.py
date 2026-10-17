@@ -1680,3 +1680,300 @@ def artigo_contratos_2026() -> Dict[str, Any]:
         "markdown": markdown,
         "blocks": blocos,
     }
+
+
+#: Comparação de 2025 com 2026 no **mesmo período** de cada ano (1 de janeiro a
+#: 10 de outubro), com as maiores empresas e as maiores classes de CPV em euros
+#: absolutos. Os totais anuais usam o mesmo filtro de ano da plataforma, para
+#: que qualquer número deste artigo seja reproduzível no painel.
+ARTIGO_2025_2026_SLUG = "contratos-publicos-2025-vs-2026"
+ARTIGO_2025_2026_EXCERPT = (
+    "O mesmo período de cada ano, lado a lado: 11% mais contratos e 6% menos valor — e as empresas e as "
+    "áreas de CPV que explicam a diferença."
+)
+
+#: SEO: título e descrição próprios do artigo. O título visível é outro, e a
+#: descrição escrita é a que aparece nos resultados de pesquisa e na partilha.
+ARTIGO_2025_2026_SEO: Dict[str, Any] = {
+    "title": "Contratos públicos: 2025 contra 2026 em empresas e áreas de CPV",
+    "description": (
+        "Comparação de 2025 com 2026 no mesmo período: 192 941 contratos contra 173 830 (+11,0%) e 16,36 mil M€ "
+        "contra 17,41 mil M€ (−6,0%). As maiores empresas adjudicatárias e as maiores classes de CPV, em euros."
+    ),
+    "keywords": [
+        "contratos públicos 2025",
+        "contratos públicos 2026",
+        "comparação anual contratos",
+        "áreas de CPV",
+        "maiores adjudicatários",
+        "compras públicas Portugal",
+    ],
+    "image_id": None,
+    "noindex": False,
+}
+
+#: Fonte citada nos gráficos e nas tabelas deste artigo.
+_ARTIGO_FONTE_2025_2026 = (
+    "Base de contratos públicos indexada no Sabemos Studio · leitura a 10/10/2026 · valores declarados pelos "
+    "adjudicantes no momento da publicação."
+)
+
+#: As doze classes de CPV que mais valor movem, em euros absolutos: `(classe,
+#: nome, contratos em 2025, valor em 2025, contratos em 2026, valor em 2026)`.
+#: Copiadas da leitura de 10/10/2026, classe a classe — sem amostragem.
+_CPV_2025_2026: List[tuple] = [
+    ("4523", "Obras em condutas, linhas de comunicação e de energia", 5208, 3193728479.26, 2723, 1347683159.04),
+    ("4521", "Obras de construção de edifícios", 1764, 2805986697.77, 867, 728242832.13),
+    ("3360", "Produtos farmacêuticos", 27684, 2625427553.97, 25842, 2598184999.77),
+    ("4545", "Outras obras de acabamento de construção", 2238, 603705408.91, 1691, 363632630.99),
+    ("9051", "Eliminação e tratamento de resíduos", 547, 534749286.18, 470, 283312077.78),
+    ("4500", "Construção", 1653, 490511436.86, 729, 201317502.01),
+    ("4520", "Obras de construção e de engenharia civil", 773, 420044666.01, 366, 147608832.58),
+    ("0931", "Eletricidade", 747, 408246572.02, 488, 324169186.11),
+    ("3314", "Material médico de consumo", 13788, 371548755.14, 9468, 296070068.33),
+    ("0913", "Petróleo e destilados", 756, 347040646.06, 444, 255393676.89),
+    ("3369", "Medicamentos vários", 5390, 346822443.60, 3861, 318645641.91),
+    ("3310", "Equipamento médico", 4981, 250678293.53, 5442, 473913219.86),
+]
+
+#: Empresas adjudicatárias que marcaram um dos dois anos: `(nome, contratos em
+#: 2025, valor em 2025, contratos em 2026, valor em 2026)`.
+_EMPRESAS_2025_2026: List[tuple] = [
+    ("AVAN Norte — Gestão da Ferrovia de Alta Velocidade", 1, 1661362811.55, 0, 0.0),
+    ("Alstom Ferroviária Portugal", 1, 746042424.94, 8, 10147661.04),
+    ("Petrogal", 990, 301297060.09, 569, 192026863.27),
+    ("Janssen Cilag Farmacêutica", 806, 279583901.27, 595, 235631635.01),
+    ("Veolia Portugal", 36, 270494057.18, 21, 4795716.45),
+    ("Teixeira Duarte — Engenharia e Construções", 16, 228031976.91, 16, 205413064.21),
+    ("Roche Farmacêutica Química", 722, 219694262.81, 439, 205454731.04),
+    ("Novartis Farma", 730, 182730358.60, 556, 157375373.82),
+    ("MEO — Serviços de Comunicações e Multimédia", 906, 177903913.64, 659, 72942268.12),
+    ("Merck Sharp & Dohme", 504, 176461458.47, 308, 163164623.28),
+    ("Iberdrola Clientes Portugal", 176, 164103914.20, 154, 167703057.98),
+    ("Pfizer (LAB. PFIZER)", 1316, 146098947.33, 858, 100909059.32),
+    ("Medtronic Portugal", 1732, 114863188.78, 1203, 124965474.67),
+    ("Uniself — Restaurantes Públicos e Privados", 127, 114674100.74, 95, 174532786.21),
+    ("Alnypt", 21, 107684770.04, 9, 190129918.14),
+]
+
+#: Maiores entidades adjudicantes em valor: `(nome, contratos em 2025, valor em
+#: 2025, contratos em 2026, valor em 2026)`.
+_COMPRADORES_2025_2026: List[tuple] = [
+    ("Infraestruturas de Portugal", 726, 2183986726.72, 616, 1028368134.80),
+    ("CP — Comboios de Portugal", 52, 837245570.39, 106, 117878289.27),
+    ("Unidade Local de Saúde de Santa Maria", 5090, 517768004.50, 4319, 531205077.84),
+    ("Estado Maior da Força Aérea", 1902, 441080074.57, 1439, 128477956.20),
+    ("Unidade Local de Saúde de São José", 4206, 421872592.05, 3272, 365965227.16),
+    ("Unidade Local de Saúde de Coimbra", 3775, 374844394.97, 4087, 430382271.56),
+    ("Unidade Local de Saúde de Santo António", 1480, 358697519.20, 1279, 401999098.72),
+    ("Unidade Local de Saúde de Lisboa Ocidental", 2040, 223911933.51, 1927, 236375038.70),
+    ("Instituto Português de Oncologia do Porto", 15255, 211196856.00, 8940, 266938770.57),
+    ("Unidade Local de Saúde do Algarve", 3778, 204100371.27, 2778, 179465574.33),
+]
+
+
+def _euros(valor: float) -> str:
+    """Valor em euros com a grandeza escrita por extenso (`3,19 mil M€`)."""
+    if valor >= 1_000_000_000:
+        return f"{valor / 1_000_000_000:.2f}".replace(".", ",") + " mil M€"
+    return f"{valor / 1_000_000:.1f}".replace(".", ",") + " M€"
+
+
+def _variacao(anterior: float, atual: float) -> str:
+    """Variação em percentagem, com sinal (`−57,8%`)."""
+    if not anterior:
+        return "—"
+    if not atual:
+        return "não voltou a contratar"
+    return f"{(atual - anterior) / anterior * 100:+.1f}%".replace(".", ",").replace("-", "−")
+
+
+def artigo_contratos_2025_2026() -> Dict[str, Any]:
+    """Resumo, gráficos e tabelas do artigo que compara 2025 com 2026.
+
+    A comparação é feita **no mesmo período de cada ano** — 1 de janeiro a 10 de
+    outubro —, porque 2026 ainda não está fechado: 192 941 contratos em 2026
+    contra 173 830 em igual período de 2025 (+11,0% em número) e 16,36 mil M€
+    contra 17,41 mil M€ (−6,0% em valor). Os totais do ano fechado de 2025
+    (246 992 contratos, 23,67 mil M€) aparecem ao lado, identificados como tal.
+
+    Os valores são os declarados pelo adjudicante e incluem os contratos sem
+    preço preenchido na contagem, mas não no valor. Todas as séries de CPV e de
+    empresas são euros **absolutos**, lidos classe a classe na base indexada.
+    """
+    b = _Blocos("artigo-contratos-2025-2026")
+    fonte = _ARTIGO_FONTE_2025_2026
+
+    markdown = (
+        "No mesmo período de cada ano — de 1 de janeiro a 10 de outubro —, 2026 registou **192 941 contratos**, "
+        "contra **173 830** em 2025: **mais 11,0% em número**. O valor declarado, porém, desceu de **17,41** para "
+        "**16,36 mil milhões de euros** (**−6,0%**), e o contrato médio caiu de **100 173 €** para **84 811 €**.\n\n"
+        "**O essencial, em três leituras:**\n\n"
+        "1. **Mais contratos, menos dinheiro.** O Estado celebra mais acordos por valores menores: o contrato "
+        "médio perde **15,3%**.\n"
+        "2. **A obra pública recua, a farmácia aguenta.** As duas maiores classes de construção perdem **57,8%** e "
+        "**74,0%** do valor; produtos farmacêuticos ficam praticamente iguais (**−1,0%**) e lideram os dois anos.\n"
+        "3. **As empresas trocam de mão.** O topo de 2025 é da alta velocidade e da construção; o de 2026 é da "
+        "farmácia e do equipamento médico, que sobe **89,1%**.\n\n"
+        "Todos os gráficos comparam os dois anos no mesmo eixo, em euros absolutos, e dizem de onde vêm os números."
+    )
+
+    blocos = [
+        b.numeros(
+            "2025 e 2026 no mesmo período (1 de janeiro a 10 de outubro)",
+            [
+                ("192 941", "contratos em 2026", "173 830 em igual período de 2025 (+11,0%)"),
+                ("16,36 mil M€", "valor declarado em 2026", "17,41 mil M€ em 2025 no mesmo período (−6,0%)"),
+                ("84 811 €", "contrato médio em 2026", "100 173 € em 2025 (−15,3%)"),
+                ("246 992", "contratos no ano de 2025 fechado", "23,67 mil M€ em doze meses"),
+                ("2 598 M€", "produtos farmacêuticos em 2026", "a maior classe de CPV nos dois anos (−1,0%)"),
+            ],
+        ),
+        b.texto(
+            "1. Mais contratos, menos dinheiro",
+            "Entre 1 de janeiro e 10 de outubro de 2026 registaram-se **192 941 contratos**, mais **19 111** do que "
+            "em igual período de 2025 (173 830) — **+11,0%**. É o número de acordos, não o dinheiro, que cresce.\n\n"
+            "O valor declarado caiu **6,0%**, de **17,41** para **16,36 mil milhões de euros**, e o contrato médio "
+            "passou de **100 173 €** para **84 811 €**: **menos 15,3%** por contrato.\n\n"
+            "Para contexto, o ano de 2025 fechado soma **246 992 contratos** e **23,67 mil milhões de euros** — "
+            "um ritmo de **2,0 mil milhões de euros por mês** que 2026 não repete.",
+        ),
+        b.grafico(
+            "O valor declarado, em euros absolutos",
+            [
+                ("2025 — ano completo", 23670498334.05, 0, "246 992 contratos em 12 meses"),
+                ("2026 — até 10 de outubro", 16370319232.74, 0, "192 955 contratos"),
+                ("2025 — 1 de janeiro a 10 de outubro", 17413013409.40, 0, "173 830 contratos (período comparável)"),
+                ("2026 — 1 de janeiro a 10 de outubro", 16363487365.18, 0, "192 941 contratos (período comparável)"),
+            ],
+            note="Só as duas últimas barras são comparáveis entre si: usam o mesmo intervalo de calendário nos dois anos.",
+            source=fonte,
+        ),
+        b.texto(
+            "2. As áreas de CPV: a obra recua, a farmácia não cede",
+            "A maior mudança está na construção. A classe **4523** — obras em condutas, linhas de comunicação e de "
+            "energia — cai de **3,19 mil M€** para **1,35 mil M€** (**−57,8%**), e a **4521**, obras de construção de "
+            "edifícios, desce de **2,81 mil M€** para **728,2 M€** (**−74,0%**). Juntas perdem **3,53 mil milhões de "
+            "euros** de um ano para o outro — mais do que a queda total do valor declarado.\n\n"
+            "A farmácia é a exceção: **produtos farmacêuticos** (3360) valem **2 598,2 M€** em 2026 contra "
+            "**2 625,4 M€** em 2025, uma variação de **−1,0%** em 25 842 contratos. É a maior classe de CPV nos dois "
+            "anos e a única do topo que não se mexeu.\n\n"
+            "Do lado de quem sobe há uma história clara: **equipamento médico** (3310) ganha **89,1%**, de **250,7** "
+            "para **473,9 M€**, em 5 442 contratos. O resto do topo é energia e serviços: eletricidade recua "
+            "**20,6%**, petróleo e destilados **26,4%**, mas ambas continuam acima dos **300 M€**.",
+        ),
+        b.grafico(
+            "As áreas de CPV que mais valor movem — 2025 contra 2026",
+            [
+                (f"{nome} ({classe})", v25, v26, _variacao(v25, v26))
+                for classe, nome, _n25, v25, _n26, v26 in _CPV_2025_2026
+            ],
+            note="As doze classes de CPV com mais valor em 2025 ou 2026, em euros absolutos. A segunda barra é 2026.",
+            legend=["2025", "2026"],
+            source=fonte,
+        ),
+        b.tabela(
+            "As doze maiores classes de CPV, em valores absolutos",
+            ["CPV", "Classe", "Contr. 2025", "Valor 2025", "Contr. 2026", "Valor 2026", "Variação"],
+            [
+                [
+                    classe,
+                    nome,
+                    f"{n25}",
+                    _euros(v25),
+                    f"{n26}",
+                    _euros(v26),
+                    _variacao(v25, v26),
+                ]
+                for classe, nome, n25, v25, n26, v26 in _CPV_2025_2026
+            ],
+        ),
+        b.texto(
+            "3. As empresas: o comboio sai, a farmácia fica",
+            "O maior vendedor ao Estado em 2025 não aparece em 2026: a **AVAN Norte**, que gere a ferrovia de alta "
+            "velocidade, assinou um contrato de **1,66 mil milhões de euros** em 2025 e não voltou a contratar. A "
+            "**Alstom Ferroviária** caiu de **746,0 M€** para **10,1 M€** (**−98,6%**) e a **Veolia Portugal**, de "
+            "**270,5 M€** para **4,8 M€** (**−98,2%**).\n\n"
+            "O topo de 2026 é outro. A **Janssen Cilag** passa a ser a maior adjudicatária (**235,6 M€**), seguida "
+            "da **Roche** (**205,5 M€**) e da **Teixeira Duarte** (**205,4 M€**). Entre as que crescem, a "
+            "**Alnypt** quase duplica (**+76,6%**) e a **Uniself**, da restauração coletiva, sobe **52,2%**.\n\n"
+            "Nem tudo é queda no mundo dos combustíveis: a **Petrogal** mantém-se entre as cinco primeiras "
+            "(**192,0 M€** em 569 contratos), ainda que **36,3%** abaixo de 2025. A **Iberdrola** é uma das poucas "
+            "a crescer nos dois anos (**+2,2%**).",
+        ),
+        b.grafico(
+            "As empresas adjudicatárias que marcaram os dois anos — em euros absolutos",
+            [
+                (nome, v25, v26, _variacao(v25, v26))
+                for nome, _n25, v25, _n26, v26 in _EMPRESAS_2025_2026
+            ],
+            note="Valor adjudicado a cada empresa, em euros. A segunda barra é 2026; uma barra em falta significa que a empresa não teve contratos nesse ano.",
+            legend=["2025", "2026"],
+            source=fonte,
+        ),
+        b.tabela(
+            "As maiores empresas adjudicatárias, em valores absolutos",
+            ["Empresa adjudicatária", "Contr. 2025", "Valor 2025", "Contr. 2026", "Valor 2026", "Variação"],
+            [
+                [nome, f"{n25}", _euros(v25), f"{n26}" if n26 else "—", _euros(v26) if v26 else "—", _variacao(v25, v26)]
+                for nome, n25, v25, n26, v26 in _EMPRESAS_2025_2026
+            ],
+        ),
+        b.texto(
+            "4. Quem compra: os mesmos, com menos dinheiro",
+            "Do lado de quem compra, a liderança não muda de mãos — muda de escala. A **Infraestruturas de "
+            "Portugal** continua a ser o maior comprador nos dois anos, mas cai de **2,18 mil M€** para "
+            "**1,03 mil M€** (**−52,9%**); a **CP — Comboios de Portugal** desce de **837,2 M€** para "
+            "**117,9 M€** e o **Estado Maior da Força Aérea**, de **441,1 M€** para **128,5 M€**.\n\n"
+            "A saúde segura o lado de cima da tabela. As unidades locais de saúde e o **IPO do Porto** ocupam oito "
+            "das dez primeiras posições, e três crescem: o **IPO do Porto** (**+26,4%**), a **ULS de Coimbra** "
+            "(**+14,8%**) e a **ULS de Santo António** (**+12,1%**).\n\n"
+            "É essa a explicação para o topo de CPV de 2026: o país compra menos obras e mais medicamento, mais "
+            "equipamento médico e mais serviços de saúde — e são os hospitais que puxam a lista.",
+        ),
+        b.grafico(
+            "Os maiores compradores públicos — 2025 contra 2026",
+            [
+                (nome, v25, v26, _variacao(v25, v26))
+                for nome, _n25, v25, _n26, v26 in _COMPRADORES_2025_2026
+            ],
+            note="Maiores entidades adjudicantes por valor, em euros. A segunda barra é 2026.",
+            legend=["2025", "2026"],
+            source=fonte,
+        ),
+        b.tabela(
+            "Os maiores compradores, em valores absolutos",
+            ["Entidade adjudicante", "Contr. 2025", "Valor 2025", "Contr. 2026", "Valor 2026", "Variação"],
+            [
+                [nome, f"{n25}", _euros(v25), f"{n26}", _euros(v26), _variacao(v25, v26)]
+                for nome, n25, v25, n26, v26 in _COMPRADORES_2025_2026
+            ],
+        ),
+        b.aviso(
+            "**Como se lê isto.** A comparação usa o **mesmo intervalo de calendário** nos dois anos — 1 de "
+            "janeiro a 10 de outubro —, porque 2026 ainda não está fechado. Os totais de 2025 aparecem em duas "
+            "versões: o ano completo (246 992 contratos, 23,67 mil M€) e o período comparável (173 830 contratos, "
+            "17,41 mil M€). Os gráficos de CPV e de empresas mostram **euros absolutos**, somados classe a classe "
+            "e empresa a empresa para todo o ano de cada ano: não são percentagens nem valores por contrato. "
+            "Duas reservas de método: o valor é o **declarado pelo adjudicante** no momento da publicação, sem "
+            "aditivos posteriores, e a classe de CPV agrupa vários códigos de oito dígitos. Os mesmos números "
+            "estão no relatório em PDF, no botão no topo do artigo.",
+            tone="amber",
+        ),
+        b.cta(
+            "Quer a comparação de uma empresa ou de um setor?",
+            "Diga-nos o NIF, o município ou a classe de CPV e devolvemos a leitura de 2025 contra 2026, com a "
+            "fonte de cada valor.",
+            "Falar connosco",
+            "/site/contactos",
+            [("Ver as soluções", "/site/solucoes"), ("Explorar contratos", "/contracts/search")],
+        ),
+    ]
+
+    return {
+        "slug": ARTIGO_2025_2026_SLUG,
+        "excerpt": ARTIGO_2025_2026_EXCERPT,
+        "seo": ARTIGO_2025_2026_SEO,
+        "markdown": markdown,
+        "blocks": blocos,
+    }

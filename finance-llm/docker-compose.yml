@@ -135,6 +135,10 @@ services:
       - INDEXNOW_KEY=${INDEXNOW_KEY:-}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      # Modelo predefinido de quem não escolheu fornecedor nas Definições. Vazio
+      # mantém o comportamento antigo (modelo local `gpt2`); `ollama:gemma4:e4b`
+      # faz o Hermes responder com o Ollama do host, com os dados do Elasticsearch.
+      - AI_DEFAULT_BACKEND=${AI_DEFAULT_BACKEND:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-}

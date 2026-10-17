@@ -6,7 +6,7 @@
  * A lista de tipos e os ícones vêm do servidor (`GET /cms/catalogue`), pelo que
  * acrescentar um bloco novo no backend faz aparecer o editor automaticamente.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -17,11 +17,12 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 
 import { Button } from "../ui/Button";
-import { cmsMediaUrl } from "../../cmsApi";
+import { cmsMediaUrl, fileToBase64, uploadCmsMedia } from "../../cmsApi";
 
 export const inputClass =
   "w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12.5px] text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-teal-300/40 focus:bg-white/[0.07]";
@@ -222,6 +223,7 @@ export function MediaPicker({
   media,
   wide,
   placeholder = "— sem imagem —",
+  allowUpload = false,
 }: {
   label: string;
   value: string;
@@ -229,24 +231,80 @@ export function MediaPicker({
   media: MediaOption[];
   wide?: boolean;
   placeholder?: string;
+  /** Botão para carregar um ficheiro do computador (entra na biblioteca de media). */
+  allowUpload?: boolean;
 }) {
-  const selected = media.find((item) => item.id === value);
+  const [carregados, setCarregados] = useState<MediaOption[]>([]);
+  const [aCarregar, setACarregar] = useState(false);
+  const [erro, setErro] = useState("");
+  const ficheiro = useRef<HTMLInputElement | null>(null);
+  // O catálogo do CMS só se actualiza ao recarregar; o que se carrega aqui fica
+  // nesta lista até lá, para a imagem aparecer já escolhida.
+  const opcoes = useMemo(() => {
+    const naBiblioteca = new Set(media.map((item) => item.id));
+    return [...carregados.filter((item) => !naBiblioteca.has(item.id)), ...media];
+  }, [carregados, media]);
+  const selected = opcoes.find((item) => item.id === value);
+
+  async function carregar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setACarregar(true);
+    setErro("");
+    try {
+      const data = await fileToBase64(file);
+      const { item } = await uploadCmsMedia({
+        filename: file.name,
+        mime: file.type || "application/octet-stream",
+        data,
+        title: file.name,
+      });
+      setCarregados((current) => [
+        { id: item.id, title: item.title || item.filename || item.id, url: item.url, kind: item.kind, mime: item.mime, size: item.size, storage: item.storage },
+        ...current,
+      ]);
+      onChange(item.id);
+    } catch (err) {
+      setErro((err as Error).message || "Não foi possível carregar a imagem.");
+    } finally {
+      setACarregar(false);
+      if (ficheiro.current) ficheiro.current.value = "";
+    }
+  }
+
   return (
-    <Field label={label} wide={wide}>
+    <div className={["flex flex-col gap-1", wide ? "sm:col-span-2" : ""].join(" ")}>
+      <span className={labelClass}>{label}</span>
       <div className="flex items-center gap-2">
         <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
           <option value="">{placeholder}</option>
-          {media.map((item) => (
+          {opcoes.map((item) => (
             <option key={item.id} value={item.id}>
               {item.title || item.id}
             </option>
           ))}
         </select>
+        {allowUpload && (
+          <>
+            <button
+              type="button"
+              title="Carregar uma imagem do computador"
+              aria-label="Carregar uma imagem do computador"
+              disabled={aCarregar}
+              onClick={() => ficheiro.current?.click()}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-60"
+            >
+              {aCarregar ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            </button>
+            <input ref={ficheiro} type="file" accept="image/*" className="hidden" onChange={(event) => void carregar(event)} />
+          </>
+        )}
         {selected && selected.kind === "imagem" && (
           <img src={cmsMediaUrl(selected)} alt="" className="h-8 w-8 rounded-md border border-white/10 object-cover" />
         )}
       </div>
-    </Field>
+      {erro && <span className="text-[10.5px] text-rose-300">{erro}</span>}
+    </div>
   );
 }
 

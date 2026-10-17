@@ -221,3 +221,90 @@ def test_erro_de_conteudo_do_fornecedor_chega_ao_utilizador(monkeypatch):
 
     assert partes == []
     assert "modelo em manutenção" in str(erro)
+
+
+# ----------------------------------------------------------------------- ollama
+
+OLLAMA_SPEC = {
+    "id": "ollama",
+    "kind": "ollama",
+    "base_url": "http://host.docker.internal:11434/v1",
+    "label": "Ollama (local)",
+}
+
+
+def test_ollama_desliga_o_pensamento():
+    """Sem `think: false` o gemma4 gasta tudo em `reasoning` e o `content` vem vazio."""
+    body = cloud_chat._ollama_body(
+        "gemma4:e4b", "sistema", [{"role": "user", "content": "olá"}], 0.2, 256, True
+    )
+
+    assert body["think"] is False
+    assert body["options"] == {"temperature": 0.2, "num_predict": 256}
+
+
+def test_ollama_usa_a_api_nativa_e_ignora_o_v1_do_base_url(monkeypatch):
+    """O `OLLAMA_BASE_URL` do compose traz `/v1`; a API nativa vive na raiz."""
+    capturado: dict = {}
+
+    class _Cliente:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        def stream(self, method, url, **kwargs):
+            capturado["url"] = url
+            capturado["body"] = kwargs.get("json")
+            linhas = [
+                json.dumps({"message": {"content": "Olá"}, "done": False}),
+                json.dumps({"done": True}),
+            ]
+            return _StreamFalso(_RespostaFalsa(linhas))
+
+    monkeypatch.setattr(cloud_chat.httpx, "AsyncClient", lambda **kwargs: _Cliente())
+
+    async def correr():
+        partes = []
+        async for chunk in cloud_chat.stream_answer(
+            provider="ollama",
+            spec=OLLAMA_SPEC,
+            model="gemma4:e4b",
+            messages=[{"role": "user", "content": "olá"}],
+            api_key=None,
+        ):
+            partes.append(chunk)
+        return partes
+
+    assert "".join(asyncio.run(correr())) == "Olá"
+    assert capturado["url"] == "http://host.docker.internal:11434/api/chat"
+    assert capturado["body"]["think"] is False
+
+
+def test_catalogo_manda_o_ollama_local_pela_api_nativa():
+    """Se o catálogo voltar ao dialecto OpenAI, o `think` deixa de pegar."""
+    from api import providers_service
+
+    assert providers_service.PROVIDERS_BY_ID["ollama"]["kind"] == "ollama"
+
+
+def test_env_define_o_modelo_predefinido_da_plataforma(monkeypatch):
+    """Sem predefinição na conta, `AI_DEFAULT_BACKEND` decide (Ollama do host)."""
+    from api import ontology_ai
+
+    monkeypatch.setenv("AI_DEFAULT_BACKEND", "ollama:gemma4:e4b")
+
+    escolhido = ontology_ai.available_backend(None, None)
+
+    assert escolhido["kind"] == "cloud"
+    assert escolhido["provider"] == "ollama"
+    assert escolhido["model"] == "gemma4:e4b"
+
+
+def test_sem_env_e_sem_predefinicao_continua_no_modelo_local(monkeypatch):
+    from api import ontology_ai
+
+    monkeypatch.delenv("AI_DEFAULT_BACKEND", raising=False)
+
+    assert ontology_ai.available_backend(None, None)["kind"] == "local"

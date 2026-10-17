@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -100,6 +101,12 @@ def available_backend(session: Any, backend: Optional[str] = None) -> Dict[str, 
         if provider:
             model = defaults.get("model") or ""
             chosen = f"{provider}:{model}" if model else provider
+        else:
+            # Sem predefinição na conta, decide a instalação: `AI_DEFAULT_BACKEND`
+            # aponta a plataforma ao modelo local do Ollama (ex.:
+            # `ollama:gemma4:e4b`) sem obrigar cada utilizador a escolher o
+            # fornecedor em Definições → Fornecedores de IA.
+            chosen = os.getenv("AI_DEFAULT_BACKEND", "").strip()
     parsed = providers_service.parse_backend(chosen or "gpt2")
     if parsed.get("kind") != "cloud":
         return {"kind": "local", "provider": None, "model": None, "api_key": None, "backend": parsed.get("backend") or "gpt2"}

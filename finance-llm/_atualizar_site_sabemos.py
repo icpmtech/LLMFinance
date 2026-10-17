@@ -8,8 +8,14 @@ CMS.
 
     python _atualizar_site_sabemos.py
 
+Na VM, onde só existe o backend em contentor e a pasta `data/` está montada:
+
+    docker exec iqos-backend python _atualizar_site_sabemos.py
+
 Pode ser corrido mais de uma vez: as imagens não duplicam, as páginas que já
-estejam iguais não voltam a ser gravadas e os menus não ganham itens repetidos.
+estejam iguais não voltam a ser gravadas, os menus não ganham itens repetidos e
+os artigos que já existam só são regravados se algum campo tiver mudado. Os
+**artigos do blog que ainda não existam são criados publicados**.
 """
 from __future__ import annotations
 
@@ -151,33 +157,82 @@ def _chave(item: Dict[str, Any]) -> str:
     return json.dumps(_assinatura(item), sort_keys=True, ensure_ascii=False)
 
 
-def _aplicar_posts(media: Dict[str, str]) -> None:
-    """Põe capa nos artigos de exemplo, acerta o autor e publica o artigo de 2026.
+def _artigos_editoriais() -> List[Dict[str, Any]]:
+    """Artigos do blog que vivem no `editorial`, prontos a publicar.
 
-    O artigo «Contratos públicos em 2026» é conteúdo, não código: o deploy não o
-    leva, por isso é aqui que ele entra numa instalação em uso — com o resumo, os
-    gráficos e as tabelas que vivem em `editorial.artigo_contratos_2026()`.
+    Os artigos são **conteúdo**, não código: o deploy não leva a pasta `data/`,
+    por isso é aqui que eles entram numa instalação em uso — com o resumo, os
+    gráficos e as tabelas que vivem em `editorial`. O `id` de cada entrada é o
+    que o artigo recebe na semente (numa instalação nova); numa instalação em
+    uso o artigo nasce com um `id` gerado, porque o `save_item` exige que um
+    `id` indicado já exista.
     """
-    artigo = editorial.artigo_contratos_2026()
-    campos_por_slug: Dict[str, Dict[str, Any]] = {
-        "bem-vindo-ao-blog": {
-            "cover_id": media.get("capa-post-bemvindo.svg"),
+    return [
+        {
+            "id": "post_bemvindo",
+            "slug": "bem-vindo-ao-blog",
             "title": "Bem-vindo ao blog do Sabemos Studio",
+            "cover": "capa-post-bemvindo.svg",
         },
-        editorial.ARTIGO_CONTRATOS_2026_SLUG: {
-            "cover_id": media.get("capa-post-contratos-2026.svg"),
+        {
+            "id": "post_contratos_2026",
+            "slug": editorial.ARTIGO_CONTRATOS_2026_SLUG,
             "title": "Contratos públicos em 2026: o que os dados mostram",
-            "excerpt": artigo["excerpt"],
-            "markdown": artigo["markdown"],
-            "blocks": artigo["blocks"],
+            "cover": "capa-post-contratos-2026.svg",
             "tags": ["contratos públicos", "2026", "mercado", "CPV"],
+            "conteudo": editorial.artigo_contratos_2026(),
         },
-    }
-    for slug, campos in campos_por_slug.items():
+        {
+            "id": "post_contratos_2025_2026",
+            "slug": editorial.ARTIGO_2025_2026_SLUG,
+            "title": "2025 contra 2026: mais contratos, menos dinheiro",
+            "cover": "capa-post-contratos-2026.svg",
+            "tags": ["contratos públicos", "2025", "2026", "mercado", "CPV"],
+            "conteudo": editorial.artigo_contratos_2025_2026(),
+        },
+    ]
+
+
+def _aplicar_posts(media: Dict[str, str]) -> None:
+    """Põe capa nos artigos de exemplo, acerta o autor e publica os artigos editoriais.
+
+    Um artigo que ainda não exista na instalação é **criado** (publicado); um que
+    já exista só é regravado se algum dos campos declarados aqui tiver mudado —
+    o que o editor escreveu no CMS fica como está.
+    """
+    for artigo in _artigos_editoriais():
+        slug = str(artigo["slug"])
+        conteudo = artigo.get("conteudo") or {}
+        campos: Dict[str, Any] = {
+            "title": artigo["title"],
+            "cover_id": media.get(artigo["cover"]),
+            "excerpt": conteudo.get("excerpt"),
+            "markdown": conteudo.get("markdown"),
+            "blocks": conteudo.get("blocks"),
+            "seo": conteudo.get("seo"),
+            "tags": artigo.get("tags"),
+        }
+        campos = {chave: valor for chave, valor in campos.items() if valor}
+
         post = store.resolve_post_by_slug(slug, published_only=False)
         if not post:
+            # Só se cria o que traz conteúdo: o artigo de boas-vindas é da
+            # instalação, não deste script.
+            if not conteudo:
+                continue
+            criado = store.save_item(
+                "posts",
+                {
+                    "slug": slug,
+                    "status": "publicado",
+                    "author": "Equipa Sabemos Studio",
+                    **campos,
+                },
+                AUTOR,
+            )
+            print(f"  artigo {slug}: criado ({len(criado.get('blocks') or [])} blocos)")
             continue
-        campos = {chave: valor for chave, valor in campos.items() if valor}
+
         if str(post.get("author") or "").strip() in ("", "Equipa IQ OS"):
             campos["author"] = "Equipa Sabemos Studio"
         if not _alterados(post, campos):

@@ -153,6 +153,21 @@ E se a própria imagem base tiver de ser reconstruída a frio, ou for para uma
 máquina que não a tem, aí é o `15-imagem-vm.ps1` (imagem inteira, por blocos,
 com repetição).
 
+## Conteúdo: o que o deploy **não** leva
+
+O contexto de build exclui `data/`, e é lá que vive o CMS
+(`data/cms/cms.json`). Um artigo novo escrito no `api/cms_editorial.py` chega à
+VM como código — mas **não aparece no site** até ser aplicado à instalação:
+
+```powershell
+docker exec iqos-backend python _atualizar_site_sabemos.py
+```
+
+O script é idempotente: cria os artigos que faltam (publicados), actualiza os que
+mudaram e deixa em paz o que já esteja igual. O `_frontend_dist` também viaja no
+contexto, por isso o backend da VM consegue escrever o `<head>` das páginas com os
+metadados de SEO de cada rota.
+
 ## Problemas conhecidos
 
 **O contexto cresce para GB sem aviso.** Já aconteceu: as partes NDJSON da

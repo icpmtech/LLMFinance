@@ -43,6 +43,26 @@ NOTICIA = {
 }
 
 
+@pytest.fixture(autouse=True)
+def capa_sem_rede(monkeypatch):
+    """Nos testes, a capa da notícia não vai à internet.
+
+    `POST /news/publish` vai buscar a imagem da notícia à página original; nos
+    testes isso seria lento e dependente de terceiros. Quem testa a capa
+    substitui estes dois por uma resposta própria.
+    """
+    monkeypatch.setattr(
+        news_routes.news_imagem,
+        "capa_da_noticia",
+        lambda pagina: {"error": "a capa não é descarregada nos testes"},
+    )
+    monkeypatch.setattr(
+        news_routes.news_imagem,
+        "capa_da_url",
+        lambda imagem: {"error": "a capa não é descarregada nos testes"},
+    )
+
+
 @pytest.fixture()
 def cms_isolado(tmp_path, monkeypatch):
     """CMS isolado em `tmp_path` (não escreve em `data/`)."""
@@ -320,6 +340,86 @@ def test_publicacao_respeita_o_texto_e_as_etiquetas_do_editor(cms_isolado, monke
     assert artigo["markdown"].startswith("## Análise")
     assert "obras públicas" in artigo["tags"] and "Lisboa" in artigo["tags"]
     assert artigo["author"] == "editor@exemplo.pt"
+
+
+def test_publicacao_usa_a_imagem_da_noticia_como_capa(cms_isolado, monkeypatch):
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    monkeypatch.setattr(
+        news_routes.news_imagem,
+        "capa_da_noticia",
+        lambda pagina: {
+            "data": "aW1hZ2Vt",
+            "mime": "image/png",
+            "filename": "obra.png",
+            "origem": "https://exemplo.pt/obra.png",
+        },
+    )
+    resposta = news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
+    artigo = resposta["artigo"]
+    assert artigo["cover_id"], "o artigo ficou sem capa"
+    media = cms_store.get_item("media", artigo["cover_id"])
+    assert media["kind"] == "imagem"
+    assert media["alt"] == artigo["title"]
+    assert media["credit"] == NOTICIA["publisher"]
+    assert resposta["capa"] == {"id": artigo["cover_id"], "origem": "https://exemplo.pt/obra.png"}
+    assert resposta["aviso_capa"] == ""
+
+
+def test_publicacao_usa_o_url_da_noticia_para_procurar_a_capa(cms_isolado, monkeypatch):
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    pedidos: List[str] = []
+
+    def capa(pagina: str) -> Dict[str, Any]:
+        pedidos.append(pagina)
+        return {"error": "sem imagem"}
+
+    monkeypatch.setattr(news_routes.news_imagem, "capa_da_noticia", capa)
+    news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
+    assert pedidos == [NOTICIA["url"]]
+
+
+def test_publicacao_aceita_uma_imagem_escolhida_no_pedido(cms_isolado, monkeypatch):
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    pedidos: List[str] = []
+
+    def capa(imagem: str) -> Dict[str, Any]:
+        pedidos.append(imagem)
+        return {"data": "aW1hZ2Vt", "mime": "image/jpeg", "filename": "escolhida.jpg", "origem": imagem}
+
+    monkeypatch.setattr(news_routes.news_imagem, "capa_da_url", capa)
+    artigo = news_routes.news_publish(
+        {"id": NOTICIA["id"], "cover_url": "https://exemplo.pt/escolhida.jpg"},
+        session=_sessao(),
+    )["artigo"]
+    assert pedidos == ["https://exemplo.pt/escolhida.jpg"]
+    assert artigo["cover_id"]
+
+
+def test_publicacao_sem_imagem_nao_vai_procurar_capa(cms_isolado, monkeypatch):
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+
+    def explodir(*_: Any, **__: Any) -> Dict[str, Any]:
+        raise AssertionError("não devia procurar a imagem da notícia")
+
+    monkeypatch.setattr(news_routes.news_imagem, "capa_da_noticia", explodir)
+    resposta = news_routes.news_publish({"id": NOTICIA["id"], "imagem": False}, session=_sessao())
+    assert resposta["artigo"]["cover_id"] is None
+    assert resposta["capa"] is None
+
+
+def test_publicacao_avisa_quando_a_noticia_nao_traz_imagem(cms_isolado, monkeypatch):
+    monkeypatch.setattr(news_routes, "get_news_item", lambda news_id: dict(NOTICIA))
+    monkeypatch.setattr(
+        news_routes.news_imagem,
+        "capa_da_noticia",
+        lambda pagina: {"error": "a notícia não anuncia nenhuma imagem de partilha (`og:image`)"},
+    )
+    resposta = news_routes.news_publish({"id": NOTICIA["id"]}, session=_sessao())
+    # O artigo é criado na mesma: a capa em falta não é motivo para perder a notícia.
+    assert resposta["saved"] is True
+    assert resposta["artigo"]["cover_id"] is None
+    assert resposta["capa"] is None
+    assert "og:image" in resposta["aviso_capa"]
 
 
 def test_publicacao_sem_noticia_nem_titulo_pede_os_dados(cms_isolado, monkeypatch):

@@ -115,6 +115,10 @@ export type NewsPublishResult = {
   ia?: NewsAiInfo;
   /** Aviso quando a tradução não foi possível (o artigo sai com o original). */
   aviso?: string;
+  /** Capa do artigo: o id do media guardado no CMS e o URL de onde veio a imagem. */
+  capa?: { id: string; origem: string } | null;
+  /** Porque é que o artigo ficou sem capa (a imagem da notícia não serviu). */
+  aviso_capa?: string;
   resumo: string;
 };
 

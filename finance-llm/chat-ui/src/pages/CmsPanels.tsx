@@ -1099,7 +1099,13 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
               <TextInput label="Endereço (slug)" value={draft.slug ?? ""} onChange={(next) => setDraft({ ...draft, slug: next })} hint="Vazio = gerado do título." />
               <TextInput label="Autor" value={draft.author ?? ""} onChange={(next) => setDraft({ ...draft, author: next })} />
               <TextArea label="Resumo" value={draft.excerpt ?? ""} onChange={(next) => setDraft({ ...draft, excerpt: next })} rows={2} wide />
-              <MediaPicker label="Imagem de capa" value={String(draft.cover_id ?? "")} onChange={(next) => setDraft({ ...draft, cover_id: next || null })} media={media} />
+              <MediaPicker
+                label="Imagem de capa"
+                value={String(draft.cover_id ?? "")}
+                onChange={(next) => setDraft({ ...draft, cover_id: next || null })}
+                media={media}
+                allowUpload
+              />
               <TagsInput label="Etiquetas" value={draft.tags ?? []} onChange={(next) => setDraft({ ...draft, tags: next })} />
               <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
                 <Toggle label="Artigo em destaque" checked={draft.featured ?? false} onChange={(next) => setDraft({ ...draft, featured: next })} />

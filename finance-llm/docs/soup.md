@@ -174,6 +174,7 @@ docker compose --profile train run --rm --entrypoint soup soup data validate ./d
 | [soup-mistral.yaml](../training/soup/soup-mistral.yaml) | `model/mistral-finance/final` (modelo do sistema, 512×8, vocabulário de 3 000) | CPU ou GPU | `model/soup-mistral` |
 | [soup-subvencoes.yaml](../training/soup/soup-subvencoes.yaml) | `model/mistral-finance/final`, só com a fonte dos subsídios | CPU ou GPU | `model/soup-subvencoes` |
 | [soup-empresas-contratos.yaml](../training/soup/soup-empresas-contratos.yaml) | `model/mistral-finance/final`, com os contratos **e** as entidades no mesmo dataset | CPU ou GPU | `model/soup-empresas-contratos` |
+| [soup-qwen05-empresas-contratos.yaml](../training/soup/soup-qwen05-empresas-contratos.yaml) | `Qwen/Qwen2.5-0.5B-Instruct` (já fala português, ~1 GB) com o mesmo dataset misto | CPU (≈75 min para 195 pares) | `model/soup-qwen05-empresas-contratos` |
 | [soup-mistral-instruct.yaml](../training/soup/soup-mistral-instruct.yaml) | `mistralai/Mistral-7B-Instruct-v0.3` | GPU com ≥ 8 GB de VRAM | `model/soup-mistral-7b-lora` |
 
 Há um config por objectivo: o `soup-mistral.yaml` treina o modelo do sistema com
@@ -288,6 +289,65 @@ sem GPU, 266 exemplos a 1 024 tokens deram 34 passos em ~7 minutos (~9 s por
 passo). Para o corpus inteiro isto são horas, não minutos — comece por um
 `--max-records` pequeno para confirmar que o fluxo corre ponta a ponta, e só
 depois alargue.
+
+O dataset misto (`soup-empresas-contratos.yaml`, 794 pares, 1 época = 189 passos)
+levou **1h07** nesta máquina — 20 s por passo **em média**, mas o passo variou
+entre 3 s e 33 s: o Docker Desktop deste portátil está limitado a 16,4 GB e
+qualquer outro contentor a trabalhar ao mesmo tempo rouba núcleos ao treino. Com
+a máquina livre, os mesmos passos correram a ~3 s. Foi por isso que a perda
+demorou tanto a descer: `7,9337 → 7,5601` (validação 7,5226).
+
+### Quando o modelo de partida já fala português
+
+O modelo do sistema não conversa — é um *toy* de 22 M treinado de raiz. Para o
+chat responder a sério há duas hipóteses: um 7B numa GPU (ver
+[soup-vm.md](soup-vm.md)) ou, em CPU, um modelo **pequeno mas já pré-treinado**
+(`Qwen/Qwen2.5-0.5B-Instruct`, 495 M, ~1 GB). O
+[soup-qwen05-empresas-contratos.yaml](../training/soup/soup-qwen05-empresas-contratos.yaml)
+faz a segunda.
+
+O que muda na conta é que o custo passa a ser **linear em linhas × tokens**, e
+este CPU tem um teto baixo. Medido aqui, com `torch.get_num_threads() = 7`:
+
+| Operação | Tempo |
+|---|---|
+| forward + backward, 128 tokens | 6,6 s |
+| forward + backward, 512 tokens | 11,3 s |
+
+São ~125 GFLOP/s — o limite real desta máquina, que não tem GPU e para quem o
+`quantization: 4bit` não existe (é CUDA). Só que o `soup train` em CPU ficou
+**muito** abaixo disso: **4 micro-lotes em 80 minutos** (~20 min cada), com o
+contentor sem qualquer limite de CPU (`cgroup cpu.max = max`, 14 núcleos
+visíveis). O travão está, portanto, no caminho de treino em CPU do próprio Soup,
+não no hardware nem no Docker — os 22 M mostram o mesmo padrão (189 passos em
+1h07, 20 s por passo, para um modelo que devia ser submilisegundo de compute).
+
+Daí a conclusão prática: **nesta máquina, treinar com o Soup paga-se ao minuto e
+só serve para provas de mecanismo** — foi o que os 22 M deram (perda a descer,
+held-out a melhorar, chat degenerado). O config do Qwen 0,5 B fica pronto e
+validado (`Data OK: 185 train samples`), à espera de GPU: numa L4 são minutos.
+
+> **Atenção ao aviso `chat template does not contain {% generation %}`.** O Qwen
+> traz o molde dele, mas sem esse marcador o Soup calcula a perda sobre o texto
+> todo — o prompt incluído. O treino corre, mas gasta capacidade a reaprender a
+> ler o prompt. A correção é dar um `chat_template` explícito com
+> `{% generation %}` à volta da resposta (como o `soup-mistral.yaml` faz para o
+> modelo do sistema).
+
+Para o chat responder **hoje**, o que funciona é a rota do Gemma local (secção
+seguinte): o modelo tem a fluência e o Elasticsearch dá-lhe os dados.
+
+Três motores, as mesmas duas linhas do dataset (`iqos_contratos_empresas_200`),
+medido:
+
+| Pergunta | Modelo do sistema afinado (22 M) | gemma4 via Ollama |
+|---|---|---|
+| Contrato 4338759 — CHUC / INDAS, 29 846,32 € | `--day-day-day 5-day-day…` (2,3 s) | lista correcta dos 7 campos do contrato (25,8 s) |
+| Entidade «Ilídio da Silva Oliveira», 1 contrato, 3 810,00 € | `--,-day-day-04-day…` (2,0 s) | campos correctos, com «1 contrato» no singular (11,2 s) |
+
+É a tabela que fecha a discussão: o fine-tune do modelo do sistema mexe nos
+números (perda, perplexidade) mas não produz português; o modelo pré-treinado
+produz — e o que lhe falta do domínio vem do Elasticsearch, no prompt.
 
 O modelo grande (`soup-mistral-instruct.yaml`, 7B em QLoRA) sem GPU não é
 praticável: use a máquina com GPU e o `--gpus all`.
@@ -417,10 +477,58 @@ passa a ter resposta, em ~30 s:
 > *O subsídio atribuído foi de 1341.85 EUR, concedido pela FUNDACAO PARA A CIENCIA
 > E A TECNOLOGIA, I. P., em 27/01/2024, com a finalidade de Bolsas.*
 
+E com os dados das **duas** fontes do dataset misto (contratos e entidades), em
+~30 s cada:
+
+> **Contrato 7414596 – Leite Escolar**, adjudicante *Agrupamento de Escolas de
+> Oliveira de Frades*, adjudicatário *LACTOGAL*, 8 940 € → *«Quem contratou foi o
+> Agrupamento de Escolas de Oliveira de Frades, para a Aquisição de bens móveis
+> (especificamente, Leite Escolar), e o valor do preço contratual foi de 8940.0
+> EUR.»*
+>
+> **Entidade Bruno Miguel Costa da Silva Parente Vilela**, 5 contratos, 372 400 €
+> → *«Esta entidade é adjudicatário (ou seja, é contratada). Número de contratos:
+> 5 contratos. Valor total: 372 400,00 EUR.»*
+
 Com o registo do Elasticsearch passado no *system prompt*, o modelo responde
 **com os nossos dados**; sem contexto, responde do que sabe — é a diferença entre
 ter fluência e ter conhecimento do domínio (o domínio vem do RAG, ou de um
 fine-tune num modelo com capacidade para o aprender).
+
+### O Gemma4 na própria plataforma (RAG) — o que foi preciso ligar
+
+O painel do Soup é uma coisa; a plataforma é outra. Para o **IQ OS** responder com
+o Ollama do host foram precisos dois arranjos, ambos com causa medida:
+
+1. **API nativa em vez do dialecto OpenAI.** O fornecedor `ollama` do catálogo
+   ([api/providers_service.py](../api/providers_service.py)) falava
+   `/v1/chat/completions` — e nesse dialecto o Ollama **ignora** o `think`: um
+   modelo que pensa devolve tudo em `reasoning` e o `content` vem vazio (resposta
+   em branco na plataforma). Passou a `kind: "ollama"` (`/api/chat`), e o
+   `_ollama_body` do [api/cloud_chat.py](../api/cloud_chat.py) manda
+   `think: false`. O `OLLAMA_BASE_URL` do compose traz `/v1`, que o
+   `_ollama_root()` retira antes de compor o URL nativo.
+2. **Um modelo predefinido.** Sem escolha em Definições → Fornecedores de IA, a
+   plataforma caía no `gpt2` local. `AI_DEFAULT_BACKEND=ollama:gemma4:e4b` (no
+   `.env` local, passado ao backend pelo compose) decide quando a conta não tem
+   predefinição. Vazio, o comportamento antigo mantém-se.
+
+Resultado medido (`POST /hermes/ask`, **sem** indicar modelo — ele resolve
+sozinho):
+
+| Pergunta | Tempo | Resposta |
+|---|---|---|
+| «Que contratos públicos tem a INDAS?» | 107 s | citada, com 564 contratos / 9,36 M€ e os CPV do Elasticsearch |
+| «Quem é a Ilídio da Silva Oliveira…» | 303 s | citada, mas com números do corpus inteiro |
+
+> **A nota honesta da segunda linha:** o modelo relatou fielmente o que a recolha
+> lhe deu — e a recolha foi má (o filtro por nome apanhou o corpus todo: 72 685
+> contratos para quem tem 1). É precisão de *retrieval*, não do modelo: o mesmo
+> gemma4, com o registo exato no prompt, responde certo (tabela acima). Melhorar
+> a recolha vale mais do que trocar de modelo.
+
+A latência (2–5 min) é desta máquina: o gemma4 gera ~4 tokens/s em CPU e o prompt
+leva 18 evidências. Numa GPU, ou com menos evidências, desce a segundos.
 
 ### A pergunta que o `soup train` não responde
 
@@ -450,6 +558,28 @@ português corrente, porque o modelo do sistema é um *toy* de 22 M parâmetros
 (512 de escondido) treinado de raiz em linhas de cotações. Para respostas a sério
 é o `soup-mistral-instruct.yaml` numa GPU — a maquinaria é a mesma, muda o modelo
 de partida.
+
+O mesmo teste no dataset misto (contratos **e** entidades, 800 exportados, 98 de
+holdout):
+
+| | Perda/token | Perplexidade | Exactidão por token |
+|---|---:|---:|---:|
+| Modelo de partida | 7,918 | 2 745,4 | 1,03 % |
+| Adaptador treinado | 7,561 | **1 922,5** | **2,20 %** |
+| *azar (3 000 tokens de vocabulário)* | *8,006* | *3 000* | *0,03 %* |
+
+A conclusão repete-se, e com a prova crua ao lado: servido pelo `serve`, com um
+contrato que **nunca** viu, o adaptador responde
+
+```
+--day-day-day,-day-day,,-day-day-day, 2022-day, 2022-day-day ...
+```
+
+— texto degenerado, apesar de a perplexidade ter caído 30 % e a exactidão por
+token ter duplicado. Duas leituras, ambas verdadeiras: o mecanismo funciona (o
+treino mexe no modelo e o efeito vê-se no holdout) e a capacidade não chega (22 M
+de parâmetros não escrevem português). É este o número que decide a altura de ir
+para uma GPU — ver [soup-vm.md](soup-vm.md).
 
 Para ter a prova de que o fine-tune acrescentou alguma coisa, compare com o modelo
 de partida pelo `infer` — que não usa molde nenhum, por isso funciona nos dois:

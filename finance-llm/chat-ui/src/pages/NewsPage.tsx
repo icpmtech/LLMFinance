@@ -25,6 +25,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Image as ImageIcon,
   Languages,
   Loader2,
   Newspaper,
@@ -855,7 +856,7 @@ function NewsCard({
 }) {
   const [traducao, setTraducao] = useState<NewsTranslationResult | null>(null);
   const [traduzindo, setTraduzindo] = useState(false);
-  const [publicacao, setPublicacao] = useState<{ busy: boolean; url?: string; nota?: string; erro?: string }>({
+  const [publicacao, setPublicacao] = useState<{ busy: boolean; url?: string; nota?: string; erro?: string; capa?: boolean; avisoCapa?: string }>({
     busy: false,
   });
 
@@ -903,7 +904,7 @@ function NewsCard({
         title: traducao?.titulo,
         excerpt: traducao?.resumo,
       });
-      setPublicacao({ busy: false, url: resposta.url, nota: resposta.resumo });
+      setPublicacao({ busy: false, url: resposta.url, nota: resposta.resumo, capa: Boolean(resposta.capa), avisoCapa: resposta.aviso_capa });
     } catch (err) {
       setPublicacao((current) => ({
         ...current,
@@ -994,6 +995,11 @@ function NewsCard({
               <span className="inline-flex items-center gap-1 text-emerald-300">
                 <Check size={11} /> {publicacao.nota}
               </span>
+              {publicacao.capa ? (
+                <span className="inline-flex items-center gap-1 text-emerald-200/90">
+                  <ImageIcon size={11} /> com a imagem da notícia
+                </span>
+              ) : null}
               <a
                 href={publicacao.url}
                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-emerald-100 hover:bg-emerald-400/20"
@@ -1023,6 +1029,11 @@ function NewsCard({
           ) : null}
           {publicacao.nota && !publicacao.url ? (
             <span className="text-muted-foreground">{publicacao.nota}</span>
+          ) : null}
+          {publicacao.url && publicacao.avisoCapa ? (
+            <span className="inline-flex items-center gap-1 text-amber-200/90" title={publicacao.avisoCapa}>
+              <AlertTriangle size={11} /> sem capa: {publicacao.avisoCapa}
+            </span>
           ) : null}
           {publicacao.erro ? (
             <span className="inline-flex items-center gap-1 text-rose-300">

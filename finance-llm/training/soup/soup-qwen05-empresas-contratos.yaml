@@ -1,0 +1,54 @@
+# Fine-tuning com o dataset misto (contratos + entidades) a partir de um modelo
+# **que já fala português**, em vez do modelo de 22 M do sistema.
+#
+# Porquê: o `soup-empresas-contratos.yaml` treina o modelo do sistema (512 de
+# dimensão escondida, vocabulário de 3 000) — serve para provar o mecanismo, mas o
+# chat devolve texto degenerado («--day-day-day»), porque 22 M de parâmetros não
+# escrevem português. Um 0,5 B já conversa e cabe em CPU (sem `bitsandbytes`, logo
+# `quantization: none`); é o maior modelo que este portátil treina em tempo útil.
+#
+# Passo 1 — exportar (o mesmo dataset das duas fontes, **medido com o tokenizer do
+# Qwen**: o orçamento de tokens é o dele, não os 950 do modelo de 22 M):
+#   python training/export_es_dataset.py --dataset contratos --dataset empresas \
+#       --max-records 100 --seed 42 --tokenizer Qwen/Qwen2.5-0.5B-Instruct \
+#       --max-tokens 480 --out data/final/iqos_contratos_empresas_200.jsonl
+#
+# São 195 pares em vez dos 794 do dataset completo: nesta máquina um par de 512
+# tokens custa ~12 s de forward+backward (~125 GFLOP/s é o teto real do CPU), por
+# isso a conta é directa — 195 pares ≈ 20–40 min, 794 ≈ 2,5 h. Com GPU use o
+# dataset inteiro; aqui a amostra chega para provar a corrente toda.
+#
+# Passo 2 — treinar:
+#   docker compose --profile train run --rm soup train -y \
+#       --config training/soup/soup-qwen05-empresas-contratos.yaml
+#
+# Não precisa de `chat_template`: o Qwen2.5-Instruct traz o dele. Atenção — o
+# Soup avisa `chat template does not contain {% generation %}` e, sem esse
+# marcador, a perda também conta os tokens do prompt (treina a continuação do
+# texto todo, não só a resposta). Funciona, mas é menos eficiente; o
+# `chat_template` explícito com `{% generation %}` resolve — ver docs/soup.md.
+#
+# Numa GPU, o mesmo config com um 7B é o caminho sério: ver docs/soup-vm.md.
+
+base: Qwen/Qwen2.5-0.5B-Instruct
+task: sft
+
+data:
+  train: ./data/final/iqos_contratos_empresas_200.jsonl
+  format: alpaca
+  val_split: 0.05
+  max_length: 512
+
+training:
+  epochs: 1
+  # LoRA aceita taxas mais altas que o fine-tune completo; 1e-4 com 1 época é o
+  # ponto onde se vê o efeito sem apagar o português que o modelo já sabe.
+  lr: 1e-4
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: none
+
+output: ./model/soup-qwen05-empresas-contratos

@@ -121,7 +121,10 @@ PROVIDERS: List[Dict[str, Any]] = [
     {
         "id": "ollama",
         "label": "Ollama (local)",
-        "kind": "openai",
+        # API nativa (`/api/chat`), não o dialecto OpenAI: é a única forma de
+        # mandar `think: false`, sem a qual os modelos que «pensam» devolvem
+        # `content` vazio (medido com o gemma4:e4b). Ver `cloud_chat._ollama_body`.
+        "kind": "ollama",
         "base_url": os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
         "env": "OLLAMA_API_KEY",
         "docs_url": "https://ollama.com/download",

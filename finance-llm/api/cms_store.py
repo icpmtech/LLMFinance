@@ -2371,6 +2371,7 @@ def _seed(store: Dict[str, Any]) -> None:
     ]
 
     artigo_contratos = editorial.artigo_contratos_2026()
+    artigo_2025_2026 = editorial.artigo_contratos_2025_2026()
     store["posts"] = [
         {
             "id": "post_bemvindo",
@@ -2419,6 +2420,27 @@ def _seed(store: Dict[str, Any]) -> None:
             "featured": False,
             "reading_minutes": post_reading_minutes(artigo_contratos["markdown"], artigo_contratos["blocks"]),
             "seo": {"title": "", "description": "", "keywords": [], "image_id": None, "noindex": False},
+            "created_at": now,
+            "updated_at": now,
+            "updated_by": "sistema",
+        },
+        {
+            "id": "post_contratos_2025_2026",
+            "title": "2025 contra 2026: mais contratos, menos dinheiro",
+            "slug": editorial.ARTIGO_2025_2026_SLUG,
+            "excerpt": editorial.ARTIGO_2025_2026_EXCERPT,
+            "markdown": artigo_2025_2026["markdown"],
+            "blocks": artigo_2025_2026["blocks"],
+            "cover_id": media.get("capa-post-contratos-2026.svg"),
+            "category_ids": [analytics_id, market_id],
+            "tags": ["contratos públicos", "2025", "2026", "mercado", "CPV"],
+            "author": "Equipa Sabemos Studio",
+            "status": "publicado",
+            "published_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+            "scheduled_at": None,
+            "featured": False,
+            "reading_minutes": post_reading_minutes(artigo_2025_2026["markdown"], artigo_2025_2026["blocks"]),
+            "seo": artigo_2025_2026["seo"],
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
