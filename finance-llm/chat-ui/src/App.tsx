@@ -117,6 +117,7 @@ import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
+import ArquivoPage from "./pages/ArquivoPage";
 import GleifPage, {
   GLEIF_SECTION_VIEWS,
   gleifSectionForView,
@@ -246,6 +247,7 @@ type AppView =
   | "risco"
   | "societario"
   | "empresas-recolha"
+  | "arquivo"
   | "iframe-pages"
   | "landing"
   | "login"
@@ -437,6 +439,7 @@ function pathForView(
   if (view === "risco") return "/empresas-risco";
   if (view === "societario") return "/societario";
   if (view === "empresas-recolha") return "/empresas-recolha";
+  if (view === "arquivo") return "/arquivo";
   if (view === "gleif") return "/gleif";
   if (view === "gleif-mapa") return "/gleif/mapa";
   if (view === "gleif-ingestao") return "/gleif/ingestao";
@@ -1772,6 +1775,7 @@ export default function App() {
     if (target === "risco") return <RiscoPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;
+    if (target === "arquivo") return <ArquivoPage />;
     if (target === "contracts-dashboard") {
       return (
         <ContractsDashboardPage

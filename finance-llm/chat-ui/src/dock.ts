@@ -12,6 +12,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Archive,
   BarChart3,
   BookOpen,
   Bot,
@@ -498,6 +499,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: FolderDown,
     gradient: "from-sky-200 via-teal-500 to-emerald-700",
     accent: "56,189,248",
+  },
+  {
+    id: "arquivo",
+    label: "Arquivo.pt",
+    hint: "Pesquisar e recolher páginas da web preservadas pelo Arquivo.pt (FCT)",
+    icon: Archive,
+    gradient: "from-amber-200 via-orange-400 to-rose-600",
+    accent: "251,146,60",
   },
   {
     id: "osint",

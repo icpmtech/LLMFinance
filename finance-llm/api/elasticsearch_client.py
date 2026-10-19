@@ -326,6 +326,13 @@ ERC_OCS_INDEX = "finance_erc_ocs"
 # rendeu e eventuais erros.
 ERC_RECOLHAS_INDEX = "finance_erc_recolhas"
 
+# **Arquivo.pt** — páginas da web preservadas pelo Arquivo.pt (FCT). Cada
+# documento é uma captura de uma página, recolhida via API pública de pesquisa
+# de texto completo (`textsearch`) ou CDX (`wayback/cdx`). Os campos principais
+# (título, URL, domínio, data de captura, snippet, links) são pesquisáveis; o
+# objeto `raw` guarda a resposta original da API.
+ARQUIVO_PT_INDEX = "finance_arquivo_pt"
+
 # ---------------------------------------------------------------------------
 # «World Model» — o estado do mundo da contratação pública, materializado.
 #
@@ -450,6 +457,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         "analysis": {
             "analyzer": {
                 "agent_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    # Arquivo.pt: títulos, snippets e texto extraído de páginas preservadas
+    # podem conter acentos; o analisador `world_folding` normaliza a pesquisa.
+    ARQUIVO_PT_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -3387,6 +3407,42 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Arquivo.pt — capturas da web preservadas pela FCT.
+    arquivo_pt_mappings = {
+        "properties": {
+            "title": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "url": {"type": "keyword", "ignore_above": 1024},
+            "domain": {"type": "keyword", "ignore_above": 256},
+            "tstamp": {"type": "keyword", "ignore_above": 16},
+            "capture_date": {"type": "date"},
+            "digest": {"type": "keyword", "ignore_above": 64},
+            "mime_type": {"type": "keyword", "ignore_above": 64},
+            "status": {"type": "keyword"},
+            "length": {"type": "long"},
+            "collection": {"type": "keyword"},
+            "query": {"type": "keyword", "ignore_above": 256},
+            "site": {"type": "keyword", "ignore_above": 256},
+            "type": {"type": "keyword", "ignore_above": 32},
+            "snippet": {"type": "text", "analyzer": "world_folding"},
+            "text": {"type": "text", "analyzer": "world_folding"},
+            "link_to_archive": {"type": "keyword", "ignore_above": 1024},
+            "link_to_no_frame": {"type": "keyword", "ignore_above": 1024},
+            "link_to_screenshot": {"type": "keyword", "ignore_above": 1024},
+            "link_to_extracted_text": {"type": "keyword", "ignore_above": 1024},
+            "link_to_metadata": {"type": "keyword", "ignore_above": 1024},
+            "link_to_original_file": {"type": "keyword", "ignore_above": 1024},
+            "filename": {"type": "keyword", "ignore_above": 512},
+            "host_key": {"type": "keyword", "ignore_above": 256},
+            "kind": {"type": "keyword"},  # "search" | "cdx"
+            "collected_at": {"type": "date"},
+            "raw": {"type": "object", "enabled": False},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -3456,6 +3512,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (ERC_RECOLHAS_INDEX, erc_recolhas_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
+        (ARQUIVO_PT_INDEX, arquivo_pt_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}

@@ -9,12 +9,14 @@ resultado em **JSONL** e indexa-o no **Elasticsearch**.
 Uso:
     python -m collectors.racius --q galp --pages 2
     python -m collectors.racius --q "" --pages 5 --limit 100
+    python -m collectors.racius --distrito porto --pages 10
     python -m collectors.racius --q "construcao" --no-elastic --out data/racius/construcao.jsonl
 
 Notas:
 - A lista usa `https://www.racius.com/pesquisa/empresas/?q=<termo>` e pagina com
-  o parâmetro `page` (`?q=<termo>&page=2`); o `robots.txt` do site permite o
-  acesso (`User-agent: * / Allow: /`).
+  o parâmetro `page` (`?q=<termo>&page=2`); com `--distrito` a lista é a do
+  diretório geográfico (`/empresas-em-portugal/distrito-<distrito>/`). O
+  `robots.txt` do site permite o acesso (`User-agent: * / Allow: /`).
 - Cada ficha é um pedido extra: `--delay` espaça os pedidos (cortesia) e
   `--limit` limita quantas fichas são abertas por execução.
 """
@@ -27,6 +29,8 @@ import logging
 import re
 import sys
 import time
+import unicodedata
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 from urllib.parse import urlencode
@@ -38,11 +42,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 LIST_URL = "https://www.racius.com/pesquisa/empresas/"
+#: Lista do diretório geográfico: um distrito por URL (`/distrito-porto/`).
+DISTRICT_URL = "https://www.racius.com/empresas-em-portugal/distrito-{slug}/"
 BASE_URL = "https://www.racius.com"
 INDEX = "finance_racius"
 #: Fonte do módulo de recolha do IQ OS que alimenta o mesmo índice.
 SOURCE_ID = "racius-diretorio"
 SINK_DIR = ROOT / "data" / "racius"
+#: Tabela oficial concelho → distrito (os 308 concelhos), usada para validar a
+#: geografia da ficha — ver `resolve_geo`.
+GEO_FILE = ROOT / "data" / "geo" / "concelhos_distritos.json"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -73,6 +82,61 @@ _ICON_RE = re.compile(r"^ico-[a-z-]+\s*", re.I)
 
 def _clean(value: str) -> str:
     return re.sub(r"\s+", " ", (value or "")).strip()
+
+
+def _fold(value: str) -> str:
+    """Chave de comparação de nomes geográficos: sem acentos nem caixa."""
+    decomposed = unicodedata.normalize("NFKD", value or "")
+    return "".join(char for char in decomposed if not unicodedata.combining(char)).strip().lower()
+
+
+def _slug(value: str) -> str:
+    """Segmento do URL do Racius (`Viana do Castelo` → `viana-do-castelo`)."""
+    return re.sub(r"[^a-z0-9]+", "-", _fold(_clean(value))).strip("-")
+
+
+@lru_cache(maxsize=1)
+def _geo_tables() -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Concelho → distrito e distrito → grafia canónica, a partir de `GEO_FILE`.
+
+    Sem a tabela o coletor continua a funcionar: `resolve_geo` devolve o que a
+    ficha disser, sem validar.
+    """
+    try:
+        data = json.loads(GEO_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:  # noqa: BLE001 — a ficha ainda serve
+        logger.warning("Tabela geográfica indisponível (%s): %s", GEO_FILE, exc)
+        return {}, {}
+    concelhos = {_fold(nome): distrito for nome, distrito in (data.get("concelhos") or {}).items()}
+    distritos = {_fold(nome): nome for nome in data.get("distritos") or []}
+    return concelhos, distritos
+
+
+def resolve_geo(label: str, value: str) -> Dict[str, str]:
+    """Concelho e distrito a partir do par geográfico da ficha do Racius.
+
+    O bloco da morada mostra o par «concelho, distrito» (ex.: «Alcobaça»,
+    «Leiria»), mas nas cidades mostra a **freguesia** no rótulo (ex.: «Sé»,
+    «Funchal») — daí validar o par contra a tabela dos 308 concelhos:
+
+    - rótulo é concelho e o valor é o seu distrito → concelho = rótulo;
+    - rótulo não é concelho mas o valor é → concelho = valor, rótulo fica em
+      `localidade`;
+    - caso contrário guarda-se o distrito (se conhecido) sem inventar concelho.
+    """
+    concelhos, distritos = _geo_tables()
+    label, value = _clean(label), _clean(value)
+    label_distrito = concelhos.get(_fold(label))
+    value_distrito = concelhos.get(_fold(value))
+
+    if label_distrito and (value_distrito is None or value_distrito == label_distrito):
+        return {"concelho": label, "distrito": label_distrito}
+    if value_distrito:
+        return {"localidade": label, "concelho": value, "distrito": value_distrito}
+    value_distrito = distritos.get(_fold(value))
+    if value_distrito:
+        return {"localidade": label, "distrito": value_distrito}
+    return {}
 
 
 def _parse_money(value: str) -> Optional[float]:
@@ -157,35 +221,54 @@ def parse_detail(html: str) -> Dict[str, Any]:
     capital = _parse_money(doc.get("capital_social", ""))
     if capital is not None:
         doc["capital_social_eur"] = capital
-    # O segundo par do bloco da morada tem rótulo variável: é o concelho, e o
-    # valor é o distrito (ex.: "Santarém": "Santarém").
+    # O par seguinte ao «Morada» é a geografia da empresa (concelho/distrito ou
+    # freguesia/concelho): o `resolve_geo` diz qual dos dois é o concelho.
     for index, (key, value) in enumerate(pairs):
         if key.strip().lower() == "morada" and index + 1 < len(pairs):
-            localidade, distrito = pairs[index + 1]
-            if localidade.strip().lower() not in LABELS:
-                doc["concelho"] = localidade
-                doc["distrito"] = distrito
+            label, valor = pairs[index + 1]
+            if label.strip().lower() not in LABELS:
+                doc.update(resolve_geo(label, valor))
             break
     return doc
+
+
+def _geo_from_localizacao(localizacao: str) -> Dict[str, str]:
+    """Geografia a partir da linha da lista («Samora Correia, Benavente»).
+
+    Só é usada quando a ficha não trouxe o par da morada: a lista dá a
+    localidade e o concelho, nunca o distrito.
+    """
+    parts = [part.strip() for part in (localizacao or "").split(",") if part.strip()]
+    if not parts:
+        return {}
+    if len(parts) == 1:
+        return resolve_geo(parts[0], parts[0])
+    return resolve_geo(parts[0], parts[-1])
 
 
 def collect(
     q: str,
     *,
+    distrito: Optional[str] = None,
     pages: int = 1,
     limit: Optional[int] = None,
     with_detail: bool = True,
     delay: float = 1.0,
     timeout: int = 30,
 ) -> Iterator[Dict[str, Any]]:
-    """Percorre as páginas de resultados e devolve as empresas (com ficha)."""
+    """Percorre as páginas de resultados e devolve as empresas (com ficha).
+
+    Com `distrito`, a lista é a do diretório geográfico desse distrito
+    (`/empresas-em-portugal/distrito-<slug>/`) em vez da pesquisa por termo.
+    """
     session = make_session()
     emitted = 0
+    base = DISTRICT_URL.format(slug=_slug(distrito)) if distrito else LIST_URL
     for page in range(1, max(1, pages) + 1):
         params: Dict[str, Any] = {"q": q}
         if page > 1:
             params["page"] = page
-        url = f"{LIST_URL}?{urlencode(params)}"
+        url = f"{base}?{urlencode(params)}"
         html = fetch(session, url, timeout=timeout)
         rows = parse_list(html)
         logger.info("Página %s: %s empresas", page, len(rows))
@@ -201,6 +284,8 @@ def collect(
                     doc.update(parse_detail(fetch(session, row["url"], timeout=timeout)))
                 except Exception as exc:  # noqa: BLE001 — segue sem ficha
                     logger.warning("Ficha de %s falhou: %s", row["url"], exc)
+            if not doc.get("distrito"):
+                doc.update(_geo_from_localizacao(doc.get("localizacao", "")))
             emitted += 1
             yield doc
 
@@ -264,6 +349,11 @@ def _as_item(doc: Dict[str, Any]) -> Dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Recolha do diretório de empresas do Racius.")
     parser.add_argument("--q", default="", help="Termo de pesquisa (vazio = todas as empresas).")
+    parser.add_argument(
+        "--distrito",
+        default=None,
+        help="Recolher a lista de um distrito (ex.: porto, lisboa, viana-do-castelo).",
+    )
     parser.add_argument("--pages", type=int, default=1, help="Nº de páginas de resultados (15 empresas por página).")
     parser.add_argument("--limit", type=int, default=None, help="Máximo de empresas a recolher.")
     parser.add_argument("--no-detail", action="store_true", help="Não abrir a ficha de cada empresa.")
@@ -276,6 +366,7 @@ def main() -> int:
     items = list(
         collect(
             args.q,
+            distrito=args.distrito,
             pages=args.pages,
             limit=args.limit,
             with_detail=not args.no_detail,

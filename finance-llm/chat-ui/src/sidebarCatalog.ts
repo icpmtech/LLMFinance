@@ -169,8 +169,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "recolha",
     label: "Recolha de dados",
-    hint: "Recolha de sites, templates, execuções, agenda e diretórios de empresas",
-    ids: ["scraper", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "racius", "empresas-recolha"],
+    hint: "Recolha de sites, templates, execuções, agenda, Arquivo.pt e diretórios de empresas",
+    ids: ["scraper", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "arquivo", "racius", "empresas-recolha"],
   },
   {
     id: "social",

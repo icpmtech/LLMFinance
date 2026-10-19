@@ -215,6 +215,7 @@ from api.elasticsearch_client import (
     ENTITIES_INDEX,
     FIRMAS_INDEX,
     TRADEMARKS_INDEX,
+    ARQUIVO_PT_INDEX,
 )
 from api.rag_service import get_contracts_chat_answer
 from api.contract_agent import analyze_contract
@@ -308,6 +309,8 @@ from api.descoberta_routes import router as descoberta_router
 # Descoberta de pessoas: uma ou várias empresas → quem nelas tem cargos, a rede de
 # cada pessoa e (com duas ou mais empresas) quem as liga (`/descoberta/pessoas/*`).
 from api.descoberta_pessoas_routes import router as descoberta_pessoas_router
+# Arquivo.pt — páginas da web preservadas pela FCT (API pública).
+from api.arquivo_routes import router as arquivo_router
 from api.cire_routes import router as cire_router
 from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
@@ -849,6 +852,14 @@ app.include_router(empresas_perfil_router)
 # a análise do Hermes (`/descoberta/*`).
 app.include_router(descoberta_router)
 app.include_router(descoberta_pessoas_router)
+# Arquivo.pt: recolha e pesquisa de páginas preservadas (`/arquivo/*`).
+app.include_router(arquivo_router)
+
+
+@app.get("/arquivo")
+def serve_arquivo_spa_page(request: Request):
+    """Página do módulo **Arquivo.pt** — pesquisar e recolher páginas do passado."""
+    return spa_page_response(str(request.url.path))
 
 
 @app.get("/societario")

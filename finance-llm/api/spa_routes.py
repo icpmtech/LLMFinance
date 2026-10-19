@@ -105,6 +105,7 @@ SEGMENTOS_DA_APP = frozenset(
         "world",
         # Análise, investigação e assistentes
         "administracao-central",
+        "arquivo",
         "benchmark",
         "benchmarks",
         "browser",
