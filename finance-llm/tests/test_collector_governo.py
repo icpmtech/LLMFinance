@@ -169,6 +169,106 @@ def test_parse_composicao_le_grupos_periodos_e_secretarios():
     assert secretario["secretarios_count"] is None
 
 
+def test_parse_dre_detail_normaliza_texto_e_datas():
+    detail = {
+        "Id": "904227412",
+        "Titulo": "Despacho n.º 958/2025 ",
+        "Publicacao": "Diário da República n.º 15/2025, Série II de 2025-01-22",
+        "Numero": "958/2025",
+        "Sumario": "Exoneração e designação do chefe do Gabinete.",
+        "Texto": "<p>1 - Ao abrigo do disposto no n.º 1 do artigo 11.º.</p>",
+        "DataPublicacao": "2025-01-22",
+        "Emissor": "Finanças - Gabinete do Ministro de Estado e das Finanças",
+        "Serie": "II",
+        "Pagina": "47 - 48",
+        "URL_PDF": "https://files.diariodarepublica.pt/2s/2025/01/015000000/0004700048.pdf",
+        "DiarioRepublica": {"URL_PDF": "https://files.diariodarepublica.pt/gratuitos/2s/2025/01/2S015A0000S00.pdf"},
+        "TipoDiploma": "Despacho",
+    }
+
+    fields = governo.parse_dre_detail(detail)
+
+    assert fields["dre_id"] == "904227412"
+    assert fields["dre_titulo"] == "Despacho n.º 958/2025"
+    assert fields["dre_sumario"] == "Exoneração e designação do chefe do Gabinete."
+    assert fields["dre_texto"].startswith("1 - Ao abrigo")
+    assert fields["dre_data_publicacao"] == "2025-01-22"
+    assert fields["dre_pdf_url"].endswith("0004700048.pdf")
+    assert fields["dre_diario_pdf_url"].endswith("2S015A0000S00.pdf")
+
+
+def _profile_html(context: dict) -> str:
+    import json as _json
+
+    payload = {
+        "props": {
+            "pageProps": {
+                "layoutData": {
+                    "sitecore": {
+                        "route": {
+                            "placeholders": {
+                                "headless-main": [
+                                    {
+                                        "componentName": "OfficialProfile",
+                                        "fields": {"data": {"contextItem": context}},
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return f'<script id="__NEXT_DATA__" type="application/json">{_json.dumps(payload, ensure_ascii=False)}</script>'
+
+
+def test_parse_member_profile_ministro_com_historico():
+    context = {
+        "officialsHistory": {
+            "targetItems": [
+                {
+                    "official": {"targetItem": {"fullName": {"jsonValue": {"value": "Dalila Rodrigues"}}}},
+                    "governmentRole": {"jsonValue": {"value": "Ministra"}},
+                    "bio": {"jsonValue": {"value": "<p>Historiadora de arte.</p>"}},
+                    "bioPhoto": {"jsonValue": {"value": {"src": "https://example.pt/dalila.jpg"}}},
+                    "startDate": {"jsonValue": {"value": "2024-04-02T00:00:00Z"}},
+                    "endDate": {"jsonValue": {"value": "2025-06-05T00:00:00Z"}},
+                }
+            ]
+        },
+        "parent": {"governmentTitle": {"jsonValue": {"value": "Cultura"}}},
+    }
+
+    fields = governo.parse_member_profile(_profile_html(context))
+
+    assert fields["nome_oficial"] == "Dalila Rodrigues"
+    assert fields["cargo_oficial"] == "Ministra"
+    assert fields["area_nome"] == "Cultura"
+    assert fields["biografia"] == "Historiadora de arte."
+    assert fields["foto_biografia"] == "https://example.pt/dalila.jpg"
+    assert fields["perfil_inicio"] == "2024-04-02"
+    assert fields["perfil_fim"] == "2025-06-05"
+
+
+def test_parse_member_profile_primeiro_ministro_sem_historico():
+    context = {
+        "official": {"targetItem": {"fullName": {"jsonValue": {"value": "Luís Montenegro"}}}},
+        "governmentRole": {"jsonValue": {"value": "Primeiro-Ministro"}},
+        "bio": {"jsonValue": {"value": "<p>Advogado.</p>"}},
+        "governmentTitle": {"jsonValue": {"value": "Primeiro-Ministro"}},
+        "startDate": {"jsonValue": {"value": "2024-04-02T00:00:00Z"}},
+        "endDate": {"jsonValue": {"value": "2025-06-05T00:00:00Z"}},
+    }
+
+    fields = governo.parse_member_profile(_profile_html(context))
+
+    assert fields["nome_oficial"] == "Luís Montenegro"
+    assert fields["cargo_oficial"] == "Primeiro-Ministro"
+    assert fields["area_nome"] == "Primeiro-Ministro"
+    assert fields["biografia"] == "Advogado."
+
+
 def test_documentos_elastic_tem_ids_estaveis_e_campos_de_topologia():
     record = {
         "area": "Finanças",

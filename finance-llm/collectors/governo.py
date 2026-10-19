@@ -14,6 +14,14 @@ Fontes
   lista é renderizada no browser, pelo que usa o *fetcher* ``dynamic`` e espera
   pelo seletor dos cartões.
 
+Enriquecimento
+--------------
+* **DRE** — cada linha tem uma ligação «Despacho» para o Diário da República. O
+  detalhe é lido pela API do DRE: título, número, sumário, texto integral,
+  data de publicação, emissor, série, páginas e URL do PDF.
+* **Perfis oficiais** — a página de cada membro publica a biografia, a
+  fotografia e o cargo, extraídos do componente ``OfficialProfile``.
+
 Saídas
 ------
 * ``data/governo/governo_nomeacoes.json`` — payload completo (áreas, membros e
@@ -32,6 +40,8 @@ Uso::
     python -m collectors.governo --no-elastic
     python -m collectors.governo --areas financas,saude --no-composicao
     python -m collectors.governo --timeline 2025-06-05 --delay 0.8
+    python -m collectors.governo --no-dre --no-perfis
+    python -m collectors.governo --dre-limit 20
 """
 from __future__ import annotations
 
@@ -40,12 +50,15 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import quote, unquote
 
+import requests
 from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -160,6 +173,195 @@ def fetch_dynamic(url: str, *, wait_selector: str, timeout: int = 90) -> str:
             timeout=timeout * 1000,
         )
         return page.html_content
+
+
+# ---------------------------------------------------------------------------
+# Diário da República (detalhe dos Despachos)
+# ---------------------------------------------------------------------------
+DRE_MODULE_VERSION_URL = "https://diariodarepublica.pt/dr/moduleservices/moduleversioninfo"
+DRE_DETAIL_ACTION = (
+    "https://diariodarepublica.pt/dr/screenservices/dr/"
+    "Legislacao_Conteudos/Conteudo_Detalhe/DataActionGetAllConteudoDetalheData"
+)
+#: Versão da API do módulo `dr` (OutSystems). Muda quando o DRE é publicado;
+#: o coletor avisa se a resposta vier vazia e a versão pode ser passada por CLI.
+DRE_API_VERSION = "B3l5BYZxaLmWUxGR3tmKGw"
+
+
+def _html_to_text(value: str) -> str:
+    if not value:
+        return ""
+    return " ".join(BeautifulSoup(str(value), "html.parser").get_text(" ", strip=True).split())
+
+
+def _dre_session() -> requests.Session:
+    """Sessão para a API do DRE (o token CSRF é comparado com o cookie)."""
+    session = requests.Session()
+    token = secrets.token_urlsafe(18)
+    session.cookies.set(
+        "nr2Users",
+        f"crf%3d{quote(token, safe='')}%3buid%3d0%3bunm%3d",
+        domain="diariodarepublica.pt",
+        path="/",
+    )
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=UTF-8",
+            "OutSystems-Locale": "pt-PT",
+            "x-csrftoken": token,
+        }
+    )
+    return session
+
+
+def _sync_dre_csrf(session: requests.Session) -> None:
+    """O DRE roda o token CSRF no cookie `nr2Users`; o cabeçalho tem de o seguir."""
+    raw = session.cookies.get("nr2Users") or ""
+    match = re.search(r"crf=([^;]+)", unquote(raw))
+    if match:
+        session.headers["x-csrftoken"] = match.group(1)
+
+
+def _dre_module_version(session: requests.Session) -> str:
+    response = session.get(DRE_MODULE_VERSION_URL, timeout=30)
+    response.raise_for_status()
+    _sync_dre_csrf(session)
+    token = str(response.json().get("versionToken") or "").strip()
+    if not token:
+        raise RuntimeError("O DRE não devolveu o versionToken do módulo.")
+    return token
+
+
+def fetch_dre_detail(
+    url: str,
+    *,
+    session: Optional[requests.Session] = None,
+    module_version: str = "",
+    api_version: str = DRE_API_VERSION,
+) -> Dict[str, Any]:
+    """Lê o detalhe de um Despacho na API do Diário da República."""
+    parts = [part for part in url.split("?")[0].rstrip("/").split("/") if part]
+    if len(parts) < 2:
+        raise ValueError(f"URL do DRE inválido: {url!r}")
+    tipo, key = parts[-2], parts[-1]
+    session = session or _dre_session()
+    module_version = module_version or _dre_module_version(session)
+    payload = {
+        "versionInfo": {"moduleVersion": module_version, "apiVersion": api_version},
+        "viewName": "Legislacao_Conteudos.Conteudo_Detalhe",
+        "screenData": {
+            "variables": {
+                "Tipo": tipo,
+                "Key": key,
+                "_tipoInDataFetchStatus": 1,
+                "_keyInDataFetchStatus": 1,
+            }
+        },
+        "clientVariables": {},
+    }
+    response = session.post(
+        DRE_DETAIL_ACTION,
+        json=payload,
+        timeout=30,
+        headers={"Referer": url},
+    )
+    response.raise_for_status()
+    _sync_dre_csrf(session)
+    if "application/json" not in str(response.headers.get("content-type") or ""):
+        raise RuntimeError("O DRE devolveu HTML em vez de JSON (sessão/CSRF inválidos).")
+    data = response.json()
+    detail = (data.get("data") or {}).get("DetalheConteudo") or {}
+    if not detail or not detail.get("Id"):
+        changed = (data.get("versionInfo") or {}).get("hasApiVersionChanged")
+        hint = " A versão da API do DRE mudou." if changed else ""
+        raise RuntimeError(f"Detalhe vazio devolvido pelo DRE.{hint}")
+    return detail
+
+
+def parse_dre_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza o detalhe do DRE para os campos guardados na nomeação."""
+    diario = detail.get("DiarioRepublica") or {}
+    return {
+        "dre_id": str(detail.get("Id") or ""),
+        "dre_titulo": _html_to_text(detail.get("Titulo") or ""),
+        "dre_numero": _html_to_text(detail.get("Numero") or ""),
+        "dre_publicacao": _html_to_text(detail.get("Publicacao") or ""),
+        "dre_sumario": _html_to_text(detail.get("Sumario") or detail.get("Resumo") or ""),
+        "dre_texto": _html_to_text(detail.get("Texto") or detail.get("TextoFormatado") or "")[:60000],
+        "dre_data_publicacao": _parse_date(detail.get("DataPublicacao") or ""),
+        "dre_emissor": _html_to_text(detail.get("Emissor") or ""),
+        "dre_serie": _html_to_text(detail.get("Serie") or ""),
+        "dre_pagina": _html_to_text(detail.get("Pagina") or ""),
+        "dre_pdf_url": str(detail.get("URL_PDF") or "").strip(),
+        "dre_diario_pdf_url": str(diario.get("URL_PDF") or "").strip(),
+        "dre_tipo": _html_to_text(detail.get("TipoDiploma") or ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Perfis oficiais (biografias)
+# ---------------------------------------------------------------------------
+def _find_component(node: Any, name: str) -> Optional[Dict[str, Any]]:
+    if isinstance(node, dict):
+        if node.get("componentName") == name:
+            return node
+        for value in node.values():
+            found = _find_component(value, name)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for value in node:
+            found = _find_component(value, name)
+            if found:
+                return found
+    return None
+
+
+def parse_member_profile(html: str) -> Dict[str, Any]:
+    """Extrai nome, cargo, biografia e fotografia do perfil oficial."""
+    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
+    if not match:
+        return {}
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return {}
+    component = _find_component(data, "OfficialProfile")
+    if not component:
+        return {}
+    context = (component.get("fields") or {}).get("data", {}).get("contextItem") or {}
+    items = (context.get("officialsHistory") or {}).get("targetItems") or []
+    # O Primeiro-Ministro publica os dados diretamente no `contextItem`; os
+    # ministros e secretários de Estado usam `officialsHistory.targetItems`.
+    item = items[0] if items else context
+    bio_html = ((item.get("bio") or {}).get("jsonValue") or {}).get("value") or ""
+    photo = ((item.get("bioPhoto") or {}).get("jsonValue") or {}).get("value") or {}
+    name = (
+        ((item.get("official") or {}).get("targetItem") or {})
+        .get("fullName", {})
+        .get("jsonValue", {})
+        .get("value")
+    )
+    role = ((item.get("governmentRole") or {}).get("jsonValue") or {}).get("value")
+    start = ((item.get("startDate") or {}).get("jsonValue") or {}).get("value")
+    end = ((item.get("endDate") or {}).get("jsonValue") or {}).get("value")
+    parent = context.get("parent") or {}
+    area = (
+        ((item.get("governmentTitle") or {}).get("jsonValue") or {}).get("value")
+        or ((parent.get("governmentTitle") or {}).get("jsonValue") or {}).get("value")
+    )
+    return {
+        "nome_oficial": _html_to_text(str(name or "")),
+        "cargo_oficial": _html_to_text(str(role or "")),
+        "area_nome": _html_to_text(str(area or "")),
+        "biografia": _html_to_text(bio_html),
+        "foto_biografia": str(photo.get("src") or "") if isinstance(photo, dict) else "",
+        "perfil_inicio": _parse_date(str(start or "")),
+        "perfil_fim": _parse_date(str(end or "")),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +497,78 @@ def parse_composicao(html: str, *, source_url: str) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# Enriquecimento (DRE e perfis oficiais)
+# ---------------------------------------------------------------------------
+def enrich_nomeacoes(
+    records: List[Dict[str, Any]],
+    *,
+    delay: float = 0.25,
+    limit: Optional[int] = None,
+    session: Optional[requests.Session] = None,
+    module_version: str = "",
+    api_version: str = DRE_API_VERSION,
+) -> Dict[str, int]:
+    """Acrescenta a cada nomeação o detalhe do Despacho publicado no DRE."""
+    targets = records[:limit] if limit else records
+    if not targets:
+        return {"ok": 0, "erros": 0}
+    session = session or _dre_session()
+    module_version = module_version or _dre_module_version(session)
+    cache: Dict[str, Dict[str, Any]] = {}
+    ok = erros = 0
+    for index, record in enumerate(targets, 1):
+        url = str(record.get("dre_url") or "").strip()
+        if not url:
+            continue
+        if url in cache:
+            record.update(cache[url])
+            ok += 1
+            continue
+        try:
+            fields = parse_dre_detail(
+                fetch_dre_detail(url, session=session, module_version=module_version, api_version=api_version)
+            )
+            record.update(fields)
+            cache[url] = fields
+            ok += 1
+        except Exception as exc:  # noqa: BLE001 — um despacho falhado não trava os outros
+            record["dre_erro"] = str(exc)[:300]
+            erros += 1
+        if index % 50 == 0:
+            logger.info("DRE: %s/%s despachos (%s erros)", index, len(targets), erros)
+        time.sleep(max(0.0, delay))
+    return {"ok": ok, "erros": erros}
+
+
+def enrich_membros(members: List[Dict[str, Any]], *, delay: float = 0.3) -> Dict[str, int]:
+    """Acrescenta a cada membro a biografia e a fotografia do perfil oficial."""
+    cache: Dict[str, Dict[str, Any]] = {}
+    ok = erros = 0
+    for index, member in enumerate(members, 1):
+        url = str(member.get("url") or "").split("?")[0]
+        if not url:
+            continue
+        if url in cache:
+            member.update(cache[url])
+            ok += 1
+            continue
+        try:
+            fields = parse_member_profile(fetch_http(url))
+            if not fields:
+                raise RuntimeError("Perfil sem componente OfficialProfile.")
+            member.update(fields)
+            cache[url] = fields
+            ok += 1
+        except Exception as exc:  # noqa: BLE001 — um perfil falhado não trava os outros
+            member["perfil_erro"] = str(exc)[:300]
+            erros += 1
+        if index % 20 == 0:
+            logger.info("Perfis: %s/%s membros (%s erros)", index, len(members), erros)
+        time.sleep(max(0.0, delay))
+    return {"ok": ok, "erros": erros}
+
+
+# ---------------------------------------------------------------------------
 # Recolha
 # ---------------------------------------------------------------------------
 def collect(
@@ -303,6 +577,11 @@ def collect(
     areas_filter: Optional[Iterable[str]] = None,
     include_composicao: bool = True,
     delay: float = 0.5,
+    enrich_dre: bool = True,
+    enrich_perfis: bool = True,
+    dre_delay: float = 0.25,
+    dre_limit: Optional[int] = None,
+    perfil_delay: float = 0.3,
     nomeacoes_url: str = BASE_URL + NOMEACOES_PATH,
     composicao_url: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -335,6 +614,15 @@ def collect(
             logger.warning("Falha em %s: %s", area["url"], exc)
             errors.append({"area_slug": area["area_slug"], "url": area["url"], "erro": str(exc)})
 
+    dre_stats = {"ok": 0, "erros": 0}
+    if enrich_dre and nomeacoes:
+        try:
+            dre_stats = enrich_nomeacoes(nomeacoes, delay=dre_delay, limit=dre_limit)
+            logger.info("DRE: %s detalhes, %s erros", dre_stats["ok"], dre_stats["erros"])
+        except Exception as exc:  # noqa: BLE001 — o resto da recolha já está feito
+            logger.warning("Enriquecimento DRE falhou: %s", exc)
+            errors.append({"area_slug": "dre", "url": DRE_DETAIL_ACTION, "erro": str(exc)})
+
     members: List[Dict[str, Any]] = []
     comp_url = composicao_url or f"{BASE_URL}{COMPOSICAO_PATH}?gc_timeline={timeline}"
     if include_composicao:
@@ -345,6 +633,15 @@ def collect(
         except Exception as exc:  # noqa: BLE001 — a composição é complementar
             logger.warning("Falha na composição (%s): %s", comp_url, exc)
             errors.append({"area_slug": "composicao", "url": comp_url, "erro": str(exc)})
+
+    perfil_stats = {"ok": 0, "erros": 0}
+    if enrich_perfis and members:
+        try:
+            perfil_stats = enrich_membros(members, delay=perfil_delay)
+            logger.info("Perfis: %s biografias, %s erros", perfil_stats["ok"], perfil_stats["erros"])
+        except Exception as exc:  # noqa: BLE001 — as nomeações já estão recolhidas
+            logger.warning("Enriquecimento dos perfis falhou: %s", exc)
+            errors.append({"area_slug": "perfis", "url": COMPOSICAO_PATH, "erro": str(exc)})
 
     return {
         "generated_at": _now(),
@@ -358,6 +655,10 @@ def collect(
             "areas": len(areas),
             "membros": len(members),
             "nomeacoes": len(nomeacoes),
+            "dre_detalhes": dre_stats["ok"],
+            "dre_erros": dre_stats["erros"],
+            "perfis": perfil_stats["ok"],
+            "perfis_erros": perfil_stats["erros"],
             "membros_por_grupo": _count_by(members, "grupo"),
             "nomeacoes_por_area": _count_by(nomeacoes, "area_slug"),
             "erros": errors,
@@ -428,6 +729,19 @@ NOMEACOES_MAPPING: Dict[str, Any] = {
         "data_nomeacao_texto": {"type": "keyword"},
         "dre_publicacao": {"type": "keyword"},
         "dre_url": {"type": "keyword"},
+        "dre_id": {"type": "keyword"},
+        "dre_titulo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "dre_numero": {"type": "keyword"},
+        "dre_sumario": {"type": "text"},
+        "dre_texto": {"type": "text"},
+        "dre_data_publicacao": {"type": "date"},
+        "dre_emissor": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+        "dre_serie": {"type": "keyword"},
+        "dre_pagina": {"type": "keyword"},
+        "dre_pdf_url": {"type": "keyword"},
+        "dre_diario_pdf_url": {"type": "keyword"},
+        "dre_tipo": {"type": "keyword"},
+        "dre_erro": {"type": "keyword"},
         "encargos_servico_origem": {"type": "boolean"},
         "url": {"type": "keyword"},
         "scraped_at": {"type": "date"},
@@ -452,6 +766,14 @@ COMPOSICAO_MAPPING: Dict[str, Any] = {
         "secretarios_count": {"type": "integer"},
         "secretarios_url": {"type": "keyword"},
         "url_fonte": {"type": "keyword"},
+        "nome_oficial": {"type": "keyword"},
+        "cargo_oficial": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "area_nome": {"type": "keyword"},
+        "biografia": {"type": "text"},
+        "foto_biografia": {"type": "keyword"},
+        "perfil_inicio": {"type": "date"},
+        "perfil_fim": {"type": "date"},
+        "perfil_erro": {"type": "keyword"},
         "scraped_at": {"type": "date"},
     },
 }
@@ -537,7 +859,8 @@ def index_payload(payload: Dict[str, Any], *, include_scraped: bool = True) -> D
                 {
                     "item_id": doc["item_id"],
                     "title": f"{doc.get('nome', '')} — {doc.get('funcao', '')}".strip(" —"),
-                    "summary": f"{doc.get('membro', '')} · {doc.get('area', '')}".strip(" ·"),
+                    "summary": doc.get("dre_sumario") or f"{doc.get('membro', '')} · {doc.get('area', '')}".strip(" ·"),
+                    "text": doc.get("dre_texto", ""),
                     "url": doc.get("dre_url") or doc.get("url", ""),
                     "tags": ["governo", "nomeacoes", "politica"],
                     "data": doc,
@@ -557,6 +880,7 @@ def index_payload(payload: Dict[str, Any], *, include_scraped: bool = True) -> D
                     "item_id": doc["item_id"],
                     "title": f"{doc.get('nome', '')} — {doc.get('cargo', '')}".strip(" —"),
                     "summary": doc.get("grupo", ""),
+                    "text": doc.get("biografia", ""),
                     "url": doc.get("url", ""),
                     "tags": ["governo", "composicao", "politica"],
                     "data": doc,
@@ -578,7 +902,12 @@ def main() -> int:
     parser.add_argument("--timeline", default=DEFAULT_TIMELINE, help="Data da composição (aaaa-mm-dd).")
     parser.add_argument("--areas", default="", help="Áreas a recolher (lista separada por vírgulas); vazio = todas.")
     parser.add_argument("--no-composicao", action="store_true", help="Não recolher a composição do Governo.")
+    parser.add_argument("--no-dre", action="store_true", help="Não enriquecer as nomeações com o detalhe do DRE.")
+    parser.add_argument("--no-perfis", action="store_true", help="Não enriquecer os membros com a biografia oficial.")
     parser.add_argument("--delay", type=float, default=0.5, help="Pausa entre páginas de áreas (segundos).")
+    parser.add_argument("--dre-delay", type=float, default=0.25, help="Pausa entre pedidos ao DRE (segundos).")
+    parser.add_argument("--dre-limit", type=int, default=None, help="Máximo de despachos a enriquecer (testes).")
+    parser.add_argument("--perfil-delay", type=float, default=0.3, help="Pausa entre perfis oficiais (segundos).")
     parser.add_argument("--out", default=str(DEFAULT_JSON), help="Ficheiro JSON de saída.")
     parser.add_argument("--no-elastic", action="store_true", help="Não indexar no Elasticsearch.")
     parser.add_argument("--no-scraped", action="store_true", help="Não indexar também em finance_scraped.")
@@ -591,6 +920,11 @@ def main() -> int:
         areas_filter=areas_filter,
         include_composicao=not args.no_composicao,
         delay=args.delay,
+        enrich_dre=not args.no_dre,
+        enrich_perfis=not args.no_perfis,
+        dre_delay=args.dre_delay,
+        dre_limit=args.dre_limit,
+        perfil_delay=args.perfil_delay,
     )
     if not payload.get("nomeacoes") and not payload.get("membros"):
         logger.warning("Sem dados recolhidos.")
@@ -604,9 +938,11 @@ def main() -> int:
         composicao_path=out.parent / "governo_composicao.json",
     )
     logger.info(
-        "Gravado: %s nomeações, %s membros (%s, %s, %s)",
+        "Gravado: %s nomeações (%s com DRE), %s membros (%s com biografia) em %s, %s, %s",
         payload["stats"]["nomeacoes"],
+        payload["stats"]["dre_detalhes"],
         payload["stats"]["membros"],
+        payload["stats"]["perfis"],
         paths["json"],
         paths["jsonl"],
         paths["composicao"],

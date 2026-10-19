@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="pt" data-dpl-id="dpl_3DAdncKYHsKhedAcLkWZyTAMaN17"><head><meta charSet="utf-8" data-next-head=""/><meta name="viewport" content="width=device-width, initial-scale=1.0" data-next-head=""/><title data-next-head="">Dalila Rodrigues - Ministra da Cultura - Cultura - XXIV Governo Constitucional</title><link rel="canonical" href="https://portugal.gov.pt/gc24/area-de-governo/cultura/ministro" data-next-head=""/><link rel="icon" href="https://edge.sitecorecloud.io/centrodeges65c9-cegere0de-prod6279-8af9/media/Project/Portal-do-Governo/Portal-do-Governo/gc24/favicon.ico" data-next-head=""/><meta name="twitter:card" content="summary_large_image" data-next-head=""/><meta name="twitter:site" content="@govpt" data-next-head=""/><meta name="twitter:url" content="https://portugal.gov.pt/gc24/area-de-governo/cultura/ministro" data-next-head=""/><meta name="twitter:image" content="https://edge.sitecorecloud.io/centrodeges65c9-cegere0de-prod6279-8af9/media/Project/Portal-do-Governo/Portal-do-Governo/portugalgov.png?h=630&amp;iar=0&amp;w=1200" data-next-head=""/><meta property="og:url" content="https://portugal.gov.pt/gc24/area-de-governo/cultura/ministro" data-next-head=""/><meta property="og:type" content="article" data-next-head=""/><meta property="og:image" content="https://edge.sitecorecloud.io/centrodeges65c9-cegere0de-prod6279-8af9/media/Project/Portal-do-Governo/Portal-do-Governo/portugalgov.png?h=630&amp;iar=0&amp;w=1200" data-next-head=""/><meta property="og:image:secure_url" content="https://edge.sitecorecloud.io/centrodeges65c9-cegere0de-prod6279-8af9/media/Project/Portal-do-Governo/Portal-do-Governo/portugalgov.png?h=630&amp;iar=0&amp;w=1200" data-next-head=""/><meta property="og:image:width" content="1200" data-next-head=""/><meta property="og:image:height" content="630" data-next-head=""/><meta property="fb:app_id" content="120336018649881" data-next-head=""/><meta name="card:category" content="Conteúdos" data-next-head=""/><meta name="card:date" content="2024-04-02T00:00:00Z" data-next-head=""/><meta name="card:officials" content="Dalila Rodrigues" data-next-head=""/><meta name="card:roles" content="Ministra" data-next-head=""/><meta name="card:template" content="{5B016FB5-E53A-475C-9A8F-63ADE695E458}" data-next-head=""/><link data-next-font="" rel="preconnect" href="/" crossorigin="anonymous"/><link rel="preload" href="/_next/static/css/4d8471bd66c9f7ea.css?dpl=dpl_3DAdncKYHsKhedAcLkWZyTAMaN17" as="style"/><link rel="preload" href="/_next/static/css/063087782b40ec30.css?dpl=dpl_3DAdncKYHsKhedAcLkWZyTAMaN17" as="style"/><link rel="preload" as="image" imageSrcSet="/_next/image?url=%2Fapi%2Fmedia%2Fedge%2FProject%2FPortal-do-Governo%2FPortal-do-Governo%2Fgc24%2FLogo.png%3Fh%3D212%26iar%3D0%26w%3D762&amp;w=828&amp;q=75&amp;dpl=dpl_3DAdncKYHsKhedAcLkWZyTAMaN17 1x, /_next/image?url=%2Fapi%2Fmedia%2Fedge%2FProject%2FPortal-do-Governo%2FPortal-do-Governo%2Fgc24%2FLogo.png%3Fh%3D212%26iar%3D0%26w%3D762&amp;w=1920&amp;q=75&amp;dpl=dpl_3DAdncKYHsKhedAcLkWZyTAMaN17 2x" data-next-head=""/><script id="consent-default" data-nscript="beforeInteractive">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){window.dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'analytics_storage': 'denied',
+    'ad_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'functionality_storage': 'denied',
+    'personalization_storage': 'denied',
+    'security_storage': 'granted'
+  });
+  // Restore consent for returning users before any tag fires
+  (function() {
+    try {
+      var gc = function(n) {
+        var m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
+        return m ? decodeURIComponent(m[2]) : null;
+      };
+      if (gc('hasAcceptedCookies') === 'true') {
+        var gv = function(v) { return v === 'true' ? 'granted' : 'denied'; };
+        gtag('consent', 'update', {
+          'analytics_storage': gv(gc('Analitics_Portal_cookies')),
+          'ad_storage': gv(gc('social_network_Portal_cookies')),
+          'ad_user_data': gv(gc('social_network_Portal_cookies')),
+          'ad_personalization': gv(gc('social_network_Portal_cookies')),
+          'functionality_storage': gv(gc('performanc
