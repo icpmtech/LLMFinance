@@ -567,7 +567,38 @@ function PoliticianDetailPanel({
               Abrir módulo
             </a>
           </div>
-          {!transparencia || transparencia.total === 0 ? (
+          {transparencia?.ambiguo && (
+            <div className="space-y-1 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-[10px] text-amber-200">
+              <p className="font-medium">
+                Nome insuficiente para decidir — {transparencia.total_candidatos ?? transparencia.candidatos?.length ?? 0}{" "}
+                titulares compatíveis na EPT:
+              </p>
+              <ul className="space-y-0.5">
+                {(transparencia.candidatos || []).slice(0, 6).map((candidato) => (
+                  <li key={candidato.titular_id}>
+                    <a
+                      href={`/entidade-transparencia?titular=${encodeURIComponent(candidato.titular_id)}`}
+                      className="underline decoration-dotted hover:text-amber-100"
+                    >
+                      {candidato.nome}
+                    </a>{" "}
+                    · {Math.round((candidato.pontuacao || 0) * 100)}%
+                  </li>
+                ))}
+              </ul>
+              <p>
+                A EPT não publica NIF e as declarações não são mostradas para não atribuir as de um homónimo.{" "}
+                <a
+                  href={`/entidade-transparencia?nome=${encodeURIComponent(transparencia.pessoa?.nome || person.name)}`}
+                  className="underline decoration-dotted hover:text-amber-100"
+                >
+                  Procurar pelo nome no módulo
+                </a>
+                .
+              </p>
+            </div>
+          )}
+          {transparencia?.ambiguo ? null : !transparencia || transparencia.total === 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
                 Sem declarações da EPT ligadas a esta ficha (a ligação é feita por nome).

@@ -1651,15 +1651,24 @@ def _pontuacao_nome(alvo: str, candidato: str) -> float:
     nome completo («António Luís Santos da Costa»). Se todos os tokens do nome
     curto estiverem no nome completo, é uma correspondência forte — não uma
     simples semelhança de caracteres.
+
+    O último token manda: em português é o apelido. «António Costa» está
+    contido em «António Costa Rodrigues», mas é outra pessoa — sem esta regra,
+    qualquer nome curto empatava com dezenas de homónimos.
     """
-    a = set(alvo.split())
-    c = set(candidato.split())
+    tokens_alvo = alvo.split()
+    tokens_candidato = candidato.split()
+    a = set(tokens_alvo)
+    c = set(tokens_candidato)
     if not a or not c:
         return 0.0
-    if c <= a and len(c) >= 2:
-        return min(1.0, 0.94 + 0.06 * (len(c) / max(1, len(a))))
-    if a <= c and len(a) >= 2:
-        return min(1.0, 0.94 + 0.06 * (len(a) / max(1, len(c))))
+    mesmo_apelido = tokens_alvo[-1] == tokens_candidato[-1]
+    if (c <= a or a <= c) and min(len(a), len(c)) >= 2:
+        # Subconjunto de tokens com o mesmo apelido: correspondência forte e
+        # com a mesma pontuação, seja o nome maior ou menor. A pontuação não
+        # pode crescer à medida que o nome encurta — é isso que fazia
+        # «António Augusto da Costa» ganhar a «António Luís Santos da Costa».
+        return 0.96 if mesmo_apelido else 0.85
     return difflib.SequenceMatcher(None, alvo, candidato).ratio()
 
 
@@ -1710,77 +1719,145 @@ def match_pessoa(nome: Optional[str], *, limiar: float = 0.88, es: Any = None) -
                     "fonte": pessoa.get("source"),
                     "partido": (pessoa.get("metadata") or {}).get("party"),
                     "pontuacao": round(_pontuacao_nome(alvo, candidato), 3),
+                    "exato": candidato == alvo,
                 }
             )
         if candidatos:
             break
-    candidatos.sort(key=lambda item: item["pontuacao"], reverse=True)
+    candidatos.sort(key=lambda item: (item["exato"], item["pontuacao"]), reverse=True)
     melhor = candidatos[0] if candidatos and candidatos[0]["pontuacao"] >= limiar else None
     ambiguo = bool(
         melhor
+        and not melhor.get("exato")
         and len([c for c in candidatos if abs(c["pontuacao"] - melhor["pontuacao"]) < 1e-9]) > 1
     )
     return {"encontrado": bool(melhor), "pessoa": melhor, "candidatos": candidatos[:5], "ambiguo": ambiguo}
 
 
+_AMBIGUIDADE_EPSILON = 0.02
+_NOME_CACHE: Dict[str, Any] = {}
+_NOME_CACHE_TTL = 300.0
+
+
+def _pontuar_titulares(alvo: str) -> List[Dict[str, Any]]:
+    """Todos os titulares do catálogo pontuados contra um nome normalizado.
+
+    A varredura é sobre o catálogo completo (12 372 nomes, ~0,5 s) e não sobre
+    os primeiros resultados do Elasticsearch: a pesquisa por relevância
+    devolvia um subconjunto diferente conforme o índice, e o mesmo nome do
+    PessoasIQ chegava a titulares distintos no PC e na VM. A regra de
+    subconjunto de tokens («António Costa» ⊂ «António Luís Santos da Costa»)
+    exige ver todos os candidatos, não os mais relevantes.
+    """
+    agora = time.time()
+    entrada = _NOME_CACHE.get(alvo)
+    if entrada and agora - entrada[0] < _NOME_CACHE_TTL:
+        return entrada[1]
+    fontes: List[Dict[str, Any]] = list(_ler_cache_bruta("titulares") or [])
+    if not fontes:
+        fontes = list(_iter_unicos(_titulares_jsonl(), "titular_id"))
+    pontuados: List[Dict[str, Any]] = []
+    for fonte in fontes:
+        titular_id = fonte.get("id") or fonte.get("titular_id")
+        nome_fonte = fonte.get("nome")
+        if not titular_id or not nome_fonte:
+            continue
+        normalizado = ept.normalize_name(nome_fonte)
+        pontuados.append(
+            {
+                "titular_id": str(titular_id),
+                "nome": nome_fonte,
+                "pontuacao": round(_pontuacao_nome(alvo, normalizado), 3),
+                "exato": normalizado == alvo,
+            }
+        )
+    # O nome exato ganha sempre; depois a pontuação e, no empate, o nome mais
+    # completo (a EPT guarda nomes completos; o PessoasIQ, muitas vezes, não).
+    pontuados.sort(
+        key=lambda item: (item["exato"], item["pontuacao"], len(item["nome"].split())),
+        reverse=True,
+    )
+    _NOME_CACHE[alvo] = (agora, pontuados)
+    return pontuados
+
+
+def _titulares_por_nome(
+    nome: str,
+    *,
+    limiar: float = 0.88,
+    es: Any = None,
+    limite: int = 5,
+) -> List[Dict[str, Any]]:
+    """Titulares da EPT parecidos com um nome, do mais para o menos parecido."""
+    alvo = ept.normalize_name(nome)
+    if not alvo:
+        return []
+    candidatos = [candidato for candidato in _pontuar_titulares(alvo) if candidato["pontuacao"] >= limiar]
+    if not candidatos:
+        # Catálogo indisponível: resta a pesquisa no índice.
+        for termo in _termos_de_pesquisa(nome):
+            resultado = search_titulares(q=termo, size=25, es=es)
+            for item in resultado.get("items") or []:
+                normalizado = ept.normalize_name(item.get("nome"))
+                pontuacao = _pontuacao_nome(alvo, normalizado)
+                if pontuacao >= limiar:
+                    candidatos.append(
+                        {
+                            "titular_id": str(item.get("titular_id")),
+                            "nome": item.get("nome"),
+                            "pontuacao": round(pontuacao, 3),
+                            "exato": normalizado == alvo,
+                        }
+                    )
+            if candidatos:
+                candidatos.sort(
+                    key=lambda item: (item["exato"], item["pontuacao"], len(item["nome"].split())),
+                    reverse=True,
+                )
+                break
+    return candidatos[: max(1, int(limite))]
+
+
 def _titular_por_nome(nome: str, *, limiar: float = 0.88, es: Any = None) -> Optional[Dict[str, Any]]:
     """Melhor titular da EPT para um nome de pessoa (também tolera nomes curtos)."""
-    alvo = ept.normalize_name(nome)
-    candidatos: List[Dict[str, Any]] = []
-    for termo in _termos_de_pesquisa(nome):
-        resultado = search_titulares(q=termo, size=25, es=es)
-        for item in resultado.get("items") or []:
-            candidato = ept.normalize_name(item.get("nome"))
-            candidatos.append(
-                {
-                    "titular_id": item.get("titular_id"),
-                    "nome": item.get("nome"),
-                    "pontuacao": round(_pontuacao_nome(alvo, candidato), 3),
-                }
-            )
-        if candidatos:
-            break
+    candidatos = _titulares_por_nome(nome, limiar=limiar, es=es, limite=1)
+    return candidatos[0] if candidatos else None
 
-    def _melhor() -> Optional[Dict[str, Any]]:
-        if not candidatos:
-            return None
-        melhor = max(candidatos, key=lambda item: item["pontuacao"])
-        return melhor if melhor["pontuacao"] >= limiar else None
 
-    encontrado = _melhor()
-    if encontrado:
-        return encontrado
-    # Nenhuma pesquisa por termo chegou ao limiar: varre-se o catálogo completo
-    # (12 372 nomes em cache), porque o PessoasIQ usa nomes curtos e a EPT o
-    # nome completo — «António Costa» não é substring de «António Luís Santos
-    # da Costa», mas os tokens estão lá todos.
-    vistos = {str(item.get("titular_id")) for item in candidatos}
-    for fonte in (_ler_cache_bruta("titulares") or []) or _iter_unicos(_titulares_jsonl(), "titular_id"):
-        titular_id = fonte.get("id") or fonte.get("titular_id")
-        if not titular_id or str(titular_id) in vistos:
-            continue
-        pontuacao = _pontuacao_nome(alvo, ept.normalize_name(fonte.get("nome")))
-        if pontuacao >= limiar:
-            candidatos.append(
-                {
-                    "titular_id": str(titular_id),
-                    "nome": fonte.get("nome"),
-                    "pontuacao": round(pontuacao, 3),
-                }
-            )
-    candidatos.sort(key=lambda item: item["pontuacao"], reverse=True)
-    return candidatos[0] if candidatos and candidatos[0]["pontuacao"] >= limiar else None
+def _homonimos(candidatos: List[Dict[str, Any]]) -> bool:
+    """Dois candidatos praticamente empatados: o nome não decide sozinho.
+
+    Um nome exato não é ambíguo, mesmo que outros nomes parecidos empatem na
+    pontuação: «Adérito Manuel Pereira dos Santos» é ele mesmo.
+    """
+    if len(candidatos) < 2 or candidatos[0].get("exato"):
+        return False
+    return abs(candidatos[0]["pontuacao"] - candidatos[1]["pontuacao"]) <= _AMBIGUIDADE_EPSILON
 
 
 def pessoa_declaracoes(nif: str, *, size: int = 100, es: Any = None) -> Dict[str, Any]:
-    """Declarações da EPT ligadas a uma pessoa do PessoasIQ (por nome)."""
+    """Declarações da EPT ligadas a uma pessoa do PessoasIQ (por nome).
+
+    A EPT não publica NIF: a ligação é por nome. Quando dois titulares ficam
+    praticamente empatados («Antonio Costa» serve tanto um primeiro-ministro
+    como um deputado homónimo), devolve `ambiguo: true` com os candidatos, em
+    vez de escolher um deles em silêncio.
+    """
     pessoa = esc.get_person_by_nif(str(nif), es=es)
     if pessoa.get("error"):
         return {"nif": str(nif), "pessoa": None, "total": 0, "items": [], "error": pessoa["error"]}
     nome = pessoa.get("name") or ""
     limite = max(1, min(int(size), 200))
-    titular = _titular_por_nome(nome, es=es) if nome else None
-    if titular and titular.get("titular_id"):
+    candidatos = _titulares_por_nome(nome, es=es, limite=6) if nome else []
+    total_candidatos = len(_titulares_por_nome(nome, es=es, limite=10_000)) if nome else 0
+    ambiguo = _homonimos(candidatos)
+    # Com homónimos empatados não se escolhe ninguém: mostrar as declarações de
+    # um «António … da Costa» ao calhas na ficha de outro sería pior do que não
+    # mostrar nada. Ficam os candidatos para a pessoa decidir.
+    titular = None if ambiguo else (candidatos[0] if candidatos else None)
+    if ambiguo:
+        declaracoes: Dict[str, Any] = {"total": 0, "items": []}
+    elif titular and titular.get("titular_id"):
         declaracoes = search_declaracoes(titular_id=titular["titular_id"], size=limite, es=es)
     else:
         declaracoes = search_declaracoes(titular=nome, size=limite, es=es)
@@ -1788,7 +1865,7 @@ def pessoa_declaracoes(nif: str, *, size: int = 100, es: Any = None) -> Dict[str
             # Ocasionalmente o nome do PessoasIQ tem partículas a mais; procura-se
             # pelo nome normalizado exato antes de desistir.
             declaracoes = _search_declaracoes_por_nome(nome, size=size, es=es)
-    if titular and titular.get("titular_id") and not declaracoes.get("items"):
+    if not ambiguo and titular and titular.get("titular_id") and not declaracoes.get("items"):
         # Titular já identificado mas ainda não recolhido: lê-se a lista ao vivo,
         # para que a ficha do político não fique vazia a meio de uma recolha.
         try:
@@ -1797,13 +1874,16 @@ def pessoa_declaracoes(nif: str, *, size: int = 100, es: Any = None) -> Dict[str
             declaracoes = {"total": len(metas), "items": metas, "ao_vivo": True}
         except Exception as exc:  # noqa: BLE001 - sem rede, fica o que há em disco
             logger.debug("EPT: declarações de %s não lidas ao vivo (%s)", titular.get("titular_id"), exc)
-    if not titular and declaracoes.get("items"):
+    if not ambiguo and not titular and declaracoes.get("items"):
         primeira = declaracoes["items"][0]
         titular = {"titular_id": primeira.get("titular_id"), "nome": primeira.get("titular")}
     return {
         "nif": str(nif),
         "pessoa": {"nif": pessoa.get("nif"), "nome": nome, "partido": (pessoa.get("metadata") or {}).get("party")},
         "titular": titular,
+        "ambiguo": ambiguo,
+        "candidatos": candidatos,
+        "total_candidatos": total_candidatos,
         "total": declaracoes.get("total", 0),
         "items": declaracoes.get("items") or [],
         "ao_vivo": bool(declaracoes.get("ao_vivo")),

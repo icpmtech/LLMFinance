@@ -202,6 +202,7 @@ def test_normalize_name_ignora_acentos_e_pontuacao():
 def pasta(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.setenv("ENTIDADE_TRANSPARENCIA_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(esc, "get_es_client", lambda *args, **kwargs: None)
+    svc._NOME_CACHE.clear()
     return tmp_path
 
 
@@ -420,6 +421,90 @@ def test_pessoa_declaracoes_le_ao_vivo_quando_o_titular_ainda_nao_foi_recolhido(
     assert resultado["titular"]["titular_id"] == "4952"
     assert resultado["total"] == 1
     assert resultado["ao_vivo"] is True
+
+
+def test_pessoa_declaracoes_sinaliza_homonimos_empatados(pasta, monkeypatch: pytest.MonkeyPatch):
+    """Dois homónimos do mesmo apelido continuam a ser uma decisão humana."""
+    svc._guardar_cache(
+        "titulares",
+        [
+            {"id": "4952", "nome": "António Luís Santos da Costa"},
+            {"id": "3733", "nome": "António Augusto da Costa"},
+        ],
+    )
+    # Há declarações de um homónimo em disco: não podem aparecer na ficha.
+    documento = ept.normalize_declaration(_declaracao(), recolhido_em="2026-01-01T00:00:00+00:00")
+    documento["titular"] = "António Augusto da Costa"
+    svc._append_jsonl(svc._declaracoes_jsonl(), [documento])
+    monkeypatch.setattr(esc, "get_person_by_nif", lambda nif, es=None: {"nif": nif, "name": "Antonio Costa"})
+    monkeypatch.setattr(ept, "fetch_declarations", lambda *args, **kwargs: [])
+
+    resultado = svc.pessoa_declaracoes("150341148")
+
+    assert resultado["ambiguo"] is True
+    assert resultado["titular"] is None
+    assert resultado["items"] == []
+    assert resultado["total"] == 0
+    assert resultado["total_candidatos"] == 2
+    nomes = [candidato["nome"] for candidato in resultado["candidatos"]]
+    assert "António Luís Santos da Costa" in nomes
+    assert "António Augusto da Costa" in nomes
+    assert resultado["candidatos"][0]["pontuacao"] >= resultado["candidatos"][1]["pontuacao"]
+
+
+def test_apelido_diferente_nao_e_homonimo(pasta, monkeypatch: pytest.MonkeyPatch):
+    """«António Costa» não é «António Costa Rodrigues»: o apelido não bate."""
+    svc._guardar_cache(
+        "titulares",
+        [
+            {"id": "6061", "nome": "António Costa Rodrigues"},
+            {"id": "4952", "nome": "António Luís Santos da Costa"},
+        ],
+    )
+    monkeypatch.setattr(esc, "get_person_by_nif", lambda nif, es=None: {"nif": nif, "name": "Antonio Costa"})
+    monkeypatch.setattr(ept, "fetch_declarations", lambda *args, **kwargs: [])
+
+    resultado = svc.pessoa_declaracoes("150341148")
+
+    assert resultado["titular"]["nome"] == "António Luís Santos da Costa"
+    assert resultado["ambiguo"] is False
+    nomes = [candidato["nome"] for candidato in resultado["candidatos"]]
+    assert "António Costa Rodrigues" not in nomes
+    assert svc._pontuacao_nome("antonio costa", "antonio costa rodrigues") < 0.88
+
+
+def test_nome_exato_ganha_aos_parecidos(pasta, monkeypatch: pytest.MonkeyPatch):
+    svc._guardar_cache(
+        "titulares",
+        [
+            {"id": "1", "nome": "António Costa Rodrigues"},
+            {"id": "2", "nome": "Antonio Costa"},
+        ],
+    )
+    monkeypatch.setattr(ept, "fetch_declarations", lambda *args, **kwargs: [])
+
+    encontrados = svc._titulares_por_nome("Antonio Costa")
+
+    assert encontrados[0]["titular_id"] == "2"
+    assert encontrados[0]["exato"] is True
+
+
+def test_nome_exato_nao_e_ambiguo_mesmo_com_parecidos(pasta, monkeypatch: pytest.MonkeyPatch):
+    """«Adérito Manuel Pereira dos Santos» é ele mesmo, não um homónimo."""
+    svc._guardar_cache(
+        "titulares",
+        [
+            {"id": "10", "nome": "Adérito Manuel Pereira dos Santos"},
+            {"id": "11", "nome": "Adérito Manuel dos Santos"},
+        ],
+    )
+    monkeypatch.setattr(esc, "get_person_by_nif", lambda nif, es=None: {"nif": nif, "name": "Adérito Manuel Pereira dos Santos"})
+    monkeypatch.setattr(ept, "fetch_declarations", lambda *args, **kwargs: [])
+
+    resultado = svc.pessoa_declaracoes("999999999")
+
+    assert resultado["ambiguo"] is False
+    assert resultado["titular"]["titular_id"] == "10"
 
 
 def test_amostra_uniforme_interpreta_zero_como_nenhum():

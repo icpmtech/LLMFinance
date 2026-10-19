@@ -109,8 +109,11 @@ def indexar(url: str, items: List[Dict[str, Any]], nome: str) -> None:
 
 def main() -> int:
     items = json.loads(JSON_FILE.read_text(encoding="utf-8"))
-    logger.info("a indexar %s empresas", len(items))
+    alvo = (sys.argv[1] if len(sys.argv) > 1 else "ambos").lower()
+    logger.info("a indexar %s empresas (%s)", len(items), alvo)
     for nome, url in ALVOS.items():
+        if alvo not in ("ambos", nome):
+            continue
         indexar(url, items, nome)
     return 0
 

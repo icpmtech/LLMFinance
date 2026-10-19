@@ -388,6 +388,10 @@ export type EptPessoaDeclaracoes = {
   nif: string;
   pessoa: { nif?: string | null; nome?: string | null; partido?: string | null } | null;
   titular?: { titular_id?: string | null; nome?: string | null; pontuacao?: number } | null;
+  /** Dois titulares praticamente empatados: a ligação por nome não decide. */
+  ambiguo?: boolean;
+  candidatos?: { titular_id: string; nome: string; pontuacao: number; exato?: boolean }[];
+  total_candidatos?: number;
   total: number;
   items: EptDeclaracaoResumo[];
 };
