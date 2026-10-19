@@ -9,7 +9,7 @@
  * do dashboard de contratos. Não há indicadores inventados: quando a API não
  * responde, a página di-lo e mostra os campos vazios.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
@@ -106,32 +106,29 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
   const [recarregar, setRecarregar] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
 
-  const carregarUniverso = useCallback(async () => {
-    setLoading(true);
-    setErro(null);
-    try {
-      const [lista, dados] = await Promise.all([
-        getContractYears().catch(() => null),
-        getContractAnalytics(FILTROS_BASE),
-      ]);
-      if (lista) setAnos(lista.available ?? []);
-      setUniverso(dados);
-    } catch (err) {
-      setErro(err instanceof Error ? err.message : "Não foi possível carregar os indicadores.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  useEffect(() => {
+    let cancelado = false;
+    Promise.all([getContractYears().catch(() => null), getContractAnalytics(FILTROS_BASE)])
+      .then(([lista, dados]) => {
+        if (cancelado) return;
+        if (lista) setAnos(lista.available ?? []);
+        setUniverso(dados);
+        setErro(null);
+      })
+      .catch((err) => {
+        if (cancelado) return;
+        setErro(err instanceof Error ? err.message : "Não foi possível carregar os indicadores.");
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [recarregar]);
 
   useEffect(() => {
-    void carregarUniverso();
-  }, [carregarUniverso, recarregar]);
-
-  useEffect(() => {
-    if (ano === "") {
-      setRecorte(null);
-      return;
-    }
+    if (ano === "") return;
     let cancelado = false;
     getContractAnalytics({ ...FILTROS_BASE, year: ano })
       .then((dados) => {
@@ -145,7 +142,9 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
     };
   }, [ano, recarregar]);
 
-  const atual = recorte ?? universo;
+  // Com um ano escolhido, os números são os desse recorte (vazio enquanto chega).
+  const atual = ano === "" ? universo : recorte;
+  const ocupado = loading || (ano !== "" && recorte === null);
 
   /** Últimos anos com dados — a série completa (2012 a 2026) não cabe legível. */
   const serie = useMemo(() => {
@@ -223,7 +222,10 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
             </span>
             <select
               value={ano}
-              onChange={(event) => setAno(event.target.value === "" ? "" : Number(event.target.value))}
+              onChange={(event) => {
+                setAno(event.target.value === "" ? "" : Number(event.target.value));
+                setRecorte(null);
+              }}
               className="rounded-xl border border-border bg-background/60 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
               aria-label="Ano em análise"
             >
@@ -236,11 +238,15 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
             </select>
             <button
               type="button"
-              onClick={() => setRecarregar((valor) => valor + 1)}
-              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                setErro(null);
+                setRecarregar((valor) => valor + 1);
+              }}
+              disabled={ocupado}
               className="flex items-center gap-2 rounded-xl glass-card px-3 py-2 text-sm transition hover:bg-white/5 disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={16} className={ocupado ? "animate-spin" : ""} />
               Atualizar
             </button>
             <button
@@ -390,7 +396,7 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
               </>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">
-                {loading ? "A calcular o ranking…" : "Sem ranking de adjudicantes para este recorte."}
+                {ocupado ? "A calcular o ranking…" : "Sem ranking de adjudicantes para este recorte."}
               </p>
             )}
 
@@ -461,5 +467,3 @@ export function AnalisePage({ onNavigate }: AnalisePageProps) {
     </div>
   );
 }
-
-export default AnalisePage;

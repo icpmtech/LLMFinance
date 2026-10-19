@@ -299,14 +299,14 @@ const CRM_NAV_GROUPS: NavGroup[] = CRM_SUITE_GROUPS.map((area) => {
 });
 
 /**
- * As aplicações no menu, **agrupadas por módulo** (`APP_MODULES`): Visão geral,
- * Contratos públicos, Contratos de Espanha, Empresas, Pessoas, Dados públicos,
- * Mercados e previsão, Investigação e IA, Conhecimento e conteúdos, Recolha de
- * dados e Redes sociais.
+ * As aplicações no menu, **agrupadas por módulo** (`APP_MODULES`): Análise,
+ * Visão geral, Contratos públicos, Contratos de Espanha, Empresas, Pessoas,
+ * Dados públicos, Mercados e previsão, Investigação e IA, Conhecimento e
+ * conteúdos, Recolha de dados e Redes sociais.
  *
  * O ícone de cada módulo é o da sua primeira aplicação (não obriga a mais um
- * mapa de ícones); «Área de análise» e «Visão geral» abrem por omissão — os
- * restantes abrem a pedido, ou sozinhos quando lá está a aplicação ativa.
+ * mapa de ícones); «Análise» e «Visão geral» abrem por omissão — os restantes
+ * abrem a pedido, ou sozinhos quando lá está a aplicação ativa.
  */
 const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
   const items = module.ids
