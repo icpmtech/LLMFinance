@@ -17,8 +17,13 @@ Notas:
   o parâmetro `page` (`?q=<termo>&page=2`); com `--distrito` a lista é a do
   diretório geográfico (`/empresas-em-portugal/distrito-<distrito>/`). O
   `robots.txt` do site permite o acesso (`User-agent: * / Allow: /`).
+- O site devolve no máximo **3.000 resultados por consulta** (200 páginas de 15);
+  `--sort` (relevância/mais recentes/mais antigas) é a forma de alargar a
+  cobertura de um distrito grande.
 - Cada ficha é um pedido extra: `--delay` espaça os pedidos (cortesia) e
   `--limit` limita quantas fichas são abertas por execução.
+- Além do JSONL (`--out`), a recolha é gravada em JSON com o mesmo nome e
+  extensão `.json`.
 """
 from __future__ import annotations
 
@@ -52,6 +57,9 @@ SINK_DIR = ROOT / "data" / "racius"
 #: Tabela oficial concelho → distrito (os 308 concelhos), usada para validar a
 #: geografia da ficha — ver `resolve_geo`.
 GEO_FILE = ROOT / "data" / "geo" / "concelhos_distritos.json"
+#: Ordenações da lista (`sort` do Racius). Variar a ordenação alarga a cobertura:
+#: o site não devolve mais de 3.000 resultados por consulta.
+SORT_PARAMS = {"relevance": "score", "recent": "-id", "oldest": "id"}
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -250,25 +258,31 @@ def collect(
     q: str,
     *,
     distrito: Optional[str] = None,
+    sort: str = "relevance",
     pages: int = 1,
     limit: Optional[int] = None,
     with_detail: bool = True,
     delay: float = 1.0,
+    page_delay: float = 0.2,
     timeout: int = 30,
 ) -> Iterator[Dict[str, Any]]:
     """Percorre as páginas de resultados e devolve as empresas (com ficha).
 
     Com `distrito`, a lista é a do diretório geográfico desse distrito
     (`/empresas-em-portugal/distrito-<slug>/`) em vez da pesquisa por termo.
+    O site devolve no máximo 3.000 resultados por consulta (200 páginas de 15),
+    pelo que variar `sort` é a forma de alargar a cobertura.
     """
     session = make_session()
     emitted = 0
     base = DISTRICT_URL.format(slug=_slug(distrito)) if distrito else LIST_URL
     for page in range(1, max(1, pages) + 1):
-        params: Dict[str, Any] = {"q": q}
+        params: Dict[str, Any] = {"q": q, "sort": SORT_PARAMS.get(sort, "score")}
         if page > 1:
             params["page"] = page
         url = f"{base}?{urlencode(params)}"
+        if page > 1 and page_delay:
+            time.sleep(page_delay)
         html = fetch(session, url, timeout=timeout)
         rows = parse_list(html)
         logger.info("Página %s: %s empresas", page, len(rows))
@@ -298,6 +312,14 @@ def write_jsonl(items: Iterable[Dict[str, Any]], path: Path) -> int:
             handle.write(json.dumps(item, ensure_ascii=False) + "\n")
             written += 1
     return written
+
+
+def write_json(items: Iterable[Dict[str, Any]], path: Path) -> int:
+    """Grava a recolha como um único array JSON (além do JSONL)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = list(items)
+    path.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return len(rows)
 
 
 def ensure_index(client: Any) -> None:
@@ -355,9 +377,16 @@ def main() -> int:
         help="Recolher a lista de um distrito (ex.: porto, lisboa, viana-do-castelo).",
     )
     parser.add_argument("--pages", type=int, default=1, help="Nº de páginas de resultados (15 empresas por página).")
+    parser.add_argument(
+        "--sort",
+        choices=sorted(SORT_PARAMS),
+        default="relevance",
+        help="Ordenação da lista (variar a ordenação alarga a cobertura; o site limita a 200 páginas).",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Máximo de empresas a recolher.")
     parser.add_argument("--no-detail", action="store_true", help="Não abrir a ficha de cada empresa.")
     parser.add_argument("--delay", type=float, default=0.8, help="Pausa entre pedidos de ficha (segundos).")
+    parser.add_argument("--page-delay", type=float, default=0.2, help="Pausa entre páginas da lista (segundos).")
     parser.add_argument("--out", default=str(SINK_DIR / "racius_empresas.jsonl"), help="Ficheiro JSONL de saída.")
     parser.add_argument("--no-elastic", action="store_true", help="Não indexar no Elasticsearch.")
     args = parser.parse_args()
@@ -367,10 +396,12 @@ def main() -> int:
         collect(
             args.q,
             distrito=args.distrito,
+            sort=args.sort,
             pages=args.pages,
             limit=args.limit,
             with_detail=not args.no_detail,
             delay=args.delay,
+            page_delay=args.page_delay,
         )
     )
     if not items:
@@ -379,6 +410,8 @@ def main() -> int:
     out = Path(args.out)
     written = write_jsonl(items, out)
     logger.info("JSONL: %s empresas em %s", written, out)
+    out_json = out.with_suffix(".json")
+    logger.info("JSON: %s empresas em %s", write_json(items, out_json), out_json)
     if not args.no_elastic:
         try:
             result = index_items(items)

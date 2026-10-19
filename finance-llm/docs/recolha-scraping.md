@@ -250,24 +250,40 @@ estraga os acentos).
 A fonte `racius-diretorio` corre pela API (`POST /scraper/sources/racius-diretorio/run`).
 Para quem precisa de a correr **sem API nem sessão**, há o coletor
 `collectors/racius.py`: percorre a mesma lista, abre a ficha de cada empresa,
-grava **JSONL** em `data/racius/` e indexa num índice próprio, `finance_racius`,
-com os campos da ficha já normalizados (`forma_juridica`, `capital_social_eur`,
-`concelho`, `distrito`, …) e a ficha crua em `ficha` (`flattened`).
+grava **JSONL e JSON** em `data/racius/` e indexa num índice próprio,
+`finance_racius`, com os campos da ficha já normalizados (`forma_juridica`,
+`capital_social_eur`, `concelho`, `distrito`, …) e a ficha crua em `ficha`
+(`flattened`).
 
 ```powershell
 c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q galp --pages 2
 c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q "" --pages 5 --limit 100
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --distrito porto --pages 200 --no-detail
 c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q construcao --no-elastic
 ```
 
 | Opção | Efeito |
 | --- | --- |
 | `--q` | Termo de pesquisa (vazio = todas as empresas) |
+| `--distrito` | Lista do diretório geográfico desse distrito (ex.: `porto`) |
+| `--sort` | `relevance`, `recent` ou `oldest` — variar alarga a cobertura |
 | `--pages` | Páginas de resultados (15 empresas por página) |
 | `--limit` | Máximo de empresas a recolher |
 | `--no-detail` | Não abrir a ficha (só os dados da lista) |
 | `--delay` | Pausa entre pedidos de ficha (cortesia, omissão 0,8 s) |
-| `--no-elastic` | Só gravar o JSONL |
+| `--page-delay` | Pausa entre páginas da lista (omissão 0,2 s) |
+| `--no-elastic` | Só gravar os ficheiros (`--out` e o `.json` ao lado) |
+
+Dois limites do site importam:
+
+- o Racius **não devolve mais de 3.000 resultados por consulta** (200 páginas
+  de 15). Para um distrito grande (Porto: 227.629 empresas) é preciso variar a
+  ordenação e/ou fatiar por termo — a paginação sozinha não chega ao fim;
+- a ficha mostra o par de localização como «concelho, distrito», mas **nas
+  cidades mostra a freguesia** no rótulo («Sé», «Funchal»). O coletor valida o
+  par contra `data/geo/concelhos_distritos.json` (308 concelhos) e guarda a
+  freguesia em `localidade`, para as facetas `distrito`/`concelho` não saírem
+  trocadas.
 
 **Sites que ficaram de fora:** os que bloqueiam HTTP simples com 403 depois de
 poucos pedidos (idealista/news, Expresso) precisariam do *fetcher* `stealth`, que

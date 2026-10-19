@@ -222,9 +222,10 @@ def status() -> Dict[str, Any]:
         return {"available": False, "total": 0, "error": "Elasticsearch indisponível"}
     try:
         if not client.indices.exists(index=INDEX):
-            return {"available": False, "total": 0}
+            return {"available": False, "total": 0, "index": INDEX}
+        client.indices.refresh(index=INDEX)
         count = client.count(index=INDEX).get("count", 0)
-        return {"available": bool(count), "total": int(count), "index": INDEX}
+        return {"available": True, "total": int(count), "index": INDEX}
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "total": 0, "error": str(exc)}
 
