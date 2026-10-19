@@ -362,6 +362,7 @@ def collect_sample(max_pages: int = 1000, delay: float = DEFAULT_DELAY, query: s
         "jsonl": str(JSONL_PATH),
         "json": str(JSON_PATH),
         "unique_total": len(_read_jsonl()),
+        "duplicates_skipped": len(items) - len(new_items),
     }
 
 

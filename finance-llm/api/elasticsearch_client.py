@@ -407,6 +407,17 @@ PLATFORM_MAIL_MESSAGES_INDEX = "finance_mail_messages"
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
+    RIGORBIZ_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "pt_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
     ANALISES_EMPRESA_INDEX: {
         # Os nomes de empresas e as notas do analista são escritos com acentos.
         "analysis": {
@@ -1988,21 +1999,21 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         "properties": {
             "name": {
                 "type": "text",
-                "analyzer": "world_folding",
-                "search_analyzer": "world_folding",
+                "analyzer": "pt_folding",
+                "search_analyzer": "pt_folding",
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
             },
             "nif": {"type": "keyword"},
             "cae_code": {"type": "keyword"},
             "cae_description": {
                 "type": "text",
-                "analyzer": "world_folding",
-                "search_analyzer": "world_folding",
+                "analyzer": "pt_folding",
+                "search_analyzer": "pt_folding",
             },
             "location": {
                 "type": "text",
-                "analyzer": "world_folding",
-                "search_analyzer": "world_folding",
+                "analyzer": "pt_folding",
+                "search_analyzer": "pt_folding",
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
             },
             "path": {"type": "keyword"},
