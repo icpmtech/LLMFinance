@@ -43,6 +43,8 @@ from urllib.parse import urlencode
 import requests
 from bs4 import BeautifulSoup
 
+from .geo_pt import CONCELHOS, DISTRITOS
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -54,9 +56,6 @@ INDEX = "finance_racius"
 #: Fonte do módulo de recolha do IQ OS que alimenta o mesmo índice.
 SOURCE_ID = "racius-diretorio"
 SINK_DIR = ROOT / "data" / "racius"
-#: Tabela oficial concelho → distrito (os 308 concelhos), usada para validar a
-#: geografia da ficha — ver `resolve_geo`.
-GEO_FILE = ROOT / "data" / "geo" / "concelhos_distritos.json"
 #: Ordenações da lista (`sort` do Racius). Variar a ordenação alarga a cobertura:
 #: o site não devolve mais de 3.000 resultados por consulta.
 SORT_PARAMS = {"relevance": "score", "recent": "-id", "oldest": "id"}
@@ -105,19 +104,11 @@ def _slug(value: str) -> str:
 
 @lru_cache(maxsize=1)
 def _geo_tables() -> Tuple[Dict[str, str], Dict[str, str]]:
-    """Concelho → distrito e distrito → grafia canónica, a partir de `GEO_FILE`.
-
-    Sem a tabela o coletor continua a funcionar: `resolve_geo` devolve o que a
-    ficha disser, sem validar.
-    """
-    try:
-        data = json.loads(GEO_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:  # noqa: BLE001 — a ficha ainda serve
-        logger.warning("Tabela geográfica indisponível (%s): %s", GEO_FILE, exc)
-        return {}, {}
-    concelhos = {_fold(nome): distrito for nome, distrito in (data.get("concelhos") or {}).items()}
-    distritos = {_fold(nome): nome for nome in data.get("distritos") or []}
-    return concelhos, distritos
+    """Concelho → distrito e distrito → grafia canónica, sem acentos nem caixa."""
+    return (
+        {_fold(nome): distrito for nome, distrito in CONCELHOS.items()},
+        {_fold(nome): nome for nome in DISTRITOS},
+    )
 
 
 def resolve_geo(label: str, value: str) -> Dict[str, str]:

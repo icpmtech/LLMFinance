@@ -281,7 +281,7 @@ Dois limites do site importam:
   ordenação e/ou fatiar por termo — a paginação sozinha não chega ao fim;
 - a ficha mostra o par de localização como «concelho, distrito», mas **nas
   cidades mostra a freguesia** no rótulo («Sé», «Funchal»). O coletor valida o
-  par contra `data/geo/concelhos_distritos.json` (308 concelhos) e guarda a
+  par contra a tabela dos 308 concelhos em `collectors/geo_pt.py` e guarda a
   freguesia em `localidade`, para as facetas `distrito`/`concelho` não saírem
   trocadas.
 
