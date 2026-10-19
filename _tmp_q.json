@@ -1,1 +1,0 @@
-﻿{"size":0,"track_total_hits":true,"aggs":{"runs":{"terms":{"field":"run_id","size":10}},"dist":{"terms":{"field":"distrito","size":25}},"fontes":{"terms":{"field":"source_id","size":5}}}}
