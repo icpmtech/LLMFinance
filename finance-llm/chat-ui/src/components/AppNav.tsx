@@ -48,6 +48,7 @@ import { getIframeRevision, iframeDockApps, subscribeIframePages } from "../ifra
 
 export type AppView =
   | "dashboard"
+  | "analise"
   | "chat"
   | "browser"
   | "finder"
@@ -304,8 +305,8 @@ const CRM_NAV_GROUPS: NavGroup[] = CRM_SUITE_GROUPS.map((area) => {
  * dados e Redes sociais.
  *
  * O ícone de cada módulo é o da sua primeira aplicação (não obriga a mais um
- * mapa de ícones) e «Visão geral» é o único aberto por omissão — os restantes
- * abrem a pedido, ou sozinhos quando lá está a aplicação ativa.
+ * mapa de ícones); «Área de análise» e «Visão geral» abrem por omissão — os
+ * restantes abrem a pedido, ou sozinhos quando lá está a aplicação ativa.
  */
 const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
   const items = module.ids
@@ -317,7 +318,7 @@ const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
     id: `app-${module.id}`,
     label: module.label,
     icon: <Icon size={14} />,
-    defaultOpen: module.id === "visao-geral" ? true : undefined,
+    defaultOpen: module.id === "visao-geral" || module.id === "analise" ? true : undefined,
     items,
   };
 }).filter((group) => group.items.length > 0);

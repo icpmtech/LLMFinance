@@ -26,6 +26,7 @@ import markdown as markdown_lib
 
 from api import captcha
 from api import cms_store as store
+from api import site_acoes
 from api import tawk
 
 logger = logging.getLogger(__name__)
@@ -765,6 +766,9 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
             return ""
         images = "".join(f'<img src="{_esc(url)}" alt="" loading="lazy" decoding="async">' for url in urls)
         return f'<div class="grelha galeria">{images}</div>'
+
+    if block_type == "estudos":
+        return _seccao_estudos(data)
 
     if block_type == "destaques":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -1886,7 +1890,23 @@ def render_page(
 ) -> str:
     settings = settings or store.get_settings()
     seo = page.get("seo") or {}
-    body = blocks_to_html(page.get("blocks") or [], preview=preview)
+    blocos = page.get("blocks") or []
+    # A página-mãe dos estudos ganha a lista do que está publicado **a seguir à
+    # abertura**: é o que quem chega a `/site/benchmarks` procura, e a lista
+    # acompanha a publicação de cada estudo sem ninguém editar a página.
+    estudos = ""
+    if _chave_nome(page.get("slug")) == "benchmarks" and not any(
+        str((bloco or {}).get("type") or "") == "estudos" for bloco in blocos
+    ):
+        estudos = _seccao_estudos()
+    if estudos and blocos and str((blocos[0] or {}).get("type") or "") == "hero":
+        body = (
+            blocks_to_html(blocos[:1], preview=preview)
+            + estudos
+            + blocks_to_html(blocos[1:], preview=preview)
+        )
+    else:
+        body = blocks_to_html(blocos, preview=preview) + estudos
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
     body = _garantir_h1(body, _titulo_visivel(page))
@@ -3338,44 +3358,26 @@ def _posts_with_meta(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _acoes_do_artigo(post: Dict[str, Any], path: str, settings: Dict[str, Any], *, preview: bool) -> str:
-    """Ações do artigo: descarregar o relatório (PDF) e partilhar.
+    """Ações do artigo: descarregar o relatório (PDF), partilhar e guardar.
 
     Valem só no site: num rascunho (pré-visualização) o artigo ainda não está
     publicado, a rota do relatório não o serve e não há endereço público para
     partilhar. O PDF é opcional por artigo (`report_pdf`) — um texto sem números
-    próprios não ganha um botão que descarrega o que já está à vista. A partilha
-    usa a Web Share API do sistema e, onde ela não existe, copia o endereço;
-    sem nenhuma das duas o botão não chega a aparecer.
+    próprios não ganha um botão que descarrega o que já está à vista.
     """
     if preview:
         return ""
-    botoes = []
-    if post.get("report_pdf", True):
-        botoes.append(f'<a class="btn ghost" href="{_esc(path)}/pdf" download>Descarregar o relatório (PDF)</a>')
-    botoes.append(
-        # Nasce escondido: quem o mostra é o script, que é quem sabe se este
-        # browser partilha ou copia. Um botão que não faz nada é pior do que
-        # nenhum — e sem JavaScript a página continua legível.
-        '<button type="button" class="btn ghost" data-partilhar hidden'
-        f' data-url="{_esc(_absolute(path, str(settings.get("base_url") or "")))}"'
-        f' data-titulo="{_esc(post.get("title") or "")}">Partilhar</button>'
+    pdf = (
+        f'<a class="btn ghost" href="{_esc(path)}/pdf" download>Descarregar o relatório (PDF)</a>'
+        if post.get("report_pdf", True)
+        else ""
     )
-    return (
-        f'<div class="artigo-acao">{"".join(botoes)}</div>'
-        # O script fica ao lado do que comanda: `currentScript.parentNode` é o
-        # artigo, e não é preciso procurar o botão no documento todo.
-        "<script>(function(){"
-        "var b=document.currentScript.parentNode.querySelector('[data-partilhar]');if(!b)return;"
-        "var u=b.getAttribute('data-url')||location.href;"
-        "var t=b.getAttribute('data-titulo')||document.title;var r=b.textContent;"
-        "var c=navigator.clipboard&&navigator.clipboard.writeText;"
-        "if(!navigator.share&&!c)return;b.hidden=false;"
-        "function dito(m){b.textContent=m;setTimeout(function(){b.textContent=r},2400)}"
-        "b.addEventListener('click',function(){"
-        "if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});return;}"
-        "navigator.clipboard.writeText(u).then(function(){dito('Ligação copiada')},"
-        "function(){dito('Não foi possível copiar')});});"
-        "})();</script>"
+    return site_acoes.barra_acoes(
+        url=_absolute(path, str(settings.get("base_url") or "")),
+        titulo=str(post.get("title") or ""),
+        tipo="artigo",
+        chave=path,
+        extra=pdf,
     )
 
 
@@ -3456,6 +3458,152 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
 # --------------------------------------------------------------------------
 # Pesquisa do site
 # --------------------------------------------------------------------------
+def _preco_estudo(valor: Any, moeda: str) -> str:
+    """Preço do cartão do estudo: «1 174,99 €» (à portuguesa)."""
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return "—"
+    texto = f"{numero:,.2f}".replace(",", "\u00a0").replace(".", ",")
+    simbolo = {"EUR": "€", "USD": "$", "GBP": "£"}.get(str(moeda or "EUR").upper())
+    return f"{texto} {simbolo}" if simbolo else f"{texto} {moeda}"
+
+
+def _cartao_estudo(
+    benchmark: Dict[str, Any],
+    *,
+    mostrar_imagem: bool = True,
+    mostrar_preco: bool = True,
+) -> str:
+    """Um estudo na lista de `/site/benchmarks`: imagem, números e ligação."""
+    slug = str(benchmark.get("slug") or "")
+    nome = str(benchmark.get("name") or "Benchmark")
+    descricao = str(benchmark.get("description") or "")
+    categoria = str(benchmark.get("category") or "").strip()
+    moeda = str(benchmark.get("currency") or "EUR")
+    endereco = f"/site/benchmarks/{slug}/pesquisa"
+    lojas = len(benchmark.get("stores") or [])
+
+    imagem = ""
+    alt = ""
+    desde = None
+    total = 0
+    if mostrar_imagem or mostrar_preco:
+        try:
+            from api import elasticsearch_client as esc  # noqa: PLC0415 - import tardio: ciclo
+
+            comparacao = esc.benchmark_product_comparison(slug, order="preco", size=4, from_=0, min_stores=1)
+        except Exception:  # noqa: BLE001 - a lista não pode cair por causa de um estudo
+            logger.warning("Estudos: não foi possível ler as ofertas de %s", slug, exc_info=True)
+            comparacao = {}
+        for produto in comparacao.get("items") or []:
+            melhor = produto.get("best") or {}
+            if mostrar_imagem and not imagem and str(melhor.get("image") or "").strip():
+                imagem = str(melhor.get("image") or "").strip()
+                alt = str(produto.get("product_name") or "")
+            if desde is None and produto.get("price_min") is not None:
+                desde = produto.get("price_min")
+        total = int(comparacao.get("total") or 0)
+
+    etiqueta = f'<span class="estudo-tag">{_esc(categoria)}</span>' if categoria else ""
+    if mostrar_imagem and imagem:
+        figura = (
+            '<div class="estudo-figura">'
+            f'<img src="{_esc(imagem)}" alt="{_esc(alt)}" loading="lazy" decoding="async" '
+            'referrerpolicy="no-referrer">'
+            f"{etiqueta}</div>"
+        )
+    else:
+        # Sem imagem de produto (recolha vazia ou em curso) o cartão fica com a
+        # mancha da categoria: uma caixa vazia parecia um erro da página.
+        figura = f'<div class="estudo-figura estudo-figura--vazia">{etiqueta}</div>'
+
+    numeros = []
+    if mostrar_preco and desde is not None:
+        numeros.append(f"<strong>desde {_esc(_preco_estudo(desde, moeda))}</strong>")
+    if lojas:
+        numeros.append(f"{lojas} {'loja' if lojas == 1 else 'lojas'}")
+    if total:
+        numeros.append(f"{total} produtos")
+    return (
+        '<article class="estudo-card">'
+        f'<a class="estudo-ligacao" href="{_esc(endereco)}">'
+        + figura
+        + '<div class="estudo-corpo">'
+        + f"<h3>{_esc(nome)}</h3>"
+        + (f'<p class="estudo-descricao">{_esc(descricao)}</p>' if descricao else "")
+        + (f'<p class="estudo-numeros">{" · ".join(numeros)}</p>' if numeros else "")
+        + '<span class="estudo-cta">Comparar preços</span>'
+        + "</div></a></article>"
+    )
+
+
+def _seccao_estudos(dados: Optional[Dict[str, Any]] = None) -> str:
+    """A lista dos estudos de preço publicados, para a página-mãe dos benchmarks.
+
+    Sai da definição dos benchmarks (`public: true`), não do CMS: publicar um
+    estudo novo faz dele um cartão aqui, sem se editar esta página. O bloco
+    `estudos` do CMS escolhe o **desenho** (grelha, lista ou primeiro em
+    destaque), as colunas, quantos estudos e se mostra imagem e preço; sem
+    bloco, a página-mãe recebe esta secção com os valores por omissão.
+    """
+    dados = dados or {}
+    try:
+        from api import benchmarks_store  # noqa: PLC0415 - import tardio: ciclo
+
+        publicos = benchmarks_store.publicos()
+    except Exception:  # noqa: BLE001 - a página do CMS não pode cair por isto
+        logger.warning("Estudos: não foi possível ler os benchmarks publicados", exc_info=True)
+        return ""
+    if not publicos:
+        return ""
+
+    layout = str(dados.get("layout") or "grelha").strip().lower()
+    if layout not in store.ESTUDOS_LAYOUT_IDS:
+        layout = "grelha"
+    try:
+        colunas = int(dados.get("columns") or 3)
+    except (TypeError, ValueError):
+        colunas = 3
+    colunas = 4 if colunas >= 4 else (2 if colunas <= 2 else 3)
+    if layout == "lista":
+        # A lista é isso mesmo: uma linha por estudo, com a imagem ao lado.
+        colunas = 1
+    try:
+        limite = int(dados.get("limit") or 12)
+    except (TypeError, ValueError):
+        limite = 12
+    limite = max(1, min(24, limite))
+    mostrar_imagem = dados.get("show_image") is not False
+    mostrar_preco = dados.get("show_price") is not False
+
+    titulo = str(dados.get("title") or "Estudos publicados").strip()
+    intro = str(
+        dados.get("intro")
+        or "Preços recolhidos automaticamente dos sites das lojas. Abra um estudo "
+        "para filtrar por loja e ver todas as ofertas."
+    ).strip()
+
+    escolhidos = publicos[:limite]
+    cartoes = "".join(
+        _cartao_estudo(benchmark, mostrar_imagem=mostrar_imagem, mostrar_preco=mostrar_preco)
+        for benchmark in escolhidos
+    )
+    quantidade = len(escolhidos)
+    classes = f"section estudos estudos--{layout} estudos--cols-{colunas}"
+    return (
+        f'<section class="{classes}" aria-labelledby="estudos-publicados">'
+        '<div class="estudos-topo"><div>'
+        f'<h2 id="estudos-publicados">{_esc(titulo)}</h2>'
+        + (f"<p>{_esc(intro)}</p>" if intro else "")
+        + "</div>"
+        f'<span class="estudos-contagem">{quantidade} {"estudo" if quantidade == 1 else "estudos"}</span>'
+        "</div>"
+        f'<div class="estudos-grid">{cartoes}</div>'
+        "</section>"
+    )
+
+
 def _seccao_dos_estudos(pages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Página-mãe dos estudos de benchmark (a que os estudos têm por ascendente).
 
@@ -3793,6 +3941,35 @@ def _pagina_de_sistema(
         "responde às perguntas que se fazem por cima disso.</p>"
         f'<ul class="sistema-links">{destinos}</ul>'
         "</section>"
+    )
+
+
+def render_favoritos(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página `/site/favoritos`: a lista guardada no browser de quem visita.
+
+    O HTML é só a moldura — os itens são desenhados pelo script a partir do
+    `localStorage`. Sem JavaScript a página explica que não consegue mostrar a
+    lista, em vez de fingir que está vazia.
+    """
+    settings = settings or store.get_settings()
+    body = (
+        '<section class="section">'
+        "<h1>Favoritos</h1>"
+        '<p class="lead">Páginas que guardou com a estrela «Guardar». A lista fica '
+        "neste navegador: não é enviada para o servidor nem aparece noutro "
+        "dispositivo.</p>"
+        + site_acoes.lista_favoritos()
+        + "</section>"
+    )
+    return _layout(
+        title="Favoritos",
+        description="Artigos, estudos e produtos que guardou neste navegador.",
+        body=body,
+        current_path=site_acoes.CAMINHO_FAVORITOS,
+        settings=settings,
+        canonical=site_acoes.CAMINHO_FAVORITOS,
+        noindex=True,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Favoritos"}],
     )
 
 

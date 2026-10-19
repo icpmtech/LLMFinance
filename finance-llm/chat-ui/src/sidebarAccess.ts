@@ -44,6 +44,9 @@ export type SidebarAccessMe = {
   protected?: string[];
 };
 
+/** Perfil de CRM que vê a «Área de análise» (a equipa da plataforma vê sempre). */
+export const ANALYST_PROFILE = "analista-dados";
+
 const EMPTY: SidebarAccessMe = { hidden: [], platform_role: "", profile: "", profile_label: "" };
 
 let cache: SidebarAccessMe = EMPTY;
@@ -101,6 +104,11 @@ export function dropHidden<T extends { id: string }>(items: T[]): T[] {
 
 export function sidebarAccessLoaded(): boolean {
   return loaded;
+}
+
+/** O utilizador tem o perfil de CRM «Analista de dados». */
+export function isAnalystProfile(): boolean {
+  return cache.profile === ANALYST_PROFILE;
 }
 
 function subscribe(onChange: () => void) {

@@ -835,6 +835,12 @@ def site_post(slug: str) -> HTMLResponse:
     return HTMLResponse(render.render_post(post, settings=settings), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/favoritos", response_class=HTMLResponse)
+def site_favoritos() -> HTMLResponse:
+    """Lista de favoritos guardada no browser (desenhada pelo script da página)."""
+    return HTMLResponse(render.render_favoritos(settings=store.get_settings()), headers=_PUBLIC_HEADERS)
+
+
 @router.get("/site/blog/{slug}/pdf")
 def site_post_pdf(slug: str) -> Response:
     """Relatório PDF do artigo, com os mesmos números e a mesma fonte da página."""

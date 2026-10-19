@@ -261,10 +261,25 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
         "hint": "Lista os relatórios do catálogo e os documentos já gerados, por área de trabalho",
         "icon": "FileText",
     },
+    {
+        "id": "estudos",
+        "label": "Estudos de preços",
+        "hint": "Lista os benchmarks publicados, em grelha, lista ou com o primeiro em destaque",
+        "icon": "LineChart",
+    },
     {"id": "conteudo", "label": "Conteúdo reutilizado", "hint": "Insere um conteúdo guardado no CMS", "icon": "Recycle"},
     {"id": "divisor", "label": "Divisor", "hint": "Linha de separação", "icon": "Minus"},
 ]
 BLOCK_IDS = {block["id"] for block in BLOCK_TYPES}
+
+#: Desenho da lista de estudos de preços (bloco `estudos`). O id é o sufixo de
+#: `estudos--<id>` no CSS; a lista e o destaque põem o cartão na horizontal.
+ESTUDOS_LAYOUTS: List[Dict[str, str]] = [
+    {"id": "grelha", "label": "Grelha de cartões"},
+    {"id": "lista", "label": "Lista compacta"},
+    {"id": "destaque", "label": "Primeiro em destaque"},
+]
+ESTUDOS_LAYOUT_IDS = {layout["id"] for layout in ESTUDOS_LAYOUTS}
 
 #: Variantes visuais do bloco «hero». `simples` é a faixa de sempre (sem caixa);
 #: as restantes são escolhidas por página no editor de blocos.
@@ -2049,6 +2064,7 @@ def catalogue() -> Dict[str, Any]:
         "block_types": BLOCK_TYPES,
         "hero_styles": HERO_STYLES,
         "hero_tones": HERO_TONES,
+        "estudos_layouts": ESTUDOS_LAYOUTS,
         "content_kinds": CONTENT_KINDS,
         "template_kinds": TEMPLATES_KINDS,
         "menu_locations": MENU_LOCATIONS,

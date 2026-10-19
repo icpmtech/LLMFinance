@@ -7,6 +7,7 @@
 import { useMemo } from "react";
 import { useAuth } from "./auth";
 import type { AuthUser } from "./authApi";
+import { isAnalystProfile } from "./sidebarAccess";
 
 export type PlanModuleMap = Record<string, string[]>;
 
@@ -200,8 +201,20 @@ function planModules(user: AuthUser | null): string[] {
   return DEFAULT_PLAN_MODULES[planId] || DEFAULT_PLAN_MODULES.basic;
 }
 
+/** Papéis da equipa da plataforma (vêem a Área de análise sem o perfil de CRM). */
+const STAFF_ROLES = new Set(["admin", "manager"]);
+
+/**
+ * A «Área de análise» não se compra: é do perfil de CRM «Analista de dados».
+ * A equipa da plataforma vê-a sempre para poder acompanhar o módulo.
+ */
+function canSeeAnalystArea(user: AuthUser): boolean {
+  return STAFF_ROLES.has(user.role) || isAnalystProfile();
+}
+
 export function canAccessDockApp(user: AuthUser | null, appId: string): boolean {
   if (!user) return false;
+  if (appId === "analise") return canSeeAnalystArea(user);
   if (user.role === "admin") return true;
   const moduleId = DOCK_APP_MODULE[appId];
   if (moduleId === null) return true;

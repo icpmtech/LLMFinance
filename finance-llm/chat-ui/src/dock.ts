@@ -703,6 +703,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "99,102,241",
   },
   {
+    id: "analise",
+    label: "Área de análise",
+    hint: "Indicadores, série anual e leitura assistida para analistas",
+    icon: Gauge,
+    gradient: "from-teal-300 via-cyan-500 to-blue-600",
+    accent: "20,184,166",
+  },
+  {
     id: "pesquisa",
     label: "Pesquisa total",
     hint: "Estilo Google: recolha, contratos, empresas, marcas, notícias e mercado",
@@ -1051,6 +1059,7 @@ const DEFAULT_ITEMS = [
   "pessoas-iq",
   "crm",
   "dashboard",
+  "analise",
   "search",
   "contracts-search",
   "contracts-dashboard",

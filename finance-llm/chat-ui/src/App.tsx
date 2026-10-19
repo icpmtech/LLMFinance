@@ -29,6 +29,7 @@ import { ElasticPage } from "./pages/ElasticPage";
 import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 // import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
 import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
+import { AnalisePage } from "./pages/AnalisePage";
 import { ContractsMapPage } from "./pages/ContractsMapPage";
 import { ContratosEcologicosPage } from "./pages/ContratosEcologicosPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
@@ -344,6 +345,7 @@ function pathForView(
   if (view === "chat") return "/chat";
   if (view === "browser") return "/browser";
   if (view === "dashboard") return "/dashboard";
+  if (view === "analise") return "/analise";
   if (view === "finder") return "/finder";
   if (view === "compare") return "/compare";
   if (view === "forecast") return "/forecast";
@@ -668,6 +670,7 @@ export default function App() {
     if (path === "/chat") return "chat";
     if (path === "/rag") return "rag";
     if (path === "/browser") return "browser";
+    if (path === "/analise") return "analise";
     if (path === "/finder") return "finder";
     if (path === "/compare") return "compare";
     if (path === "/forecast") return "forecast";
@@ -848,6 +851,7 @@ export default function App() {
       else if (path === "/finder") next = "finder";
       else if (path === "/compare") next = "compare";
       else if (path === "/dashboard") next = "dashboard";
+      else if (path === "/analise") next = "analise";
       else if (path === "/forecast") next = "forecast";
       else if (path === "/trading") next = "trading";
       else if (path === "/tickers") next = "tickers";
@@ -1609,6 +1613,7 @@ export default function App() {
       );
     }
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
+    if (target === "analise") return <AnalisePage onNavigate={handleSwitchView} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
     if (target === "pessoas-iq") return <PessoasIQPage />;
     if (target === "descoberta") return <DescobertaPage onBack={() => setViewAndHistory("chat")} />;

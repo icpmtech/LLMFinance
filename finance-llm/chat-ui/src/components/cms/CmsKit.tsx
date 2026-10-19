@@ -1041,6 +1041,57 @@ function BlockSpecificFields({
           </div>
         </div>
       );
+    case "estudos":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <TextInput label="Título da secção" value={text("title")} onChange={(next) => set("title", next)} wide />
+          <TextInput label="Texto de apoio" value={text("intro")} onChange={(next) => set("intro", next)} wide />
+          <SelectInput
+            label="Desenho"
+            value={text("layout") || "grelha"}
+            onChange={(next) => set("layout", next)}
+            options={[
+              { value: "grelha", label: "Grelha de cartões" },
+              { value: "lista", label: "Lista compacta" },
+              { value: "destaque", label: "Primeiro em destaque" },
+            ]}
+            hint="A lista e o destaque põem a imagem ao lado do texto."
+          />
+          <SelectInput
+            label="Colunas"
+            value={String(data.columns ?? 3)}
+            onChange={(next) => set("columns", Number(next))}
+            options={[
+              { value: "2", label: "Duas" },
+              { value: "3", label: "Três" },
+              { value: "4", label: "Quatro" },
+            ]}
+            hint="No telemóvel a grelha passa a uma coluna (duas a partir de 620px). A lista usa sempre uma."
+          />
+          <NumberInput
+            label="Nº de estudos"
+            value={Number(data.limit ?? 12)}
+            onChange={(next) => set("limit", next)}
+            min={1}
+            max={24}
+            hint="Saem da lista de benchmarks publicados: publicar um estudo novo faz aparecer aqui."
+          />
+          <div className="grid gap-2 sm:col-span-2">
+            <Toggle
+              checked={data.show_image !== false}
+              onChange={(next) => set("show_image", next)}
+              label="Mostrar imagens"
+              hint="A imagem é a do produto mais barato de cada estudo."
+            />
+            <Toggle
+              checked={data.show_price !== false}
+              onChange={(next) => set("show_price", next)}
+              label="Mostrar preços"
+              hint="«Desde» é o preço mais baixo recolhido no estudo."
+            />
+          </div>
+        </div>
+      );
     case "conteudo":
       return (
         <SelectInput
@@ -1267,7 +1318,7 @@ export function BlockEditor({
                     {
                       id: `blk_${Math.random().toString(36).slice(2, 10)}`,
                       type: item.id,
-                      data: item.id === "blog" ? { limit: 3 } : {},
+                      data: item.id === "blog" ? { limit: 3 } : item.id === "estudos" ? { layout: "grelha", columns: 3, limit: 12, show_image: true, show_price: true } : {},
                     },
                   ]);
                   setAdding(false);

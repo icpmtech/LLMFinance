@@ -616,6 +616,175 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
    este browser tem partilha do sistema ou área de transferência. */
 .artigo-acao button.btn { font-family: inherit; cursor: pointer; }
 .artigo-acao [hidden] { display: none; }
+/* Partilhar e guardar: a mesma barra no artigo do blog e no estudo de preços.
+   O menu de partilha é um `<details>` — abre sem JavaScript e fecha com Esc
+   (o script das ações trata do clique fora). */
+.site-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.site-acao {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 42px; padding: 9px 15px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: .87rem;
+  font-weight: 600; line-height: 1.2; text-decoration: none; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.site-acao:hover, .site-acao:focus-visible { border-color: var(--accent); color: var(--accent); }
+.site-acoes .btn { min-height: 42px; padding: 9px 16px; font-size: .87rem; }
+.site-acao-icone {
+  width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.site-acao--guardar[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 72%, #0b1220);
+}
+.site-acao--guardar[aria-pressed="true"] .site-acao-icone { fill: currentColor; }
+.site-partilha { position: relative; display: inline-flex; }
+.site-partilha > summary { list-style: none; user-select: none; }
+.site-partilha > summary::-webkit-details-marker { display: none; }
+.site-partilha[open] > summary { border-color: var(--accent); color: var(--accent); }
+/* Na abertura do estudo a barra está encostada à direita: o menu abre para
+   dentro da página, senão saía do ecrã e criava rolagem lateral. Abaixo disso
+   a barra passa para a esquerda e o menu abre para a direita, como no blog. */
+@media (min-width: 901px) {
+  .bench-hero .site-partilha-menu { left: auto; right: 0; }
+}
+.site-partilha-menu {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
+  display: flex; flex-direction: column; min-width: 210px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 14px 38px rgba(16,24,40,.18);
+}
+.site-partilha-item {
+  display: flex; align-items: center; width: 100%; min-height: 40px; padding: 8px 12px;
+  border: 0; border-radius: 8px; background: none; color: var(--text);
+  font: inherit; font-size: .88rem; text-align: left; text-decoration: none; cursor: pointer;
+}
+.site-partilha-item:hover, .site-partilha-item:focus-visible { background: var(--code); text-decoration: none; }
+.site-partilha-item[hidden] { display: none; }
+.site-aviso {
+  position: fixed; z-index: 90; left: 50%; bottom: 22px;
+  transform: translate(-50%, 12px); max-width: min(92vw, 420px);
+  padding: 11px 18px; border-radius: 999px; background: #101828; color: #fff;
+  font-size: .88rem; font-weight: 600; text-align: center; box-shadow: 0 14px 34px rgba(16,24,40,.3);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+}
+.site-aviso--visivel { opacity: 1; transform: translate(-50%, 0); }
+/* A estrela dos cartões (produtos, estudos): por cima da imagem, discreta. */
+.site-fav-icone {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  padding: 0; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, transform .15s ease;
+}
+.site-fav-icone:hover { color: var(--accent); border-color: var(--accent); transform: scale(1.06); }
+.site-fav-icone[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.site-fav-icone[aria-pressed="true"] .site-acao-icone { fill: currentColor; }
+/* A lista de favoritos (`/site/favoritos`). */
+.site-favoritos { margin-top: 10px; }
+.site-favoritos-vazio {
+  margin: 18px 0 0; padding: 30px 24px; border: 1px dashed var(--border);
+  border-radius: var(--radius); text-align: center; color: var(--muted);
+}
+.site-favoritos-lista { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 10px; }
+.site-favorito {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.site-favorito:has(> :first-child:not(.site-favorito-img)) { grid-template-columns: minmax(0, 1fr) auto; }
+.site-favorito-img {
+  width: 56px; height: 56px; object-fit: contain; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg);
+}
+.site-favorito-titulo { display: block; font-weight: 700; color: var(--text); }
+.site-favorito-titulo:hover { color: var(--accent); }
+.site-favorito-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
+.site-favorito-meta strong { color: var(--text); }
+.site-favorito-remover {
+  min-height: 38px; padding: 6px 13px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--muted); font: inherit; font-size: .82rem; cursor: pointer;
+}
+.site-favorito-remover:hover { color: #b42318; border-color: #f1c2bc; }
+.site-favoritos-acoes { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 18px; }
+.site-favoritos-total { color: var(--muted); font-size: .9rem; }
+.site-favoritos-total strong { color: var(--text); }
+.site-favoritos-nota { color: var(--muted); font-size: .9rem; }
+/* Estudos publicados na página-mãe (`/site/benchmarks`). */
+.estudos { margin-top: 30px; }
+.estudos-topo { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.estudos-topo h2 { margin: 0 0 6px; font-size: clamp(1.2rem, 3.4vw, 1.45rem); }
+.estudos-topo p { margin: 0; color: var(--muted); font-size: .93rem; max-width: 62ch; }
+.estudos-contagem { color: var(--muted); font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.estudos-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+/* O bloco `estudos` do CMS escolhe as colunas (2, 3 ou 4) e o desenho. */
+.estudos--cols-2 .estudos-grid,
+.estudos--cols-3 .estudos-grid,
+.estudos--cols-4 .estudos-grid { grid-template-columns: 1fr; }
+@media (min-width: 620px) {
+  .estudos--cols-1 .estudos-grid { grid-template-columns: 1fr; }
+  .estudos-grid,
+  .estudos--cols-2 .estudos-grid,
+  .estudos--cols-3 .estudos-grid,
+  .estudos--cols-4 .estudos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1000px) {
+  .estudos--cols-2 .estudos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .estudos--cols-3 .estudos-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .estudos--cols-4 .estudos-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.estudo-card { display: flex; }
+.estudo-ligacao {
+  display: flex; flex-direction: column; width: 100%; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  box-shadow: var(--shadow); color: inherit;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.estudo-ligacao:hover {
+  transform: translateY(-3px); border-color: var(--accent); text-decoration: none;
+  box-shadow: 0 2px 4px rgba(16,24,40,.06), 0 14px 34px rgba(16,24,40,.12);
+}
+.estudo-figura { position: relative; aspect-ratio: 16 / 10; background: var(--code); overflow: hidden; }
+.estudo-figura img { width: 100%; height: 100%; object-fit: contain; padding: 14px; }
+.estudo-figura--vazia { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface)), var(--code)); }
+.estudo-tag {
+  position: absolute; top: 10px; left: 10px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.estudo-corpo { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 18px; flex: 1; }
+.estudo-corpo h3 { margin: 0; font-size: 1.02rem; line-height: 1.35; }
+.estudo-descricao {
+  margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.estudo-numeros { margin: 2px 0 0; color: var(--muted); font-size: .84rem; }
+.estudo-numeros strong { color: var(--accent); font-size: .95rem; }
+.estudo-cta { margin-top: auto; padding-top: 8px; color: var(--accent); font-size: .86rem; font-weight: 700; }
+.estudo-cta::after { content: " →"; }
+/* Lista compacta: imagem à esquerda, texto à direita. */
+.estudos--lista .estudo-ligacao { flex-direction: row; }
+.estudos--lista .estudo-figura { flex: 0 0 clamp(120px, 26%, 220px); aspect-ratio: auto; align-self: stretch; }
+/* Primeiro em destaque: ocupa a linha toda e mostra a imagem ao lado. */
+.estudos--destaque .estudos-grid > :first-child { grid-column: 1 / -1; }
+.estudos--destaque .estudos-grid > :first-child .estudo-ligacao { flex-direction: row; }
+.estudos--destaque .estudos-grid > :first-child .estudo-figura { flex: 0 0 42%; aspect-ratio: auto; }
+.estudos--destaque .estudos-grid > :first-child .estudo-corpo h3 { font-size: 1.15rem; }
+@media (max-width: 619px) {
+  .estudos--lista .estudo-figura,
+  .estudos--destaque .estudos-grid > :first-child .estudo-figura { flex: none; aspect-ratio: 16 / 10; }
+  .estudos--lista .estudo-ligacao,
+  .estudos--destaque .estudos-grid > :first-child .estudo-ligacao { flex-direction: column; }
+}
+@media (max-width: 620px) {
+  .site-favorito { grid-template-columns: minmax(0, 1fr) auto; }
+  .site-favorito-img { display: none; }
+  /* No telemóvel o menu de partilha é uma folha em baixo: colado ao botão,
+     saía do ecrã quando a barra de ações quebrava para a linha de baixo. */
+  .site-partilha-menu {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto;
+    min-width: 0; border-radius: 16px; box-shadow: 0 24px 60px rgba(16,24,40,.35);
+  }
+}
 .posts { display: grid; gap: 16px; grid-template-columns: 1fr; }
 .post-card { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .post-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }

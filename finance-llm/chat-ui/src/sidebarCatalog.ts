@@ -58,11 +58,18 @@ export type AppModule = {
 /**
  * Organização das aplicações por módulo (a ordem aqui é a ordem no menu).
  *
- * «Visão geral» é o único módulo aberto por omissão — é onde vivem o dashboard,
- * o Finder, o chat e a pesquisa; os restantes abrem a pedido (ou sozinhos,
- * quando lá está a aplicação ativa).
+ * «Área de análise» e «Visão geral» abrem por omissão — a primeira é o painel
+ * do analista e a segunda é onde vivem o dashboard, o Finder, o chat e a
+ * pesquisa; os restantes abrem a pedido (ou sozinhos, quando lá está a
+ * aplicação ativa).
  */
 export const APP_MODULES: AppModule[] = [
+  {
+    id: "analise",
+    label: "Área de análise",
+    hint: "Painel de trabalho do analista: indicadores, série anual e leitura assistida",
+    ids: ["analise"],
+  },
   {
     id: "visao-geral",
     label: "Visão geral",
