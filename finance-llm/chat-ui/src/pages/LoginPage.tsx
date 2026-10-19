@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth";
 import { PublicFooter, PublicHeader } from "../components/PublicShell";
+import { TawkChat } from "../components/TawkChat";
 
 type Mode = "login" | "register";
 
@@ -306,6 +307,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
         </section>
       </main>
       <PublicFooter />
+      <TawkChat />
     </div>
   );
 }

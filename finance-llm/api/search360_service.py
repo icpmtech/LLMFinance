@@ -133,6 +133,11 @@ def plan(term: str, requested: Optional[Sequence[str]] = None) -> Dict[str, Any]
     }
     clean_for_tickers = clean
     for alias, symbol in ticker_aliases.items():
+        if alias in STOPWORDS:
+            # «nos», «os», «as» são palavras da língua: em minúsculas não são
+            # ticker. Sem isto, «quem é a X *nos* contratos públicos?» virava uma
+            # pergunta sobre a NOS (medido: a resposta falava da NOS, não da X).
+            continue
         clean_for_tickers = re.sub(rf"\b{re.escape(alias)}\b", symbol, clean_for_tickers, flags=re.IGNORECASE)
     tickers = [match.group(1) for match in TICKER_RE.finditer(clean_for_tickers)]
     nifs = [match.group(1) for match in NIF_RE.finditer(clean)]

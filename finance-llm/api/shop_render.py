@@ -5,11 +5,12 @@ pesquisa, filtros e paginação, ficha de produto com avaliações, carrinho e
 finalização de compra, além de confirmação de encomenda, `sitemap.xml` e
 `robots.txt`.
 
-O HTML é **autónomo** (CSS embutido, sem dependências) e cada página leva a
-mesma aplicação de carrinho em JavaScript: o carrinho vive no `localStorage` do
+O HTML é **autónomo** (CSS embutido, JS mínimo) e cada página leva a mesma
+aplicação de carrinho em JavaScript: o carrinho vive no `localStorage` do
 visitante e o **servidor continua a ser a autoridade** — o browser só envia
 identificadores e quantidades, os preços, o stock e os portes são recalculados
-em `shop_store.checkout`.
+em `shop_store.checkout`. O único script de terceiros é o widget de apoio ao
+cliente (`api/tawk.py`).
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from urllib.parse import quote
 import markdown as markdown_lib
 
 from api import shop_store as store
+from api import tawk
 
 logger = logging.getLogger(__name__)
 
@@ -1479,6 +1481,10 @@ def _layout(
             '<script async src="https://www.googletagmanager.com/gtag/js?id=' + _esc(analytics) + '"></script>'
             '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","' + _esc(analytics) + '");</script>'
         )
+    # Apoio ao cliente nas páginas públicas. A pré-visualização é do editor da
+    # loja, não de quem compra: aí o widget não entra.
+    if not preview:
+        meta.append(tawk.TAWK_SNIPPET)
     cores = _pwa_cores(settings)
     meta.extend(
         [

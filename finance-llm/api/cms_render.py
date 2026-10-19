@@ -4,10 +4,11 @@ Converte o modelo do `cms_store` em HTML pronto a servir: páginas por blocos,
 artigos de blog, índice do blog (com paginação, categoria e etiqueta), RSS,
 sitemap e `robots.txt`.
 
-O HTML é **autónomo** (CSS embutido, sem dependências) para poder ser servido
-por qualquer proxy e indexado pelos motores de busca: cada página leva `title`,
+O HTML é **autónomo** (CSS embutido, JS mínimo) para poder ser servido por
+qualquer proxy e indexado pelos motores de busca: cada página leva `title`,
 `meta description`, canónica, Open Graph e JSON-LD. A aparência vem das
-definições do site (`theme`, `accent`, `radius`).
+definições do site (`theme`, `accent`, `radius`). O único script de terceiros é
+o widget de apoio ao cliente (`api/tawk.py`).
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ import markdown as markdown_lib
 
 from api import captcha
 from api import cms_store as store
+from api import tawk
 
 logger = logging.getLogger(__name__)
 
@@ -750,10 +752,10 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         if movel:
             imagem = (
                 f'<picture><source media="(max-width: 899px)" srcset="{_esc(movel)}">'
-                f'<img src="{_esc(url)}" alt="{alt}"{medidas}{_proporcao_movel(movel_id)} loading="lazy"></picture>'
+                f'<img src="{_esc(url)}" alt="{alt}"{medidas}{_proporcao_movel(movel_id)} loading="lazy" decoding="async"></picture>'
             )
         else:
-            imagem = f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy">'
+            imagem = f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy" decoding="async">'
         return f"<figure>{imagem}{caption}</figure>"
 
     if block_type == "galeria":
@@ -761,7 +763,7 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         urls = [url for url in urls if url]
         if not urls:
             return ""
-        images = "".join(f'<img src="{_esc(url)}" alt="" loading="lazy">' for url in urls)
+        images = "".join(f'<img src="{_esc(url)}" alt="" loading="lazy" decoding="async">' for url in urls)
         return f'<div class="grelha galeria">{images}</div>'
 
     if block_type == "destaques":
@@ -785,7 +787,11 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
             else:
                 tiles.append(f'<div class="tile">{corpo}</div>')
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
-        return f'<div class="section">{title}<div class="grelha">{"".join(tiles)}</div></div>'
+        # A grelha sabe quantos cartões tem: três, quatro ou seis alinham sem
+        # deixar uma linha órfã de um cartão (era o que acontecia com o
+        # `auto-fit` genérico).
+        colunas = f" grelha--n{len(items)}" if len(items) in (3, 4, 6) else ""
+        return f'<div class="section">{title}<div class="grelha{colunas}">{"".join(tiles)}</div></div>'
 
     if block_type == "numeros":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -902,6 +908,17 @@ def _acrescentar_classes(html_text: str, classes: str) -> str:
     return f"<{tag}{attrs}>" + html_text[match.end() :]
 
 
+def _acrescentar_atributo(html_text: str, nome: str, valor: str) -> str:
+    """Acrescenta um atributo à raiz do bloco, sem tocar no resto da marcação."""
+    match = re.match(r"<([A-Za-z][\w:-]*)([^>]*)>", html_text)
+    if not match:
+        return html_text
+    tag, attrs = match.group(1), match.group(2)
+    if re.search(rf"\b{re.escape(nome)}=", attrs):
+        return html_text
+    return f'<{tag}{attrs} {nome}="{_esc(valor)}">' + html_text[match.end() :]
+
+
 _APARENCIA_FUNDOS = frozenset({"sem", "cartao", "destaque", "suave"})
 _APARENCIA_ESPACAMENTOS = frozenset({"normal", "compacto", "amplo"})
 
@@ -947,6 +964,13 @@ def blocks_to_html(blocks: Iterable[Dict[str, Any]], *, preview: bool = False) -
     for block in blocks or []:
         html_text = _render_block(block, preview=preview)
         if html_text:
+            # A raiz de cada bloco leva o tipo (`data-bloco="hero"`, …): o CSS
+            # consegue assim tratar a abertura, os números ou a galeria sem
+            # depender da ordem nem de uma classe genérica partilhada. Vai como
+            # atributo (e não como classe) para não alterar o contrato das
+            # classes que o CMS e os testes já conhecem.
+            tipo = re.sub(r"[^\w-]", "", str(block.get("type") or "texto"))
+            html_text = _acrescentar_atributo(html_text, "data-bloco", tipo)
             parts.append(_aplicar_aparencia(block, html_text))
     return "".join(parts)
 
@@ -1319,7 +1343,9 @@ CSS_PATH = "/site/site.css"
 #: permite apagar só as caches do site na ativação — o PWA da plataforma, que
 #: vive no mesmo domínio, não é tocado. Ao mudar a estratégia, subir a versão.
 PWA_CACHE_PREFIX = "sabemos-site-"
-PWA_SW_VERSION = "v1"
+# v2: nova folha do site (página inicial). Sem o salto de versão, quem já tinha
+# a cache antiga via o desenho anterior na primeira visita depois da publicação.
+PWA_SW_VERSION = "v2"
 
 
 def _pwa_cores(settings: Dict[str, Any]) -> Dict[str, str]:
@@ -1577,6 +1603,7 @@ def _layout(
     noindex: bool = False,
     extra_css: str = "",
     breadcrumb: Optional[List[Dict[str, str]]] = None,
+    wrap_class: str = "",
 ) -> str:
     base_url = str(settings.get("base_url") or "")
     site_name = _esc(settings.get("site_name") or "Site")
@@ -1615,6 +1642,10 @@ def _layout(
             + _esc(analytics)
             + '");</script>'
         )
+    # Apoio ao cliente nas páginas públicas. A pré-visualização é do editor, não
+    # de quem visita o site: aí o widget não entra.
+    if not preview:
+        meta.append(tawk.TAWK_SNIPPET)
     if json_ld:
         meta.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
     if breadcrumb and len(breadcrumb) >= 2:
@@ -1651,8 +1682,12 @@ def _layout(
         # CSS próprio da página (`extra_css`), que não passa pelo compilador.
         + f'<link rel="stylesheet" href="{CSS_PATH}">'
         + f"<style>{_css(settings)}{extra_css}</style></head><body>"
+        # Ligação de salto: quem navega por teclado chega ao conteúdo sem
+        # percorrer o menu inteiro em todas as páginas.
+        + '<a class="skip-link" href="#conteudo">Saltar para o conteúdo</a>'
         + _header(settings, current_path=current_path, preview=preview)
-        + f"<main><div class=\"wrap\">{_breadcrumb(breadcrumb)}{body}</div></main>"
+        + f"<main id=\"conteudo\"><div class=\"{(f'wrap {wrap_class}').strip()}\">"
+        + f"{_breadcrumb(breadcrumb)}{body}</div></main>"
         + _footer(settings)
         # Registo do service worker (dá o funcionamento sem ligação e o cache
         # das imagens). Falha em silêncio: sem HTTPS ou num browser antigo, o
@@ -1664,6 +1699,15 @@ def _layout(
             "function(){navigator.serviceWorker.register(\"" + SW_PATH + "\")"
             ".catch(function(){});});}</script>"
         )
+        # Media em falta no disco não pode deixar uma caixa vazia (ou o ícone de
+        # imagem quebrada) no meio da página: a imagem sai e, quando não sobra
+        # nenhuma na galeria ou na figura, sai também o espaço dela.
+        + '<script>(function(){function falhou(i){i.style.display="none";i.setAttribute("data-falhou","");'
+        'var f=i.closest("figure");if(f&&!f.querySelector("img:not([data-falhou])"))f.style.display="none";'
+        'var g=i.closest(".galeria");if(g&&!g.querySelector("img:not([data-falhou])"))g.style.display="none";'
+        'var p=i.closest(".post-card");if(p)p.classList.add("sem-imagem");}'
+        'document.querySelectorAll("img").forEach(function(i){if(i.classList.contains("brand-mark"))return;'
+        'if(i.complete&&i.naturalWidth===0)falhou(i);i.addEventListener("error",function(){falhou(i);});});})();</script>'
         + (
             ""
             if preview
@@ -1874,6 +1918,9 @@ def render_page(
     if faq:
         grafo.append(faq)
     json_ld: Dict[str, Any] = {"@context": "https://schema.org", "@graph": grafo}
+    # A página inicial recebe uma classe própria: o desenho de abertura (faixa
+    # escura, números sobrepostos, ritmo mais amplo) não se aplica às restantes.
+    wrap_class = "pagina-inicial" if str(page.get("template") or "") == "pagina-inicial" else ""
     return _layout(
         title=str(seo.get("title") or page.get("title") or ""),
         description=_page_description(page),
@@ -1887,6 +1934,7 @@ def render_page(
         preview=preview,
         noindex=bool(seo.get("noindex")),
         breadcrumb=_trilha_da_pagina(page),
+        wrap_class=wrap_class,
     )
 
 
@@ -3261,7 +3309,7 @@ def render_remuneracao(
 def _post_card(post: Dict[str, Any]) -> str:
     href = f"/site/blog/{post.get('slug')}"
     cover = _media_url(post.get("cover_id"))
-    image = f'<img src="{_esc(cover)}" alt="" loading="lazy">' if cover else ""
+    image = f'<img src="{_esc(cover)}" alt="" loading="lazy" decoding="async">' if cover else ""
     category = ""
     return (
         f'<article class="card post-card">{image}<div class="body">'

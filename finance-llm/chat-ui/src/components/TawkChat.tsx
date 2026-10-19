@@ -1,13 +1,15 @@
 /**
- * Widget de apoio ao cliente (Tawk.to) da landing page pública.
+ * Widget de apoio ao cliente (Tawk.to) das páginas públicas da SPA
+ * (landing, login e registo).
  *
  * O snippet oficial do Tawk.to foi adaptado a uma SPA:
  *
  * - o `<script>` é injetado **uma única vez** (identificado por `id`), mesmo que o
- *   componente volte a montar ao navegar para fora e para dentro da landing page
- *   — a SPA não recarrega o documento;
- * - o widget fica **só na landing page**: ao desmontar esconde-se a bolha
- *   (`hideWidget`), sem apagar o script (o `Tawk_API` não tem «destroy»);
+ *   componente volte a montar ao navegar entre páginas públicas — a SPA não
+ *   recarrega o documento;
+ * - o widget só aparece enquanto houver uma página pública montada: ao
+ *   desmontar a última esconde-se a bolha (`hideWidget`), sem apagar o script
+ *   (o `Tawk_API` não tem «destroy»);
  * - se a página sair antes de o script carregar, o estado desejado é aplicado no
  *   `onLoad` (a chamada direta a `hideWidget`/`showWidget` ainda não existiria).
  *
@@ -39,10 +41,21 @@ declare global {
 }
 
 /**
- * O widget é global (vive fora do React): este módulo guarda se a página que o
- * pediu ainda está montada, para o `onLoad`/remontagem saber o que aplicar.
+ * O widget é global (vive fora do React): este módulo conta quantas páginas
+ * públicas o pediram, para o `onLoad`/remontagem saber o que aplicar. Uma
+ * contagem (e não um booleano) evita que a saída de uma página esconda o widget
+ * que a página seguinte acabou de mostrar.
  */
-let pedidoVisivel = false;
+let paginasComWidget = 0;
+/** O `onLoad` do Tawk.to só se instala uma vez (é chamado no carregamento). */
+let onLoadInstalado = false;
+
+function aplicar(): void {
+  const api = window.Tawk_API;
+  if (!api) return;
+  if (paginasComWidget > 0) api.showWidget?.();
+  else api.hideWidget?.();
+}
 
 function injetarScript(): void {
   if (document.getElementById(TAWK_SCRIPT_ID)) return;
@@ -55,30 +68,29 @@ function injetarScript(): void {
   document.head.appendChild(script);
 }
 
+function instalarOnLoad(api: TawkApi): void {
+  if (onLoadInstalado) return;
+  onLoadInstalado = true;
+  const onLoadAnterior = api.onLoad;
+  api.onLoad = () => {
+    onLoadAnterior?.();
+    aplicar();
+  };
+}
+
 export function TawkChat() {
   useEffect(() => {
     const api = (window.Tawk_API = window.Tawk_API ?? {});
     window.Tawk_LoadStart = window.Tawk_LoadStart ?? new Date();
-    pedidoVisivel = true;
-
-    const aplicar = () => {
-      if (pedidoVisivel) api.showWidget?.();
-      else api.hideWidget?.();
-    };
-
-    // O Tawk chama `onLoad` uma vez, quando o widget fica pronto.
-    const onLoadAnterior = api.onLoad;
-    api.onLoad = () => {
-      onLoadAnterior?.();
-      aplicar();
-    };
+    paginasComWidget += 1;
+    instalarOnLoad(api);
 
     if (document.getElementById(TAWK_SCRIPT_ID)) aplicar();
     else injetarScript();
 
     return () => {
-      pedidoVisivel = false;
-      api.hideWidget?.();
+      paginasComWidget = Math.max(0, paginasComWidget - 1);
+      if (paginasComWidget === 0) api.hideWidget?.();
     };
   }, []);
 

@@ -43,6 +43,22 @@ As páginas ligam a folha com `<link rel="stylesheet" href="/site/site.css">`; o
 `extra_css` de cada página (as páginas de pesquisa e de remunerações têm o seu)
 continua em linha, porque depende dos dados.
 
+## A página inicial
+
+A página com o template `pagina-inicial` recebe a classe `pagina-inicial` no
+`.wrap` (`render_page` → `_layout`). É o gancho para o desenho próprio da
+abertura: faixa escura com os números sobrepostos, ritmo vertical mais amplo e
+cartões compactos no telefone. As páginas interiores não são afetadas.
+
+Cada raiz de bloco leva também `data-bloco="<tipo>"` (`hero`, `numeros`,
+`texto`, `imagem`, `destaques`, `passos`, `faq`, `cta`, `blog`, `galeria`…). O
+CSS usa esse atributo em vez de uma classe nova, para não alterar as classes que
+o CMS e os testes já conhecem.
+
+O cabeçalho passa a usar o painel de menu até **1199px**: com 9-10 entradas a
+fila de pastilhas empurrava a página para o lado em ecrãs de 1024px. A partir de
+1200px volta a fila de uma linha.
+
 ## Regras a manter
 
 **Nenhuma classe do site pode ter o nome de um utilitário do Tailwind.** Os

@@ -155,6 +155,16 @@ TOPIC_STOPWORDS = {
     "the", "of", "and", "for", "with", "in", "about", "is", "are", "what", "which", "who", "how", "many", "much",
 }
 
+#: Partículas que podem aparecer a meio de um nome próprio («Ilídio **da** Silva»).
+NAME_PARTICLES = {"da", "de", "do", "das", "dos", "e"}
+#: Verbos e nomes que abrem perguntas e que não fazem parte de nomes de entidades.
+QUESTION_WORDS = {
+    "diz", "diga", "explica", "explicar", "mostra", "mostrar", "lista", "listar", "indica",
+    "indicar", "resume", "resumir", "calcula", "calcular", "contratos", "contrato", "empresas",
+    "empresa", "entidade", "entidades", "valores", "valor", "dados", "publicos", "publicas",
+    "informacao", "quais", "quantos", "quantas",
+}
+
 
 def _topic_of(question: str, keywords: Optional[Sequence[str]] = None) -> str:
     """Tema curto e em minúsculas (sem palavras vazias) para as sub-perguntas."""
@@ -801,9 +811,167 @@ def _biggest_contracts(keywords: Sequence[str], *, limit: int = 4) -> tuple:
     return facts, items
 
 
+def _name_candidates(question: str) -> List[str]:
+    """Nomes próprios plausíveis na pergunta («Ilídio da Silva Oliveira»).
+
+    Parte da forma escrita: sequências de 2+ palavras capitalizadas, aceitando as
+    partículas minúsculas do meio («da», «de», «dos»). As palavras de pergunta
+    («Quem», «Qual», …) não entram, senão a frase inteira virava candidato.
+    """
+    candidatos: List[str] = []
+    atual: List[str] = []
+
+    def fechar() -> None:
+        conteudo = [palavra for palavra in atual if _fold(palavra) not in NAME_PARTICLES]
+        if len(conteudo) >= 2:
+            candidatos.append(" ".join(atual))
+
+    for palavra in re.findall(r"[^\W\d_][\w'’-]*", question):
+        dobrada = _fold(palavra)
+        if palavra[:1].isupper() and dobrada not in TOPIC_STOPWORDS and dobrada not in QUESTION_WORDS:
+            atual.append(palavra)
+        elif atual and dobrada in NAME_PARTICLES:
+            atual.append(palavra)
+        else:
+            fechar()
+            atual = []
+    fechar()
+    return candidatos
+
+
+def _normaliza_ficha(row: Dict[str, Any], origem: str) -> Optional[Dict[str, Any]]:
+    """Unifica a ficha do cadastro de entidades e a do diretório de empresas."""
+    name = str(row.get("name") or row.get("nome") or "").strip()
+    if not name:
+        return None
+    nif = str(row.get("nif") or "").strip()
+    if not re.fullmatch(r"[1-9]\d{8}", nif):
+        # Pessoas e entidades sem NIF no cadastro existem: sem NIF não há
+        # agregação exata de contratos, mas a ficha já traz os totais certos.
+        nif = ""
+    adjudicante = row.get("adjudicante") if isinstance(row.get("adjudicante"), dict) else {}
+    adjudicatario = row.get("adjudicatario") if isinstance(row.get("adjudicatario"), dict) else {}
+    return {
+        "name": name,
+        "nif": nif,
+        "contracts_count": int(row.get("contracts_count") or row.get("contracts_total") or 0),
+        "total_value": row.get("total_value"),
+        "as_adjudicante_count": int(row.get("as_adjudicante_count") or adjudicante.get("contracts_count") or 0),
+        "as_adjudicante_value": row.get("as_adjudicante_value") or adjudicante.get("total_value"),
+        "as_adjudicatario_count": int(row.get("as_adjudicatario_count") or adjudicatario.get("contracts_count") or 0),
+        "as_adjudicatario_value": row.get("as_adjudicatario_value") or adjudicatario.get("total_value"),
+        "origem": origem,
+    }
+
+
+def _resolve_entity(question: str, plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve a entidade mencionada para uma ficha do cadastro de entidades.
+
+    O plano só encontra NIFs **escritos** na pergunta. Um nome próprio ficava em
+    texto livre, e a agregação por palavras é larga de mais: «ilidio silva
+    oliveira» casou 72 685 contratos (basta o «silva») e o modelo contou-os como
+    sendo daquela pessoa, que tem 1. O cadastro de entidades (`finance_entities`)
+    responde por nome e traz os totais já calculados — inclusive para pessoas sem
+    NIF, que é o caso.
+
+    Aceita-se o candidato que tiver **quase todas** as palavras do nome na
+    pergunta: é o inverso de extrair o nome da frase, o que torna isto robusto a
+    pontuação, partículas («da», «de») e ordem.
+    """
+    if plan.get("nifs"):
+        return None
+    candidatos = _name_candidates(question)
+    if not candidatos and _wants_general_total(question, plan):
+        # «Quantos contratos existem?» pede um total e não há entidade nenhuma.
+        # «Quem é a X e que valores tem?» também traz «valores» — mas tem um nome
+        # próprio, e é a entidade que manda sobre o total.
+        return None
+    from api.elasticsearch_client import search_companies, search_entities  # noqa: PLC0415
+
+    palavras = {token for token in re.split(r"\W+", _fold(question)) if len(token) > 2}
+    if not palavras:
+        return None
+
+    keywords = [str(word) for word in (plan.get("keywords") or [])]
+    tentativas = [*candidatos, " ".join(keywords[:4]), " ".join(keywords)]
+    buscas = (
+        ("cadastro", lambda termo: search_entities(q=termo, size=8)),
+        ("diretório", lambda termo: search_companies(q=termo, size=8, min_contracts=1)),
+    )
+    melhor: Optional[Dict[str, Any]] = None
+    melhor_score = 0.0
+    vistas = set()
+    for termo in tentativas:
+        termo = termo.strip()
+        if len(termo) < 5 or _fold(termo) in vistas:
+            continue
+        vistas.add(_fold(termo))
+        for origem, buscar in buscas:
+            payload = buscar(termo)
+            for row in payload.get("items") or []:
+                ficha = _normaliza_ficha(row, origem)
+                if not ficha:
+                    continue
+                tokens = [
+                    token
+                    for token in re.split(r"\W+", _fold(ficha["name"]))
+                    if len(token) > 2 and token not in TOPIC_STOPWORDS
+                ]
+                if len(tokens) < 2:
+                    continue
+                cobertura = sum(1 for token in tokens if token in palavras) / len(tokens)
+                if cobertura < 0.8:
+                    continue
+                # Entre candidatos válidos fica o que tem mais contratos: para quem
+                # pergunta por contratos, o homónimo sem contratos não serve.
+                score = cobertura + min(ficha["contracts_count"], 500) / 1000
+                if score > melhor_score:
+                    melhor_score = score
+                    melhor = ficha
+    return melhor
+
+
+def _entity_card_facts(ficha: Dict[str, Any]) -> Dict[str, Any]:
+    """Ficha da entidade resolvida, com os totais do cadastro de entidades."""
+    nome = str(ficha.get("name") or "")
+    nif = ficha.get("nif") or ""
+    rotulo_nif = f"NIF {nif}" if nif else "sem NIF no cadastro"
+    facts = [
+        "Ficha da entidade (cadastro de entidades do IQ OS, já com os totais calculados):",
+        f"- {nome} ({rotulo_nif}): {_count(ficha.get('contracts_count'))} contratos públicos, "
+        f"{_money(ficha.get('total_value'))} no total.",
+    ]
+    for chave, valor, rotulo in (
+        ("as_adjudicante_count", "as_adjudicante_value", "como adjudicante"),
+        ("as_adjudicatario_count", "as_adjudicatario_value", "como adjudicatário"),
+    ):
+        if ficha.get(chave):
+            facts.append(f"- {rotulo}: {_count(ficha.get(chave))} contratos, {_money(ficha.get(valor))}.")
+    if not nif:
+        facts.append(
+            "- Esta entidade não tem NIF no cadastro, por isso não há agregação exacta dos contratos "
+            "por NIF — e não se somam contratos por semelhança de nome."
+        )
+    items = [
+        _fact_item(
+            title=f"{nome} — {_count(ficha.get('contracts_count'))} contratos · {_money(ficha.get('total_value'))}",
+            kind="entity",
+            snippet=f"{rotulo_nif} · totais do cadastro de entidades.",
+            url=f"/companies/{nif}" if nif else "/empresas",
+            source="Plataforma IQ OS · empresas",
+        )
+    ]
+    return {"facts": facts, "items": items, "warnings": [], "stats": {"entidade": nome, "nif": nif or None}}
+
+
 def _entity_facts(question: str, plan: Dict[str, Any], *, limit: int = FACT_ENTITY_LIMIT) -> Dict[str, Any]:
     """Ranking de empresas dos contratos públicos, com nomes (diretório de empresas)."""
     from api.elasticsearch_client import search_companies  # noqa: PLC0415
+
+    ficha = plan.get("entity")
+    if isinstance(ficha, dict) and ficha.get("name"):
+        # Entidade já resolvida a partir da pergunta: a ficha é que manda.
+        return _entity_card_facts(ficha)
 
     nifs = [nif for nif in (plan.get("nifs") or []) if nif]
     if nifs:
@@ -895,6 +1063,12 @@ def _entity_facts(question: str, plan: Dict[str, Any], *, limit: int = FACT_ENTI
 def _entity_facts_for_ticker(question: str, plan: Dict[str, Any], *, limit: int = FACT_ENTITY_LIMIT) -> Dict[str, Any]:
     """Ficha de empresa para um ticker/entidade mencionada (ex.: 'contratos da EDP')."""
     from api.elasticsearch_client import search_companies, get_contract_analytics  # noqa: PLC0415
+
+    ficha = plan.get("entity")
+    if isinstance(ficha, dict) and ficha.get("name"):
+        # Um nome resolvido no cadastro manda sobre um ticker adivinhado: o
+        # «NOS» saía de «*nos* contratos», e a resposta falava da operadora.
+        return _entity_card_facts(ficha)
 
     tickers = [str(t).strip().upper() for t in (plan.get("tickers") or []) if t]
     if not tickers:
@@ -1040,6 +1214,11 @@ def _contract_facts(question: str, plan: Dict[str, Any], *, limit: int = FACT_EN
 
     keywords = _fact_keywords(question, plan)
     nifs = [nif for nif in (plan.get("nifs") or []) if nif]
+    if plan.get("entity") and not nifs:
+        # Entidade resolvida **sem NIF**: a agregação por palavras é larga de mais
+        # (bastou «silva» para casar 72 685 contratos) e daria números falsos. A
+        # ficha do cadastro já entra como facto, com os totais certos.
+        return {"facts": [], "items": [], "warnings": [], "stats": {}}
     # Perguntas gerais de total («quantos contratos temos», «valor total») não
     # devem filtrar por keywords; cobrem todos os contratos indexados.
     wants_general_total = _wants_general_total(question, plan) and not nifs
@@ -1541,6 +1720,21 @@ async def ask(
     ] or list(spec["sources"])
 
     research = search360.plan(clean, selected)
+    # Resolver a entidade **antes** do texto livre. Um nome próprio («Ilídio da
+    # Silva Oliveira») não traz NIF na pergunta; sem esta resolução os factos
+    # vinham da agregação por palavras — o corpus inteiro — e o modelo contava
+    # esse total como sendo daquela entidade. Resolvido o NIF, todos os factos a
+    # jusante (ficha da empresa e agregação de contratos) passam a ser os dela.
+    entidade_resolvida = _resolve_entity(clean, research)
+    if entidade_resolvida:
+        nifs_entidade = [entidade_resolvida["nif"]] if entidade_resolvida.get("nif") else []
+        research = {**research, "nifs": nifs_entidade, "entity": entidade_resolvida}
+        logger.info(
+            "Hermes: entidade resolvida «%s» (%s, %d contratos no cadastro).",
+            entidade_resolvida["name"],
+            nifs_entidade[0] if nifs_entidade else "sem NIF",
+            entidade_resolvida["contracts_count"],
+        )
     topic = _topic_of(clean, research.get("keywords"))
     substeps = _subquestions(topic) if spec["subquestions"] else []
 

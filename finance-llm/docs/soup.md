@@ -521,13 +521,36 @@ sozinho):
 | «Que contratos públicos tem a INDAS?» | 107 s | citada, com 564 contratos / 9,36 M€ e os CPV do Elasticsearch |
 | «Quem é a Ilídio da Silva Oliveira…» | 303 s | citada, mas com números do corpus inteiro |
 
-> **A nota honesta da segunda linha:** o modelo relatou fielmente o que a recolha
-> lhe deu — e a recolha foi má (o filtro por nome apanhou o corpus todo: 72 685
-> contratos para quem tem 1). É precisão de *retrieval*, não do modelo: o mesmo
-> gemma4, com o registo exato no prompt, responde certo (tabela acima). Melhorar
-> a recolha vale mais do que trocar de modelo.
+> **Antes da correção da recolha**, a segunda linha respondia «72 685 contratos —
+> 7,39 M€» para quem tem 1. O modelo relatou fielmente o que a recolha lhe deu; o
+> erro estava na recolha, não no modelo.
 
-A latência (2–5 min) é desta máquina: o gemma4 gera ~4 tokens/s em CPU e o prompt
+#### A recolha: dois erros concretos
+
+1. **«nos» não é a NOS.** O [api/search360_service.py](../api/search360_service.py)
+   convertia qualquer «nos» minúsculo no *ticker* **NOS** (o dicionário de alcunhas
+   incluía «nos», que é palavra da língua). Uma pergunta sobre uma pessoa que
+   dissesse «*nos* contratos públicos» era respondida sobre a operadora de
+   telecomunicações. Agora as alcunhas que são palavras comuns (`STOPWORDS`) não
+   são convertidas — e um nome resolvido no cadastro manda sobre um *ticker*
+   adivinhado.
+2. **Nome próprio ia para texto livre.** `_resolve_entity`
+   (em [api/hermes_service.py](../api/hermes_service.py)) procura o nome no
+   cadastro de entidades (`search_entities`), que responde por nome e traz os
+   totais já calculados, e aceita o candidato cujas palavras estão **quase todas**
+   na pergunta — o inverso de extrair o nome da frase, o que o torna robusto a
+   partículas («da», «de»), pontuação e ordem. Resolvido o nome, a ficha entra
+   como facto; se a entidade **não tiver NIF**, a agregação por semelhança de nome
+   é proibida (era ela que somava 72 685) e o prompt di-lo explicitamente.
+
+Resultado medido depois das duas correções:
+
+| Pergunta | Resposta |
+|---|---|
+| «Quem é a Ilídio da Silva Oliveira… e que valores tem?» | **1 contrato, 3,8 mil€** — e a nota de que não há NIF no cadastro, pelo que não se somam contratos por semelhança de nome |
+| «Que contratos públicos tem a INDAS?» | 564 contratos, 9,36 M€ (por NIF 503505196) — inalterado |
+
+A latência (1–5 min) é desta máquina: o gemma4 gera ~4 tokens/s em CPU e o prompt
 leva 18 evidências. Numa GPU, ou com menos evidências, desce a segundos.
 
 ### A pergunta que o `soup train` não responde

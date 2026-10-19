@@ -100,7 +100,7 @@
     text-rendering: optimizeLegibility;
   }
   a {
-    color: var(--color-accent);
+    color: color-mix(in srgb, var(--accent) 62%, #0b1220);
     text-decoration: none;
   }
   a:hover {
@@ -124,14 +124,22 @@
 
 @layer components {
 .wrap {
-  max-width: 1100px; margin: 0 auto;
+  max-width: 1140px; margin: 0 auto;
   padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
   padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
 }
+/* Atalho de teclado: fica fora do ecrã até receber foco. */
+.skip-link {
+  @apply fixed left-3 top-3 z-50 rounded-full bg-surface px-5 py-3 font-bold text-text shadow-card;
+  transform: translateY(-160%);
+  transition: transform .18s ease;
+}
+.skip-link:focus { transform: translateY(0); outline: 2px solid var(--accent); outline-offset: 2px; }
 .site-header {
   position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(16, 24, 40, .02);
 }
 /* Cabeçalho de telefone: marca e botão na mesma linha, menu por baixo. */
 .site-header .wrap {
@@ -212,7 +220,7 @@ nav.main .tem-submenu.aberto > .submenu { display: block; }
 }
 .pesquisa-form button, .menu-pesquisa button {
   flex: none; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 999px;
-  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 72%, #0b1220); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
 }
 /* Entrar/criar conta: os dois botões do painel do telemóvel. Partilham a linha
    quando ela é larga o suficiente e empilham-se quando não é — o rótulo nunca
@@ -230,7 +238,7 @@ nav.main .submenu a, nav.main .submenu .menu-pai {
   min-height: 44px; padding: 9px 10px; font-size: .95rem; font-weight: 500;
 }
 nav.main a:hover, nav.main a:focus-visible, nav.main .menu-pai:hover, nav.main .menu-pai:focus-visible { background: var(--code); text-decoration: none; }
-nav.main a[aria-current="page"] { background: var(--accent); color: #fff; }
+nav.main a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 72%, #0b1220); color: #fff; }
 .breadcrumb { margin: 0 0 16px; font-size: .86rem; }
 .breadcrumb ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; list-style: none; }
 .breadcrumb li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
@@ -260,8 +268,9 @@ nav.main a[aria-current="page"] { background: var(--accent); color: #fff; }
 .site-header.template-grande .brand { font-size: 1.25rem; }
 .site-header.template-grande nav.main > a,
 .site-header.template-grande nav.main > .menu-item > .menu-pai { font-size: 1.05rem; padding: 10px 16px; }
-/* Menu responsivo para todos os ecrãs e equipamentos */
-@media (max-width: 799px) {
+/* Menu responsivo: até 1199px o cabeçalho usa o painel (são muitos itens e a
+   fila de pastilhas não cabe sem empurrar a página para o lado). */
+@media (max-width: 1199px) {
   .site-header .wrap { flex-direction: row; align-items: center; }
   /* A marca é um link: com o logótipo de 32px ficava com 32px de altura, abaixo
      do alvo de toque confortável. O `min-height` dá-lhe os 44px sem mexer na
@@ -293,7 +302,7 @@ nav.main a[aria-current="page"] { background: var(--accent); color: #fff; }
   .site-header.tema-linha nav.main > a,
   .site-header.tema-linha nav.main > .menu-item > .menu-pai { border-bottom: 0; border-radius: 10px; }
 }
-@media (min-width: 800px) {
+@media (min-width: 1200px) {
   .site-header.tema-central .wrap { flex-direction: row; justify-content: space-between; }
   .site-header.tema-central .brand { text-align: left; }
   .site-header.tema-central nav.main { margin-left: auto; margin-top: 0; width: auto; }
@@ -432,12 +441,13 @@ p { margin: 0 0 14px; text-wrap: pretty; }
 .sistema-links a { font-weight: 700; }
 .sistema-links span { color: var(--muted); font-size: .93rem; }
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; min-height: 46px;
-  padding: 11px 20px; border-radius: 999px; font-weight: 700;
-  background: var(--accent); color: #fff; border: 1px solid transparent;
+  @apply inline-flex items-center justify-center rounded-full border border-transparent font-bold transition duration-200;
+  min-height: 46px; padding: 11px 20px;
+  background: color-mix(in srgb, var(--accent) 72%, #0b1220); color: #fff;
 }
-.btn.ghost { background: transparent; color: var(--accent); border-color: var(--border); }
+.btn.ghost { background: transparent; color: color-mix(in srgb, var(--accent) 62%, #0b1220); border-color: var(--border); }
 .btn:hover { text-decoration: none; filter: brightness(1.05); }
+.btn:active { transform: translateY(1px); }
 /* Uma coluna no telefone; a grelha só entra quando há largura para ela. */
 .grelha { display: grid; gap: 14px; grid-template-columns: 1fr; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
@@ -594,7 +604,8 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
 .faq details > div { padding: 0 16px 14px; }
 .pill {
   display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
-  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 55%, #0b1220);
 }
 .meta { color: var(--muted); font-size: .88rem; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }
 /* Ações do artigo (relatório em PDF e partilha): entre os créditos e a capa. */
@@ -668,10 +679,18 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%;
   background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .88rem;
 }
-.site-footer { border-top: 1px solid var(--border); background: var(--surface); padding: 26px 0; color: var(--muted); font-size: .9rem; }
-.site-footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-.site-footer nav { display: flex; gap: 8px 16px; flex-wrap: wrap; }
-.site-footer a { color: var(--muted); min-height: 44px; display: inline-flex; align-items: center; }
+.site-footer {
+  @apply border-t text-[0.9rem];
+  border-color: rgba(255, 255, 255, .08);
+  background: #0b1220;
+  color: #9aa7b8;
+  padding: clamp(34px, 5vw, 54px) 0;
+}
+.site-footer .wrap { @apply flex flex-wrap items-start justify-between gap-7; }
+.site-footer strong { color: #fff; font-size: 1.05rem; letter-spacing: -.01em; }
+.site-footer nav { @apply flex flex-wrap gap-x-6 gap-y-1; max-width: 640px; }
+.site-footer a { @apply inline-flex min-h-[44px] items-center transition-colors; color: #9aa7b8; }
+.site-footer a:hover, .site-footer a:focus-visible { color: #fff; }
 .kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px 16px; }
 .kpi span { display: block; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }
@@ -755,32 +774,37 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   /* A partir daqui há largura para a tabela larga caber inteira. */
   .tabela-rolavel.larga table { min-width: 0; }
 }
-@media (min-width: 800px) and (max-width: 1160px) {
-  /* Com 9-10 itens no menu, a fila de pastilhas encosta no logótipo em ecrãs de
-     800-1160px. Reduzir um pouco o tamanho das pastilhas e o separador evita
-     quebras de linha e mantém todos os links numa linha só. */
-  .site-header .wrap { gap: 8px; padding-left: 12px; padding-right: 12px; }
+@media (min-width: 1200px) and (max-width: 1380px) {
+  /* Com 9-10 itens no menu, a fila de pastilhas encosta no logótipo. Reduzir
+     um pouco o tamanho das pastilhas evita quebras de linha. */
+  .site-header .wrap { gap: 10px; padding-left: 14px; padding-right: 14px; }
   .brand .brand-mark { height: 30px; }
-  nav.main { gap: 2px; }
+  nav.main { gap: 1px; }
   nav.main > a,
-  nav.main > .menu-item > .menu-pai { padding: 7px 8px; font-size: .84rem; }
+  nav.main > .menu-item > .menu-pai { padding: 7px 7px; font-size: .82rem; }
 }
-@media (min-width: 800px) {
+@media (min-width: 1200px) {
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
   .site-header .wrap { flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }
+  .brand { flex: 0 0 auto; }
   .brand .brand-mark { height: 34px; }
+  /* O logótipo já traz o nome: a linha de apoio só faria o cabeçalho crescer. */
+  .brand small { display: none; }
   /* No ecrã grande não há botão de menu, nem pesquisa, nem conta, e as pastilhas
      ficam sem ícones (da seta trata a regra própria, mais abaixo): a fila é larga
      e já tem o «Entrar» à vista. */
   .menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-icone { display: none; }
   nav.main {
-    display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
-    width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+    display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 4px;
+    min-width: 0; width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
   }
   nav.main > a,
   nav.main > .menu-item > .menu-pai {
-    min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px;
+    min-height: 0; padding: 8px 10px; font-size: .88rem; border-radius: 999px;
+    white-space: nowrap;
   }
+}
+@media (min-width: 800px) {
   /* Nas páginas de sistema a ilustração fica ao lado do texto. */
   .sistema { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; }
   /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
@@ -789,8 +813,442 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
      ficavam a um ecrã de distância um do outro e a comparação perdia-se. */
   .grafico-lista, .grafico-legenda, .grafico-nota, .grafico-fonte { max-width: 760px; }
 }
+
+/* ==========================================================================
+   Página inicial
+   O ritmo é mais amplo do que o das páginas interiores e a abertura é uma
+   faixa própria. Tudo o resto continua a ser os mesmos blocos do CMS: os
+   cartões de números, as figuras e as chamadas à ação só mudam de roupa.
+   ========================================================================== */
+.wrap.pagina-inicial { --home-gap: clamp(42px, 6vw, 78px); }
+
+/* Espaçamento entre secções. A regra tem de ganhar aos espaçamentos gerais
+   (`.section + .section`, `.bloco + .bloco`), por isso leva o `.wrap`. */
+.wrap.pagina-inicial > * + * { margin-top: var(--home-gap); }
+
+/* ---- Abertura ---------------------------------------------------------- */
+.wrap.pagina-inicial > .hero {
+  @apply relative isolate overflow-hidden text-white;
+  padding: clamp(36px, 6vw, 76px) clamp(22px, 5vw, 64px) clamp(70px, 9vw, 112px);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, #0b1220);
+  border-radius: clamp(20px, 3vw, 32px);
+  background: #0b1220;
+  background:
+    radial-gradient(110% 150% at 10% 0%, color-mix(in srgb, var(--accent) 58%, transparent), transparent 58%),
+    radial-gradient(90% 130% at 100% 100%, rgba(37, 99, 235, .34), transparent 62%),
+    linear-gradient(145deg, #0a2230 0%, #0b1220 58%, #062522 100%);
+  box-shadow: 0 36px 70px -34px rgba(6, 16, 28, .65);
+}
+.wrap.pagina-inicial > .hero::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  background-image: radial-gradient(rgba(255, 255, 255, .18) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: linear-gradient(115deg, #000 0%, transparent 60%);
+  mask-image: linear-gradient(115deg, #000 0%, transparent 60%);
+  opacity: .5;
+  pointer-events: none;
+}
+.wrap.pagina-inicial > .hero::after {
+  content: "";
+  position: absolute; z-index: -1; right: -150px; top: -170px;
+  width: 520px; height: 520px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  filter: blur(110px); opacity: .5;
+  pointer-events: none;
+}
+.wrap.pagina-inicial > .hero .hero-copy { @apply relative; }
+.wrap.pagina-inicial > .hero h1 {
+  @apply text-balance;
+  max-width: 19ch; margin: 0 auto 18px;
+  color: #fff;
+  font-size: clamp(2.15rem, 5.6vw, 3.75rem);
+  line-height: 1.03; letter-spacing: -.035em;
+}
+.wrap.pagina-inicial > .hero .lead {
+  @apply mx-auto;
+  max-width: 61ch; margin-bottom: 0;
+  color: rgba(255, 255, 255, .8);
+  font-size: clamp(1.02rem, 1.3vw, 1.16rem);
+  line-height: 1.65;
+}
+.wrap.pagina-inicial > .hero .actions {
+  @apply mt-8 flex flex-wrap justify-center gap-3;
+}
+.wrap.pagina-inicial > .hero .btn {
+  @apply gap-2 rounded-full px-7 py-3.5 text-[0.98rem] font-extrabold transition duration-200;
+  background: #fff; color: #07211f; border: 0;
+  box-shadow: 0 16px 34px -18px rgba(0, 0, 0, .8);
+}
+.wrap.pagina-inicial > .hero .btn::after {
+  content: "→"; font-weight: 500;
+  transition: transform .2s ease;
+}
+.wrap.pagina-inicial > .hero .btn:hover {
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+  filter: none; transform: translateY(-1px);
+}
+.wrap.pagina-inicial > .hero .btn:hover::after { transform: translateX(4px); }
+
+/* ---- Números: a faixa sobe sobre a abertura ---------------------------- */
+.wrap.pagina-inicial > .hero + [data-bloco="numeros"] {
+  margin-top: clamp(-90px, -7vw, -44px);
+}
+.wrap.pagina-inicial > [data-bloco="numeros"] {
+  @apply relative z-10;
+  padding: clamp(16px, 2.2vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: clamp(18px, 2.4vw, 24px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 60px -32px rgba(16, 24, 40, .4);
+}
+.wrap.pagina-inicial > [data-bloco="numeros"] > h2 {
+  @apply text-center uppercase;
+  margin: 2px 0 16px;
+  color: var(--muted);
+  font-size: .72rem; font-weight: 800; letter-spacing: .16em;
+}
+.wrap.pagina-inicial > [data-bloco="numeros"] > h2::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px;
+  border-radius: 999px; background: var(--accent); vertical-align: middle;
+}
+.wrap.pagina-inicial [data-bloco="numeros"] .kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+  background: var(--border);
+}
+.wrap.pagina-inicial [data-bloco="numeros"] .kpi {
+  padding: 18px 18px 16px;
+  border: 0; border-radius: 0;
+  background: var(--surface); box-shadow: none;
+}
+.wrap.pagina-inicial [data-bloco="numeros"] .kpi span {
+  @apply uppercase;
+  color: color-mix(in srgb, var(--accent) 52%, var(--text));
+  font-size: .68rem; font-weight: 800; letter-spacing: .12em;
+}
+.wrap.pagina-inicial [data-bloco="numeros"] .kpi strong {
+  margin-top: 8px;
+  font-size: clamp(1.55rem, 3.4vw, 2.35rem);
+  line-height: 1; letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+.wrap.pagina-inicial [data-bloco="numeros"] .kpi small {
+  margin-top: 7px; color: var(--muted);
+  font-size: .78rem; line-height: 1.45;
+}
+@media (min-width: 720px) {
+  .wrap.pagina-inicial [data-bloco="numeros"] .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .wrap.pagina-inicial [data-bloco="numeros"] .kpi { padding: 22px 22px 20px; }
+}
+
+/* ---- Texto corrido ----------------------------------------------------- */
+.wrap.pagina-inicial > [data-bloco="texto"] {
+  @apply mx-auto;
+  max-width: 70ch;
+  text-align: left;
+}
+.wrap.pagina-inicial > [data-bloco="texto"] h2 {
+  margin: 0 0 16px;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  line-height: 1.15; letter-spacing: -.02em;
+}
+.wrap.pagina-inicial > [data-bloco="texto"] h2::before {
+  content: ""; display: block; width: 46px; height: 3px; margin-bottom: 18px;
+  border-radius: 999px; background: var(--accent);
+}
+.wrap.pagina-inicial > [data-bloco="texto"] p {
+  margin-bottom: 16px;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: 1.03rem; line-height: 1.75;
+}
+
+/* ---- Figuras ----------------------------------------------------------- */
+/* A imagem já herda a largura e o raio de `figure img`; aqui só se acerta a
+   legenda e a moldura quando o CMS escolheu o fundo «cartão». */
+.wrap.pagina-inicial > [data-bloco="imagem"] figcaption {
+  @apply text-center;
+  margin-top: 12px; color: var(--muted); font-size: .86rem;
+}
+.wrap.pagina-inicial > [data-bloco="imagem"].bloco--cartao { padding: 10px; }
+.wrap.pagina-inicial > [data-bloco="imagem"].bloco--cartao figcaption { padding: 10px 8px 6px; }
+
+/* ---- Cartões de destaque ---------------------------------------------- */
+.wrap.pagina-inicial > .section > h2 {
+  margin: 0 0 20px;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.18; letter-spacing: -.02em;
+}
+.wrap.pagina-inicial .grelha { gap: clamp(12px, 1.6vw, 18px); }
+.wrap.pagina-inicial .grelha--n3,
+.wrap.pagina-inicial .grelha--n4,
+.wrap.pagina-inicial .grelha--n6 { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) {
+  .wrap.pagina-inicial .grelha--n3,
+  .wrap.pagina-inicial .grelha--n4,
+  .wrap.pagina-inicial .grelha--n6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 720px) {
+  .wrap.pagina-inicial .grelha--n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 900px) {
+  .wrap.pagina-inicial .grelha--n6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1020px) {
+  .wrap.pagina-inicial .grelha--n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.wrap.pagina-inicial .tile {
+  @apply relative flex flex-col overflow-hidden transition duration-200;
+  padding: 22px 20px;
+  border-radius: calc(var(--radius) + 4px);
+}
+.wrap.pagina-inicial .tile::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 3px;
+  background: linear-gradient(90deg, var(--accent), transparent 80%);
+  opacity: 0; transition: opacity .2s ease;
+}
+.wrap.pagina-inicial .tile:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  box-shadow: 0 22px 42px -26px rgba(16, 24, 40, .45);
+}
+.wrap.pagina-inicial .tile:hover::before { opacity: 1; }
+.wrap.pagina-inicial .tile-icon {
+  width: 46px; height: 46px; margin-bottom: 14px; padding: 8px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.wrap.pagina-inicial .tile h3 { margin: 0 0 7px; font-size: 1.02rem; letter-spacing: -.01em; }
+.wrap.pagina-inicial .tile p { font-size: .93rem; line-height: 1.6; }
+.wrap.pagina-inicial a.tile h3 { color: var(--text); }
+.wrap.pagina-inicial a.tile h3::after {
+  content: "→"; display: inline-block; margin-left: 6px; color: var(--accent);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.wrap.pagina-inicial a.tile:hover h3::after,
+.wrap.pagina-inicial a.tile:focus-visible h3::after { opacity: 1; transform: translateX(0); }
+
+/* ---- Passos ------------------------------------------------------------ */
+.wrap.pagina-inicial [data-bloco="passos"] .steps {
+  @apply grid gap-4;
+  grid-template-columns: minmax(0, 1fr);
+}
+.wrap.pagina-inicial [data-bloco="passos"] .step {
+  position: relative;
+  padding: 22px 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.wrap.pagina-inicial [data-bloco="passos"] .step::before {
+  position: static; display: grid; place-items: center;
+  width: 40px; height: 40px; margin-bottom: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  font-size: .95rem; font-weight: 800;
+}
+.wrap.pagina-inicial [data-bloco="passos"] .step h3 { margin: 0 0 8px; font-size: 1.02rem; }
+.wrap.pagina-inicial [data-bloco="passos"] .step p {
+  margin: 0; color: var(--muted); font-size: .93rem; line-height: 1.6;
+}
+@media (min-width: 560px) {
+  .wrap.pagina-inicial [data-bloco="passos"] .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .wrap.pagina-inicial [data-bloco="passos"] .steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ---- Galeria ----------------------------------------------------------- */
+.wrap.pagina-inicial .galeria {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.wrap.pagina-inicial .galeria img {
+  @apply w-full;
+  aspect-ratio: 5 / 3; object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+}
+@media (min-width: 700px) {
+  .wrap.pagina-inicial .galeria {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+/* ---- Perguntas frequentes --------------------------------------------- */
+.wrap.pagina-inicial .faq {
+  @apply grid;
+  padding: clamp(20px, 3.6vw, 40px);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 8px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.wrap.pagina-inicial .faq > h2 {
+  margin: 0 0 18px;
+  font-size: clamp(1.5rem, 2.8vw, 1.9rem);
+  line-height: 1.2; letter-spacing: -.02em;
+}
+.wrap.pagina-inicial .faq details {
+  margin: 0;
+  border: 0; border-top: 1px solid var(--border); border-radius: 0;
+  background: transparent;
+}
+.wrap.pagina-inicial .faq details:last-child { border-bottom: 1px solid var(--border); }
+.wrap.pagina-inicial .faq summary {
+  @apply flex items-center justify-between gap-4;
+  min-height: 0; padding: 18px 4px;
+  font-weight: 650; font-size: 1rem;
+  list-style: none;
+}
+.wrap.pagina-inicial .faq summary::-webkit-details-marker { display: none; }
+.wrap.pagina-inicial .faq summary::after {
+  content: "+"; flex: none;
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  font-size: 1.1rem; font-weight: 500;
+  transition: transform .2s ease, background .2s ease;
+}
+.wrap.pagina-inicial .faq details[open] summary::after { content: "−"; transform: rotate(180deg); }
+.wrap.pagina-inicial .faq details > div {
+  padding: 0 38px 18px 4px;
+  color: var(--muted);
+}
+.wrap.pagina-inicial .faq details > div > :last-child { margin-bottom: 0; }
+@media (min-width: 900px) {
+  .wrap.pagina-inicial .faq {
+    grid-template-columns: minmax(220px, .8fr) minmax(0, 1.7fr);
+    column-gap: clamp(28px, 4vw, 64px);
+  }
+  .wrap.pagina-inicial .faq > h2 {
+    grid-column: 1; align-self: start;
+    position: sticky; top: 104px;
+    margin: 0;
+  }
+  .wrap.pagina-inicial .faq details { grid-column: 2; }
+  .wrap.pagina-inicial .faq details:first-of-type { border-top: 0; }
+}
+
+/* ---- Chamadas à ação --------------------------------------------------- */
+.wrap.pagina-inicial .cta {
+  @apply relative flex flex-col items-start gap-6 overflow-hidden;
+  padding: clamp(26px, 4.4vw, 48px);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, #0b1220);
+  border-radius: calc(var(--radius) + 10px);
+  background: #0b1220;
+  background:
+    radial-gradient(120% 160% at 100% 0%, color-mix(in srgb, var(--accent) 32%, transparent), transparent 60%),
+    linear-gradient(120deg, #0b1220, #0b2b29);
+  color: #fff;
+  box-shadow: 0 30px 60px -34px rgba(6, 16, 28, .6);
+}
+.wrap.pagina-inicial .cta h2 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: clamp(1.45rem, 2.8vw, 2rem);
+  line-height: 1.16; letter-spacing: -.02em;
+}
+.wrap.pagina-inicial .cta p { margin: 0; max-width: 62ch; color: rgba(255, 255, 255, .76); }
+.wrap.pagina-inicial .cta .actions { @apply flex flex-wrap gap-2.5; margin: 0; }
+.wrap.pagina-inicial .cta .btn {
+  padding: 12px 22px;
+  background: var(--accent); color: #04211f;
+  font-weight: 800;
+}
+.wrap.pagina-inicial .cta .btn.ghost {
+  background: rgba(255, 255, 255, .07); color: #fff;
+  border: 1px solid rgba(255, 255, 255, .26);
+}
+.wrap.pagina-inicial .cta .btn:hover { filter: brightness(1.06); text-decoration: none; }
+@media (min-width: 700px) {
+  .wrap.pagina-inicial .cta {
+    flex-direction: row; align-items: center; justify-content: space-between;
+  }
+  .wrap.pagina-inicial .cta > div:first-child { max-width: 66%; }
+}
+
+/* ---- Últimos artigos --------------------------------------------------- */
+.wrap.pagina-inicial .posts {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: clamp(16px, 2vw, 22px);
+}
+.wrap.pagina-inicial .post-card {
+  border-radius: calc(var(--radius) + 6px);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.wrap.pagina-inicial .post-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 24px 46px -26px rgba(16, 24, 40, .45);
+}
+.wrap.pagina-inicial .post-card .body { padding: 20px 20px 22px; gap: 10px; }
+.wrap.pagina-inicial .post-card h2 { font-size: 1.1rem; line-height: 1.35; }
+.wrap.pagina-inicial .post-card .meta { margin-top: auto; font-size: .8rem; }
+.wrap.pagina-inicial .post-card.sem-imagem .body { padding-top: 26px; }
+
+/* No telefone, os cartões com ícone passam a lista compacta (ícone à esquerda,
+   texto à direita) e os artigos a cartão horizontal: a mesma informação sem
+   três ecrãs de rolo. A partir de 560px volta a grelha. */
+@media (max-width: 559px) {
+  .wrap.pagina-inicial .tile {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr);
+    column-gap: 12px; row-gap: 4px; align-items: start;
+    padding: 16px;
+  }
+  .wrap.pagina-inicial .tile-icon {
+    grid-row: 1 / span 2; width: 42px; height: 42px; margin: 0;
+  }
+  .wrap.pagina-inicial .tile h3 { grid-column: 2; margin: 0; font-size: .98rem; }
+  .wrap.pagina-inicial .tile p { grid-column: 2; font-size: .89rem; line-height: 1.5; }
+
+  .wrap.pagina-inicial [data-bloco="passos"] .step {
+    display: grid; grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: 12px; row-gap: 2px; align-items: start;
+    padding: 16px;
+  }
+  .wrap.pagina-inicial [data-bloco="passos"] .step::before {
+    grid-row: 1 / span 2; margin: 0;
+  }
+  .wrap.pagina-inicial [data-bloco="passos"] .step h3 { margin: 0; font-size: .99rem; }
+  .wrap.pagina-inicial [data-bloco="passos"] .step p { grid-column: 2; font-size: .89rem; }
+
+  .wrap.pagina-inicial .post-card {
+    display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .wrap.pagina-inicial .post-card.sem-imagem { grid-template-columns: minmax(0, 1fr); }
+  .wrap.pagina-inicial .post-card img { height: 100%; aspect-ratio: auto; }
+  .wrap.pagina-inicial .post-card .body { padding: 14px 14px 16px; gap: 6px; }
+  .wrap.pagina-inicial .post-card h2 { font-size: .96rem; line-height: 1.3; }
+  .wrap.pagina-inicial .post-card p {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; font-size: .84rem; line-height: 1.45;
+  }
+  .wrap.pagina-inicial .post-card .meta { font-size: .74rem; gap: 4px 10px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .wrap.pagina-inicial .tile,
+  .wrap.pagina-inicial .post-card,
+  .wrap.pagina-inicial > .hero .btn,
+  .wrap.pagina-inicial a.tile h3::after { transition: none; }
+  .wrap.pagina-inicial .tile:hover,
+  .wrap.pagina-inicial .post-card:hover,
+  .wrap.pagina-inicial > .hero .btn:hover { transform: none; }
 }
 @media print { .site-header, .site-footer, .draft-banner, .menu-botao { display: none; } body { background: #fff; } }
 }
