@@ -373,7 +373,16 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Building2,
     gradient: "from-teal-200 via-emerald-500 to-green-700",
     accent: "20,184,166",
-  },  {
+  },
+  {
+    id: "rigorbiz",
+    label: "Diretório · RigorBiz",
+    hint: "Pesquisar empresas do diretório RigorBiz (NIF, CAE, localidade)",
+    icon: Building2,
+    gradient: "from-blue-200 via-cyan-500 to-teal-700",
+    accent: "6,182,212",
+  },
+  {
     id: "social",
     label: "Pesquisa social",
     hint: "LinkedIn, TikTok, Reddit e Facebook: recolher, agendar e pesquisar",

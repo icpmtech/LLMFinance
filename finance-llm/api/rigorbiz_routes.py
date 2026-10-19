@@ -80,19 +80,36 @@ def rigorbiz_collect(
     background_tasks: BackgroundTasks,
     session: Session,
 ) -> Dict[str, Any]:
-    """Arranca a recolha de empresas da RigorBiz em segundo plano."""
-    if req.mode == "all":
-        background_tasks.add_task(collect_all, delay=req.delay)
-        return {"ok": True, "mode": "all", "delay": req.delay, "message": "Recolha total iniciada em segundo plano."}
-    background_tasks.add_task(collect_sample, max_pages=req.pages, delay=req.delay)
-    return {"ok": True, "mode": "sample", "pages": req.pages, "delay": req.delay, "message": f"Recolha de amostra ({req.pages} páginas) iniciada em segundo plano."}
+    """Arranca a recolha de empresas da RigorBiz em segundo plano.
+
+    Usa o runner dedicado que escreve estado em tempo real e indexa a cada batch.
+    """
+    from api.rigorbiz_runner import run as run_runner
+    background_tasks.add_task(run_runner, mode=req.mode, pages=req.pages, delay=req.delay, index_to_es=True)
+    return {
+        "ok": True,
+        "mode": req.mode,
+        "pages": req.pages if req.mode != "all" else None,
+        "delay": req.delay,
+        "message": f"Recolha RigorBiz ({req.mode}) iniciada em segundo plano.",
+    }
+
+
+@router.post("/collect/stop")
+def rigorbiz_collect_stop(session: Session) -> Dict[str, Any]:
+    """Sinaliza o runner para parar (a recolha atual termina graciosamente)."""
+    from api.rigorbiz_runner import stop
+    stop()
+    return {"ok": True, "message": "Pedido de paragem enviado ao runner."}
 
 
 @router.get("/collect/status")
 def rigorbiz_collect_status() -> Dict[str, Any]:
-    """Estado da recolha (checkpoint e ficheiros)."""
+    """Estado da recolha em tempo real (runner + checkpoint + meta)."""
     from api.rigorbiz_collector import _load_checkpoint
+    from api.rigorbiz_runner import get_state
     return {
+        "runner": get_state(),
         "checkpoint": _load_checkpoint(),
         "meta": service.meta(),
     }

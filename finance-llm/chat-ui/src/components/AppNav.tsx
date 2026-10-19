@@ -126,6 +126,7 @@ export type AppView =
   | "scraper-pesquisa"
   | "scraper-agenda"
   | "racius"
+  | "rigorbiz"
   | "social"
   | "social-canais"
   | "social-execucoes"

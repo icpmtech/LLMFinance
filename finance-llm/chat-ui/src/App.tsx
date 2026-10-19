@@ -117,6 +117,7 @@ import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
+import RigorbizPage from "./pages/RigorbizPage";
 import ArquivoPage from "./pages/ArquivoPage";
 import GleifPage, {
   GLEIF_SECTION_VIEWS,
@@ -392,6 +393,7 @@ function pathForView(
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
   if (view === "racius") return "/racius";
+  if (view === "rigorbiz") return "/rigorbiz";
   if (view === "social") return "/social";
   if (view === "social-canais") return "/social/canais";
   if (view === "social-execucoes") return "/social/execucoes";
@@ -753,6 +755,7 @@ export default function App() {
     if (path === "/rss" || path.startsWith("/rss/")) return "rss";
     if (path === "/iframe-pages") return "iframe-pages";
     if (path === "/racius") return "racius";
+    if (path === "/rigorbiz") return "rigorbiz";
     const iframeView = iframeViewFromPath(path);
     if (iframeView) return iframeView as AppView;
     {
@@ -899,6 +902,7 @@ export default function App() {
       else if (path === "/noticias" || path.startsWith("/noticias/")) next = "noticias";
       else if (path === "/iframe-pages") next = "iframe-pages";
       else if (path === "/racius") next = "racius";
+      else if (path === "/rigorbiz") next = "rigorbiz";
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
@@ -1457,6 +1461,7 @@ export default function App() {
       };
       return <RaciusPage onSelectCompany={handleSelectCompany} />;
     }
+    if (target === "rigorbiz") return <RigorbizPage />;
     if (target === "compare") return <CompareWindow />;
     if (target.startsWith("company-detail:")) {
       return (

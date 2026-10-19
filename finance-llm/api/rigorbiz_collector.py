@@ -18,8 +18,9 @@ import logging
 import random
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
@@ -163,7 +164,7 @@ class RigorbizCollector:
         start_page: int = 1,
         max_pages: Optional[int] = None,
         query: str = "",
-        on_page: Optional[callable] = None,
+        on_page: Optional[Callable[[int, List[Dict[str, Any]], Optional[int], int], None]] = None,
     ) -> List[Dict[str, Any]]:
         """Percorre todas as páginas até esgotar resultados ou atingir ``max_pages``.
 
@@ -238,10 +239,33 @@ def _save_results(items: Iterable[Dict[str, Any]], append: bool = True) -> None:
     with JSONL_PATH.open(mode, encoding="utf-8") as fh:
         for item in items:
             fh.write(json.dumps(item, ensure_ascii=False) + "\n")
-    # Rewrite compact JSON array
-    all_items = list(_read_jsonl())
+    # Deduplicate JSONL by NIF (keep last occurrence) and rewrite files
+    _deduplicate_jsonl()
+
+
+def _deduplicate_jsonl() -> None:
+    """Remove NIFs duplicados do JSONL, mantendo a entrada mais recente."""
+    if not JSONL_PATH.exists():
+        return
+    seen: Dict[str, Dict[str, Any]] = {}
+    with JSONL_PATH.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            nif = str(item.get("nif") or "").strip()
+            if nif:
+                seen[nif] = item
+    deduped = list(seen.values())
+    with JSONL_PATH.open("w", encoding="utf-8") as fh:
+        for item in deduped:
+            fh.write(json.dumps(item, ensure_ascii=False) + "\n")
     with JSON_PATH.open("w", encoding="utf-8") as fh:
-        json.dump(all_items, fh, ensure_ascii=False, indent=2)
+        json.dump(deduped, fh, ensure_ascii=False, indent=2)
 
 
 def _read_jsonl() -> List[Dict[str, Any]]:
@@ -278,87 +302,165 @@ def collect_all(
     delay: float = DEFAULT_DELAY,
     query: str = "",
     pages_per_batch: int = 100,
+    index_to_es: bool = True,
+    index_batch_size: int = 100,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
+    resume: bool = True,
 ) -> Dict[str, Any]:
     """Recolhe **todas** as empresas, retomando do checkpoint anterior.
 
-    Guarda checkpoint a cada ``pages_per_batch`` páginas para permitir
-    interrupção segura e retomada posterior. O processo para ao detetar
-    429 persistentes para não ser bloqueado.
+    - O checkpoint é gravado a cada página concluída (barato), pelo que uma
+      paragem abrupta nunca repete páginas já lidas.
+    - Os itens são gravados/indexados em lotes de ``index_batch_size``.
+    - ``should_stop`` permite parar graciosamente (usado pelo runner de UI).
     """
     existing = _existing_nifs()
     checkpoint = _load_checkpoint()
-    if checkpoint.get("completed"):
+    if resume and checkpoint.get("completed"):
         logger.info("Recolha já marcada como concluída (%s itens).", len(existing))
         return {
             "ok": True,
             "collected": 0,
             "unique_total": len(existing),
+            "indexed": 0,
             "jsonl": str(JSONL_PATH),
             "json": str(JSON_PATH),
             "completed": True,
         }
-    last_page = int(checkpoint.get("last_page", 0))
-    # Quando parámos por rate-limit, a última página processada com sucesso pode
-    # ter sido guardada no checkpoint. Começamos 1 página depois.
-    start_page = last_page + 1 if last_page > 0 else 1
-    if existing:
-        logger.info("A retomar da página %s com %s NIFs já guardados.", start_page, len(existing))
+    if resume:
+        last_page = int(checkpoint.get("last_page", 0))
+        start_page = last_page + 1
+    else:
+        start_page = 1
+    logger.info("A recolher a partir da página %s (%s NIFs já guardados).", start_page, len(existing))
 
     collector = RigorbizCollector(delay=delay)
-    all_items: List[Dict[str, Any]] = []
+    buffer: List[Dict[str, Any]] = []
     total_announced: Optional[int] = checkpoint.get("total")
-    consecutive_429 = 0
-    max_consecutive_429 = 3
+    indexed_total = 0
+    collected_total = 0
+    last_page = start_page - 1
+    stopped = False
 
-    def on_page(page: int, items: List[Dict[str, Any]], total: Optional[int], accumulated: int) -> None:
-        nonlocal total_announced, consecutive_429
+    def _emit(**kwargs) -> None:
+        if on_progress:
+            try:
+                on_progress(kwargs)
+            except Exception as cb_exc:
+                logger.debug("Progress callback ignorado: %s", cb_exc)
+
+    def _flush() -> None:
+        nonlocal indexed_total
+        if not buffer:
+            return
+        if index_to_es:
+            try:
+                from api.rigorbiz_indexer import index_items
+                indexed_total += int(index_items(buffer).get("indexed") or 0)
+            except Exception as exc:
+                logger.warning("Indexação de lote falhou: %s", exc)
+        _save_results(buffer, append=True)
+        buffer.clear()
+
+    def on_page(page: int, items: List[Dict[str, Any]], total: Optional[int], accumulated: int) -> bool:
+        nonlocal total_announced, collected_total, last_page
         if total is not None:
             total_announced = total
-        consecutive_429 = 0
-        if page % pages_per_batch == 0:
-            _save_checkpoint({"last_page": page, "total": total_announced, "completed": False})
-            _save_results(all_items, append=True)
-            all_items.clear()
+        collected_total += len(items)
+        last_page = page
+        buffer.extend(items)
+        _save_checkpoint({"last_page": page, "total": total_announced, "completed": False})
+        if len(buffer) >= index_batch_size:
+            _flush()
+        _emit(
+            kind="page",
+            page=page,
+            items=len(items),
+            collected=collected_total,
+            unique_total=len(existing) + collected_total,
+            indexed=indexed_total,
+            total_announced=total_announced,
+        )
+        if should_stop and should_stop():
+            logger.info("Paragem pedida — a terminar após a página %s.", page)
+            return True
+        return False
+
+    class _StopRequested(Exception):
+        pass
+
+    # Adaptador: `fetch_all` espera um callback opcional; aqui interrompemos
+    # levantando uma exceção própria para conservar o progresso já gravado.
+    def _page_hook(page: int, items: List[Dict[str, Any]], total: Optional[int], accumulated: int) -> None:
+        if on_page(page, items, total, accumulated):
+            raise _StopRequested()
 
     try:
-        items = collector.fetch_all(start_page=start_page, query=query, on_page=on_page)
+        collector.fetch_all(start_page=start_page, query=query, on_page=_page_hook)
+    except _StopRequested:
+        stopped = True
     except requests.exceptions.HTTPError as exc:
-        if getattr(exc.response, "status_code", None) == 429:
-            consecutive_429 += 1
-            logger.error("Rate limit (429) detetado. A parar para não ser bloqueado.")
-            if consecutive_429 >= max_consecutive_429:
-                raise
-        else:
+        if getattr(exc.response, "status_code", None) != 429:
             raise
-    all_items.extend(items)
-    if all_items:
-        _save_results(all_items, append=True)
+        logger.error("Rate limit (429) persistente — recolha interrompida para evitar bloqueio.")
+        stopped = True
+    finally:
+        _flush()
+
     unique_total = len(_read_jsonl())
     completed = bool(total_announced and unique_total >= total_announced)
-    _save_checkpoint({"last_page": 0 if completed else (start_page + len(items) // PAGE_SIZE), "total": total_announced, "completed": completed})
+    if completed:
+        _save_checkpoint({"last_page": 0, "total": total_announced, "completed": True})
+    _emit(
+        kind="done",
+        page=last_page,
+        indexed=indexed_total,
+        collected=collected_total,
+        unique_total=unique_total,
+        completed=completed,
+        stopped=stopped,
+        total_announced=total_announced,
+    )
     return {
         "ok": True,
-        "collected": len(items),
+        "collected": collected_total,
         "unique_total": unique_total,
+        "indexed": indexed_total,
         "total_announced": total_announced,
+        "last_page": last_page,
+        "stopped": stopped,
         "jsonl": str(JSONL_PATH),
         "json": str(JSON_PATH),
         "completed": completed,
     }
 
 
-def collect_sample(max_pages: int = 1000, delay: float = DEFAULT_DELAY, query: str = "") -> Dict[str, Any]:
-    """Recolhe uma amostra e devolve metadados."""
+def collect_sample(
+    max_pages: int = 1000,
+    delay: float = DEFAULT_DELAY,
+    query: str = "",
+    index_to_es: bool = True,
+) -> Dict[str, Any]:
+    """Recolhe uma amostra, deduplica e indexa opcionalmente."""
     existing = _existing_nifs()
     collector = RigorbizCollector(delay=delay)
     items = collector.fetch_sample(max_pages=max_pages, query=query)
     new_items = [i for i in items if i.get("nif") and i["nif"] not in existing]
     if new_items:
         _save_results(new_items, append=True)
+    indexed = 0
+    if index_to_es and new_items:
+        try:
+            from api.rigorbiz_indexer import index_items
+            indexed = int(index_items(new_items).get("indexed") or 0)
+        except Exception as exc:
+            logger.warning("Indexação da amostra falhou: %s", exc)
     return {
         "ok": True,
         "collected": len(new_items),
         "sampled_total": len(items),
+        "indexed": indexed,
         "jsonl": str(JSONL_PATH),
         "json": str(JSON_PATH),
         "unique_total": len(_read_jsonl()),
