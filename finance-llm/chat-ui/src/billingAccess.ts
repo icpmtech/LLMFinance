@@ -127,6 +127,7 @@ const DOCK_APP_MODULE: Record<string, string | null> = {
   "report-studio": "reports",
   subvencoes: null,
   "administracao-central": null,
+  governo: null,
   partidos: null,
   "entidade-transparencia": null,
   erc: null,
