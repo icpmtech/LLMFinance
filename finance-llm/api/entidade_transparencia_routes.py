@@ -22,14 +22,20 @@ Endpoints:
 - `GET  /entidade-transparencia/declaracoes/{id}` — declaração completa (secções e interesses)
 - `GET  /entidade-transparencia/pessoa/{nif}`  — declarações ligadas a uma pessoa do PessoasIQ
 - `GET  /entidade-transparencia/export.csv`    — exportação da pesquisa
+- `POST /entidade-transparencia/exportar`      — grava um `.json` por entidade
+- `GET  /entidade-transparencia/exportar/indice` — índice dos `.json` por entidade
+- `GET  /entidade-transparencia/entidades/{id}/export.json` — `.json` de uma entidade
+- `GET  /entidade-transparencia/validar`       — último relatório de validação
+- `POST /entidade-transparencia/validar`       — valida catálogo, cascata e detalhes
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from api import entidade_transparencia_service as ept
@@ -66,6 +72,28 @@ class EptIndexarRequest(BaseModel):
     forcar: bool = Field(False, description="Reindexar mesmo o que já está indexado")
 
 
+class EptExportarRequest(BaseModel):
+    """Exportação de um `.json` por entidade."""
+
+    entidades: Optional[List[str]] = Field(
+        None, description="Ids das entidades a exportar (por omissão, todas)"
+    )
+
+
+class EptValidarRequest(BaseModel):
+    """Validação do catálogo e dos detalhes contra a plataforma da EPT."""
+
+    limite_titulares: Optional[int] = Field(
+        0,
+        ge=0,
+        description="Quantos titulares validar (0 = nenhum, por omissão; reparte a amostra pelo catálogo)",
+    )
+    limite_declaracoes: Optional[int] = Field(
+        None, ge=1, description="Quantas declarações validar (por omissão, todas as que estão em disco)"
+    )
+    pausa: Optional[float] = Field(None, ge=0, le=10, description="Pausa entre pedidos, em segundos")
+
+
 @router.get("/meta")
 def ept_meta(session: ReadSession = None) -> Dict[str, Any]:
     """Proveniência, pastas, índice e endpoints externos usados pelo módulo."""
@@ -94,6 +122,39 @@ def ept_entidades(
         alvo = normalize_name(q)
         itens = [item for item in itens if alvo in normalize_name(item.get("nome"))]
     return {"total": len(itens), "items": itens[:limite]}
+
+
+@router.get("/entidades/{entidade_id}/export.json")
+def ept_entidade_export(entidade_id: str, session: ReadSession = None) -> FileResponse:
+    """Descarrega o `.json` de uma entidade (gera-o se ainda não existir)."""
+    caminho = ept.entidades_json_dir() / f"{entidade_id}.json"
+    if not caminho.exists():
+        try:
+            ept.exportar_entidades_json([entidade_id])
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not caminho.exists():
+        raise HTTPException(status_code=404, detail="Entidade sem dados exportados.")
+    return FileResponse(
+        str(caminho),
+        media_type="application/json; charset=utf-8",
+        filename=f"entidade-transparencia-{entidade_id}.json",
+    )
+
+
+@router.get("/exportar/indice")
+def ept_exportar_indice(session: ReadSession = None) -> Dict[str, Any]:
+    """Índice dos `.json` por entidade (quais existem e o que contêm)."""
+    destino = ept.entidades_json_dir()
+    indice = destino / "_index.json"
+    if not indice.exists():
+        try:
+            ept.exportar_entidades_json()
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not indice.exists():
+        raise HTTPException(status_code=404, detail="Ainda não há exportação por entidade.")
+    return json.loads(indice.read_text(encoding="utf-8"))
 
 
 @router.get("/cargos")
@@ -209,6 +270,36 @@ def ept_indexar(payload: EptIndexarRequest | None = None, session: Session = Non
     """Indexa em `finance_ept_*` o que já está em disco (segundo plano)."""
     dados = (payload or EptIndexarRequest()).model_dump()
     return ept.start_job("indexar", dados)
+
+
+@router.post("/exportar")
+def ept_exportar(payload: EptExportarRequest | None = None, session: Session = None) -> Dict[str, Any]:
+    """Gera um `.json` por entidade em `data/entidade-transparencia/entidades`."""
+    dados = (payload or EptExportarRequest()).model_dump()
+    return ept.start_job("exportar", dados)
+
+
+@router.get("/validar")
+def ept_validacao(session: ReadSession = None) -> Dict[str, Any]:
+    """Último relatório de validação (catálogo, cascata e detalhes vs EPT)."""
+    relatorio = ept.ler_validacao()
+    if relatorio is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ainda não há validação. Corre POST /entidade-transparencia/validar.",
+        )
+    return relatorio
+
+
+@router.post("/validar")
+def ept_validar(payload: EptValidarRequest | None = None, session: Session = None) -> Dict[str, Any]:
+    """Valida entidades, cargos, nomes de titulares e detalhes em segundo plano.
+
+    A cascata completa (entidade × cargo × titular) é comparada com a listagem
+    de titularidades da plataforma; os detalhes são validados por amostra.
+    """
+    dados = (payload or EptValidarRequest()).model_dump()
+    return ept.start_job("validar", dados)
 
 
 @router.get("/jobs")

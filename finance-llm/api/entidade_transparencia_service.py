@@ -28,9 +28,10 @@ import os
 import threading
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
 
 from api import elasticsearch_client as esc
 from collectors import entidade_transparencia as ept
@@ -50,7 +51,7 @@ _JOBS_LOCK = threading.Lock()
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _JOBS_KEEP = 20
 _RUNNING = "running"
-TIPOS_JOB = ("recolher", "indexar")
+TIPOS_JOB = ("recolher", "indexar", "exportar", "validar")
 
 _LOTE_ES = 500
 
@@ -67,6 +68,22 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _substituir(temporario: Path, destino: Path, *, tentativas: int = 7) -> None:
+    """Troca atómica de ficheiros, com recuo para o Windows.
+
+    No Windows o `os.replace` falha com `PermissionError` quando outro processo
+    (a API a servir leituras) tem o destino aberto; insiste-se um pouco.
+    """
+    for tentativa in range(1, tentativas + 1):
+        try:
+            temporario.replace(destino)
+            return
+        except PermissionError:
+            if tentativa == tentativas:
+                raise
+            time.sleep(0.2 * tentativa)
+
+
 def data_dir() -> Path:
     """Pasta do módulo (configurável por `ENTIDADE_TRANSPARENCIA_DATA_DIR`)."""
     return Path(os.getenv(DATA_DIR_ENV) or _DEFAULT_DATA_DIR)
@@ -78,6 +95,11 @@ def catalogo_dir() -> Path:
 
 def normalized_dir() -> Path:
     return data_dir() / _NORMALIZED_DIRNAME
+
+
+def entidades_json_dir() -> Path:
+    """Pasta dos `.json` por entidade (uma entrada por entidade da EPT)."""
+    return data_dir() / "entidades"
 
 
 def _manifest_path() -> Path:
@@ -104,7 +126,7 @@ def _write_manifest(manifest: Dict[str, Any]) -> None:
     manifest["atualizado_em"] = _now()
     temporario = caminho.with_suffix(".tmp")
     temporario.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporario.replace(caminho)
+    _substituir(temporario, caminho)
 
 
 def _append_jsonl(caminho: Path, linhas: Iterable[Dict[str, Any]]) -> int:
@@ -200,7 +222,7 @@ def _guardar_cache(nome: str, itens: List[Dict[str, Any]]) -> None:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     temporario = caminho.with_suffix(".tmp")
     temporario.write_text(json.dumps(itens, ensure_ascii=False), encoding="utf-8")
-    temporario.replace(caminho)
+    _substituir(temporario, caminho)
 
 
 def _catalogo(
@@ -346,7 +368,7 @@ def _posicoes_por_titular(*, forcar: bool = False, pausa: float = ept.PAUSA) -> 
     with temporario.open("w", encoding="utf-8") as ficheiro:
         for linha in linhas:
             ficheiro.write(json.dumps(linha, ensure_ascii=False) + "\n")
-    temporario.replace(caminho)
+    _substituir(temporario, caminho)
     return agrupado
 
 
@@ -367,6 +389,7 @@ def recolher(
     forcar: bool = False,
     indexar_no_fim: bool = False,
     progresso: Optional[Dict[str, Any]] = None,
+    ao_progresso: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
     """Recolhe catálogo e declarações, guardando JSONL e o manifesto.
 
@@ -440,6 +463,7 @@ def recolher(
 
     conhecidas = ids_declaracoes_conhecidas()
     tocados: set[str] = set()
+    entidades_para_exportar: Optional[set[str]] = {str(entidade_id)} if entidade_id else (set() if titular_id else None)
 
     # 3. Declarações por titular.
     for indice, titular in enumerate(alvo_titulares, start=1):
@@ -499,6 +523,13 @@ def recolher(
         documento_titular["declaracoes_novas"] = len(declaracoes_novas)
         _append_jsonl(_titulares_jsonl(), [documento_titular])
         tocados.add(tid)
+        if entidades_para_exportar is not None:
+            for posicao in posicoes.get(tid) or []:
+                if posicao.get("entidade_id"):
+                    entidades_para_exportar.add(str(posicao["entidade_id"]))
+            for declaracao in declaracoes_novas:
+                if declaracao.get("entidade_id"):
+                    entidades_para_exportar.add(str(declaracao["entidade_id"]))
         manifest.setdefault("titulares", {})[tid] = {
             "nome": nome,
             "declaracoes": len(declaracoes_meta),
@@ -513,6 +544,8 @@ def recolher(
         resultado["titulares"] += 1
         progresso["titulares_done"] = indice
         progresso["current"] = None
+        if ao_progresso and (indice % 10 == 0 or indice == len(alvo_titulares)):
+            ao_progresso(progresso)
 
     manifest.setdefault("catalogo", {})
     manifest["catalogo"].update(
@@ -527,11 +560,563 @@ def recolher(
     _write_manifest(manifest)
     resultado["terminado_em"] = _now()
 
+    try:
+        resultado["exportacao"] = exportar_entidades_json(
+            entidades_para_exportar,
+            progresso=progresso,
+        )
+    except Exception as exc:  # noqa: BLE001 - a exportação não invalida a recolha
+        logger.exception("EPT: falha a exportar os JSON por entidade")
+        resultado["errors"].append({"fonte": "exportacao", "error": f"{type(exc).__name__}: {exc}"})
+
     if indexar_no_fim:
         progresso["phase"] = "a indexar"
         resultado["indexacao"] = indexar(forcar=True, progresso=progresso)
     progresso["phase"] = "concluído"
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# Exportação: um `.json` por entidade
+# ---------------------------------------------------------------------------
+
+
+def exportar_entidades_json(
+    entidade_ids: Optional[Iterable[str]] = None,
+    *,
+    progresso: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Grava `data/entidade-transparencia/entidades/<id>.json` por entidade.
+
+    Cada ficheiro junta a entidade, os cargos, os titulares dessa entidade e as
+    declarações cuja `entidade_id` coincide — com as secções normalizadas e o
+    registo de interesses. É a exportação «por entidade» pedida para consumo
+    externo (um JSON por entidade, não um único JSONL).
+    """
+    alvo = {str(identificador) for identificador in entidade_ids} if entidade_ids else None
+    progresso = progresso if progresso is not None else {}
+    progresso.update({"phase": "a exportar por entidade", "current": None, "registos": 0})
+
+    catalogo = {str(item.get("id")): item.get("nome") for item in entidades()}
+
+    posicoes_por_entidade: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for posicao in _iter_unicos(_titularidades_jsonl(), "titularidade_id"):
+        entidade_id = str(posicao.get("entidade_id") or "")
+        if not entidade_id or (alvo and entidade_id not in alvo):
+            continue
+        posicoes_por_entidade[entidade_id].append(posicao)
+    if alvo:
+        for entidade_id in alvo:
+            posicoes_por_entidade.setdefault(entidade_id, [])
+
+    declaracoes_por_entidade: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+    for documento in _iter_unicos(_declaracoes_jsonl(), "declaracao_id"):
+        entidade_id = str(documento.get("entidade_id") or "")
+        if not entidade_id or (alvo and entidade_id not in alvo):
+            continue
+        titular_id = str(documento.get("titular_id") or "")
+        if not titular_id:
+            continue
+        declaracoes_por_entidade[entidade_id][titular_id].append(documento)
+
+    destino = entidades_json_dir()
+    destino.mkdir(parents=True, exist_ok=True)
+    indice: List[Dict[str, Any]] = []
+    total_titulares = 0
+    total_declaracoes = 0
+
+    for entidade_id in sorted(posicoes_por_entidade):
+        posicoes = posicoes_por_entidade[entidade_id]
+        nome = catalogo.get(entidade_id) or (posicoes[0].get("entidade") if posicoes else "") or ""
+        titulares: Dict[str, Dict[str, Any]] = {}
+
+        for posicao in posicoes:
+            titular_id = str(posicao.get("titular_id") or "")
+            if not titular_id:
+                continue
+            entrada = titulares.setdefault(
+                titular_id,
+                {"titular_id": titular_id, "nome": posicao.get("titular"), "cargos": [], "declaracoes": []},
+            )
+            cargo = posicao.get("cargo")
+            if cargo and cargo not in entrada["cargos"]:
+                entrada["cargos"].append(cargo)
+
+        for titular_id, documentos in declaracoes_por_entidade.get(entidade_id, {}).items():
+            entrada = titulares.setdefault(
+                titular_id,
+                {"titular_id": titular_id, "nome": documentos[0].get("titular"), "cargos": [], "declaracoes": []},
+            )
+            entrada["declaracoes"] = sorted(
+                documentos,
+                key=lambda item: (item.get("ano") or 0, item.get("entrega") or ""),
+                reverse=True,
+            )
+
+        lista = sorted(
+            titulares.values(),
+            key=lambda item: ept.normalize_name(item.get("nome") or ""),
+        )
+        cargos = sorted({cargo for item in lista for cargo in item.get("cargos") or []})
+        orgaos = sorted(
+            {
+                documento.get("orgao")
+                for item in lista
+                for documento in item.get("declaracoes") or []
+                if documento.get("orgao")
+            }
+        )
+        documentos_totais = sum(len(item.get("declaracoes") or []) for item in lista)
+        documento = {
+            "entidade_id": entidade_id,
+            "entidade": nome,
+            "gerado_em": _now(),
+            "fonte": "entidade-transparencia",
+            "fonte_url": ept.BASE_WEB,
+            "cargos": cargos,
+            "orgaos": orgaos,
+            "titulares": lista,
+            "totais": {"titulares": len(lista), "declaracoes": documentos_totais},
+        }
+        caminho = destino / f"{entidade_id}.json"
+        caminho.write_text(json.dumps(documento, ensure_ascii=False, indent=2), encoding="utf-8")
+        indice.append(
+            {
+                "entidade_id": entidade_id,
+                "entidade": nome,
+                "ficheiro": caminho.name,
+                "titulares": len(lista),
+                "declaracoes": documentos_totais,
+                "cargos": len(cargos),
+                "orgaos": len(orgaos),
+                "gerado_em": documento["gerado_em"],
+            }
+        )
+        total_titulares += len(lista)
+        total_declaracoes += documentos_totais
+        progresso["registos"] = len(indice)
+        progresso["current"] = nome or entidade_id
+
+    (destino / "_index.json").write_text(
+        json.dumps(
+            {
+                "gerado_em": _now(),
+                "fonte": "entidade-transparencia",
+                "pasta": str(destino),
+                "totais": {
+                    "entidades": len(indice),
+                    "titulares": total_titulares,
+                    "declaracoes": total_declaracoes,
+                },
+                "entidades": indice,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    progresso["phase"] = "exportado"
+    progresso["current"] = None
+    return {
+        "entidades": len(indice),
+        "titulares": total_titulares,
+        "declaracoes": total_declaracoes,
+        "pasta": str(destino),
+        "indice": str(destino / "_index.json"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Validação contra a plataforma
+# ---------------------------------------------------------------------------
+
+_AMOSTRA_VALIDACAO = 40
+_CAMPOS_DECLARACAO = (
+    "natureza",
+    "estado",
+    "entidade",
+    "orgao",
+    "cargo",
+    "ano",
+    "inicio",
+    "fim",
+    "entrega",
+)
+
+
+def _validacao_path() -> Path:
+    return data_dir() / "_validacao.json"
+
+
+def _ler_cache_bruta(nome: str) -> Optional[List[Dict[str, Any]]]:
+    """Cache do catálogo sem prazo de validade (o que ficou em disco)."""
+    return _ler_cache(nome, max_idade=float("inf"))
+
+
+def _comparar_catalogo(
+    vivos: Iterable[Dict[str, Any]],
+    guardados: Iterable[Dict[str, Any]],
+    *,
+    chave_id: str = "id",
+    chave_nome: str = "nome",
+) -> Dict[str, Any]:
+    indices_vivos = {str(item.get(chave_id)): item for item in vivos or [] if item.get(chave_id)}
+    indices_guardados = {str(item.get(chave_id)): item for item in guardados or [] if item.get(chave_id)}
+    em_falta = sorted(set(indices_vivos) - set(indices_guardados))
+    a_mais = sorted(set(indices_guardados) - set(indices_vivos))
+    nomes: List[Dict[str, Any]] = []
+    for chave in sorted(set(indices_vivos) & set(indices_guardados)):
+        vivo = indices_vivos[chave].get(chave_nome) or ""
+        guardado = indices_guardados[chave].get(chave_nome) or ""
+        if ept.normalize_name(vivo) != ept.normalize_name(guardado):
+            nomes.append({"id": chave, "guardado": guardado, "ao_vivo": vivo})
+    return {
+        "ok": not (em_falta or a_mais or nomes),
+        "ao_vivo": len(indices_vivos),
+        "guardados": len(indices_guardados),
+        "em_falta": len(em_falta),
+        "a_mais": len(a_mais),
+        "nomes_divergentes": len(nomes),
+        "amostra": {
+            "em_falta": [indices_vivos[chave] for chave in em_falta[:_AMOSTRA_VALIDACAO]],
+            "a_mais": [indices_guardados[chave] for chave in a_mais[:_AMOSTRA_VALIDACAO]],
+            "nomes_divergentes": nomes[:_AMOSTRA_VALIDACAO],
+        },
+    }
+
+
+def _cascata(posicoes: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    """Conjuntos entidade → cargo → titular, em nomes normalizados."""
+    entidades: Dict[str, Dict[str, Any]] = {}
+    cargos: Dict[tuple, Dict[str, Any]] = {}
+    titulares: Dict[tuple, Dict[str, Any]] = {}
+    for posicao in posicoes:
+        entidade = str(posicao.get("entidade") or "")
+        cargo = str(posicao.get("cargo") or "")
+        nome = str(posicao.get("titular") or "")
+        chave_entidade = ept.normalize_name(entidade)
+        chave_cargo = ept.normalize_name(cargo)
+        chave_nome = ept.normalize_name(nome)
+        if not chave_entidade or not chave_cargo:
+            continue
+        entidades.setdefault(chave_entidade, {"entidade": entidade})
+        cargos.setdefault((chave_entidade, chave_cargo), {"entidade": entidade, "cargo": cargo})
+        titulares.setdefault(
+            (chave_entidade, chave_cargo, chave_nome),
+            {"entidade": entidade, "cargo": cargo, "titular": nome, "titular_id": posicao.get("titular_id")},
+        )
+    return {"entidades": entidades, "cargos": cargos, "titulares": titulares}
+
+
+def _comparar_cascata(viva: Dict[str, Any], guardada: Dict[str, Any]) -> Dict[str, Any]:
+    resultado: Dict[str, Any] = {}
+    for chave, rotulo in (("entidades", "entidade"), ("cargos", "cargo"), ("titulares", "titular")):
+        em_falta = sorted(set(viva[chave]) - set(guardada[chave]), key=str)
+        a_mais = sorted(set(guardada[chave]) - set(viva[chave]), key=str)
+        resultado[chave] = {
+            "ok": not (em_falta or a_mais),
+            "ao_vivo": len(viva[chave]),
+            "guardados": len(guardada[chave]),
+            "em_falta": len(em_falta),
+            "a_mais": len(a_mais),
+            "amostra": {
+                "em_falta": [viva[chave][item] for item in em_falta[:_AMOSTRA_VALIDACAO]],
+                "a_mais": [guardada[chave][item] for item in a_mais[:_AMOSTRA_VALIDACAO]],
+            },
+        }
+        logger.debug("EPT: validação da cascata (%s) com %d divergências", rotulo, len(em_falta) + len(a_mais))
+    return resultado
+
+
+def _assinatura_declaracao(documento: Dict[str, Any]) -> Dict[str, Any]:
+    assinatura = {campo: documento.get(campo) for campo in _CAMPOS_DECLARACAO}
+    assinatura["secoes"] = len(documento.get("secoes") or [])
+    assinatura["interesses"] = len(documento.get("interesses") or [])
+    assinatura["texto"] = len(documento.get("texto") or "")
+    return assinatura
+
+
+def _amostra_uniforme(itens: List[Any], limite: Optional[int]) -> List[Any]:
+    """Amostra espalhada pelo catálogo (evita ficar só nos primeiros).
+
+    `None` significa «todos» e `0` significa «nenhum».
+    """
+    if limite is None:
+        return list(itens)
+    if limite <= 0 or not itens:
+        return []
+    if limite >= len(itens):
+        return list(itens)
+    passo = len(itens) / float(limite)
+    return [itens[min(len(itens) - 1, int(posicao * passo))] for posicao in range(int(limite))]
+
+
+def validar(
+    *,
+    pausa: float = ept.PAUSA,
+    cliente: Any = None,
+    limite_titulares: Optional[int] = 0,
+    limite_declaracoes: Optional[int] = None,
+    progresso: Optional[Dict[str, Any]] = None,
+    ao_progresso: Optional[Callable[[Dict[str, Any]], None]] = None,
+) -> Dict[str, Any]:
+    """Compara o catálogo e os detalhes guardados com a API pública da EPT.
+
+    A plataforma expõe todas as titularidades (entidade × cargo × titular) numa
+    listagem paginada, pelo que a cascata completa — **todas as entidades,
+    cargos e nomes de titulares** — é validada sem um pedido por entidade. Os
+    detalhes (declarações de cada titular e conteúdo de cada declaração) são
+    validados por amostra (`limite_titulares`) ou na totalidade.
+
+    Com `limite_titulares=0` só se valida o catálogo e a cascata; `None`
+    valida as declarações de todos os titulares em disco.
+    """
+    cliente = cliente or ept.make_client()
+    progresso = progresso if progresso is not None else {}
+    progresso.update({"phase": "a validar", "current": None})
+
+    relatorio: Dict[str, Any] = {
+        "gerado_em": _now(),
+        "fonte": ept.BASE_API,
+        "fonte_url": ept.BASE_WEB,
+        "estado": "ok",
+        "parametros": {
+            "limite_titulares": limite_titulares,
+            "limite_declaracoes": limite_declaracoes,
+            "pausa": pausa,
+        },
+        "resumo": {},
+        "catalogos": {},
+        "cascata": {},
+        "detalhes": {"titulares": {}, "declaracoes": {}},
+        "errors": [],
+    }
+
+    def _registar(fonte: str, exc: Exception) -> None:
+        logger.warning("EPT: validação de %s falhou (%s)", fonte, exc)
+        relatorio["errors"].append({"fonte": fonte, "error": f"{type(exc).__name__}: {exc}"})
+
+    # 1. Catálogos ao vivo.
+    progresso["current"] = "catálogos"
+    vivos: Dict[str, List[Dict[str, Any]]] = {}
+    for nome, carregar in (
+        ("entidades", ept.fetch_entities),
+        ("cargos", ept.fetch_roles),
+        ("orgaos", ept.fetch_boards),
+        ("titulares", ept.fetch_holders),
+    ):
+        try:
+            vivos[nome] = carregar(cliente)
+        except Exception as exc:  # noqa: BLE001 - um catálogo falhado não trava o resto
+            _registar(nome, exc)
+            vivos[nome] = []
+
+    # 2. Titularidades ao vivo: a cascata completa numa só leitura.
+    posicoes_vivas: List[Dict[str, Any]] = []
+    try:
+        for posicao in ept.iter_positions(cliente, pausa=0.0):
+            posicoes_vivas.append(posicao)
+            if ao_progresso and len(posicoes_vivas) % 2000 == 0:
+                progresso["current"] = f"titularidades {len(posicoes_vivas)}"
+                ao_progresso(progresso)
+    except Exception as exc:  # noqa: BLE001
+        _registar("titularidades", exc)
+
+    progresso["current"] = "a comparar catálogos"
+    for nome in ("entidades", "cargos", "orgaos", "titulares"):
+        if not vivos.get(nome):
+            relatorio["catalogos"][nome] = {"ok": None, "nota": "sem resposta da plataforma"}
+            continue
+        relatorio["catalogos"][nome] = _comparar_catalogo(vivos[nome], _ler_cache_bruta(nome) or [])
+
+    posicoes_guardadas = [
+        posicao for posicao in _iter_jsonl(_titularidades_jsonl()) if posicao.get("titularidade_id")
+    ]
+    if posicoes_vivas and not posicoes_guardadas:
+        relatorio["cascata"] = {"ok": None, "nota": "sem titularidades em disco (recolha pendente)"}
+    elif posicoes_vivas:
+        relatorio["cascata"] = _comparar_cascata(_cascata(posicoes_vivas), _cascata(posicoes_guardadas))
+    else:
+        relatorio["cascata"] = {"ok": None, "nota": "sem resposta da plataforma"}
+
+    progresso["current"] = "a comparar titularidades"
+    indices_vivos = {str(posicao.get("titularidade_id")): posicao for posicao in posicoes_vivas}
+    indices_guardados = {str(posicao.get("titularidade_id")): posicao for posicao in posicoes_guardadas}
+    em_falta = sorted(set(indices_vivos) - set(indices_guardados))
+    a_mais = sorted(set(indices_guardados) - set(indices_vivos))
+    datas = [
+        {
+            "titularidade_id": chave,
+            "guardado": {"inicio": indices_guardados[chave].get("inicio"), "fim": indices_guardados[chave].get("fim")},
+            "ao_vivo": {"inicio": indices_vivos[chave].get("inicio"), "fim": indices_vivos[chave].get("fim")},
+        }
+        for chave in sorted(set(indices_vivos) & set(indices_guardados))
+        if (indices_vivos[chave].get("inicio"), indices_vivos[chave].get("fim"))
+        != (indices_guardados[chave].get("inicio"), indices_guardados[chave].get("fim"))
+    ]
+    relatorio["titularidades"] = {
+        "ok": not (em_falta or a_mais or datas) if (posicoes_vivas or posicoes_guardadas) else None,
+        "ao_vivo": len(indices_vivos),
+        "guardadas": len(indices_guardados),
+        "em_falta": len(em_falta),
+        "a_mais": len(a_mais),
+        "datas_divergentes": len(datas),
+        "amostra": {
+            "em_falta": [indices_vivos[chave] for chave in em_falta[:_AMOSTRA_VALIDACAO]],
+            "a_mais": [indices_guardados[chave] for chave in a_mais[:_AMOSTRA_VALIDACAO]],
+            "datas_divergentes": datas[:_AMOSTRA_VALIDACAO],
+        },
+    }
+
+    # 3. Detalhes por titular (declarações registadas em cada ficha).
+    documentos_titular: Dict[str, Dict[str, Any]] = {}
+    for documento in _iter_jsonl(_titulares_jsonl()):
+        if documento.get("titular_id"):
+            documentos_titular[str(documento["titular_id"])] = documento
+    declaracoes_guardadas: Dict[str, Dict[str, Any]] = {}
+    por_titular: Dict[str, set] = {}
+    for documento in _iter_jsonl(_declaracoes_jsonl()):
+        declaracao_id = str(documento.get("declaracao_id") or "")
+        if not declaracao_id:
+            continue
+        declaracoes_guardadas[declaracao_id] = documento
+        por_titular.setdefault(str(documento.get("titular_id") or ""), set()).add(declaracao_id)
+    alvo = _amostra_uniforme(sorted(documentos_titular), limite_titulares)
+    detalhes_titulares: List[Dict[str, Any]] = []
+    for indice, titular_id in enumerate(alvo, start=1):
+        documento = documentos_titular.get(titular_id) or {}
+        progresso["current"] = f"titular {documento.get('nome') or titular_id}"
+        progresso["titulares_done"] = indice
+        progresso["titulares_total"] = len(alvo)
+        try:
+            ao_vivo = ept.fetch_declarations(cliente, titular_id)
+        except Exception as exc:  # noqa: BLE001
+            _registar(f"titular {titular_id}", exc)
+            continue
+        if pausa:
+            time.sleep(pausa)
+        ids_vivos = {str(item.get("declaracao_id")) for item in ao_vivo if item.get("declaracao_id")}
+        ids_guardados = por_titular.get(titular_id) or set()
+        faltam = sorted(ids_vivos - ids_guardados)
+        a_mais = sorted(ids_guardados - ids_vivos)
+        esperado = documento.get("declaracoes_total")
+        if faltam or a_mais or (esperado is not None and int(esperado or 0) != len(ids_vivos)):
+            detalhes_titulares.append(
+                {
+                    "titular_id": titular_id,
+                    "nome": documento.get("nome"),
+                    "ao_vivo": len(ids_vivos),
+                    "guardadas": len(ids_guardados),
+                    "declaracoes_total_guardado": esperado,
+                    "em_falta": faltam[:_AMOSTRA_VALIDACAO],
+                    "a_mais": a_mais[:_AMOSTRA_VALIDACAO],
+                }
+            )
+        if ao_progresso and (indice % 10 == 0 or indice == len(alvo)):
+            ao_progresso(progresso)
+    relatorio["detalhes"]["titulares"] = {
+        "ok": not detalhes_titulares,
+        "verificados": len(alvo),
+        "divergentes": len(detalhes_titulares),
+        "amostra": detalhes_titulares[:_AMOSTRA_VALIDACAO],
+    }
+
+    # 4. Detalhes de cada declaração (secções, naturezas, interesses).
+    por_id = declaracoes_guardadas
+    alvo_declaracoes = _amostra_uniforme(sorted(por_id), limite_declaracoes)
+    divergencias_declaracoes: List[Dict[str, Any]] = []
+    falhadas: List[Dict[str, Any]] = []
+    for indice, declaracao_id in enumerate(alvo_declaracoes, start=1):
+        progresso["current"] = f"declaração {declaracao_id}"
+        try:
+            payload = ept.fetch_declaration(cliente, declaracao_id)
+            ao_vivo = ept.normalize_declaration({**payload, "id": int(declaracao_id)})
+        except Exception as exc:  # noqa: BLE001
+            _registar(f"declaração {declaracao_id}", exc)
+            falhadas.append({"declaracao_id": declaracao_id, "error": f"{type(exc).__name__}: {exc}"})
+            continue
+        if pausa:
+            time.sleep(pausa)
+        assinatura_guardada = _assinatura_declaracao(por_id[declaracao_id])
+        assinatura_viva = _assinatura_declaracao(ao_vivo)
+        diferencas = [
+            {"campo": campo, "guardado": assinatura_guardada.get(campo), "ao_vivo": assinatura_viva.get(campo)}
+            for campo in assinatura_viva
+            if assinatura_guardada.get(campo) != assinatura_viva.get(campo)
+        ]
+        if diferencas:
+            divergencias_declaracoes.append({"declaracao_id": declaracao_id, "campos": diferencas})
+        if ao_progresso and (indice % 10 == 0 or indice == len(alvo_declaracoes)):
+            ao_progresso(progresso)
+    relatorio["detalhes"]["declaracoes"] = {
+        "ok": not divergencias_declaracoes,
+        "verificadas": len(alvo_declaracoes),
+        "divergentes": len(divergencias_declaracoes),
+        "ilegiveis": len(falhadas),
+        "amostra": divergencias_declaracoes[:_AMOSTRA_VALIDACAO],
+    }
+
+    # 5. Resumo.
+    seccoes = {
+        "entidades": relatorio["catalogos"].get("entidades") or {},
+        "cargos": relatorio["catalogos"].get("cargos") or {},
+        "orgaos": relatorio["catalogos"].get("orgaos") or {},
+        "nomes_de_titulares": relatorio["catalogos"].get("titulares") or {},
+        "cascata_entidade_cargo": (relatorio["cascata"] or {}).get("cargos") or {},
+        "cascata_cargo_titular": (relatorio["cascata"] or {}).get("titulares") or {},
+        "titularidades": relatorio["titularidades"],
+        "declaracoes_por_titular": relatorio["detalhes"]["titulares"],
+        "declaracoes": relatorio["detalhes"]["declaracoes"],
+    }
+    divergencias = 0
+    for seccao in seccoes.values():
+        parcial = sum(
+            int(seccao.get(campo) or 0)
+            for campo in ("em_falta", "a_mais", "nomes_divergentes", "datas_divergentes", "divergentes")
+        )
+        seccao["divergencias"] = parcial
+        divergencias += parcial
+    catalogo_entidades = relatorio["catalogos"].get("entidades") or {}
+    catalogo_titulares = relatorio["catalogos"].get("titulares") or {}
+    relatorio["resumo"] = {
+        "entidades_ao_vivo": len(vivos.get("entidades") or []),
+        "cargos_ao_vivo": len(vivos.get("cargos") or []),
+        "titulares_ao_vivo": len(vivos.get("titulares") or []),
+        "titularidades_ao_vivo": len(posicoes_vivas),
+        "entidades_guardadas": int(catalogo_entidades.get("guardados") or 0),
+        "titulares_guardados": int(catalogo_titulares.get("guardados") or 0),
+        "fichas_de_titular_guardadas": len(documentos_titular),
+        "declaracoes_guardadas": len(por_id),
+        "divergencias": divergencias,
+        "verificacoes": seccoes,
+    }
+    relatorio["estado"] = "ok" if divergencias == 0 and not relatorio["errors"] else "divergencias"
+    relatorio["terminado_em"] = _now()
+
+    caminho = _validacao_path()
+    try:
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        temporario = caminho.with_suffix(".tmp")
+        temporario.write_text(json.dumps(relatorio, ensure_ascii=False, indent=2), encoding="utf-8")
+        _substituir(temporario, caminho)
+        relatorio["ficheiro"] = str(caminho)
+    except Exception as exc:  # noqa: BLE001 - o relatório devolvido continua válido
+        _registar("relatorio", exc)
+
+    progresso["phase"] = "concluído"
+    progresso["current"] = None
+    return relatorio
+
+
+def ler_validacao() -> Optional[Dict[str, Any]]:
+    """Último relatório de validação gravado em disco."""
+    caminho = _validacao_path()
+    if not caminho.exists():
+        return None
+    try:
+        return json.loads(caminho.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -1412,6 +1997,18 @@ def _run_job(job: Dict[str, Any]) -> None:
                 pausa=float(payload.get("pausa") or ept.PAUSA),
                 forcar=bool(payload.get("forcar")),
                 indexar_no_fim=bool(payload.get("indexar")),
+                progresso=progresso,
+            )
+        elif job["tipo"] == "exportar":
+            resultado = exportar_entidades_json(
+                payload.get("entidades") or None,
+                progresso=progresso,
+            )
+        elif job["tipo"] == "validar":
+            resultado = validar(
+                pausa=float(payload.get("pausa") or ept.PAUSA),
+                limite_titulares=payload.get("limite_titulares", 0),
+                limite_declaracoes=payload.get("limite_declaracoes"),
                 progresso=progresso,
             )
         else:

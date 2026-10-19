@@ -293,10 +293,11 @@ não entram no catálogo para não dar fontes que “às vezes funciona”.
 ### Governo — nomeações e composição
 
 O coletor `collectors/governo.py` usa o motor de recolha (`http` para as páginas
-das áreas e `dynamic` para a composição, que é renderizada no browser) e grava
-JSON/JSONL e os índices `finance_governo_nomeacoes` e
-`finance_governo_composicao` (além de `finance_scraped`). Ver
-[governo.md](./governo.md).
+das áreas e `dynamic` para a composição, que é renderizada no browser), enriquece
+cada nomeação com o detalhe do Despacho no DRE e cada membro com a biografia
+oficial, e grava JSON/JSONL e os índices `finance_governo_nomeacoes`,
+`finance_governo_composicao` e `finance_governo_ministerios` (além de
+`finance_scraped`). Ver [governo.md](./governo.md).
 
 ```powershell
 c:\LLMFinance\.venv\Scripts\python.exe -m collectors.governo

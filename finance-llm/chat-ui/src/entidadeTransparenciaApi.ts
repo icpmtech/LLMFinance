@@ -79,7 +79,7 @@ export type EptStats = {
 /** Trabalho de recolha/indexação. */
 export type EptJob = {
   job_id: string;
-  tipo: "recolher" | "indexar";
+  tipo: "recolher" | "indexar" | "exportar";
   status: "running" | "done" | "error";
   started_at?: string | null;
   finished_at?: string | null;
@@ -175,6 +175,7 @@ export type EptTitular = {
   };
   posicoes: {
     titularidade_id: string;
+    entidade_id?: string | null;
     entidade?: string | null;
     cargo?: string | null;
     inicio?: string | null;
@@ -266,6 +267,26 @@ export function recolherEpt(params: EptRecolherParams = {}): Promise<EptJob> {
 
 export function indexarEpt(forcar = false): Promise<EptJob> {
   return enviar("/entidade-transparencia/indexar", { forcar });
+}
+
+export function exportarEpt(entidades?: string[]): Promise<EptJob> {
+  return enviar("/entidade-transparencia/exportar", { entidades });
+}
+
+export function getEptExportIndice(): Promise<{
+  gerado_em: string;
+  totais: { entidades: number; titulares: number; declaracoes: number };
+  entidades: { entidade_id: string; entidade: string; ficheiro: string; titulares: number; declaracoes: number }[];
+}> {
+  return pedir("/entidade-transparencia/exportar/indice");
+}
+
+export function eptEntidadeJsonUrl(entidadeId: string): string {
+  return `${API_BASE}/entidade-transparencia/entidades/${encodeURIComponent(entidadeId)}/export.json`;
+}
+
+export function eptExportIndiceUrl(): string {
+  return `${API_BASE}/entidade-transparencia/exportar/indice`;
 }
 
 export function getEptJob(jobId: string): Promise<EptJob> {

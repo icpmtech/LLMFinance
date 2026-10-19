@@ -169,6 +169,37 @@ def test_parse_composicao_le_grupos_periodos_e_secretarios():
     assert secretario["secretarios_count"] is None
 
 
+def test_build_ministerios_consolida_titular_secretarios_e_nomeacoes():
+    areas = [
+        {"area": "Primeiro-Ministro", "area_slug": "primeiro-ministro", "descricao": "", "url": "pm"},
+        {"area": "Ministro de Estado e das Finanças", "area_slug": "financas", "descricao": "", "url": "fin"},
+    ]
+    members = [
+        {"nome": "Luís Montenegro", "cargo": "Primeiro-Ministro", "grupo": "Primeiro-Ministro", "area_slug": ""},
+        {"nome": "Joaquim Miranda Sarmento", "cargo": "Ministro de Estado e das Finanças", "grupo": "Ministros", "area_slug": "financas"},
+        {"nome": "Secretário A", "cargo": "Secretário de Estado", "grupo": "Secretários de Estado", "area_slug": "financas"},
+        {"nome": "Secretária B", "cargo": "Secretária de Estado", "grupo": "Secretários de Estado", "area_slug": "financas"},
+    ]
+    nomeacoes = [
+        {"area_slug": "financas"},
+        {"area_slug": "financas"},
+        {"area_slug": "primeiro-ministro"},
+    ]
+
+    ministerios = governo.build_ministerios(areas, members, nomeacoes)
+
+    assert len(ministerios) == 2
+    pm, financas = ministerios
+    assert pm["tipo"] == "Primeiro-Ministro"
+    assert pm["titular"] == "Luís Montenegro"
+    assert pm["nomeacoes_count"] == 1
+    assert financas["tipo"] == "Ministério"
+    assert financas["titular"] == "Joaquim Miranda Sarmento"
+    assert financas["secretarios_count"] == 2
+    assert financas["nomeacoes_count"] == 2
+    assert len(financas["membros"]) == 3
+
+
 def test_parse_dre_detail_normaliza_texto_e_datas():
     detail = {
         "Id": "904227412",

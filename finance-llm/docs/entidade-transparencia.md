@@ -69,6 +69,9 @@ Leitura aberta; recolha e indexação exigem sessão de escrita.
 | GET | `/entidade-transparencia/pessoa/{nif}` | declarações ligadas a uma pessoa do PessoasIQ |
 | GET | `/entidade-transparencia/export.csv` | exportação da pesquisa |
 | POST | `/entidade-transparencia/recolher` | recolha em segundo plano (filtros da cascata) |
+| POST | `/entidade-transparencia/exportar` | grava um JSON por entidade (segundo plano) |
+| GET | `/entidade-transparencia/exportar/indice` | índice do último export por entidade |
+| GET | `/entidade-transparencia/entidades/{id}/export.json` | ficheiro JSON de uma entidade |
 | POST | `/entidade-transparencia/indexar` | indexa o que está em disco |
 | POST | `/entidade-transparencia/titular/{id}/recolher` | recolhe um único titular |
 | GET | `/entidade-transparencia/jobs[/{id}]` | progresso dos trabalhos |
@@ -107,10 +110,39 @@ data/entidade-transparencia/
 ├── _normalized/
 │   ├── titulares.jsonl
 │   └── declaracoes.jsonl
+├── entidades/
+│   ├── 4216.json
+│   ├── _index.json
+│   └── ...
 └── _manifest.json
 ```
 
 A pasta pode ser mudada com `ENTIDADE_TRANSPARENCIA_DATA_DIR`.
+
+## Export por entidade
+
+`exportar_entidades_json()` (e `POST /entidade-transparencia/exportar`) grava um
+ficheiro por entidade com todos os titulares e declarações normalizadas:
+
+```json
+{
+  "entidade_id": "4216",
+  "entidade": "Conselho de Administração da Câmara Municipal de Lisboa",
+  "gerado_em": "2025-01-31T12:00:00+00:00",
+  "fonte": "entidade-transparencia",
+  "fonte_url": "https://entidadetransparencia.pt",
+  "cargos": ["Presidente"],
+  "orgaos": ["Conselho de Administração"],
+  "titulares": [
+    {"titular_id": 4952, "nome": "…", "cargos": ["Presidente"], "declaracoes": []}
+  ],
+  "totais": {"titulares": 1, "declaracoes": 0}
+}
+```
+
+`cargos` lista apenas posições (cargo); os órgãos declarados ficam em `orgaos`.
+O `_index.json` resume cada entidade (`titulares`, `declaracoes`, `cargos`,
+`orgaos`, `ficheiro`). A recolha exporta automaticamente no fim.
 
 ## Scraper fora da API
 
@@ -118,7 +150,11 @@ A pasta pode ser mudada com `ENTIDADE_TRANSPARENCIA_DATA_DIR`.
 python scripts/recolher_entidade_transparencia.py --entidade 2 --limite 50
 python scripts/recolher_entidade_transparencia.py --titular 4952
 python scripts/recolher_entidade_transparencia.py --tudo --indexar
+python scripts/recolher_entidade_transparencia.py --so-exportar
 ```
+
+`--tudo --indexar` percorre o catálogo completo, indexa e, no fim, escreve um JSON
+por entidade. `--so-exportar` regrava o export a partir do que está em disco.
 
 ## Ligação à ficha do político
 

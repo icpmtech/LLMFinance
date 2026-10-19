@@ -20,6 +20,7 @@ import {
   Database,
   Download,
   ExternalLink,
+  FileJson,
   FileText,
   Landmark,
   Loader2,
@@ -39,7 +40,10 @@ import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/Tabs";
 import {
+  eptEntidadeJsonUrl,
+  eptExportIndiceUrl,
   eptExportUrl,
+  exportarEpt,
   getEptCargos,
   getEptDeclaracao,
   getEptDeclaracoes,
@@ -566,6 +570,19 @@ export default function EntidadeTransparenciaPage() {
     }
   }, [acompanharJob]);
 
+  const iniciarExportacao = useCallback(async () => {
+    setARecolher(true);
+    setErro(null);
+    try {
+      const resposta = await exportarEpt(entidadeId ? [entidadeId] : undefined);
+      acompanharJob(resposta);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao exportar os JSON por entidade");
+    } finally {
+      setARecolher(false);
+    }
+  }, [entidadeId, acompanharJob]);
+
   const recolherTitular = useCallback(async () => {
     if (!titular) return;
     setARecolher(true);
@@ -946,6 +963,14 @@ export default function EntidadeTransparenciaPage() {
                         >
                           <FileText size={13} /> CSV
                         </a>
+                        {titular.posicoes[0]?.entidade_id && (
+                          <a
+                            href={eptEntidadeJsonUrl(titular.posicoes[0].entidade_id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                          >
+                            <FileJson size={13} /> JSON da entidade
+                          </a>
+                        )}
                       </div>
 
                       <div className="space-y-2 border-t border-border pt-3">
@@ -1117,6 +1142,15 @@ export default function EntidadeTransparenciaPage() {
                     >
                       Indexar agora
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<FileJson size={13} />}
+                      loading={aRecolher && job?.tipo === "exportar"}
+                      onClick={() => void iniciarExportacao()}
+                    >
+                      Exportar JSON por entidade
+                    </Button>
                   </div>
 
                   {job && (
@@ -1135,10 +1169,14 @@ export default function EntidadeTransparenciaPage() {
                         />
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        {job.progress?.titulares_total
-                          ? `${contagem(job.progress.titulares_done)} / ${contagem(job.progress.titulares_total)} titulares`
-                          : `${contagem(job.progress?.registos)} registos`}
-                        {job.progress?.declaracoes ? ` · ${contagem(job.progress.declaracoes)} declarações novas` : ""}
+                        {job.tipo === "exportar"
+                          ? `${contagem(job.progress?.registos)} entidade(s) exportada(s) em JSON`
+                          : job.progress?.titulares_total
+                            ? `${contagem(job.progress.titulares_done)} / ${contagem(job.progress.titulares_total)} titulares`
+                            : `${contagem(job.progress?.registos)} registos`}
+                        {job.tipo !== "exportar" && job.progress?.declaracoes
+                          ? ` · ${contagem(job.progress.declaracoes)} declarações novas`
+                          : ""}
                         {job.progress?.current ? ` · ${job.progress.current}` : ""}
                       </p>
                       {job.error && <p className="text-[10px] text-destructive">{job.error}</p>}
@@ -1168,6 +1206,17 @@ export default function EntidadeTransparenciaPage() {
                     <>
                       <p className="break-all">
                         Dados: <code className="rounded bg-muted px-1">{meta.pasta}</code>
+                      </p>
+                      <p className="break-all">
+                        JSON por entidade:{" "}
+                        <a
+                          href={eptExportIndiceUrl()}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-teal-300 hover:underline"
+                        >
+                          entidades/_index.json
+                        </a>
                       </p>
                       <p className="break-all">
                         Índices:{" "}

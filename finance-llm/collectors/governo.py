@@ -31,8 +31,10 @@ Saídas
 * Elasticsearch:
   - ``finance_governo_nomeacoes`` — uma nomeação por documento;
   - ``finance_governo_composicao`` — um membro do Governo por documento;
+  - ``finance_governo_ministerios`` — um ministério por documento (titular,
+    secretários de Estado e totais);
   - ``finance_scraped`` — os mesmos registos, para aparecerem na pesquisa do
-    módulo de recolha (``source_id`` ``governo-nomeacoes``/``governo-composicao``).
+    módulo de recolha (``source_id`` ``governo-*``).
 
 Uso::
 
@@ -69,6 +71,12 @@ NOMEACOES_PATH = "/gc24/governo/nomeacoes"
 COMPOSICAO_PATH = "/gc24/governo/composicao"
 DEFAULT_TIMELINE = "2025-06-05"
 
+#: O portal usa nomes de área diferentes na composição e no índice de
+#: nomeações. Normaliza-se para a chave do índice (a que liga as duas fontes).
+AREA_SLUG_ALIASES = {
+    "ministro-adjunto-e-da-coesao-territorial": "coesao-territorial",
+}
+
 SINK_DIR = ROOT / "data" / "governo"
 DEFAULT_JSON = SINK_DIR / "governo_nomeacoes.json"
 DEFAULT_JSONL = SINK_DIR / "governo_nomeacoes.jsonl"
@@ -76,8 +84,10 @@ COMPOSICAO_JSON = SINK_DIR / "governo_composicao.json"
 
 INDEX_NOMEACOES = "finance_governo_nomeacoes"
 INDEX_COMPOSICAO = "finance_governo_composicao"
+INDEX_MINISTERIOS = "finance_governo_ministerios"
 SOURCE_NOMEACOES = "governo-nomeacoes"
 SOURCE_COMPOSICAO = "governo-composicao"
+SOURCE_MINISTERIOS = "governo-ministerios"
 SOURCE_NAME = "Governo de Portugal — nomeações e composição"
 
 logger = logging.getLogger("governo")
@@ -304,6 +314,14 @@ def parse_dre_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Perfis oficiais (biografias)
 # ---------------------------------------------------------------------------
+def _norm_name(value: Any) -> str:
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.casefold().split())
+
+
 def _find_component(node: Any, name: str) -> Optional[Dict[str, Any]]:
     if isinstance(node, dict):
         if node.get("componentName") == name:
@@ -320,8 +338,13 @@ def _find_component(node: Any, name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def parse_member_profile(html: str) -> Dict[str, Any]:
-    """Extrai nome, cargo, biografia e fotografia do perfil oficial."""
+def parse_member_profile(html: str, *, preferred_name: str = "") -> Dict[str, Any]:
+    """Extrai nome, cargo, biografia e fotografia do perfil oficial.
+
+    Alguns cargos têm histórico (quem passou pelo lugar). Quando a composição
+    indica o titular, escolhe-se o item com o mesmo nome; sem correspondência,
+    fica o mandato mais recente.
+    """
     match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
     if not match:
         return {}
@@ -336,7 +359,28 @@ def parse_member_profile(html: str) -> Dict[str, Any]:
     items = (context.get("officialsHistory") or {}).get("targetItems") or []
     # O Primeiro-Ministro publica os dados diretamente no `contextItem`; os
     # ministros e secretários de Estado usam `officialsHistory.targetItems`.
-    item = items[0] if items else context
+    item = None
+    wanted = _norm_name(preferred_name)
+    if items and wanted:
+        for candidate in items:
+            name = (
+                ((candidate.get("official") or {}).get("targetItem") or {})
+                .get("fullName", {})
+                .get("jsonValue", {})
+                .get("value")
+            )
+            if _norm_name(name) == wanted:
+                item = candidate
+                break
+    if item is None and items:
+        item = max(
+            items,
+            key=lambda candidate: str(
+                ((candidate.get("startDate") or {}).get("jsonValue") or {}).get("value") or ""
+            ),
+        )
+    if item is None:
+        item = context
     bio_html = ((item.get("bio") or {}).get("jsonValue") or {}).get("value") or ""
     photo = ((item.get("bioPhoto") or {}).get("jsonValue") or {}).get("value") or {}
     name = (
@@ -478,6 +522,7 @@ def parse_composicao(html: str, *, source_url: str) -> List[Dict[str, Any]]:
                 idx = parts.index("area-de-governo")
                 if idx + 1 < len(parts):
                     area_slug = parts[idx + 1]
+            area_slug = AREA_SLUG_ALIASES.get(area_slug, area_slug)
             members.append(
                 {
                     "grupo": group_name,
@@ -524,15 +569,25 @@ def enrich_nomeacoes(
             record.update(cache[url])
             ok += 1
             continue
-        try:
-            fields = parse_dre_detail(
-                fetch_dre_detail(url, session=session, module_version=module_version, api_version=api_version)
-            )
-            record.update(fields)
-            cache[url] = fields
-            ok += 1
-        except Exception as exc:  # noqa: BLE001 — um despacho falhado não trava os outros
-            record["dre_erro"] = str(exc)[:300]
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                fields = parse_dre_detail(
+                    fetch_dre_detail(url, session=session, module_version=module_version, api_version=api_version)
+                )
+                record.pop("dre_erro", None)
+                record.update(fields)
+                cache[url] = fields
+                ok += 1
+                last_error = None
+                break
+            except Exception as exc:  # noqa: BLE001 — um despacho falhado não trava os outros
+                last_error = exc
+                # Timeouts e falhas de ligação são transitórios; uma pausa
+                # curta costuma resolver sem repetir toda a recolha.
+                time.sleep(1.0 + attempt)
+        if last_error is not None:
+            record["dre_erro"] = str(last_error)[:300]
             erros += 1
         if index % 50 == 0:
             logger.info("DRE: %s/%s despachos (%s erros)", index, len(targets), erros)
@@ -553,7 +608,7 @@ def enrich_membros(members: List[Dict[str, Any]], *, delay: float = 0.3) -> Dict
             ok += 1
             continue
         try:
-            fields = parse_member_profile(fetch_http(url))
+            fields = parse_member_profile(fetch_http(url), preferred_name=str(member.get("nome") or ""))
             if not fields:
                 raise RuntimeError("Perfil sem componente OfficialProfile.")
             member.update(fields)
@@ -643,16 +698,19 @@ def collect(
             logger.warning("Enriquecimento dos perfis falhou: %s", exc)
             errors.append({"area_slug": "perfis", "url": COMPOSICAO_PATH, "erro": str(exc)})
 
+    ministerios = build_ministerios(areas, members, nomeacoes)
     return {
         "generated_at": _now(),
         "governo": "XXIV Governo Constitucional",
         "timeline": timeline,
         "fontes": {"nomeacoes": nomeacoes_url, "composicao": comp_url},
         "areas": areas,
+        "ministerios": ministerios,
         "membros": members,
         "nomeacoes": nomeacoes,
         "stats": {
             "areas": len(areas),
+            "ministerios": len(ministerios),
             "membros": len(members),
             "nomeacoes": len(nomeacoes),
             "dre_detalhes": dre_stats["ok"],
@@ -672,6 +730,57 @@ def _count_by(items: Iterable[Dict[str, Any]], field: str) -> Dict[str, int]:
         key = str(item.get(field) or "")
         counts[key] = counts.get(key, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def build_ministerios(
+    areas: List[Dict[str, Any]],
+    members: List[Dict[str, Any]],
+    nomeacoes: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Consolida cada área de governo num registo de ministério.
+
+    O registo junta o titular, os secretários de Estado, o número de nomeações
+    e as ligações oficiais — é a vista «todos os ministérios» do módulo.
+    """
+    by_area: Dict[str, List[Dict[str, Any]]] = {}
+    for member in members:
+        slug = AREA_SLUG_ALIASES.get(str(member.get("area_slug") or ""), str(member.get("area_slug") or ""))
+        if member.get("grupo") == "Primeiro-Ministro":
+            slug = "primeiro-ministro"
+        by_area.setdefault(slug, []).append(member)
+    totals = _count_by(nomeacoes, "area_slug")
+
+    ministerios: List[Dict[str, Any]] = []
+    for area in areas:
+        slug = str(area.get("area_slug") or "")
+        people = by_area.get(slug, [])
+        titular = next(
+            (m for m in people if m.get("grupo") in ("Ministros", "Primeiro-Ministro")),
+            None,
+        )
+        secretarios = [m for m in people if m.get("grupo") == "Secretários de Estado"]
+        ministerios.append(
+            {
+                "area": area.get("area", ""),
+                "area_slug": slug,
+                "descricao": area.get("descricao", ""),
+                "tipo": "Primeiro-Ministro" if slug == "primeiro-ministro" else "Ministério",
+                "titular": titular.get("nome", "") if titular else "",
+                "cargo": titular.get("cargo", "") if titular else "",
+                "secretarios_count": len(secretarios),
+                "nomeacoes_count": totals.get(slug, 0),
+                "url": area.get("url", ""),
+                "membros": [
+                    {
+                        "nome": member.get("nome", ""),
+                        "cargo": member.get("cargo", ""),
+                        "grupo": member.get("grupo", ""),
+                    }
+                    for member in ([titular] if titular else []) + secretarios
+                ],
+            }
+        )
+    return ministerios
 
 
 # ---------------------------------------------------------------------------
@@ -779,6 +888,27 @@ COMPOSICAO_MAPPING: Dict[str, Any] = {
 }
 
 
+MINISTERIOS_MAPPING: Dict[str, Any] = {
+    "dynamic": True,
+    "properties": {
+        "item_id": {"type": "keyword"},
+        "source_id": {"type": "keyword"},
+        "source_name": {"type": "keyword"},
+        "run_id": {"type": "keyword"},
+        "area": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "area_slug": {"type": "keyword"},
+        "tipo": {"type": "keyword"},
+        "titular": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "cargo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "secretarios_count": {"type": "integer"},
+        "nomeacoes_count": {"type": "integer"},
+        "url": {"type": "keyword"},
+        "membros": {"type": "flattened"},
+        "scraped_at": {"type": "date"},
+    },
+}
+
+
 def _ensure_index(client: Any, index: str, mapping: Dict[str, Any]) -> None:
     if not client.indices.exists(index=index):
         client.indices.create(
@@ -806,6 +936,18 @@ def _composicao_doc(record: Dict[str, Any], run_id: str, scraped_at: str) -> Dic
         **record,
         "item_id": item_id,
         "source_id": SOURCE_COMPOSICAO,
+        "source_name": SOURCE_NAME,
+        "run_id": run_id,
+        "scraped_at": scraped_at,
+    }
+
+
+def _ministerio_doc(record: Dict[str, Any], run_id: str, scraped_at: str) -> Dict[str, Any]:
+    item_id = f"{SOURCE_MINISTERIOS}:{_stable_id(record.get('area_slug'))}"
+    return {
+        **record,
+        "item_id": item_id,
+        "source_id": SOURCE_MINISTERIOS,
         "source_name": SOURCE_NAME,
         "run_id": run_id,
         "scraped_at": scraped_at,
@@ -841,14 +983,17 @@ def index_payload(payload: Dict[str, Any], *, include_scraped: bool = True) -> D
 
     nomeacoes = [_nomeacao_doc(row, run_id, scraped_at) for row in payload.get("nomeacoes", [])]
     membros = [_composicao_doc(row, run_id, scraped_at) for row in payload.get("membros", [])]
+    ministerios = [_ministerio_doc(row, run_id, scraped_at) for row in payload.get("ministerios", [])]
 
     _ensure_index(client, INDEX_NOMEACOES, NOMEACOES_MAPPING)
     _ensure_index(client, INDEX_COMPOSICAO, COMPOSICAO_MAPPING)
+    _ensure_index(client, INDEX_MINISTERIOS, MINISTERIOS_MAPPING)
 
     result: Dict[str, Any] = {
         "run_id": run_id,
         "nomeacoes": _bulk(client, INDEX_NOMEACOES, nomeacoes),
         "composicao": _bulk(client, INDEX_COMPOSICAO, membros),
+        "ministerios": _bulk(client, INDEX_MINISTERIOS, ministerios),
     }
     if include_scraped:
         result["scraped_nomeacoes"] = index_scraped_items(
@@ -887,6 +1032,26 @@ def index_payload(payload: Dict[str, Any], *, include_scraped: bool = True) -> D
                     "scraped_at": scraped_at,
                 }
                 for doc in membros
+            ],
+            trigger="script",
+            es=client,
+        )
+        result["scraped_ministerios"] = index_scraped_items(
+            SOURCE_MINISTERIOS,
+            SOURCE_NAME,
+            run_id,
+            [
+                {
+                    "item_id": doc["item_id"],
+                    "title": f"{doc.get('area', '')} — {doc.get('titular', '')}".strip(" —"),
+                    "summary": f"{doc.get('secretarios_count', 0)} secretários de Estado · {doc.get('nomeacoes_count', 0)} nomeações",
+                    "text": doc.get("descricao", ""),
+                    "url": doc.get("url", ""),
+                    "tags": ["governo", "ministerios", "politica"],
+                    "data": doc,
+                    "scraped_at": scraped_at,
+                }
+                for doc in ministerios
             ],
             trigger="script",
             es=client,
@@ -952,11 +1117,13 @@ def main() -> int:
         try:
             result = index_payload(payload, include_scraped=not args.no_scraped)
             logger.info(
-                "Elasticsearch: nomeações=%s, composição=%s (%s, %s)",
+                "Elasticsearch: nomeações=%s, composição=%s, ministérios=%s (%s, %s, %s)",
                 result.get("nomeacoes", {}).get("indexed_count", 0),
                 result.get("composicao", {}).get("indexed_count", 0),
+                result.get("ministerios", {}).get("indexed_count", 0),
                 INDEX_NOMEACOES,
                 INDEX_COMPOSICAO,
+                INDEX_MINISTERIOS,
             )
         except Exception as exc:  # noqa: BLE001 — os ficheiros já estão gravados
             logger.error("Indexação no Elasticsearch falhou: %s", exc)

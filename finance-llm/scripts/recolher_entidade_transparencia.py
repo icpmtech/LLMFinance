@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,11 +53,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pausa", type=float, default=PAUSA, help="Pausa entre pedidos, em segundos")
     parser.add_argument("--forcar", action="store_true", help="Reler o que já está em disco")
     parser.add_argument("--indexar", action="store_true", help="Indexar em finance_ept_* no fim")
+    parser.add_argument(
+        "--exportar-json",
+        action="store_true",
+        help="Exportar um .json por entidade no fim (já acontece automaticamente)",
+    )
+    parser.add_argument(
+        "--so-exportar",
+        action="store_true",
+        help="Não recolher: gerar só os .json por entidade a partir do que está em disco",
+    )
     parser.add_argument("--tudo", action="store_true", help="Percorrer o catálogo completo (sem filtros)")
     args = parser.parse_args(argv)
 
+    if args.so_exportar:
+        resultado = ept.exportar_entidades_json()
+        print(json.dumps(resultado, ensure_ascii=False, indent=2))
+        return 0
+
     if not args.tudo and not any((args.entidade, args.cargo, args.titular)):
         parser.error("Indique --entidade/--cargo/--titular, ou --tudo para o catálogo completo.")
+
+    ultimo = {"em": 0.0}
+
+    def ao_progresso(progresso: dict) -> None:
+        agora = time.time()
+        if agora - ultimo["em"] < 5:
+            return
+        ultimo["em"] = agora
+        _progresso(progresso)
 
     progresso: dict = {}
     resultado = ept.recolher(
@@ -69,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         forcar=args.forcar,
         indexar_no_fim=args.indexar,
         progresso=progresso,
+        ao_progresso=ao_progresso,
     )
     _progresso(progresso)
     print("\n")

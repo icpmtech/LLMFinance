@@ -11,6 +11,8 @@ A árvore sintética segue a forma real da resposta de `/publicquery/getdeclarat
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from api import elasticsearch_client as esc
@@ -237,6 +239,43 @@ def test_detalhe_da_declaracao_em_disco(pasta):
     assert detalhe["declaracao_id"] == "123"
     assert detalhe["secoes"]
     assert detalhe["interesses"][0]["valores"]["Entidade"] == "Fundação Exemplo"
+
+
+def test_exportacao_por_entidade_gera_um_json_por_entidade(pasta):
+    """Cada entidade fica num `.json` próprio, com titulares e declarações."""
+    svc._guardar_cache("entidades", [{"id": "10", "nome": "Entidade Exemplo"}])
+    documento = ept.normalize_declaration(_declaracao(), recolhido_em="2026-01-01T00:00:00+00:00")
+    svc._append_jsonl(svc._declaracoes_jsonl(), [documento])
+    svc._append_jsonl(
+        svc._titularidades_jsonl(),
+        [
+            {
+                "titularidade_id": "900",
+                "titular_id": "40",
+                "titular": "Maria de Sousa Example",
+                "entidade_id": "10",
+                "entidade": "Entidade Exemplo",
+                "cargo_id": "30",
+                "cargo": "Presidente",
+                "inicio": "2024-01-02",
+                "fim": "2024-12-31",
+            }
+        ],
+    )
+
+    resultado = svc.exportar_entidades_json()
+    assert resultado["entidades"] == 1
+    assert resultado["declaracoes"] == 1
+
+    caminho = svc.entidades_json_dir() / "10.json"
+    assert caminho.exists()
+    exportado = json.loads(caminho.read_text(encoding="utf-8"))
+    assert exportado["entidade"] == "Entidade Exemplo"
+    assert exportado["totais"] == {"titulares": 1, "declaracoes": 1}
+    assert exportado["titulares"][0]["nome"] == "Maria de Sousa Example"
+    assert exportado["titulares"][0]["cargos"] == ["Presidente"]
+    assert exportado["titulares"][0]["declaracoes"][0]["declaracao_id"] == "123"
+    assert (svc.entidades_json_dir() / "_index.json").exists()
 
 
 def test_start_job_recusa_tipo_desconhecido():

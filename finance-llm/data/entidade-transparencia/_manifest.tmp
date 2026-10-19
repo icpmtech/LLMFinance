@@ -1,0 +1,4786 @@
+{
+  "titulares": {
+    "4952": {
+      "nome": "António Luís Santos da Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T14:31:12+00:00"
+    },
+    "6": {
+      "nome": "Rui Manuel Candeias Santana",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T14:30:37+00:00"
+    },
+    "5": {
+      "nome": "Sónia Maria Ferreira Dias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T14:30:37+00:00"
+    },
+    "11697": {
+      "nome": "Abel Artur Cruz Torres Mascarenhas",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T14:33:48+00:00"
+    },
+    "2557": {
+      "nome": "Abel Bruno Ferreira Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:54+00:00"
+    },
+    "4717": {
+      "nome": "Abel da Silva Sá",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:14:54+00:00"
+    },
+    "7776": {
+      "nome": "Abel Fernando Vinagre e Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:55+00:00"
+    },
+    "3073": {
+      "nome": "Abel Francisco Paulos Rocha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:55+00:00"
+    },
+    "8157": {
+      "nome": "Abel José Feiteira Pinheiro Arez",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:14:56+00:00"
+    },
+    "12035": {
+      "nome": "Abilio Batista Maia Evaristo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:14:56+00:00"
+    },
+    "6610": {
+      "nome": "Abílio Eugénio de Sousa Serpa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:57+00:00"
+    },
+    "10345": {
+      "nome": "Abílio Fernando da Silva Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:57+00:00"
+    },
+    "2975": {
+      "nome": "Abílio Flores Mendes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:14:58+00:00"
+    },
+    "2737": {
+      "nome": "Abílio Lopes Semedo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:14:58+00:00"
+    },
+    "7084": {
+      "nome": "Abílio Manuel Mota Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:59+00:00"
+    },
+    "11241": {
+      "nome": "Abílio Manuel Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:14:59+00:00"
+    },
+    "6847": {
+      "nome": "Abílio Manuel Saraiva da Cunha",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:00+00:00"
+    },
+    "8616": {
+      "nome": "Abílio Marques Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:00+00:00"
+    },
+    "4072": {
+      "nome": "Abílio Monteiro Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:01+00:00"
+    },
+    "5208": {
+      "nome": "Abílio Pinto Vieira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:02+00:00"
+    },
+    "9608": {
+      "nome": "Abílio Vargas Sousa",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:15:03+00:00"
+    },
+    "1713": {
+      "nome": "Acácio Alberto Correia Morais",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:03+00:00"
+    },
+    "8371": {
+      "nome": "Acácio Dias Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:04+00:00"
+    },
+    "2394": {
+      "nome": "Acácio João Lopes Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:04+00:00"
+    },
+    "1204": {
+      "nome": "Acílio dos Santos Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:04+00:00"
+    },
+    "1842": {
+      "nome": "Acir Fernandes Meirelles",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:04+00:00"
+    },
+    "292": {
+      "nome": "Adalberto Borges Couto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:05+00:00"
+    },
+    "1878": {
+      "nome": "Adalberto Campos Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:05+00:00"
+    },
+    "10222": {
+      "nome": "Adalgisa Maria Capela Rodrigues Barata",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:06+00:00"
+    },
+    "5109": {
+      "nome": "Adão José Fonseca Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:07+00:00"
+    },
+    "10746": {
+      "nome": "Adão Manuel Barbosa Moreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:08+00:00"
+    },
+    "650": {
+      "nome": "Adelia Carminda Carvalho Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:08+00:00"
+    },
+    "1136": {
+      "nome": "Adélia de Jesus Gonçalves da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:08+00:00"
+    },
+    "4215": {
+      "nome": "Adélia Maria Soares Leite",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:09+00:00"
+    },
+    "6667": {
+      "nome": "Adelina Fernanda Magalhães Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:10+00:00"
+    },
+    "5361": {
+      "nome": "Adelina Maria Marques Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:10+00:00"
+    },
+    "7055": {
+      "nome": "Adelina Paula Mendes Pinto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:11+00:00"
+    },
+    "10997": {
+      "nome": "Adelino Alberto Monteiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:12+00:00"
+    },
+    "8699": {
+      "nome": "Adelino António Bastos Camões Sobral",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:12+00:00"
+    },
+    "2773": {
+      "nome": "Adelino Antunes de Almeida",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:13+00:00"
+    },
+    "11309": {
+      "nome": "Adelino Carlos Bandeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:14+00:00"
+    },
+    "8423": {
+      "nome": "Adelino da Silva Cunha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:14+00:00"
+    },
+    "11409": {
+      "nome": "Adelino de Gouveia Jardim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:15+00:00"
+    },
+    "2024": {
+      "nome": "Adelino Duarte Machado",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:15+00:00"
+    },
+    "11353": {
+      "nome": "Adelino José Ramalho Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:16+00:00"
+    },
+    "3972": {
+      "nome": "Adelino Manuel Almeida Miguéns",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:17+00:00"
+    },
+    "9520": {
+      "nome": "Adelino Manuel da Silva Dias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:18+00:00"
+    },
+    "9173": {
+      "nome": "Adelino Manuel Martins Leitão de Azevedo Pinto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:18+00:00"
+    },
+    "3565": {
+      "nome": "Adelino Martins Maia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:19+00:00"
+    },
+    "4508": {
+      "nome": "Adelino Morgado Carneiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:19+00:00"
+    },
+    "4023": {
+      "nome": "Adelino Silva Costa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:19+00:00"
+    },
+    "773": {
+      "nome": "Adelino Silvério Ferreira Esteves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:20+00:00"
+    },
+    "4211": {
+      "nome": "Adelino Teixeira de Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:20+00:00"
+    },
+    "8139": {
+      "nome": "Adélio da Costa Carneiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:21+00:00"
+    },
+    "4768": {
+      "nome": "Adérito de Jesus Teixeira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:21+00:00"
+    },
+    "12064": {
+      "nome": "Adérito Duarte Simões Tostão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:22+00:00"
+    },
+    "7627": {
+      "nome": "Adérito Ferreira Machado",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:23+00:00"
+    },
+    "11193": {
+      "nome": "Adérito Manuel Pereira dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:23+00:00"
+    },
+    "4872": {
+      "nome": "Adília Maria Pires da Silva Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:24+00:00"
+    },
+    "7389": {
+      "nome": "Adilo Oliveira Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:24+00:00"
+    },
+    "11656": {
+      "nome": "Adma Ribeiro Ibrahim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:25+00:00"
+    },
+    "11258": {
+      "nome": "Admar Manuel Feijó",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:26+00:00"
+    },
+    "12039": {
+      "nome": "Adolfo Amílcar Moreno",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:26+00:00"
+    },
+    "6968": {
+      "nome": "Adolfo Augusto Martins da Cruz Morais de Macedo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:27+00:00"
+    },
+    "2285": {
+      "nome": "Adolfo Manuel Chevarria Marrocos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:28+00:00"
+    },
+    "2173": {
+      "nome": "Adolfo Nuno Gregório Vasconcelos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:29+00:00"
+    },
+    "5550": {
+      "nome": "Adolfo Viana Soares dos Reis",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:30+00:00"
+    },
+    "11471": {
+      "nome": "Adozinda de Jesus Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:31+00:00"
+    },
+    "10278": {
+      "nome": "Adriana dos Santos Nunes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:31+00:00"
+    },
+    "10762": {
+      "nome": "Adriana Filipa Martins da Cruz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:32+00:00"
+    },
+    "9635": {
+      "nome": "Adriana Filipe Dias Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:32+00:00"
+    },
+    "8040": {
+      "nome": "Adriana Helena da Silva Rodrigues",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:33+00:00"
+    },
+    "3443": {
+      "nome": "Adriana Magalhães Ribeiro Reais Pinto",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:34+00:00"
+    },
+    "7882": {
+      "nome": "Adriana Margarida Viana Guimarães Moreira Leal",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:34+00:00"
+    },
+    "6942": {
+      "nome": "Adriana Milene Ascenção Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:35+00:00"
+    },
+    "3901": {
+      "nome": "Adriana Oliveira Madeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:36+00:00"
+    },
+    "5590": {
+      "nome": "Adriano Almeida Ramos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:36+00:00"
+    },
+    "774": {
+      "nome": "Adriano Alves da Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:37+00:00"
+    },
+    "8936": {
+      "nome": "Adriano António Pinto de Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:37+00:00"
+    },
+    "8573": {
+      "nome": "Adriano Augusto Azevedo Correia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:38+00:00"
+    },
+    "4737": {
+      "nome": "Adriano Augusto Correia Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:38+00:00"
+    },
+    "1110": {
+      "nome": "Adriano Augusto Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:39+00:00"
+    },
+    "2422": {
+      "nome": "Adriano Barbeiro Neto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:39+00:00"
+    },
+    "7495": {
+      "nome": "Adriano de Jesus Miguel Dias Pedro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:40+00:00"
+    },
+    "1187": {
+      "nome": "Adriano de Lima Gouveia Azevedo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:41+00:00"
+    },
+    "1295": {
+      "nome": "Adriano João Leal Cardoso Guerra",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:42+00:00"
+    },
+    "4623": {
+      "nome": "Adriano José Moreira da Rocha",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:42+00:00"
+    },
+    "4678": {
+      "nome": "Adriano Machado Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:42+00:00"
+    },
+    "2848": {
+      "nome": "Adriano Manuel Mota Costa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:43+00:00"
+    },
+    "5641": {
+      "nome": "Adriano Rafael de Sousa Moreira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:44+00:00"
+    },
+    "7692": {
+      "nome": "Adriano Teixeira Alves dos Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:44+00:00"
+    },
+    "2283": {
+      "nome": "Adriano Vieira Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:44+00:00"
+    },
+    "7194": {
+      "nome": "Afonso Augusto da Silva Luz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:45+00:00"
+    },
+    "10476": {
+      "nome": "Afonso dos Santos Fernandes do Nascimento",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:46+00:00"
+    },
+    "5112": {
+      "nome": "Afonso Gonçalves da Silva Oliveira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:47+00:00"
+    },
+    "11713": {
+      "nome": "Afonso Henrique Dias Ferreira de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:48+00:00"
+    },
+    "3108": {
+      "nome": "Afonso Humberto Ribeiro Mota",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:48+00:00"
+    },
+    "9911": {
+      "nome": "Afonso Jorge da Silva Brandão",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:49+00:00"
+    },
+    "2313": {
+      "nome": "Afonso José Morais de Gouveia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:49+00:00"
+    },
+    "5835": {
+      "nome": "Afonso Manuel Baptista Dias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:50+00:00"
+    },
+    "10204": {
+      "nome": "Afonso Manuel Sapateiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:50+00:00"
+    },
+    "10684": {
+      "nome": "Afonso Miguel Silveira Machado Pereira Costa",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:15:51+00:00"
+    },
+    "9056": {
+      "nome": "Afonso Nunes Figueiredo Patrão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:52+00:00"
+    },
+    "12350": {
+      "nome": "Afonso Reis Cabral",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:53+00:00"
+    },
+    "2352": {
+      "nome": "Agostinho Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:53+00:00"
+    },
+    "12480": {
+      "nome": "Agostinho Alves Pinto",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:54+00:00"
+    },
+    "5600": {
+      "nome": "Agostinho António Gonçalves Lopes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:54+00:00"
+    },
+    "6258": {
+      "nome": "Agostinho César Gomes Soares",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:55+00:00"
+    },
+    "2872": {
+      "nome": "Agostinho Constantino Rodrigues Carvalho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:55+00:00"
+    },
+    "9813": {
+      "nome": "Agostinho Correia Branquinho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:56+00:00"
+    },
+    "806": {
+      "nome": "Agostinho da Costa Rego",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:56+00:00"
+    },
+    "9274": {
+      "nome": "Agostinho da Silva Viana",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:57+00:00"
+    },
+    "8980": {
+      "nome": "Agostinho David de Sousa Henriques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:57+00:00"
+    },
+    "11349": {
+      "nome": "Agostinho de Sousa Mendes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:58+00:00"
+    },
+    "8443": {
+      "nome": "Agostinho dos Santos Menino",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:58+00:00"
+    },
+    "11519": {
+      "nome": "Agostinho Feliciano Melo de Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:15:59+00:00"
+    },
+    "7402": {
+      "nome": "Agostinho Franklim Pinto Marques",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:15:59+00:00"
+    },
+    "5114": {
+      "nome": "Agostinho Gonçalves Alves da Santa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:00+00:00"
+    },
+    "3868": {
+      "nome": "Agostinho Gonçalves de Araújo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:01+00:00"
+    },
+    "3532": {
+      "nome": "Agostinho Joaquim Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:01+00:00"
+    },
+    "6724": {
+      "nome": "Agostinho José Carvalho dos Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:02+00:00"
+    },
+    "1737": {
+      "nome": "Agostinho José do Ó Mira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:02+00:00"
+    },
+    "1434": {
+      "nome": "Agostinho Machado Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:02+00:00"
+    },
+    "7862": {
+      "nome": "Agostinho Manuel Pinho de Oliveira",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:16:05+00:00"
+    },
+    "2441": {
+      "nome": "Agostinho Martins da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:05+00:00"
+    },
+    "786": {
+      "nome": "Agostinho Rodrigues Loureiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:06+00:00"
+    },
+    "4047": {
+      "nome": "Agostinho Salgado Faria",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:06+00:00"
+    },
+    "2437": {
+      "nome": "Aida Filipa Moreira da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:06+00:00"
+    },
+    "3677": {
+      "nome": "Aida Maria Melo Amaral",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:07+00:00"
+    },
+    "1328": {
+      "nome": "Aida Maria Oliveira Carvalho",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:16:08+00:00"
+    },
+    "6179": {
+      "nome": "Aires Carlos Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:09+00:00"
+    },
+    "1766": {
+      "nome": "Aires Henrique do Couto Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:10+00:00"
+    },
+    "2695": {
+      "nome": "Albano António Cabral Figueiredo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:10+00:00"
+    },
+    "3700": {
+      "nome": "Albano Joaquim Mestre Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:11+00:00"
+    },
+    "4804": {
+      "nome": "Albano José Dias Moreira Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:12+00:00"
+    },
+    "145": {
+      "nome": "Albano Manuel de Jesus Gonçalves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:13+00:00"
+    },
+    "1417": {
+      "nome": "Albertina de Jesus Diniz Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:13+00:00"
+    },
+    "513": {
+      "nome": "Albertina de Jesus Gomes Guedes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:13+00:00"
+    },
+    "10813": {
+      "nome": "Albertina Maria Costa Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:14+00:00"
+    },
+    "9468": {
+      "nome": "Albertina Maria Mateus Rosa Tavares",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:14+00:00"
+    },
+    "381": {
+      "nome": "Albertino Augusto Videira Tomé",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:14+00:00"
+    },
+    "1843": {
+      "nome": "Albertino José Ribeiro Monteiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:15+00:00"
+    },
+    "7089": {
+      "nome": "Albertino Lameira Lourenço Crespo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:15+00:00"
+    },
+    "12428": {
+      "nome": "Albertino Pereira Ventura",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:16+00:00"
+    },
+    "9473": {
+      "nome": "Alberto Afonso Pereira da Silva Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:17+00:00"
+    },
+    "5817": {
+      "nome": "Alberto Amaro Guedes Machado",
+      "declaracoes": 9,
+      "declaracoes_novas": 9,
+      "recolhido_em": "2026-10-19T15:16:20+00:00"
+    },
+    "393": {
+      "nome": "Alberto Armindo do Braz Moura",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:21+00:00"
+    },
+    "7984": {
+      "nome": "Alberto Augusto Andrade de Oliveira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:22+00:00"
+    },
+    "364": {
+      "nome": "Alberto Carlos Faria Afonso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:22+00:00"
+    },
+    "1691": {
+      "nome": "Alberto da Silva Oliveira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:23+00:00"
+    },
+    "11781": {
+      "nome": "Alberto de Oliveira Bravo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:23+00:00"
+    },
+    "12394": {
+      "nome": "Alberto de Sousa Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:24+00:00"
+    },
+    "2962": {
+      "nome": "Alberto Dias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:25+00:00"
+    },
+    "7871": {
+      "nome": "Alberto Fernando da Silva Santos",
+      "declaracoes": 8,
+      "declaracoes_novas": 8,
+      "recolhido_em": "2026-10-19T15:16:28+00:00"
+    },
+    "11599": {
+      "nome": "Alberto Fernando de Matos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:29+00:00"
+    },
+    "9420": {
+      "nome": "Alberto Fernando de Paiva Amorim Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:30+00:00"
+    },
+    "11589": {
+      "nome": "Alberto Filipe Freitas Guerra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:30+00:00"
+    },
+    "4442": {
+      "nome": "Alberto Gonçalves de Melo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:31+00:00"
+    },
+    "6275": {
+      "nome": "Alberto João Coelho de Melo e Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:31+00:00"
+    },
+    "10429": {
+      "nome": "Alberto Jorge Braga Ferreira Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:32+00:00"
+    },
+    "4701": {
+      "nome": "Alberto Jorge da Luz Encarnação",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:32+00:00"
+    },
+    "9710": {
+      "nome": "Alberto Jorge Sousa Bettencourt",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:32+00:00"
+    },
+    "5818": {
+      "nome": "Alberto Jorge Torres da Silva Fonseca",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:16:34+00:00"
+    },
+    "6803": {
+      "nome": "Alberto José Antunes Varela Velez Grilo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:35+00:00"
+    },
+    "9491": {
+      "nome": "Alberto José da Silva Moura",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:35+00:00"
+    },
+    "7738": {
+      "nome": "Alberto Luís Laplaine Fernandes Guimarães",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:36+00:00"
+    },
+    "11251": {
+      "nome": "Alberto Manuel da Costa Baranda Diniz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:36+00:00"
+    },
+    "4776": {
+      "nome": "Alberto Manuel da Silva Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:37+00:00"
+    },
+    "5473": {
+      "nome": "Alberto Manuel de Almeida Diogo",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:16:38+00:00"
+    },
+    "4116": {
+      "nome": "Alberto Manuel Martins da Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:39+00:00"
+    },
+    "2855": {
+      "nome": "Alberto Manuel Nunes de Olim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:40+00:00"
+    },
+    "5684": {
+      "nome": "Alberto Manuel Rodrigues da Silva",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:16:41+00:00"
+    },
+    "10484": {
+      "nome": "Alberto Miguel Rosales Ledo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:42+00:00"
+    },
+    "4450": {
+      "nome": "Alberto Pacheco da Ponte",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:42+00:00"
+    },
+    "9065": {
+      "nome": "Alberto Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:43+00:00"
+    },
+    "10010": {
+      "nome": "Alberto Ricardo Cabral Bulhões",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:43+00:00"
+    },
+    "9967": {
+      "nome": "Alberto Ricardo Teixeira Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:44+00:00"
+    },
+    "1926": {
+      "nome": "Alberto Rocha Afonso",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:44+00:00"
+    },
+    "1203": {
+      "nome": "Alberto Tavares Nunes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:44+00:00"
+    },
+    "2723": {
+      "nome": "Albino Alves Rodrigo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:45+00:00"
+    },
+    "7409": {
+      "nome": "Albino Bruno da Silva Ramos",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:16:46+00:00"
+    },
+    "6496": {
+      "nome": "Albino Jorge Cardoso Gonçalves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:47+00:00"
+    },
+    "10797": {
+      "nome": "Albino Manuel Conceição Coelho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:47+00:00"
+    },
+    "876": {
+      "nome": "Albino Manuel de Oliveira Magalhães",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:48+00:00"
+    },
+    "2304": {
+      "nome": "Albino Mário Borges Ferrão",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:48+00:00"
+    },
+    "12197": {
+      "nome": "Albino Marques Lameiras",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:49+00:00"
+    },
+    "1288": {
+      "nome": "Albino Pedro Pereira Baganha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:50+00:00"
+    },
+    "2943": {
+      "nome": "Alceu Alves Afonso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:51+00:00"
+    },
+    "6401": {
+      "nome": "Alcides Cardoso Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:51+00:00"
+    },
+    "9550": {
+      "nome": "Alcides Manuel Lopes de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:52+00:00"
+    },
+    "4988": {
+      "nome": "Alcina Maria Machado Pereira da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:53+00:00"
+    },
+    "2688": {
+      "nome": "Alcinda Maria Sarmento do Sacramento Costa dos Reis",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:53+00:00"
+    },
+    "11173": {
+      "nome": "Alcindo José Gonçalves Quaresma",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:54+00:00"
+    },
+    "3845": {
+      "nome": "Alcino da Silva Francisco",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:54+00:00"
+    },
+    "1497": {
+      "nome": "Alcino Filipe Pereira Francisco",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:55+00:00"
+    },
+    "11996": {
+      "nome": "Alcino Jorge de Saraiva Vieira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:55+00:00"
+    },
+    "5195": {
+      "nome": "Alcino Jorge Marcos de Sousa Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:56+00:00"
+    },
+    "1446": {
+      "nome": "Alcino Matias Correia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:56+00:00"
+    },
+    "1273": {
+      "nome": "Alcino Miguel dos Santos Morgado",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:16:57+00:00"
+    },
+    "4545": {
+      "nome": "Alcino Nascimento dos Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:16:58+00:00"
+    },
+    "5398": {
+      "nome": "Alda Gisela de Freitas Monteiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:58+00:00"
+    },
+    "12437": {
+      "nome": "Alda Maria Correia Mendes Fidalgo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:16:59+00:00"
+    },
+    "7419": {
+      "nome": "Alda Maria das Neves Delgado Correia de Carvalho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:00+00:00"
+    },
+    "10617": {
+      "nome": "Alda Odete Borges Martins Falé Monteiro Falca",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:01+00:00"
+    },
+    "9682": {
+      "nome": "Alda Sofia Galante Filipe",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:01+00:00"
+    },
+    "7855": {
+      "nome": "Aldara Dorisa Gonçalves Salsa Braga",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:02+00:00"
+    },
+    "10616": {
+      "nome": "Aldeberto José de Loura Chaves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:02+00:00"
+    },
+    "7617": {
+      "nome": "Aldevina Maria Machado Rodrigues",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:03+00:00"
+    },
+    "12411": {
+      "nome": "Aldo Manuel Serra Passarinho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:04+00:00"
+    },
+    "9638": {
+      "nome": "Aleixo Jacinto Castro Abreu",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:05+00:00"
+    },
+    "1259": {
+      "nome": "Alejandro Marcelino Gonçalves Gonçalves",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:06+00:00"
+    },
+    "3993": {
+      "nome": "Alex Olivier Alves Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:06+00:00"
+    },
+    "6464": {
+      "nome": "Alexandra Alvarez Martins",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:07+00:00"
+    },
+    "2637": {
+      "nome": "Alexandra Assis Rosa Queiroz de Barros",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:07+00:00"
+    },
+    "7286": {
+      "nome": "Alexandra Cerveira Pinto Sousa Lima",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:09+00:00"
+    },
+    "2941": {
+      "nome": "Alexandra Cláudia Exposto Gonçalves Cadete",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:09+00:00"
+    },
+    "7078": {
+      "nome": "Alexandra Cristina Nabais Ribeiro Toscano",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:10+00:00"
+    },
+    "3669": {
+      "nome": "Alexandra da Cruz Pereira Rosa Teixeira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:11+00:00"
+    },
+    "1324": {
+      "nome": "Alexandra de Carvalho dos Santos Garcia Guerreiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:12+00:00"
+    },
+    "3059": {
+      "nome": "Alexandra Filipa Campos Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:12+00:00"
+    },
+    "9648": {
+      "nome": "Alexandra Filipa Lopes Figueiredo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:13+00:00"
+    },
+    "2184": {
+      "nome": "Alexandra Filipe Teixeira da Fonseca",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:13+00:00"
+    },
+    "11370": {
+      "nome": "Alexandra Gonçalves Morais",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:14+00:00"
+    },
+    "11016": {
+      "nome": "Alexandra Isabel Bento Barros Duarte",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:15+00:00"
+    },
+    "12324": {
+      "nome": "Alexandra Isabel Cardador de Queirós",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:15+00:00"
+    },
+    "6554": {
+      "nome": "Alexandra Isabel Castanheira Afonso Alves Ferreira",
+      "declaracoes": 7,
+      "declaracoes_novas": 7,
+      "recolhido_em": "2026-10-19T15:17:18+00:00"
+    },
+    "4913": {
+      "nome": "Alexandra Isabel Gomes Rufino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:19+00:00"
+    },
+    "4924": {
+      "nome": "Alexandra Isabel Marques Rodrigues Correia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:19+00:00"
+    },
+    "9868": {
+      "nome": "Alexandra Isabel Santos Correia Isidro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:20+00:00"
+    },
+    "5115": {
+      "nome": "Alexandra Ludomila Ribeiro Fernandes Leitão",
+      "declaracoes": 10,
+      "declaracoes_novas": 10,
+      "recolhido_em": "2026-10-19T15:17:24+00:00"
+    },
+    "7023": {
+      "nome": "Alexandra Margarida Telhal Costa Gomes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:24+00:00"
+    },
+    "6650": {
+      "nome": "Alexandra Margarida Vieira Reis",
+      "declaracoes": 12,
+      "declaracoes_novas": 12,
+      "recolhido_em": "2026-10-19T15:17:29+00:00"
+    },
+    "2196": {
+      "nome": "Alexandra Maria Amaral Martins Ramos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:30+00:00"
+    },
+    "10508": {
+      "nome": "Alexandra Maria da Silva Ferra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:31+00:00"
+    },
+    "7710": {
+      "nome": "Alexandra Maria do Couto Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:31+00:00"
+    },
+    "10252": {
+      "nome": "Alexandra Maria Duarte Monteiro Araújo da Silva Esteves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:32+00:00"
+    },
+    "8312": {
+      "nome": "Alexandra Maria Fonseca Marques",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:33+00:00"
+    },
+    "5773": {
+      "nome": "Alexandra Maria Gomes da Costa",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:17:35+00:00"
+    },
+    "602": {
+      "nome": "Alexandra Maria Martins Ramos da Cunha Serra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:36+00:00"
+    },
+    "10543": {
+      "nome": "Alexandra Medinas de Oliveira Aleixo Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:36+00:00"
+    },
+    "595": {
+      "nome": "Alexandra Nunes Esteves Tavares de Moura",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:38+00:00"
+    },
+    "1320": {
+      "nome": "Alexandra Nunes Viana",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:38+00:00"
+    },
+    "3921": {
+      "nome": "Alexandra Patrícia Moreira da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:39+00:00"
+    },
+    "591": {
+      "nome": "Alexandra Paula Monteiro Pessanha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:39+00:00"
+    },
+    "279": {
+      "nome": "Alexandra Paula Pereira Cardoso de Moura",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:40+00:00"
+    },
+    "6231": {
+      "nome": "Alexandra Santos Domingos Carvalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:41+00:00"
+    },
+    "3614": {
+      "nome": "Alexandra Sofia Bernardo Almeida",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:17:42+00:00"
+    },
+    "2622": {
+      "nome": "Alexandra Sofia Marinho da Silva Mendes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:43+00:00"
+    },
+    "5490": {
+      "nome": "Alexandra Sofia Vieira Nogueira Barbosa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:43+00:00"
+    },
+    "7516": {
+      "nome": "Alexandra Suzana Abreu de Faria Carvalho Röger",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:17:45+00:00"
+    },
+    "1287": {
+      "nome": "Alexandre Afonso Marques Ribeiro Nunes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:45+00:00"
+    },
+    "2464": {
+      "nome": "Alexandre António Sousa Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:46+00:00"
+    },
+    "4496": {
+      "nome": "Alexandre Barreira Gomes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:17:46+00:00"
+    },
+    "5117": {
+      "nome": "Alexandre Bernardo de Macedo e Lopes Simões",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:47+00:00"
+    },
+    "1762": {
+      "nome": "Alexandre Branco Gaudêncio",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:48+00:00"
+    },
+    "902": {
+      "nome": "Alexandre Correia Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:49+00:00"
+    },
+    "10620": {
+      "nome": "Alexandre da Cunha Pinto Teixeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:49+00:00"
+    },
+    "11439": {
+      "nome": "Alexandre da Silva Cruz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:50+00:00"
+    },
+    "5120": {
+      "nome": "Alexandre Damasceno da Silva Poço",
+      "declaracoes": 9,
+      "declaracoes_novas": 9,
+      "recolhido_em": "2026-10-19T15:17:54+00:00"
+    },
+    "4137": {
+      "nome": "Alexandre de França Pitão Abreu Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:54+00:00"
+    },
+    "8529": {
+      "nome": "Alexandre Duarte Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:55+00:00"
+    },
+    "7479": {
+      "nome": "Alexandre Emanuel Marques Figueira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:56+00:00"
+    },
+    "7096": {
+      "nome": "Alexandre Emanuel Ramos Marques",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:17:57+00:00"
+    },
+    "7967": {
+      "nome": "Alexandre Fernando Mendes Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:57+00:00"
+    },
+    "6587": {
+      "nome": "Alexandre Ferreira de Brito Vaz Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:17:58+00:00"
+    },
+    "6162": {
+      "nome": "Alexandre Filipe Fernandes Lote",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:17:59+00:00"
+    },
+    "11651": {
+      "nome": "Alexandre Francisco Morais Medeiros",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:00+00:00"
+    },
+    "7353": {
+      "nome": "Alexandre Gabriel Batista Alho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:00+00:00"
+    },
+    "10152": {
+      "nome": "Alexandre Gabriel Mateus Horta",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:01+00:00"
+    },
+    "1093": {
+      "nome": "Alexandre Gomes Araújo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:02+00:00"
+    },
+    "6853": {
+      "nome": "Alexandre Guedes da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:02+00:00"
+    },
+    "12464": {
+      "nome": "Alexandre Hilário Afonso Gameiro Pires",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:02+00:00"
+    },
+    "9066": {
+      "nome": "Alexandre José Germano de Abreu",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:03+00:00"
+    },
+    "1391": {
+      "nome": "Alexandre José Lourenço Carvalho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:18:04+00:00"
+    },
+    "6472": {
+      "nome": "Alexandre José Matias Nunes Mendes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:04+00:00"
+    },
+    "10600": {
+      "nome": "Alexandre José Pessoa Amado",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:05+00:00"
+    },
+    "10968": {
+      "nome": "Alexandre José Sanches Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:05+00:00"
+    },
+    "9969": {
+      "nome": "Alexandre Manuel Coimbra Peixoto",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:06+00:00"
+    },
+    "352": {
+      "nome": "Alexandre Manuel de Oliveira Soares Tavares",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:06+00:00"
+    },
+    "12020": {
+      "nome": "Alexandre Manuel Fernandes Gonçalves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:07+00:00"
+    },
+    "8487": {
+      "nome": "Alexandre Manuel Gomes Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:08+00:00"
+    },
+    "3148": {
+      "nome": "Alexandre Manuel Mendonça Vaz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:08+00:00"
+    },
+    "8213": {
+      "nome": "Alexandre Manuel Mouta Favaios",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:18:10+00:00"
+    },
+    "6606": {
+      "nome": "Alexandre Manuel Nobre da Silva Pais",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:11+00:00"
+    },
+    "5584": {
+      "nome": "Alexandre Manuel Palma Trindade",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:11+00:00"
+    },
+    "10389": {
+      "nome": "Alexandre Manuel Pinheiro Sardoeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:12+00:00"
+    },
+    "10018": {
+      "nome": "Alexandre Manuel Pinto Raposo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:13+00:00"
+    },
+    "2673": {
+      "nome": "Alexandre Manuel Rodrigues Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:13+00:00"
+    },
+    "5517": {
+      "nome": "Alexandre Miguel Alves Tomás",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:14+00:00"
+    },
+    "7337": {
+      "nome": "Alexandre Miguel Cardoso de Soveral Martins",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:14+00:00"
+    },
+    "1946": {
+      "nome": "Alexandre Miguel Carvalho Constantino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:15+00:00"
+    },
+    "1284": {
+      "nome": "Alexandre Miguel da Costa Mendes da Silva Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:15+00:00"
+    },
+    "5442": {
+      "nome": "Alexandre Miguel de Sousa Neves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:16+00:00"
+    },
+    "6215": {
+      "nome": "Alexandre Miguel Fernandes Gomes da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:16+00:00"
+    },
+    "5543": {
+      "nome": "Alexandre Miguel Gastinho Quendera",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:17+00:00"
+    },
+    "4336": {
+      "nome": "Alexandre Miguel Gonçalves Maciel",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:18+00:00"
+    },
+    "7565": {
+      "nome": "Alexandre Miguel Pereira Araújo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:18+00:00"
+    },
+    "2711": {
+      "nome": "Alexandre Miguel Pereira Ferreira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:18:19+00:00"
+    },
+    "10782": {
+      "nome": "Alexandre Miguel Pereira Florentino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:20+00:00"
+    },
+    "4537": {
+      "nome": "Alexandre Miguel Pires dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:21+00:00"
+    },
+    "6232": {
+      "nome": "Alexandre Nuno de Aguiar Faria",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:18:22+00:00"
+    },
+    "8276": {
+      "nome": "Alexandre Nuno dos Santos Antunes Capucha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:23+00:00"
+    },
+    "4817": {
+      "nome": "Alexandre Nuno Teixeira de Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:23+00:00"
+    },
+    "3253": {
+      "nome": "Alexandre Paulo Simões Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:24+00:00"
+    },
+    "1959": {
+      "nome": "Alexandre Pereira Lagoa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:24+00:00"
+    },
+    "3435": {
+      "nome": "Alexandre Ricardo Garção Nunes Videira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:25+00:00"
+    },
+    "5135": {
+      "nome": "Alexandre Tiedtke Quintanilha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:26+00:00"
+    },
+    "6188": {
+      "nome": "Alexandre Valente Rosas Caetano",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:18:27+00:00"
+    },
+    "11400": {
+      "nome": "Alexandrina da Conceição Montês Abrunhosa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:28+00:00"
+    },
+    "8237": {
+      "nome": "Alexandrina Ferreira de Figueiredo",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:18:29+00:00"
+    },
+    "9675": {
+      "nome": "Alexandrina Maria Paulino Mota Leitão",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:29+00:00"
+    },
+    "3387": {
+      "nome": "Alexis Frantz",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:30+00:00"
+    },
+    "9611": {
+      "nome": "Alfeu Miguel Ferreira Nascimento",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:30+00:00"
+    },
+    "7301": {
+      "nome": "Alfredo António Amaral Dias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:31+00:00"
+    },
+    "2735": {
+      "nome": "Alfredo António Lopes Amaral",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:31+00:00"
+    },
+    "9131": {
+      "nome": "Alfredo Augusto Azevedo Morais Lima",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:32+00:00"
+    },
+    "2959": {
+      "nome": "Alfredo Augusto Dias Gapar",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:32+00:00"
+    },
+    "6301": {
+      "nome": "Alfredo César Vasconcellos Navio",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:18:34+00:00"
+    },
+    "6377": {
+      "nome": "Alfredo Condeço Amante",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:18:36+00:00"
+    },
+    "1196": {
+      "nome": "Alfredo da Costa Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:36+00:00"
+    },
+    "8645": {
+      "nome": "Alfredo Dias da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:37+00:00"
+    },
+    "2775": {
+      "nome": "Alfredo Domingues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:37+00:00"
+    },
+    "9047": {
+      "nome": "Alfredo Domingues da Rocha",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:37+00:00"
+    },
+    "5404": {
+      "nome": "Alfredo Eduardo Argulho Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:38+00:00"
+    },
+    "9294": {
+      "nome": "Alfredo Filipe Spínola Fernandes Correia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:39+00:00"
+    },
+    "3280": {
+      "nome": "Alfredo José da Silva Barreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:39+00:00"
+    },
+    "6538": {
+      "nome": "Alfredo José Leal Castanheira Neves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:40+00:00"
+    },
+    "1428": {
+      "nome": "Alfredo José Teixeira Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:40+00:00"
+    },
+    "4638": {
+      "nome": "Alfredo Manuel da Costa Antunes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:41+00:00"
+    },
+    "4775": {
+      "nome": "Alfredo Manuel Frasquilho Guerra",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:41+00:00"
+    },
+    "7366": {
+      "nome": "Alfredo Manuel Pereira Geraldes Dias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:41+00:00"
+    },
+    "3472": {
+      "nome": "Alfredo Oliveira Henriques",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:42+00:00"
+    },
+    "4411": {
+      "nome": "Alfredo Paulo de Vila Moura dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:42+00:00"
+    },
+    "6528": {
+      "nome": "Alfredo Roque Quelhas Marques Ferreira",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:18:44+00:00"
+    },
+    "2016": {
+      "nome": "Alfredo Teixeira Carvalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:45+00:00"
+    },
+    "3625": {
+      "nome": "Alice Clara Carneiro da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:45+00:00"
+    },
+    "8233": {
+      "nome": "Alice Cristina da Graça Dias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:46+00:00"
+    },
+    "2006": {
+      "nome": "Alice Maria Ascensão Afonso",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:46+00:00"
+    },
+    "1841": {
+      "nome": "Alice Maria Pereira Teixeira Mendes Feiteira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:47+00:00"
+    },
+    "6930": {
+      "nome": "Alice Sofia de Freitas Soares Ferreira Fernandes",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:18:48+00:00"
+    },
+    "8583": {
+      "nome": "Alina Maria Azevedo Sousa Vaz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:48+00:00"
+    },
+    "7436": {
+      "nome": "Alípio Ricardo Barbosa de Campos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:49+00:00"
+    },
+    "6741": {
+      "nome": "Áliyah Bhikha",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:18:50+00:00"
+    },
+    "5137": {
+      "nome": "Alma Benedetti Croce Rivera",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:51+00:00"
+    },
+    "5153": {
+      "nome": "Almerinda da Purificação de Freitas Rodrigues Marques",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:51+00:00"
+    },
+    "5821": {
+      "nome": "Almiro Miguel dos Santos Rodrigues Moreira",
+      "declaracoes": 6,
+      "declaracoes_novas": 6,
+      "recolhido_em": "2026-10-19T15:18:54+00:00"
+    },
+    "4053": {
+      "nome": "Almiro Silva Machado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:55+00:00"
+    },
+    "5562": {
+      "nome": "Alódia de Melo Rocha Costa e Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:55+00:00"
+    },
+    "2693": {
+      "nome": "Altamiro Manuel Rodrigues da Costa Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:56+00:00"
+    },
+    "7451": {
+      "nome": "Altina de Fátima Sebastian Gonzalez Villamarin",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:56+00:00"
+    },
+    "1104": {
+      "nome": "Altino Agostinho de Sousa de Freitas",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:57+00:00"
+    },
+    "335": {
+      "nome": "Altino Bernardo Lemos Bessa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:58+00:00"
+    },
+    "1960": {
+      "nome": "Altino Francisco Pereira Pires",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:18:58+00:00"
+    },
+    "2976": {
+      "nome": "Álvaro Agostinho Gomes Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:59+00:00"
+    },
+    "11335": {
+      "nome": "Álvaro Alexandre Rua Sousa Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:18:59+00:00"
+    },
+    "5667": {
+      "nome": "Álvaro António Magalhães Ferrão de Castelo Branco",
+      "declaracoes": 6,
+      "declaracoes_novas": 6,
+      "recolhido_em": "2026-10-19T15:19:02+00:00"
+    },
+    "10515": {
+      "nome": "Álvaro da Costa Marques Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:03+00:00"
+    },
+    "6834": {
+      "nome": "Álvaro dos Santos Amaro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:03+00:00"
+    },
+    "4779": {
+      "nome": "Álvaro dos Santos Beijinha",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:05+00:00"
+    },
+    "9278": {
+      "nome": "Álvaro Fernando Monteiro Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:06+00:00"
+    },
+    "7033": {
+      "nome": "Álvaro Fernando Santos Almeida",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:19:07+00:00"
+    },
+    "4243": {
+      "nome": "Álvaro Francisco Rodrigues Garrido",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:07+00:00"
+    },
+    "1774": {
+      "nome": "Álvaro Gil Ferreira Martins Coimbra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:08+00:00"
+    },
+    "9436": {
+      "nome": "Álvaro Guimarães Teixeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:09+00:00"
+    },
+    "2767": {
+      "nome": "Álvaro Joaquim Loureiro Santo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:09+00:00"
+    },
+    "7663": {
+      "nome": "Álvaro José Alves Manito",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:09+00:00"
+    },
+    "10466": {
+      "nome": "Álvaro José da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:10+00:00"
+    },
+    "7274": {
+      "nome": "Álvaro José de Oliveira Saraiva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:10+00:00"
+    },
+    "355": {
+      "nome": "Álvaro Jose Dias Carvalhinho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:11+00:00"
+    },
+    "11556": {
+      "nome": "Álvaro José Madureira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:11+00:00"
+    },
+    "816": {
+      "nome": "Álvaro José Monteiro Benjamim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:12+00:00"
+    },
+    "1788": {
+      "nome": "Álvaro José Pato Azedo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:13+00:00"
+    },
+    "3305": {
+      "nome": "Álvaro José Rocha Bota Guia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:13+00:00"
+    },
+    "1776": {
+      "nome": "Álvaro Manuel Balseiro Amaro",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:15+00:00"
+    },
+    "11526": {
+      "nome": "Álvaro Manuel Ferraz Festas",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:15+00:00"
+    },
+    "189": {
+      "nome": "Álvaro Manuel Paulino",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:16+00:00"
+    },
+    "9004": {
+      "nome": "Álvaro Manuel Reis Santos",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:19:17+00:00"
+    },
+    "6999": {
+      "nome": "Álvaro Miguel Ferreira Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:18+00:00"
+    },
+    "6485": {
+      "nome": "Álvaro Miguel Rodrigues dos Santos Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:18+00:00"
+    },
+    "8247": {
+      "nome": "Álvaro Oliveira Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:19+00:00"
+    },
+    "4103": {
+      "nome": "Álvaro Palma de Araújo",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:19:21+00:00"
+    },
+    "4602": {
+      "nome": "Álvaro Pedro Ferreira dos Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:21+00:00"
+    },
+    "4632": {
+      "nome": "Álvaro Pinto Cardoso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:22+00:00"
+    },
+    "11606": {
+      "nome": "Álvaro Xavier Carvalho Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:23+00:00"
+    },
+    "1623": {
+      "nome": "Alvim dos Santos Azevedo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:23+00:00"
+    },
+    "12030": {
+      "nome": "Alzira Maria de Sousa Torres",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:24+00:00"
+    },
+    "6451": {
+      "nome": "Alziro Antunes Cardoso",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:24+00:00"
+    },
+    "6172": {
+      "nome": "Amadeu Albertino Marques Soares Albergaria",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:26+00:00"
+    },
+    "2030": {
+      "nome": "Amadeu Esteves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:26+00:00"
+    },
+    "7026": {
+      "nome": "Amadeu Francisco Ribeiro Guerra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:27+00:00"
+    },
+    "8144": {
+      "nome": "Amadeu José Borges Ferro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:27+00:00"
+    },
+    "5531": {
+      "nome": "Amadeu José Guimarães Campos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:28+00:00"
+    },
+    "8614": {
+      "nome": "Amadeu José Neves Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:28+00:00"
+    },
+    "205": {
+      "nome": "Amadeu Paula Neves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:29+00:00"
+    },
+    "4725": {
+      "nome": "Amadeu Vieira dos Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:29+00:00"
+    },
+    "3277": {
+      "nome": "Amado Manuel Rodrigues Dias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:30+00:00"
+    },
+    "8020": {
+      "nome": "Amância Conceição Nogueira Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:30+00:00"
+    },
+    "100": {
+      "nome": "Amâncio Manuel Moreira da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:30+00:00"
+    },
+    "4585": {
+      "nome": "Amâncio Sequeira Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:31+00:00"
+    },
+    "1232": {
+      "nome": "Amâncio Sérgio Castro Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:31+00:00"
+    },
+    "10316": {
+      "nome": "Amândio António Almeida da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:32+00:00"
+    },
+    "1949": {
+      "nome": "Amândio do Nascimento",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:32+00:00"
+    },
+    "3812": {
+      "nome": "Amândio Fernandes Dinis",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:33+00:00"
+    },
+    "11105": {
+      "nome": "Amândio José Couteiro da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:34+00:00"
+    },
+    "9662": {
+      "nome": "Amândio Ribeiro Pedro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:34+00:00"
+    },
+    "11162": {
+      "nome": "Amândio Veríssimo Machado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:35+00:00"
+    },
+    "10959": {
+      "nome": "Ambrósio António Morgado Silvano",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:36+00:00"
+    },
+    "8001": {
+      "nome": "Ambrósio José da Silva Teixeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:36+00:00"
+    },
+    "12135": {
+      "nome": "Ameetkumar Subhaschandra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:37+00:00"
+    },
+    "131": {
+      "nome": "Amélia Margarida Rogério da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:38+00:00"
+    },
+    "7468": {
+      "nome": "Amélia Maria Cavaca Augusto",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:38+00:00"
+    },
+    "7547": {
+      "nome": "Amélia Maria da Silva Ramos Fernandes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:38+00:00"
+    },
+    "10168": {
+      "nome": "Amélia Maria Miguel Coelho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:39+00:00"
+    },
+    "1503": {
+      "nome": "Américo Carlos Fernandes Pinto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:39+00:00"
+    },
+    "2898": {
+      "nome": "Américo Carvalho Mendes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:40+00:00"
+    },
+    "1955": {
+      "nome": "Américo da Conceição Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:40+00:00"
+    },
+    "2353": {
+      "nome": "Américo Domingues do Pio",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:41+00:00"
+    },
+    "4918": {
+      "nome": "Américo dos Santos Afonso",
+      "declaracoes": 6,
+      "declaracoes_novas": 6,
+      "recolhido_em": "2026-10-19T15:19:43+00:00"
+    },
+    "236": {
+      "nome": "Américo Jorge Monteiro Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:44+00:00"
+    },
+    "4652": {
+      "nome": "Américo Jorge Vaz Monteiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:44+00:00"
+    },
+    "11366": {
+      "nome": "Américo Lopes da Fonseca",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:45+00:00"
+    },
+    "2404": {
+      "nome": "Américo Manuel de Oliveira e Castro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:45+00:00"
+    },
+    "1234": {
+      "nome": "Américo Paulo da Silva Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:46+00:00"
+    },
+    "10912": {
+      "nome": "Américo Pereira Coelho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:46+00:00"
+    },
+    "3283": {
+      "nome": "Américo Pereira da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:47+00:00"
+    },
+    "4099": {
+      "nome": "Américo Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:47+00:00"
+    },
+    "5481": {
+      "nome": "Amílcar Álvaro de Oliveira Ferreira Monteiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:47+00:00"
+    },
+    "4750": {
+      "nome": "Amílcar André Machado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:48+00:00"
+    },
+    "7363": {
+      "nome": "Amílcar Celta Falcão Ramos Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:48+00:00"
+    },
+    "449": {
+      "nome": "Amílcar Duarte da Cunha Ribas",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:49+00:00"
+    },
+    "4105": {
+      "nome": "Amílcar José Nunes Salvador",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:49+00:00"
+    },
+    "2109": {
+      "nome": "Amílcar Magalhães de Lima Gonçalves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:50+00:00"
+    },
+    "1964": {
+      "nome": "Amílcar Manuel Bispo Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:50+00:00"
+    },
+    "465": {
+      "nome": "Amílcar Monteiro de Almeida",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:51+00:00"
+    },
+    "5822": {
+      "nome": "Amílcar Rodrigues Alves Castro de Almeida",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:19:52+00:00"
+    },
+    "10814": {
+      "nome": "Amílcar Sérgio Oliveira Goulart",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:53+00:00"
+    },
+    "8648": {
+      "nome": "Ana Alexandra Silva Pacheco",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:54+00:00"
+    },
+    "8151": {
+      "nome": "Ana Alice Alves Pedro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:54+00:00"
+    },
+    "11775": {
+      "nome": "Ana Alice da Silva Araújo Lopes Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:55+00:00"
+    },
+    "5084": {
+      "nome": "Ana Amélia Rocha Branco Almeida Ceia da Silva Tavares",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:56+00:00"
+    },
+    "9814": {
+      "nome": "Ana Andreia dos Santos Ferreira Castelo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:56+00:00"
+    },
+    "8670": {
+      "nome": "Ana Bárbara Antunes do Carmo da Silva Amaro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:57+00:00"
+    },
+    "3757": {
+      "nome": "Ana Beatriz Pereira Arruda",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:57+00:00"
+    },
+    "9126": {
+      "nome": "Ana Beatriz Soares Pereira da Silva",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:19:58+00:00"
+    },
+    "6695": {
+      "nome": "Ana Branco Rodrigues Leitão",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:58+00:00"
+    },
+    "7647": {
+      "nome": "Ana Brígida Anacleto Meireles Clímaco Umbelino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:19:59+00:00"
+    },
+    "1399": {
+      "nome": "Ana Cardoso de Matos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:19:59+00:00"
+    },
+    "9226": {
+      "nome": "Ana Carla da Silva Seguro Areias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:00+00:00"
+    },
+    "7814": {
+      "nome": "Ana Carla de Carvalho Venâncio",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:01+00:00"
+    },
+    "9978": {
+      "nome": "Ana Carla Marques Pereira Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:01+00:00"
+    },
+    "6063": {
+      "nome": "Ana Carla Pimenta Soares Violante Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:02+00:00"
+    },
+    "3438": {
+      "nome": "Ana Carmen Monteiro do Carmo Cisa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:03+00:00"
+    },
+    "11093": {
+      "nome": "Ana Carolina Cunha Videira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:03+00:00"
+    },
+    "8885": {
+      "nome": "Ana Carolina Damas Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:04+00:00"
+    },
+    "9754": {
+      "nome": "Ana Carolina Martins Simões",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:05+00:00"
+    },
+    "3878": {
+      "nome": "Ana Carolina Pimenta de Jesus",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:20:06+00:00"
+    },
+    "5509": {
+      "nome": "Ana Catarina Barbosa Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:07+00:00"
+    },
+    "241": {
+      "nome": "Ana Catarina Camossa Coelho Paulo Neto Cardoso da Costa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:08+00:00"
+    },
+    "8159": {
+      "nome": "Ana Catarina Cardoso de Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:08+00:00"
+    },
+    "10067": {
+      "nome": "Ana Catarina Carvalho dos Reis Leite da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:08+00:00"
+    },
+    "9229": {
+      "nome": "Ana Catarina Cortes Soares",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:09+00:00"
+    },
+    "1248": {
+      "nome": "Ana Catarina da Fonseca Neves Roberto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:10+00:00"
+    },
+    "5776": {
+      "nome": "Ana Catarina da Rocha Araújo",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:20:12+00:00"
+    },
+    "6599": {
+      "nome": "Ana Catarina de Freitas Alves Bravo de Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:12+00:00"
+    },
+    "10669": {
+      "nome": "Ana Catarina de Freitas Dutra Goulart",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:13+00:00"
+    },
+    "6037": {
+      "nome": "Ana Catarina de Moura Louro",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:20:15+00:00"
+    },
+    "5986": {
+      "nome": "Ana Catarina de Oliveira Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:16+00:00"
+    },
+    "5971": {
+      "nome": "Ana Catarina de Oliveira Monteiro Inácio",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:16+00:00"
+    },
+    "3331": {
+      "nome": "Ana Catarina Ferreira Marques da Fonseca",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:17+00:00"
+    },
+    "9428": {
+      "nome": "Ana Catarina Ferreira Rita",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:17+00:00"
+    },
+    "7534": {
+      "nome": "Ana Catarina Fortuna de Sousa",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:18+00:00"
+    },
+    "1861": {
+      "nome": "Ana Catarina Gamboa Vaz",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:19+00:00"
+    },
+    "9405": {
+      "nome": "Ana Catarina Gomes de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:20+00:00"
+    },
+    "11987": {
+      "nome": "Ana Catarina Graça da Rocha",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:20+00:00"
+    },
+    "9643": {
+      "nome": "Ana Catarina Guerreiro Carrasco",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:21+00:00"
+    },
+    "11901": {
+      "nome": "Ana Catarina Lopes Dias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:21+00:00"
+    },
+    "9674": {
+      "nome": "Ana Catarina Martins da Cunha Monteiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:22+00:00"
+    },
+    "11888": {
+      "nome": "Ana Catarina Martins Santana Sultane",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:23+00:00"
+    },
+    "11362": {
+      "nome": "Ana Catarina Morais Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:23+00:00"
+    },
+    "8112": {
+      "nome": "Ana Catarina Rocha Mendes Fernando",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:24+00:00"
+    },
+    "2121": {
+      "nome": "Ana Catarina Sousa Silva Aguiar",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:20:26+00:00"
+    },
+    "2524": {
+      "nome": "Ana Catarina Terra Brum",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:27+00:00"
+    },
+    "6514": {
+      "nome": "Ana Catarina Vaz Pinheiro de Furtado Faria",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:28+00:00"
+    },
+    "4979": {
+      "nome": "Ana Catarina Veiga dos Santos Mendonça Mendes",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:20:30+00:00"
+    },
+    "5191": {
+      "nome": "Ana Cecília do Bem Gago",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:31+00:00"
+    },
+    "11869": {
+      "nome": "Ana Cecília Xavier Salgueiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:31+00:00"
+    },
+    "5698": {
+      "nome": "Ana Clara de Sousa Birrento Matos Silva",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:32+00:00"
+    },
+    "11350": {
+      "nome": "Ana Clara Gomes dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:33+00:00"
+    },
+    "3375": {
+      "nome": "Ana Clara Vieira Mendonça e Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:34+00:00"
+    },
+    "7053": {
+      "nome": "Ana Cláudia Bettencourt Amarante Veríssimo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:34+00:00"
+    },
+    "9760": {
+      "nome": "Ana Cláudia Bonifácio Machado Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:35+00:00"
+    },
+    "8326": {
+      "nome": "Ana Cláudia Branco Rolo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:35+00:00"
+    },
+    "5772": {
+      "nome": "Ana Cláudia Figueiredo dos Santos de Cáceres Pires",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:36+00:00"
+    },
+    "5007": {
+      "nome": "Ana Cláudia Fontoura Gouveia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:36+00:00"
+    },
+    "3294": {
+      "nome": "Ana Cláudia Formiga Fernandes Valente",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:37+00:00"
+    },
+    "10327": {
+      "nome": "Ana Cláudia Pinto de Oliveira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:37+00:00"
+    },
+    "6017": {
+      "nome": "Ana Cristina Almeida Capucho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:37+00:00"
+    },
+    "6573": {
+      "nome": "Ana Cristina Araújo Veloso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:38+00:00"
+    },
+    "11386": {
+      "nome": "Ana Cristina Arrabaça Miranda Queiroga Perdigão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:39+00:00"
+    },
+    "4066": {
+      "nome": "Ana Cristina Baião Furtado Graça",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:39+00:00"
+    },
+    "6467": {
+      "nome": "Ana Cristina Branquinho Alves",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:40+00:00"
+    },
+    "6820": {
+      "nome": "Ana Cristina Campos Gouveia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:41+00:00"
+    },
+    "10722": {
+      "nome": "Ana Cristina Cardoso Coelho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:41+00:00"
+    },
+    "3603": {
+      "nome": "Ana Cristina Carneiro Elias Ferreira Claro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:42+00:00"
+    },
+    "9091": {
+      "nome": "Ana Cristina Carreira Carvalho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:43+00:00"
+    },
+    "7242": {
+      "nome": "Ana Cristina Chora e Martins Carrola da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:43+00:00"
+    },
+    "11654": {
+      "nome": "Ana Cristina da Costa Vicente Pereira Braga",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:44+00:00"
+    },
+    "5739": {
+      "nome": "Ana Cristina da Silva dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:45+00:00"
+    },
+    "607": {
+      "nome": "Ana Cristina Dantas Andrade",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:46+00:00"
+    },
+    "10866": {
+      "nome": "Ana Cristina de Aguiar Pinhal Melo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:47+00:00"
+    },
+    "8341": {
+      "nome": "Ana Cristina de Almeida Henriques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:47+00:00"
+    },
+    "12040": {
+      "nome": "Ana Cristina de Castro Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:48+00:00"
+    },
+    "9028": {
+      "nome": "Ana Cristina de Jesus Lopes da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:49+00:00"
+    },
+    "6878": {
+      "nome": "Ana Cristina de Lemos Cabral Gouveia de Carvalho",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:20:51+00:00"
+    },
+    "7235": {
+      "nome": "Ana Cristina de Lima Vicente",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:51+00:00"
+    },
+    "4395": {
+      "nome": "Ana Cristina de Oliveira Carmona Bicho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:52+00:00"
+    },
+    "6549": {
+      "nome": "Ana Cristina Dias Chambel Matias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:53+00:00"
+    },
+    "9404": {
+      "nome": "Ana Cristina Dias Pires",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:20:54+00:00"
+    },
+    "4355": {
+      "nome": "Ana Cristina do Vale Brízido",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:54+00:00"
+    },
+    "4849": {
+      "nome": "Ana Cristina Domingues de Almeida Caldeira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:54+00:00"
+    },
+    "2467": {
+      "nome": "Ana Cristina dos Santos Geraldes Milheiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:55+00:00"
+    },
+    "10578": {
+      "nome": "Ana Cristina Fernandes Campos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:55+00:00"
+    },
+    "3290": {
+      "nome": "Ana Cristina Fernandes Rente",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:56+00:00"
+    },
+    "4216": {
+      "nome": "Ana Cristina Ferreira dos Santos Corrêa Figueira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:56+00:00"
+    },
+    "6503": {
+      "nome": "Ana Cristina Figueira da Luz",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:56+00:00"
+    },
+    "8039": {
+      "nome": "Ana Cristina Gaminha Ribeiro Borges de Azevedo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:20:57+00:00"
+    },
+    "9059": {
+      "nome": "Ana Cristina Gomes de Azevedo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:20:57+00:00"
+    },
+    "6164": {
+      "nome": "Ana Cristina Gomes de Barros Tojal Silva Lopes",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:20:59+00:00"
+    },
+    "7777": {
+      "nome": "Ana Cristina Gonçalves Coelho Centeno",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:00+00:00"
+    },
+    "12231": {
+      "nome": "Ana Cristina Gotelib da Costa Veloso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:01+00:00"
+    },
+    "7072": {
+      "nome": "Ana Cristina Jorge Gonçalves",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:02+00:00"
+    },
+    "5446": {
+      "nome": "Ana Cristina Leal Moreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:03+00:00"
+    },
+    "8764": {
+      "nome": "Ana Cristina Marques Simões da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:03+00:00"
+    },
+    "7027": {
+      "nome": "Ana Cristina Martins Baptista",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:04+00:00"
+    },
+    "9714": {
+      "nome": "Ana Cristina Martins Marta Ramos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:04+00:00"
+    },
+    "2725": {
+      "nome": "Ana Cristina Martins Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:05+00:00"
+    },
+    "539": {
+      "nome": "Ana Cristina Miguens Abrantes Bilou",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:05+00:00"
+    },
+    "4234": {
+      "nome": "Ana Cristina Moreira Freire",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:06+00:00"
+    },
+    "2727": {
+      "nome": "Ana Cristina Paula Pires",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:06+00:00"
+    },
+    "10869": {
+      "nome": "Ana Cristina Peixoto Lopes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:07+00:00"
+    },
+    "7911": {
+      "nome": "Ana Cristina Pereira Coelho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:08+00:00"
+    },
+    "4810": {
+      "nome": "Ana Cristina Pereira Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:09+00:00"
+    },
+    "10159": {
+      "nome": "Ana Cristina Pinto Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:09+00:00"
+    },
+    "2612": {
+      "nome": "Ana Cristina Pontes de Barros Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:10+00:00"
+    },
+    "9127": {
+      "nome": "Ana Cristina Prego Simões Ozório",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:10+00:00"
+    },
+    "1355": {
+      "nome": "Ana Cristina Raposo Freire Bordalo Ramos Preto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:11+00:00"
+    },
+    "2660": {
+      "nome": "Ana Cristina Rebelo da Silva Couto de Olim",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:12+00:00"
+    },
+    "5823": {
+      "nome": "Ana Cristina Rodrigues dos Santos Araújo",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:21:14+00:00"
+    },
+    "10050": {
+      "nome": "Ana Cristina Rodrigues Tavares Martins de Sousa Calado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:14+00:00"
+    },
+    "2594": {
+      "nome": "Ana Cristina Rodrigues Vieira da Mata",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:15+00:00"
+    },
+    "10395": {
+      "nome": "Ana Cristina Simões Neto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:15+00:00"
+    },
+    "7665": {
+      "nome": "Ana Cristina Sousa Falcão Miguel Trovão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:16+00:00"
+    },
+    "11286": {
+      "nome": "Ana Cristina Teixeira de Sousa Gomes Tomé",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:17+00:00"
+    },
+    "9509": {
+      "nome": "Ana Cristina Tiago Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:18+00:00"
+    },
+    "10972": {
+      "nome": "Ana Cristina Tomé Pais Cabral",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:18+00:00"
+    },
+    "7137": {
+      "nome": "Ana Cristina Torres Varejão dos Reis",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:19+00:00"
+    },
+    "625": {
+      "nome": "Ana Cristina Vasconcelos Mendes Russo de Lima",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:20+00:00"
+    },
+    "7315": {
+      "nome": "Ana Cristina Véstia Moisão",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:20+00:00"
+    },
+    "8636": {
+      "nome": "Ana da Conceição Bento Carepo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:21+00:00"
+    },
+    "10397": {
+      "nome": "Ana da Purificação Alves Amaro Castelo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:21+00:00"
+    },
+    "7863": {
+      "nome": "Ana de Campos Cabral de Noronha Meneses",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:22+00:00"
+    },
+    "45": {
+      "nome": "Ana de Lurdes Mondim Miranda",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:23+00:00"
+    },
+    "1070": {
+      "nome": "Ana de Oliveira e Silva de Oliveira Monteiro",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:24+00:00"
+    },
+    "12229": {
+      "nome": "Ana e Brito Maneira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:24+00:00"
+    },
+    "6483": {
+      "nome": "Ana Elisa da Silva da Costa Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:25+00:00"
+    },
+    "6757": {
+      "nome": "Ana Elisa Dias Lourenço Barreiros Proença",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:25+00:00"
+    },
+    "12161": {
+      "nome": "Ana Elisabete Farinha Ferreira e Dias Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:26+00:00"
+    },
+    "6055": {
+      "nome": "Ana Elisabete Laborda Oliveira",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:21:29+00:00"
+    },
+    "7218": {
+      "nome": "Ana Elvira Lucas Calado Baptista",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:29+00:00"
+    },
+    "5624": {
+      "nome": "Ana Fernanda Osio Bracamonte",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:30+00:00"
+    },
+    "2837": {
+      "nome": "Ana Fialho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:30+00:00"
+    },
+    "1510": {
+      "nome": "Ana Filipa Batista Martinho Correia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:31+00:00"
+    },
+    "3971": {
+      "nome": "Ana Filipa Bernardo Raimundo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:31+00:00"
+    },
+    "12027": {
+      "nome": "Ana Filipa das Neves Aveiro Guerreiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:32+00:00"
+    },
+    "7938": {
+      "nome": "Ana Filipa dos Santos Pato Correia Pinto Barbosa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:33+00:00"
+    },
+    "1153": {
+      "nome": "Ana Filipa Fernandes da Costa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:33+00:00"
+    },
+    "9634": {
+      "nome": "Ana Filipa Ferreira de Almeida",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:34+00:00"
+    },
+    "12503": {
+      "nome": "Ana Filipa Gomes de Almeida",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:34+00:00"
+    },
+    "211": {
+      "nome": "Ana Filipa Horta de Oliveira Cardoso Pais",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:35+00:00"
+    },
+    "8782": {
+      "nome": "Ana Filipa Laborinho da Fonseca",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:35+00:00"
+    },
+    "8828": {
+      "nome": "Ana Filipa Larcher de Jesus Ferreira Arroja",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:35+00:00"
+    },
+    "7152": {
+      "nome": "Ana Filipa Martins Ferreira Varges Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:36+00:00"
+    },
+    "3036": {
+      "nome": "Ana Filipa Mendes Canilho Fonseca",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:36+00:00"
+    },
+    "7674": {
+      "nome": "Ana Filipa Mendes Martins Pintado Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:37+00:00"
+    },
+    "10113": {
+      "nome": "Ana Filipa Pinho de Oliveira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:37+00:00"
+    },
+    "11229": {
+      "nome": "Ana Filipa Ramalho Bibiu Farias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:38+00:00"
+    },
+    "3626": {
+      "nome": "Ana Filipa Santos Cunha",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:38+00:00"
+    },
+    "7934": {
+      "nome": "Ana Filipa Simões Grade dos Santos Pífaro Dinis",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:39+00:00"
+    },
+    "10109": {
+      "nome": "Ana Filipa Soares Pacheco Medeiros",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:39+00:00"
+    },
+    "7328": {
+      "nome": "Ana Filomena Alves Leal Leite da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:40+00:00"
+    },
+    "6884": {
+      "nome": "Ana Gabriela Campos Maia",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:40+00:00"
+    },
+    "4218": {
+      "nome": "Ana Gabriela Gonçalves Neves Gomes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:41+00:00"
+    },
+    "5824": {
+      "nome": "Ana Gabriela Oliveira Cabilhas",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:21:42+00:00"
+    },
+    "8424": {
+      "nome": "Ana Genoveva da Silva Araújo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:43+00:00"
+    },
+    "1371": {
+      "nome": "Ana Gouveia e Freitas Martins",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:43+00:00"
+    },
+    "5825": {
+      "nome": "Ana Inês de Oliveira Cecílio Nogueira Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:44+00:00"
+    },
+    "8459": {
+      "nome": "Ana Irene Dias Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:45+00:00"
+    },
+    "10780": {
+      "nome": "Ana Isabel Alves Dias",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:45+00:00"
+    },
+    "2138": {
+      "nome": "Ana Isabel Bordalo Pereira dos Santos Martins Monteiro Limão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:46+00:00"
+    },
+    "7016": {
+      "nome": "Ana Isabel Cardoso Tenente",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:47+00:00"
+    },
+    "12262": {
+      "nome": "Ana Isabel Carvalho Sequeira Grade",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:48+00:00"
+    },
+    "5140": {
+      "nome": "Ana Isabel Correia dos Santos",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:21:49+00:00"
+    },
+    "9993": {
+      "nome": "Ana Isabel Cosme Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:49+00:00"
+    },
+    "7666": {
+      "nome": "Ana Isabel Costa d'Oliveira da Silva Mascarenhas",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:50+00:00"
+    },
+    "950": {
+      "nome": "Ana Isabel Costa e Silva Carvalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:51+00:00"
+    },
+    "9902": {
+      "nome": "Ana Isabel da Costa Conceição Guerra",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:51+00:00"
+    },
+    "10118": {
+      "nome": "Ana Isabel da Costa e Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:51+00:00"
+    },
+    "5691": {
+      "nome": "Ana Isabel da Rocha Moreira",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:21:53+00:00"
+    },
+    "6545": {
+      "nome": "Ana Isabel de Azeredo Rodrigues Coelho Fernandes da Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:53+00:00"
+    },
+    "12273": {
+      "nome": "Ana Isabel de Azevedo Pinto Castro Maciel",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:54+00:00"
+    },
+    "4854": {
+      "nome": "Ana Isabel de Bettencourt Furtado Roçadas Ramalho de Matos Almeida",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:54+00:00"
+    },
+    "12069": {
+      "nome": "Ana Isabel de Feitas Lourenço",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:54+00:00"
+    },
+    "7471": {
+      "nome": "Ana Isabel de Jesus Martinho",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:21:56+00:00"
+    },
+    "9389": {
+      "nome": "Ana Isabel Dias Correia",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:57+00:00"
+    },
+    "7557": {
+      "nome": "Ana Isabel dos Santos Danado Mémé",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:57+00:00"
+    },
+    "6174": {
+      "nome": "Ana Isabel dos Santos Ramalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:58+00:00"
+    },
+    "10640": {
+      "nome": "Ana Isabel Espada Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:21:59+00:00"
+    },
+    "8481": {
+      "nome": "Ana Isabel Faustino Jorge Magina",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:21:59+00:00"
+    },
+    "9213": {
+      "nome": "Ana Isabel Fernandes de Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:00+00:00"
+    },
+    "11910": {
+      "nome": "Ana Isabel Gonçalves Alexandre Calado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:00+00:00"
+    },
+    "8223": {
+      "nome": "Ana Isabel Gouveia Costa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:01+00:00"
+    },
+    "11214": {
+      "nome": "Ana Isabel Gouveia Costa da Fonseca Lopes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:01+00:00"
+    },
+    "8777": {
+      "nome": "Ana Isabel Guerreiro Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:02+00:00"
+    },
+    "9285": {
+      "nome": "Ana Isabel Jacinto Marques Arroja",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:03+00:00"
+    },
+    "2713": {
+      "nome": "Ana Isabel Jorge Domingos Dias Alvoeiro Romano Delgado",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:04+00:00"
+    },
+    "12325": {
+      "nome": "Ana Isabel Lillebo Batista",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:04+00:00"
+    },
+    "10783": {
+      "nome": "Ana Isabel Lopes Guerreiro Cortes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:05+00:00"
+    },
+    "5668": {
+      "nome": "Ana Isabel Marques Xavier",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:22:07+00:00"
+    },
+    "5475": {
+      "nome": "Ana Isabel Mota da Silva Coelho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:08+00:00"
+    },
+    "510": {
+      "nome": "Ana Isabel Neves Duarte",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:08+00:00"
+    },
+    "10490": {
+      "nome": "Ana Isabel Neves Lino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:09+00:00"
+    },
+    "7112": {
+      "nome": "Ana Isabel Pais Pacheco Valente",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:10+00:00"
+    },
+    "11080": {
+      "nome": "Ana Isabel Pelaez Garcia Galego Durão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:10+00:00"
+    },
+    "8042": {
+      "nome": "Ana Isabel Pereira Ferreira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:12+00:00"
+    },
+    "10519": {
+      "nome": "Ana Isabel Pinheiro Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:12+00:00"
+    },
+    "1603": {
+      "nome": "Ana Isabel Pinto Barros Santos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:13+00:00"
+    },
+    "11799": {
+      "nome": "Ana Isabel Pinto da Rocha Mena de Matos Lessa Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:13+00:00"
+    },
+    "5842": {
+      "nome": "Ana Isabel Pinto Vieira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:14+00:00"
+    },
+    "252": {
+      "nome": "Ana Isabel Pires Pego Gonçalves Lima Gattini",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:15+00:00"
+    },
+    "4284": {
+      "nome": "Ana Isabel Pires Sousa da Silva Braga",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:15+00:00"
+    },
+    "7576": {
+      "nome": "Ana Isabel Ribeiro Isaac Senha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:16+00:00"
+    },
+    "4255": {
+      "nome": "Ana Isabel Rita Martins",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:16+00:00"
+    },
+    "11817": {
+      "nome": "Ana Isabel Rodrigues Carvalho Simões",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:17+00:00"
+    },
+    "2840": {
+      "nome": "Ana Isabel Rodrigues da Costa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:18+00:00"
+    },
+    "2696": {
+      "nome": "Ana Isabel Sacramento Sampaio Ribeiro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:18+00:00"
+    },
+    "187": {
+      "nome": "Ana Isabel Saraiva Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:19+00:00"
+    },
+    "7107": {
+      "nome": "Ana Isabel Saraiva Vieira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:19+00:00"
+    },
+    "7535": {
+      "nome": "Ana Isabel Simões Alves Correia de Brito Paulo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:20+00:00"
+    },
+    "6185": {
+      "nome": "Ana Isabel Tavares Cunha",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:22:21+00:00"
+    },
+    "7037": {
+      "nome": "Ana Isabel Vieira do Espírito Santo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:22+00:00"
+    },
+    "1175": {
+      "nome": "Ana Izabel Carrilho Pitacas Antunes Merêces",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:22+00:00"
+    },
+    "6748": {
+      "nome": "Ana João Vieira Rangel",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:23+00:00"
+    },
+    "9143": {
+      "nome": "Ana José Manita Vaz de Carvalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:24+00:00"
+    },
+    "7940": {
+      "nome": "Ana Katila Bernardes Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:24+00:00"
+    },
+    "7136": {
+      "nome": "Ana Lara Henriques de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:25+00:00"
+    },
+    "12528": {
+      "nome": "Ana Leonor Cruzeiro de Oliveira Barata",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:25+00:00"
+    },
+    "6806": {
+      "nome": "Ana Lídia Fernandes Oliveira Pereira",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:22:27+00:00"
+    },
+    "7839": {
+      "nome": "Ana Lisa Rocha Moutinho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:28+00:00"
+    },
+    "10703": {
+      "nome": "Ana Lúcia Machado Afonso",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:29+00:00"
+    },
+    "11036": {
+      "nome": "Ana Lúcia Miranda de Almeida Pimpão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:29+00:00"
+    },
+    "6822": {
+      "nome": "Ana Lúcia Pereira de Sousa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:30+00:00"
+    },
+    "1846": {
+      "nome": "Ana Luís Cleto Vaz Pimentel",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:31+00:00"
+    },
+    "2044": {
+      "nome": "Ana Luísa Alferes Pinto Soares",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:32+00:00"
+    },
+    "7059": {
+      "nome": "Ana Luisa Bárbara dos Santos Reis",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:33+00:00"
+    },
+    "7511": {
+      "nome": "Ana Luísa Borges e Borges",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:34+00:00"
+    },
+    "3964": {
+      "nome": "Ana Luísa Cartaxo Manique",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:35+00:00"
+    },
+    "12057": {
+      "nome": "Ana Luísa Carvalho Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:36+00:00"
+    },
+    "10075": {
+      "nome": "Ana Luísa Couto de Almeida dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:36+00:00"
+    },
+    "9399": {
+      "nome": "Ana Luísa da Rosa Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:37+00:00"
+    },
+    "7881": {
+      "nome": "Ana Luísa da Silva Broa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:38+00:00"
+    },
+    "5794": {
+      "nome": "Ana Luísa da Silva Gonçalves Machado",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:22:40+00:00"
+    },
+    "8867": {
+      "nome": "Ana Luísa de Oliveira Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:40+00:00"
+    },
+    "5519": {
+      "nome": "Ana Luísa do Nascimento Miranda",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:41+00:00"
+    },
+    "12353": {
+      "nome": "Ana Luísa dos Santos Gonçalves Riquito",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:42+00:00"
+    },
+    "8633": {
+      "nome": "Ana Luísa Faria Pereira Correia Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:43+00:00"
+    },
+    "11075": {
+      "nome": "Ana Luísa Ferreira Victorino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:43+00:00"
+    },
+    "11930": {
+      "nome": "Ana Luísa Garcia de Mendonça Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:44+00:00"
+    },
+    "6577": {
+      "nome": "Ana Luísa Gomes Figueiredo Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:45+00:00"
+    },
+    "1879": {
+      "nome": "Ana Luísa Gouveia Marques da Silva",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:45+00:00"
+    },
+    "10224": {
+      "nome": "Ana Luísa Lima Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:46+00:00"
+    },
+    "9106": {
+      "nome": "Ana Luísa Machado Gomes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:47+00:00"
+    },
+    "7350": {
+      "nome": "Ana Luísa Monteiro de Carvalho",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:47+00:00"
+    },
+    "6141": {
+      "nome": "Ana Luísa Monteiro do Couto",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:48+00:00"
+    },
+    "6655": {
+      "nome": "Ana Luísa Reis Natário",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:48+00:00"
+    },
+    "10530": {
+      "nome": "Ana Luisa Santana de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:49+00:00"
+    },
+    "8709": {
+      "nome": "Ana Luísa Santos Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:50+00:00"
+    },
+    "11322": {
+      "nome": "Ana Luísa Silva Peleira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:50+00:00"
+    },
+    "2834": {
+      "nome": "Ana Luísa Silva Rodrigues",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:51+00:00"
+    },
+    "7823": {
+      "nome": "Ana Luísa Soares Jara",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:51+00:00"
+    },
+    "8743": {
+      "nome": "Ana Luisa Tavares de Mello Nobre Soalheira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:52+00:00"
+    },
+    "10491": {
+      "nome": "Ana Luíza Cândido da Silva Rodrigues Serrão Arrais",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:52+00:00"
+    },
+    "6116": {
+      "nome": "Ana Mafalda Brandão Barbosa Sequinho dos Santos",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:53+00:00"
+    },
+    "9650": {
+      "nome": "Ana Mafalda de Oliveira Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:54+00:00"
+    },
+    "6156": {
+      "nome": "Ana Mafalda Guedes da Torre",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:55+00:00"
+    },
+    "11567": {
+      "nome": "Ana Mafalda Oliveira Gala Fagulha",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:22:56+00:00"
+    },
+    "2210": {
+      "nome": "Ana Mafalda Xavier Ferreira Guiné",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:56+00:00"
+    },
+    "4999": {
+      "nome": "Ana Manuel Jerónimo Lopes Correia Mendes Godinho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:57+00:00"
+    },
+    "7236": {
+      "nome": "Ana Manuela de Jesus Guerreiro do Carmo",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:22:59+00:00"
+    },
+    "3444": {
+      "nome": "Ana Margarida Afonso De Matos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:22:59+00:00"
+    },
+    "5654": {
+      "nome": "Ana Margarida Balseiro de Sousa Lopes",
+      "declaracoes": 4,
+      "declaracoes_novas": 4,
+      "recolhido_em": "2026-10-19T15:23:01+00:00"
+    },
+    "9787": {
+      "nome": "Ana Margarida Cardoso Alves",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:01+00:00"
+    },
+    "10434": {
+      "nome": "Ana Margarida da Conceição Silva Duarte António",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:02+00:00"
+    },
+    "11184": {
+      "nome": "Ana Margarida da Silva Fonseca",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:03+00:00"
+    },
+    "6368": {
+      "nome": "Ana Margarida da Silva Laranjeiro Matias",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:03+00:00"
+    },
+    "2583": {
+      "nome": "Ana Margarida de Brito Pedroso",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:03+00:00"
+    },
+    "9812": {
+      "nome": "Ana Margarida de Castro e Sousa Amorim Bravo Faria",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:04+00:00"
+    },
+    "2096": {
+      "nome": "Ana Margarida de Linares Luís",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:23:05+00:00"
+    },
+    "8836": {
+      "nome": "Ana Margarida Félix Valentim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:06+00:00"
+    },
+    "11098": {
+      "nome": "Ana Margarida Fernandes Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:07+00:00"
+    },
+    "8576": {
+      "nome": "Ana Margarida Ferreira Carvalho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:07+00:00"
+    },
+    "12295": {
+      "nome": "Ana Margarida Ferreira Lima de Oliveira Lopes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:08+00:00"
+    },
+    "9721": {
+      "nome": "Ana Margarida Ferreira Mendes Soares Meneses Barbosa",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:09+00:00"
+    },
+    "8829": {
+      "nome": "Ana Margarida Fontes da Costa Mendes Barata Marques",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:09+00:00"
+    },
+    "573": {
+      "nome": "Ana Margarida Guerreiro Mendes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:10+00:00"
+    },
+    "6435": {
+      "nome": "Ana Margarida Leal Furtado",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:10+00:00"
+    },
+    "4922": {
+      "nome": "Ana Margarida Lemos Gomes",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:11+00:00"
+    },
+    "3749": {
+      "nome": "Ana Margarida Leonardo Silva Fortuna",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:12+00:00"
+    },
+    "7564": {
+      "nome": "Ana Margarida Lopes Botelho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:13+00:00"
+    },
+    "1873": {
+      "nome": "Ana Margarida Machado da Silva Lourenço",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:14+00:00"
+    },
+    "4265": {
+      "nome": "Ana Margarida Magalhães Vasques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:14+00:00"
+    },
+    "3816": {
+      "nome": "Ana Margarida Marreiros Raposo Custódio",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:15+00:00"
+    },
+    "7971": {
+      "nome": "Ana Margarida Miguel Figueiredo",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:15+00:00"
+    },
+    "5676": {
+      "nome": "Ana Margarida Pinheiro Povo",
+      "declaracoes": 5,
+      "declaracoes_novas": 5,
+      "recolhido_em": "2026-10-19T15:23:18+00:00"
+    },
+    "2604": {
+      "nome": "Ana Margarida Rebelo de Andrade Moura Soares Bandeira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:18+00:00"
+    },
+    "5402": {
+      "nome": "Ana Margarida Ribeiro Correia de Oliveira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:19+00:00"
+    },
+    "7866": {
+      "nome": "Ana Margarida Rodrigues Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:20+00:00"
+    },
+    "7377": {
+      "nome": "Ana Margarida Rodrigues Silva Lé",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:21+00:00"
+    },
+    "11810": {
+      "nome": "Ana Margarida Salina Ferro de Beça Carmona Rodrigues",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:22+00:00"
+    },
+    "10729": {
+      "nome": "Ana Margarida São Marcos Pedreiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:23+00:00"
+    },
+    "6345": {
+      "nome": "Ana Margarida Serrano Gaspar Coelho",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:24+00:00"
+    },
+    "10916": {
+      "nome": "Ana Margarida Tamissa de Castro Martins Castelino",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:26+00:00"
+    },
+    "11018": {
+      "nome": "Ana Margarida Tito Fontes Parada",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:26+00:00"
+    },
+    "11877": {
+      "nome": "Ana Margarida Vences Rosa do Céu",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:27+00:00"
+    },
+    "8472": {
+      "nome": "Ana Margarida Vidal Serafim",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:28+00:00"
+    },
+    "7512": {
+      "nome": "Ana Margarida Vilaverde e Cunha",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:30+00:00"
+    },
+    "7051": {
+      "nome": "Ana Maria Antunes de Vasconcelos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:31+00:00"
+    },
+    "8493": {
+      "nome": "Ana Maria Baixinho Farinho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:32+00:00"
+    },
+    "314": {
+      "nome": "Ana Maria Beirão Reis de la Fuente Sanchez",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:33+00:00"
+    },
+    "5085": {
+      "nome": "Ana Maria Briosa da Mota Antunes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:34+00:00"
+    },
+    "11117": {
+      "nome": "Ana Maria Carolina Guerreiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:35+00:00"
+    },
+    "10475": {
+      "nome": "Ana Maria César Bastos Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:36+00:00"
+    },
+    "6517": {
+      "nome": "Ana Maria Chapeleira Fazenda",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:37+00:00"
+    },
+    "11719": {
+      "nome": "Ana Maria Cortez Vaz dos Santos Oliveira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:38+00:00"
+    },
+    "12424": {
+      "nome": "Ana Maria Cunha Ribeiro dos Santos Ponces Camanho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:39+00:00"
+    },
+    "3404": {
+      "nome": "Ana Maria da Silva dos Santos",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:40+00:00"
+    },
+    "8044": {
+      "nome": "Ana Maria da Silva Silveira",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:41+00:00"
+    },
+    "8952": {
+      "nome": "Ana Maria de Campos Pedroso Mateus",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:42+00:00"
+    },
+    "8245": {
+      "nome": "Ana Maria de Lemos Nunes",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:43+00:00"
+    },
+    "1961": {
+      "nome": "Ana Maria de Melo Bastos Silva",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:44+00:00"
+    },
+    "5463": {
+      "nome": "Ana Maria de Melo Sampaio de Freitas",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:47+00:00"
+    },
+    "1304": {
+      "nome": "Ana Maria dos Santos Malho",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:49+00:00"
+    },
+    "10371": {
+      "nome": "Ana Maria dos Santos Pereira Nunes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:23:49+00:00"
+    },
+    "9207": {
+      "nome": "Ana Maria dos Santos Ribeiro",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:50+00:00"
+    },
+    "7170": {
+      "nome": "Ana Maria Duarte Inácio Marreiros",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:51+00:00"
+    },
+    "7294": {
+      "nome": "Ana Maria Esteves Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:52+00:00"
+    },
+    "9393": {
+      "nome": "Ana Maria Faria dos Reis Carriço",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:53+00:00"
+    },
+    "12168": {
+      "nome": "Ana Maria Felgueiras de Oliveira Sousa Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:54+00:00"
+    },
+    "9096": {
+      "nome": "Ana Maria Fernandes de Almeida Poiares Baptista",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:54+00:00"
+    },
+    "7371": {
+      "nome": "Ana Maria Fernandes Esperança",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:55+00:00"
+    },
+    "11854": {
+      "nome": "Ana Maria Fernandes Pires Pereira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:56+00:00"
+    },
+    "7737": {
+      "nome": "Ana Maria Ferreira Loureiro Pereira Viana Taborda Barata",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:23:57+00:00"
+    },
+    "12310": {
+      "nome": "Ana Maria Ferreira Monteiro de Macedo de Azeredo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:23:59+00:00"
+    },
+    "7156": {
+      "nome": "Ana Maria Ferreira Pereira Duarte Cabral",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:00+00:00"
+    },
+    "5711": {
+      "nome": "Ana Maria Ferreira Soares Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:00+00:00"
+    },
+    "1853": {
+      "nome": "Ana Maria Furtado Soares de Albergaria Pacheco Gouveia",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:24:02+00:00"
+    },
+    "4875": {
+      "nome": "Ana Maria Grego Dias Sobral Canhestro",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:02+00:00"
+    },
+    "8123": {
+      "nome": "Ana Maria Herrero Valverde",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:03+00:00"
+    },
+    "1388": {
+      "nome": "Ana Maria Ivens de Sousa",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:03+00:00"
+    },
+    "7621": {
+      "nome": "Ana Maria Leça Rodrigues de Sousa Carvalho",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:24:05+00:00"
+    },
+    "11626": {
+      "nome": "Ana Maria Lopes Damião",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:05+00:00"
+    },
+    "11812": {
+      "nome": "Ana Maria Loureiro Raimundo",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:24:07+00:00"
+    },
+    "8043": {
+      "nome": "Ana Maria Lourenço Martins",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:08+00:00"
+    },
+    "7375": {
+      "nome": "Ana Maria Machado Fernandes",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:08+00:00"
+    },
+    "11314": {
+      "nome": "Ana Maria Marques Coimbra",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:09+00:00"
+    },
+    "1502": {
+      "nome": "Ana Maria Marques Tavares de Leão",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:10+00:00"
+    },
+    "56": {
+      "nome": "Ana Maria Martins Rodrigues",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:10+00:00"
+    },
+    "3670": {
+      "nome": "Ana Maria Medeiros Peixoto",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:11+00:00"
+    },
+    "3491": {
+      "nome": "Ana Maria Morais Ribeiro Gonçalves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:11+00:00"
+    },
+    "1393": {
+      "nome": "Ana Maria Moreira Ferreira",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:12+00:00"
+    },
+    "10357": {
+      "nome": "Ana Maria Norte Gonçalves Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:12+00:00"
+    },
+    "11767": {
+      "nome": "Ana Maria Nunes Maduro Barata Marques",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:13+00:00"
+    },
+    "10193": {
+      "nome": "Ana Maria Oliveira de Abreu",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:24:15+00:00"
+    },
+    "5013": {
+      "nome": "Ana Maria Pereira Abrunhosa Trigueiros de Aragão",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:24:16+00:00"
+    },
+    "8120": {
+      "nome": "Ana Maria Pereira Antunes",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:17+00:00"
+    },
+    "8345": {
+      "nome": "Ana Maria Prego de Faria Berkeley Cotter",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:17+00:00"
+    },
+    "8897": {
+      "nome": "Ana Maria Proença Filipe",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:24:19+00:00"
+    },
+    "108": {
+      "nome": "Ana Maria Ribeiro Pereira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:19+00:00"
+    },
+    "2319": {
+      "nome": "Ana Maria Ribeiro Pinto Paulo",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:20+00:00"
+    },
+    "3882": {
+      "nome": "Ana Maria Rodrigues Duarte",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:20+00:00"
+    },
+    "1356": {
+      "nome": "Ana Maria Rodrigues Seixas do Val Ferreira",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:21+00:00"
+    },
+    "12312": {
+      "nome": "Ana Maria Saraiva de Matos",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:21+00:00"
+    },
+    "5675": {
+      "nome": "Ana Maria Severino de Almeida e Paiva",
+      "declaracoes": 2,
+      "declaracoes_novas": 2,
+      "recolhido_em": "2026-10-19T15:24:22+00:00"
+    },
+    "6387": {
+      "nome": "Ana Maria Soares de Freitas",
+      "declaracoes": 3,
+      "declaracoes_novas": 3,
+      "recolhido_em": "2026-10-19T15:24:24+00:00"
+    },
+    "1121": {
+      "nome": "Ana Maria Sousa Alves",
+      "declaracoes": 0,
+      "declaracoes_novas": 0,
+      "recolhido_em": "2026-10-19T15:24:24+00:00"
+    },
+    "12343": {
+      "nome": "Ana Maria Sousa de Freitas",
+      "declaracoes": 1,
+      "declaracoes_novas": 1,
+      "recolhido_em": "2026-10-19T15:24:26+00:00"
+    }
+  },
+  "totais": {
+    "titulares": 795,
+    "declaracoes": 781
+  },
+  "atualizado_em": "2026-10-19T15:24:26+00:00",
+  "catalogo": {
+    "entidades": 4461,
+    "cargos": 292,
+    "orgaos": 160,
+    "titulares": 12372,
+    "atualizado_em": "2026-10-19T14:33:48+00:00"
+  }
+}
