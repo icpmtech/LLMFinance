@@ -78,6 +78,7 @@ export type AppView =
   | "subvencoes"
   | "administracao-central"
   | "remuneracoes"
+  | "entidade-transparencia"
   | "municipios-despesas"
   | "partidos"
   | "erc"

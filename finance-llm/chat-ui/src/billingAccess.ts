@@ -128,6 +128,7 @@ const DOCK_APP_MODULE: Record<string, string | null> = {
   subvencoes: null,
   "administracao-central": null,
   partidos: null,
+  "entidade-transparencia": null,
   erc: null,
   remuneracoes: null,
   "remuneracoes-ap": null,

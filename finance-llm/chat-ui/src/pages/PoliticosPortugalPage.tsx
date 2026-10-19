@@ -22,12 +22,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   API_BASE,
   enrichPolitician,
+  getPerson,
   getPersonGraph,
   getPoliticianGraph,
   getPoliticianPartyNews,
   getPoliticianProfile,
   searchPeople,
 } from "../api";
+import { getEptPessoa, type EptPessoaDeclaracoes } from "../entidadeTransparenciaApi";
 import { Card, EmptyState, Loading, openGraphWindow } from "../components/people/peopleKit";
 import type { PeopleGraphResponse, PeopleSearchResponse, Person, PoliticianProfile } from "../types";
 
@@ -180,24 +182,27 @@ function usePoliticianProfile(_person: Person | null) {
   const [profile, setProfile] = useState<PoliticianProfile | null>(null);
   const [partyNews, setPartyNews] = useState<{ total: number; items: any[]; warnings?: string[] } | null>(null);
   const [politicalGraph, setPoliticalGraph] = useState<PeopleGraphResponse | null>(null);
+  const [transparencia, setTransparencia] = useState<EptPessoaDeclaracoes | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [newsLoading, setNewsLoading] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"summary" | "technical" | "biography" | "news" | "graph">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "technical" | "biography" | "news" | "graph" | "ept">("summary");
   const [error, setError] = useState<string | null>(null);
 
   const loadProfile = useCallback(async (nif: string) => {
     setProfileLoading(true);
     setError(null);
     try {
-      const [p, news, graph] = await Promise.all([
+      const [p, news, graph, ept] = await Promise.all([
         getPoliticianProfile(nif, { reuseHours: 24 }).catch(() => null),
         getPoliticianPartyNews(nif, 12).catch(() => ({ party: null, total: 0, items: [], warnings: [] })),
         getPoliticianGraph(nif, { maxCoParty: 20, limitPartyNews: 12 }).catch(() => null),
+        getEptPessoa(nif).catch(() => null),
       ]);
       setProfile(p);
       setPartyNews(news as any);
       setPoliticalGraph(graph);
+      setTransparencia(ept);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar perfil político");
     } finally {
@@ -228,6 +233,7 @@ function usePoliticianProfile(_person: Person | null) {
     setProfile(null);
     setPartyNews(null);
     setPoliticalGraph(null);
+    setTransparencia(null);
     setError(null);
     setActiveTab("summary");
   }, []);
@@ -236,6 +242,7 @@ function usePoliticianProfile(_person: Person | null) {
     profile,
     partyNews,
     politicalGraph,
+    transparencia,
     profileLoading,
     newsLoading,
     graphLoading,
@@ -308,6 +315,7 @@ function PoliticianDetailPanel({
     profile,
     partyNews,
     politicalGraph,
+    transparencia,
     profileLoading,
     activeTab,
     setActiveTab,
@@ -335,6 +343,7 @@ function PoliticianDetailPanel({
     { key: "technical", label: "Perfil técnico" },
     { key: "biography", label: "Biografia" },
     { key: "news", label: `Notícias ${partyNews && partyNews.total > 0 ? `(${partyNews.total})` : ""}` },
+    { key: "ept", label: `Transparência ${transparencia && transparencia.total > 0 ? `(${transparencia.total})` : ""}` },
     { key: "graph", label: "Grafo político" },
   ];
 
@@ -545,6 +554,67 @@ function PoliticianDetailPanel({
         </div>
       )}
 
+      {activeTab === "ept" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Declarações · Entidade para a Transparência
+            </h4>
+            <a
+              href="/entidade-transparencia"
+              className="text-[11px] text-teal-300 hover:underline"
+            >
+              Abrir módulo
+            </a>
+          </div>
+          {!transparencia || transparencia.total === 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Sem declarações da EPT ligadas a esta ficha (a ligação é feita por nome).
+              </p>
+              <a
+                href={`/entidade-transparencia?nome=${encodeURIComponent(person.name)}`}
+                className="inline-flex items-center gap-1.5 text-[11px] text-teal-300 hover:underline"
+              >
+                Procurar na Entidade para a Transparência
+              </a>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {transparencia.titular?.titular_id && (
+                <p className="text-[11px] text-muted-foreground">
+                  Titular na EPT: <span className="text-foreground">{transparencia.titular.nome}</span>
+                </p>
+              )}
+              <div className="grid gap-2">
+                {transparencia.items.slice(0, 12).map((item) => (
+                  <a
+                    key={item.declaracao_id}
+                    href={`/entidade-transparencia?titular=${encodeURIComponent(item.titular_id || transparencia.titular?.titular_id || "")}&declaracao=${encodeURIComponent(item.declaracao_id)}`}
+                    className="rounded-lg border border-white/10 bg-white/[0.04] p-3 transition hover:border-emerald-400/30 hover:bg-emerald-400/10"
+                  >
+                    <p className="text-xs font-medium text-foreground">
+                      {item.ano || "—"} · {item.natureza || "—"} · {item.cargo || "—"}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {item.entidade || "—"} · entregue {item.entrega ? String(item.entrega).slice(0, 10) : "—"}
+                    </p>
+                    {item.tem_registo_interesses && (
+                      <p className="mt-1 text-[10px] text-emerald-300">Registo de interesses publicado</p>
+                    )}
+                  </a>
+                ))}
+              </div>
+              {transparencia.items.length > 12 && (
+                <p className="text-[10px] text-muted-foreground">
+                  + {transparencia.items.length - 12} declaração(ões) no módulo.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === "graph" && (
         <div className="space-y-3">
           <div className="mb-2 flex items-center justify-between">
@@ -727,6 +797,9 @@ export default function PoliticosPortugalPage() {
       setSelected(person);
       setGraph(null);
       void loadGraph(person.nif);
+      const params = new URLSearchParams(window.location.search);
+      params.set("nif", person.nif);
+      window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
     },
     [loadGraph],
   );
@@ -734,7 +807,28 @@ export default function PoliticosPortugalPage() {
   const handleCloseDetail = useCallback(() => {
     setSelected(null);
     setGraph(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("nif");
+    window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`);
   }, []);
+
+  // Deep link da Entidade para a Transparência: `?nif=<NIF>` abre a ficha.
+  useEffect(() => {
+    const nif = new URLSearchParams(window.location.search).get("nif");
+    if (!nif) return;
+    let activo = true;
+    getPerson(nif)
+      .then((person) => {
+        if (!activo) return;
+        setSelected(person);
+        setGraph(null);
+        void loadGraph(person.nif);
+      })
+      .catch(() => undefined);
+    return () => {
+      activo = false;
+    };
+  }, [loadGraph]);
 
   const activeFilters = useMemo(() => {
     const list: { key: string; label: string; clear: () => void }[] = [];

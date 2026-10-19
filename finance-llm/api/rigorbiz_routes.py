@@ -39,7 +39,7 @@ LOG_PATH = ROOT / "data" / "rigorbiz" / "rigorbiz_collector.log"
 class CollectRequest(BaseModel):
     """Pedido de recolha de empresas da RigorBiz."""
 
-    mode: str = Field("all", description="all | sample")
+    mode: str = Field("prefix", description="prefix (recolha total por prefixos) | sample")
     pages: int = Field(1000, ge=1, le=5000, description="Páginas no modo sample")
     delay: float = Field(4.0, ge=0.5, le=30.0, description="Segundos entre páginas")
 
@@ -115,13 +115,20 @@ def rigorbiz_collect_stop(session: Session) -> Dict[str, Any]:
 
 @router.get("/collect/status")
 def rigorbiz_collect_status() -> Dict[str, Any]:
-    """Estado da recolha em tempo real (runner + checkpoint + meta + últimos logs)."""
-    from api.rigorbiz_collector import _load_checkpoint
+    """Estado da recolha em tempo real (runner + checkpoint + prefixos + meta)."""
+    from api.rigorbiz_collector import _load_checkpoint, _load_prefix_state
     from api.rigorbiz_runner import get_state
 
+    prefix_state = _load_prefix_state()
     return {
         "runner": get_state(),
         "checkpoint": _load_checkpoint(),
+        "prefixes": {
+            "queue": len(prefix_state.get("queue") or []),
+            "done": len(prefix_state.get("done") or []),
+            "current": prefix_state.get("current"),
+            "stats": prefix_state.get("stats") or {},
+        },
         "meta": service.meta(),
         "log_tail": _tail_log(),
     }

@@ -575,6 +575,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "139,92,246",
   },
   {
+    id: "entidade-transparencia",
+    label: "Entidade para a Transparência",
+    hint: "Declarações únicas dos titulares de cargos políticos e altos cargos públicos — pesquisa por entidade, cargo e nome, com registo de interesses",
+    icon: ShieldCheck,
+    gradient: "from-emerald-200 via-teal-500 to-sky-700",
+    accent: "16,185,129",
+  },
+  {
     id: "erc",
     label: "ERC · Comunicação social",
     hint: "Entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais, os OCS detidos e a estrutura de propriedade",

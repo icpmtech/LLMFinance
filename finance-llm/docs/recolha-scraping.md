@@ -290,6 +290,19 @@ poucos pedidos (idealista/news, Expresso) precisariam do *fetcher* `stealth`, qu
 muda de IP/impressão digital a cada pedido; como falham de forma intermitente,
 não entram no catálogo para não dar fontes que “às vezes funciona”.
 
+### Governo — nomeações e composição
+
+O coletor `collectors/governo.py` usa o motor de recolha (`http` para as páginas
+das áreas e `dynamic` para a composição, que é renderizada no browser) e grava
+JSON/JSONL e os índices `finance_governo_nomeacoes` e
+`finance_governo_composicao` (além de `finance_scraped`). Ver
+[governo.md](./governo.md).
+
+```powershell
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.governo
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.governo --no-elastic
+```
+
 ## Contratação pública (UE, Reino Unido e Portugal)
 
 A contratação pública é o caso em que a **sonda** compensa mais do que a pressa:

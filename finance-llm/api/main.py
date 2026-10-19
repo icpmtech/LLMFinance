@@ -376,6 +376,11 @@ from api.partidos_routes import router as partidos_router
 # comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos;
 # indexados em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`.
 from api.erc_routes import router as erc_router
+# Entidade para a Transparência: declarações únicas dos titulares de cargos
+# políticos e altos cargos públicos, recolhidas pela cascata entidade → cargo →
+# titular e indexadas em `finance_ept_titulares`, `finance_ept_titularidades` e
+# `finance_ept_declaracoes`.
+from api.entidade_transparencia_routes import router as entidade_transparencia_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
@@ -692,6 +697,9 @@ _NO_STORE_PREFIXES = (
     # O portal da ERC segue a mesma regra: o painel e o progresso da recolha
     # mudam a cada leitura.
     "/erc",
+    # As declarações da Entidade para a Transparência e o progresso da recolha
+    # também não podem vir do cache do browser.
+    "/entidade-transparencia",
     # O índice da Administração Central e as agregações dos contratos mudam a
     # cada leitura (e a cada reconstrução do índice).
     "/administracao-central",
@@ -850,6 +858,20 @@ app.include_router(societario_router)
 app.include_router(societario_recolha_router)
 app.include_router(empresas_recolha_router)
 app.include_router(empresas_perfil_router)
+# As páginas da interface têm de ser registadas **antes** do router: o
+# `GET /rigorbiz/{nif}` capturaria `/rigorbiz/collector` como um NIF.
+@app.get("/rigorbiz")
+def serve_rigorbiz_spa_page(request: Request):
+    """Página do diretório **RigorBiz** (pesquisa de empresas portuguesas)."""
+    return spa_page_response(str(request.url.path))
+
+
+@app.get("/rigorbiz/collector")
+def serve_rigorbiz_collector_spa_page(request: Request):
+    """Página do **Collector RigorBiz** (monitor da recolha e da indexação)."""
+    return spa_page_response(str(request.url.path))
+
+
 # RigorBiz: diretório de empresas portuguesas (recolha + pesquisa).
 app.include_router(rigorbiz_router)
 # Descoberta: uma empresa, todas as fontes, o grafo de informação, a ontologia e
@@ -934,6 +956,7 @@ app.include_router(subvencoes_router)
 app.include_router(partidos_router)
 # Portal da Transparência da ERC (entidades, pessoas dos órgãos sociais e OCS).
 app.include_router(erc_router)
+app.include_router(entidade_transparencia_router)
 app.include_router(benchmark_router)
 app.include_router(administracao_central_router)
 

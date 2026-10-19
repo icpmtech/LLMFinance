@@ -438,6 +438,19 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "entidade-transparencia",
+        "description": (
+            "Entidade para a Transparência: declarações únicas dos titulares de "
+            "cargos políticos e altos cargos públicos. Recolhe o catálogo pela "
+            "cascata entidade → cargo → titular, lê as declarações de cada "
+            "titular (facto determinante, dados pessoais, rendimentos, ativo, "
+            "passivo e registo de interesses) e indexa em "
+            "`finance_ept_titulares`, `finance_ept_titularidades` e "
+            "`finance_ept_declaracoes`; serve pesquisa, ficha do titular e a "
+            "ligação ao PessoasIQ."
+        ),
+    },
+    {
         "name": "gleif",
         "description": (
             "GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* "

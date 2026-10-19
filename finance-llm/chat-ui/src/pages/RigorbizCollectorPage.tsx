@@ -101,6 +101,9 @@ export default function RigorbizCollectorPage() {
   const unique = runner.unique_total ?? status?.meta.local_count ?? 0;
   const indexed = runner.indexed ?? 0;
   const page = runner.page ?? status?.checkpoint.last_page ?? 0;
+  const prefixInfo = status?.prefixes;
+  const queueRemaining = runner.queue_remaining ?? prefixInfo?.queue ?? null;
+  const prefixesDone = runner.prefixes_done ?? prefixInfo?.done ?? null;
   const progress = useMemo(() => {
     if (!total || total <= 0) return 0;
     return Math.min(100, (unique / total) * 100);
@@ -151,7 +154,7 @@ export default function RigorbizCollectorPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => act(() => startRigorbizCollect({ mode: "all", delay }))}
+              onClick={() => act(() => startRigorbizCollect({ mode: "prefix", delay }))}
               disabled={busy || running}
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:opacity-40"
             >
@@ -224,14 +227,20 @@ export default function RigorbizCollectorPage() {
           </div>
         ) : null}
 
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+          <Kpi
+            label="Prefixo"
+            value={runner.prefix || prefixInfo?.current || "—"}
+            icon={<Gauge size={11} />}
+            hint={queueRemaining !== null ? `${num(queueRemaining)} na fila` : undefined}
+          />
           <Kpi label="Página" value={num(page)} icon={<Gauge size={11} />} hint={`total ${num(total)}`} />
           <Kpi label="Recolhidas" value={num(unique)} icon={<Building2 size={11} />} hint={`+${num(runner.collected)} nesta execução`} />
           <Kpi label="Indexadas (ES)" value={num(status?.meta.elasticsearch_count ?? indexed)} icon={<Database size={11} />} hint={`${num(indexed)} neste run`} />
           <Kpi
             label="Progresso"
             value={`${progress.toFixed(progress < 1 ? 3 : 1)}%`}
-            hint={total ? `${num(total)} anunciadas pelo site` : "total desconhecido"}
+            hint={prefixesDone !== null ? `${num(prefixesDone)} prefixos concluídos` : "prefixos"}
           />
         </div>
 

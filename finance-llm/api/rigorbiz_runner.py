@@ -22,6 +22,13 @@ LOG_PATH = ROOT / "data" / "rigorbiz" / "rigorbiz_collector.log"
 logger = logging.getLogger(__name__)
 
 
+class _RigorbizOnly(logging.Filter):
+    """Só deixa passar registos do próprio coletor (sem ruído do Elasticsearch)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        return record.name.startswith("api.rigorbiz")
+
+
 def _setup_file_logging() -> None:
     """Garante que a recolha escreve num log consultável pela UI."""
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -29,10 +36,15 @@ def _setup_file_logging() -> None:
     for handler in logging.getLogger().handlers:
         if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "") == target:
             return
-    handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    handler = logging.FileHandler(LOG_PATH, mode="w", encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.addFilter(_RigorbizOnly())
     logging.getLogger().addHandler(handler)
-    logging.getLogger().setLevel(logging.INFO)
+    # O registo do coletor tem de chegar ao handler (o root fica em WARNING).
+    logging.getLogger("api.rigorbiz_collector").setLevel(logging.INFO)
+    logging.getLogger("api.rigorbiz_runner").setLevel(logging.INFO)
+    # O cliente do Elasticsearch é muito falador a INFO e afogava o log da recolha.
+    logging.getLogger("elastic_transport").setLevel(logging.WARNING)
 
 
 
@@ -83,6 +95,7 @@ def run(
         _load_checkpoint,
         _read_jsonl,
         collect_all,
+        collect_by_prefix,
         collect_sample,
     )
 
@@ -108,12 +121,15 @@ def run(
             "indexed": 0,
             "page": int(checkpoint.get("last_page", 0)),
             "unique_total": len(_read_jsonl()),
+            "prefix": None,
+            "queue_remaining": None,
+            "prefixes_done": None,
             "error": None,
         }
     )
 
     try:
-        if mode != "all":
+        if mode == "sample":
             result = collect_sample(max_pages=pages, delay=delay, index_to_es=index_to_es)
             _save_state(
                 {
@@ -129,7 +145,9 @@ def run(
             )
             return result
 
-        result = collect_all(
+        # A partir da página 21 o site repete resultados (limite de 200 por
+        # pesquisa), pelo que a recolha total é feita por prefixos de nome.
+        result = collect_by_prefix(
             delay=delay,
             index_to_es=index_to_es,
             on_progress=_on_progress,
@@ -147,6 +165,8 @@ def run(
                 "indexed": result.get("indexed", 0),
                 "collected": result.get("collected", 0),
                 "page": result.get("last_page"),
+                "queue_remaining": result.get("queue_remaining"),
+                "prefixes_done": result.get("prefixes_done"),
                 "total_announced": result.get("total_announced"),
                 "finished_at": _now(),
             }

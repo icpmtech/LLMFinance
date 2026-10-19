@@ -36,11 +36,27 @@ DATA_DIR = ROOT / "data" / "rigorbiz"
 JSON_PATH = DATA_DIR / "rigorbiz_empresas.json"
 JSONL_PATH = DATA_DIR / "rigorbiz_empresas.jsonl"
 CHECKPOINT_PATH = DATA_DIR / "rigorbiz_collector_state.json"
+PREFIX_STATE_PATH = DATA_DIR / "rigorbiz_prefix_state.json"
 
-DEFAULT_DELAY = 4.0  # segundos entre páginas (evita 429)
+DEFAULT_DELAY = 12.0  # segundos entre páginas (o site bloqueia ritmos altos)
 PAGE_SIZE = 10
 MAX_RETRIES = 5
-RETRY_BACKOFF = 15.0  # segundos adicionais após erro 429
+RETRY_BACKOFF = 20.0  # segundos adicionais após erro 429
+MAX_DELAY = 90.0  # teto do throttle adaptativo
+
+#: O site devolve no máximo 200 resultados por pesquisa (20 páginas de 10).
+#: Acima disso a página repete a última — daí a recolha ser particionada por
+#: prefixo de nome (`ksearch` é pesquisa por prefixo).
+MAX_RESULTS_PER_QUERY = 200
+MAX_PAGES_PER_QUERY = MAX_RESULTS_PER_QUERY // PAGE_SIZE
+
+#: Alfabeto dos prefixos. O site procura por prefixo do nome e ignora acentos.
+PREFIX_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+#: Primeiros caracteres que aparecem em nomes reais ('!', '#', '&', …).
+PREFIX_SEEDS = list(PREFIX_ALPHABET) + ["!", "#", "&", "*", "+", "-", ".", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+#: Profundidade máxima de expansão (prefixo "abc" → "abcd"). Nomes portugueses
+#: partilham prefixos longos («ACABAMENTOS…», «SOCIEDADE…»), daí ir até 8.
+MAX_PREFIX_DEPTH = 8
 
 _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -68,7 +84,8 @@ class RigorbizCollector:
         session: Optional[requests.Session] = None,
         rotate_user_agent: bool = True,
     ):
-        self.delay = max(0.3, float(delay))
+        self.base_delay = max(0.3, float(delay))
+        self.delay = self.base_delay
         self.rotate_user_agent = rotate_user_agent
         self.session = session or requests.Session()
         self.session.headers.update(self._headers())
@@ -148,14 +165,21 @@ class RigorbizCollector:
                     self.session.headers.update({"User-Agent": random.choice(_USER_AGENTS)})
                 resp = self.session.post(LIST_ENDPOINT, data=body, timeout=30)
                 resp.raise_for_status()
+                # Sucesso: alivia o throttle suavemente até ao mínimo configurado.
+                self.delay = max(self.base_delay, self.delay * 0.97)
                 return self._parse_list_html(resp.text)
             except Exception as exc:
                 status_429 = hasattr(exc, "response") and getattr(exc.response, "status_code", None) == 429
                 logger.warning("Erro página %s (tentativa %s/%s): %s", page, attempt, MAX_RETRIES, exc)
+                if status_429:
+                    # O site é sensível ao ritmo: sobe o intervalo entre pedidos.
+                    self.delay = min(MAX_DELAY, self.delay * 1.6)
+                    # Respiro extra: rajadas depois de um bloqueio voltam a bloquear.
+                    time.sleep(random.uniform(20, 45))
                 if attempt == MAX_RETRIES:
                     raise
                 wait = RETRY_BACKOFF * attempt + (random.uniform(2, 8) if status_429 else 0)
-                logger.info("Aguardar %.1fs antes de retentar...", wait)
+                logger.info("Aguardar %.1fs antes de retentar (delay agora %.1fs)...", wait, self.delay)
                 time.sleep(wait)
         return [], None  # nunca atingido, mas mantém type checker feliz
 
@@ -434,6 +458,201 @@ def collect_all(
         "jsonl": str(JSONL_PATH),
         "json": str(JSON_PATH),
         "completed": completed,
+    }
+
+
+# ---------------------------------------------------------------- prefixos
+def _load_prefix_state() -> Dict[str, Any]:
+    """Estado da recolha por prefixos (fila, feitos e estatísticas)."""
+    if not PREFIX_STATE_PATH.exists():
+        return {"queue": list(PREFIX_SEEDS), "done": [], "current": None, "stats": {}}
+    try:
+        state = json.loads(PREFIX_STATE_PATH.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return {"queue": list(PREFIX_SEEDS), "done": [], "current": None, "stats": {}}
+    if not state.get("queue") and not state.get("done"):
+        state["queue"] = list(PREFIX_SEEDS)
+    return state
+
+
+def _save_prefix_state(state: Dict[str, Any]) -> None:
+    _ensure_data_dir()
+    PREFIX_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def collect_by_prefix(
+    delay: float = DEFAULT_DELAY,
+    index_to_es: bool = True,
+    index_batch_size: int = 100,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
+    max_seconds: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Recolhe o diretório inteiro particionando o nome por prefixos.
+
+    O site devolve no máximo 200 resultados por pesquisa, pelo que cada prefixo
+    com mais resultados é dividido em prefixos mais longos. A fila fica em
+    ``data/rigorbiz/rigorbiz_prefix_state.json``, o que permite retomar sempre
+    do mesmo ponto.
+    """
+    started = time.monotonic()
+    state = _load_prefix_state()
+    existing = _existing_nifs()
+    collector = RigorbizCollector(delay=delay)
+    buffer: List[Dict[str, Any]] = []
+    collected_total = 0
+    indexed_total = 0
+    pages_total = 0
+    stopped = False
+    current: Optional[str] = None
+    seen_prefixes = set(state.get("done") or [])
+
+    def _emit(**kwargs) -> None:
+        if on_progress:
+            try:
+                on_progress(kwargs)
+            except Exception as exc:  # noqa: BLE001 — o progresso nunca derruba a recolha
+                logger.debug("Progress callback ignorado: %s", exc)
+
+    def _flush() -> None:
+        nonlocal indexed_total
+        if not buffer:
+            return
+        if index_to_es:
+            try:
+                from api.rigorbiz_indexer import index_items
+
+                indexed_total += int(index_items(buffer).get("indexed") or 0)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Indexação de lote falhou: %s", exc)
+        _save_results(buffer, append=True)
+        buffer.clear()
+
+    queue: List[str] = list(state.get("queue") or PREFIX_SEEDS)
+
+    while queue:
+        if should_stop and should_stop():
+            logger.info("Paragem pedida — a guardar a fila (%s prefixos).", len(queue))
+            stopped = True
+            break
+        if max_seconds is not None and (time.monotonic() - started) > max_seconds:
+            logger.info("Limite de tempo atingido — a guardar a fila.")
+            stopped = True
+            break
+
+        prefix = queue.pop(0)
+        if prefix in seen_prefixes:
+            continue
+        current = prefix
+
+        try:
+            first_items, total = collector.fetch_page(1, query=prefix)
+        except Exception as exc:  # noqa: BLE001 — 429 persistente
+            logger.error("Prefixo '%s' falhou (%s); devolvido à fila.", prefix, exc)
+            queue.insert(0, prefix)
+            _save_prefix_state({"queue": queue, "done": sorted(seen_prefixes), "current": prefix, "stats": {}})
+            time.sleep(collector.delay)
+            continue
+
+        if total is not None and total > MAX_RESULTS_PER_QUERY and len(prefix) < MAX_PREFIX_DEPTH:
+            # Demasiados resultados: divide o prefixo e ignora esta página.
+            children = [prefix + ch for ch in PREFIX_ALPHABET]
+            queue[:0] = children
+            logger.info("Prefixo '%s' tem %s resultados → a dividir em %s sub-prefixos.", prefix, total, len(children))
+            _save_prefix_state(
+                {"queue": queue, "done": sorted(seen_prefixes), "current": prefix,
+                 "stats": {"collected": collected_total, "indexed": indexed_total, "pages": pages_total}}
+            )
+            _emit(kind="expand", prefix=prefix, total=total, queue=len(queue), collected=collected_total,
+                  indexed=indexed_total, unique_total=len(existing) + collected_total)
+            continue
+
+        # Prefixo com ≤200 resultados: esgota a paginação (máx. 20 páginas).
+        pages = min(MAX_PAGES_PER_QUERY, max(1, ((total or len(first_items)) + PAGE_SIZE - 1) // PAGE_SIZE))
+        page_failed = False
+        for page in range(1, pages + 1):
+            if should_stop and should_stop():
+                logger.info("Paragem pedida no prefixo '%s' (página %s).", prefix, page)
+                stopped = True
+                # O prefixo fica por concluir: volta à fila para retomar depois.
+                queue.insert(0, prefix)
+                page_failed = True
+                break
+            try:
+                items, page_total = (first_items, total) if page == 1 else collector.fetch_page(page, query=prefix)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Prefixo '%s' página %s falhou: %s", prefix, page, exc)
+                queue.insert(0, prefix)
+                page_failed = True
+                break
+            if not items:
+                break
+            pages_total += 1
+            collected_total += len(items)
+            buffer.extend(items)
+            if len(buffer) >= index_batch_size:
+                _flush()
+            logger.info(
+                "Prefixo '%s' página %s/%s: +%s itens (%s recolhidas, %s indexadas)",
+                prefix, page, pages, len(items), collected_total, indexed_total,
+            )
+            _emit(kind="page", prefix=prefix, page=page, items=len(items), collected=collected_total,
+                  indexed=indexed_total, unique_total=len(existing) + collected_total,
+                  queue=len(queue), total=total)
+            if page < pages:
+                time.sleep(collector.delay + random.uniform(0.3, 1.2))
+
+        if page_failed:
+            _flush()
+            _save_prefix_state(
+                {"queue": queue, "done": sorted(seen_prefixes), "current": prefix,
+                 "stats": {"collected": collected_total, "indexed": indexed_total, "pages": pages_total}}
+            )
+            continue
+
+        seen_prefixes.add(prefix)
+        _flush()
+        _save_prefix_state(
+            {"queue": queue, "done": sorted(seen_prefixes), "current": prefix,
+             "stats": {"collected": collected_total, "indexed": indexed_total, "pages": pages_total}}
+        )
+
+    _flush()
+    state = _load_prefix_state()
+    state.update(
+        {
+            "queue": queue,
+            "done": sorted(seen_prefixes),
+            "current": current,
+            "stats": {"collected": collected_total, "indexed": indexed_total, "pages": pages_total},
+        }
+    )
+    _save_prefix_state(state)
+    unique_total = len(_read_jsonl())
+    completed = not queue
+    _emit(
+        kind="done",
+        prefix=current,
+        page=0,
+        collected=collected_total,
+        indexed=indexed_total,
+        unique_total=unique_total,
+        queue=len(queue),
+        completed=completed,
+        stopped=stopped,
+    )
+    return {
+        "ok": True,
+        "mode": "prefix",
+        "collected": collected_total,
+        "unique_total": unique_total,
+        "indexed": indexed_total,
+        "pages": pages_total,
+        "queue_remaining": len(queue),
+        "prefixes_done": len(seen_prefixes),
+        "stopped": stopped,
+        "completed": completed,
+        "jsonl": str(JSONL_PATH),
     }
 
 

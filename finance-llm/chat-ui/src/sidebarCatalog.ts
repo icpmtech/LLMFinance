@@ -122,7 +122,7 @@ export const APP_MODULES: AppModule[] = [
     id: "pessoas",
     label: "Pessoas",
     hint: "Pessoas, cargos, políticos e as contas dos partidos",
-    ids: ["descoberta-pessoas", "pessoas-iq", "pessoas-iq-politicos", "partidos"],
+    ids: ["descoberta-pessoas", "pessoas-iq", "pessoas-iq-politicos", "partidos", "entidade-transparencia"],
   },
   {
     id: "dados-publicos",

@@ -453,6 +453,143 @@ def test_analise_de_lojas_calcula_indice_de_preco(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Recolha
+# ---------------------------------------------------------------------------
+def test_recolha_sem_limite_explicito_usa_o_da_configuracao(monkeypatch):
+    """Sem `limite_por_loja` na chamada, a recolha tem de usar o limite configurado.
+
+    Já rebentava aqui: o limite resolvido (`limite`) era usado só na mensagem e a
+    leitura dos itens ia buscar o argumento em bruto (`None`), pelo que cada loja
+    falhava com `int(None)` e o resumo saía com 0 ofertas.
+    """
+    benchmark = {
+        "slug": "demo",
+        "name": "Demo",
+        "match_on": "nome",
+        "currency": "EUR",
+        "field_map": {},
+        "stores": [{"id": "loja", "name": "Loja", "url": "https://loja.pt", "enabled": True}],
+    }
+    item = {
+        "data": {"titulo": "Casaco", "preco": "49,90 €"},
+        "summary": "Casaco",
+        "source_id": "fonte",
+        "run_id": "r1",
+    }
+    lidos: dict = {}
+
+    def _read_run_items(run_id, source_id, *, limit=100, offset=0):
+        lidos["limit"] = limit
+        return {"run_id": run_id, "total": 1, "items": [item]}
+
+    monkeypatch.setattr(servico.store, "obter", lambda slug: benchmark)
+    monkeypatch.setattr(
+        servico.store, "obter_configuracao", lambda: {"limite_por_loja": 200, "pausa_segundos": 0}
+    )
+    monkeypatch.setattr(servico.store, "marcar_recolha", lambda slug, resumo: None)
+    monkeypatch.setattr(servico.esc, "ensure_benchmark_items_index", lambda slug: None)
+    monkeypatch.setattr(servico.esc, "delete_benchmark_items", lambda slug, store_id="": None)
+    monkeypatch.setattr(servico.esc, "index_benchmark_items", lambda slug, ofertas: {"indexed": len(ofertas)})
+    monkeypatch.setattr(servico, "_fonte_da_loja", lambda b, l: "fonte")
+    monkeypatch.setattr(
+        servico.scraper_service,
+        "execute_run_sync",
+        lambda source_id, trigger="", user_id=None: {"run_id": "r1", "items_count": 1, "status": "completed"},
+    )
+    monkeypatch.setattr(servico.scraper_service, "read_run_items", _read_run_items)
+
+    resumo = servico.recolher("demo")
+
+    assert lidos["limit"] == 200
+    assert resumo["offers"] == 1
+    assert resumo["indexed"] == 1
+    assert resumo["stores"][0]["status"] == "ok"
+    assert resumo["errors"] == []
+
+
+def test_recolha_usa_o_limite_explicito_quando_indicado(monkeypatch):
+    """Um limite explícito continua a mandar sobre o da configuração."""
+    benchmark = {
+        "slug": "demo",
+        "name": "Demo",
+        "match_on": "nome",
+        "currency": "EUR",
+        "field_map": {},
+        "stores": [{"id": "loja", "name": "Loja", "url": "https://loja.pt", "enabled": True}],
+    }
+    lidos: dict = {}
+
+    def _read_run_items(run_id, source_id, *, limit=100, offset=0):
+        lidos["limit"] = limit
+        return {"run_id": run_id, "total": 0, "items": []}
+
+    monkeypatch.setattr(servico.store, "obter", lambda slug: benchmark)
+    monkeypatch.setattr(
+        servico.store, "obter_configuracao", lambda: {"limite_por_loja": 200, "pausa_segundos": 0}
+    )
+    monkeypatch.setattr(servico.store, "marcar_recolha", lambda slug, resumo: None)
+    monkeypatch.setattr(servico.esc, "ensure_benchmark_items_index", lambda slug: None)
+    monkeypatch.setattr(servico.esc, "delete_benchmark_items", lambda slug, store_id="": None)
+    monkeypatch.setattr(servico.esc, "index_benchmark_items", lambda slug, ofertas: {"indexed": 0})
+    monkeypatch.setattr(servico, "_fonte_da_loja", lambda b, l: "fonte")
+    monkeypatch.setattr(
+        servico.scraper_service,
+        "execute_run_sync",
+        lambda source_id, trigger="", user_id=None: {"run_id": "r2", "items_count": 0, "status": "completed"},
+    )
+    monkeypatch.setattr(servico.scraper_service, "read_run_items", _read_run_items)
+
+    servico.recolher("demo", limite_por_loja=42)
+
+    assert lidos["limit"] == 42
+
+
+# ---------------------------------------------------------------------------
+# Tipo de peça
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "nome,categoria,esperado",
+    [
+        ("Camisola de malha canelada", "", "Camisolas"),
+        ("Sweatshirt com capuz", "", "Camisolas"),
+        ("T-shirt básica de algodão", "", "T-shirts"),
+        ("Camisa de popeline", "", "Camisas"),
+        ("Blusa fluida", "", "Camisas"),
+        ("Jeans wide leg", "", "Jeans"),
+        ("Calças de fato", "", "Calças"),
+        ("Calções de ganga", "", "Calções"),
+        ("Saia plissada", "", "Saias"),
+        ("Vestido midi", "", "Vestidos"),
+        ("Casaco de lã", "", "Casacos"),
+        ("Blazer oversize", "", "Casacos"),
+        ("Sapatilhas running", "", "Sapatilhas"),
+        ("Botins de pele estilo cowboy", "", "Botas"),
+        ("Sandálias de salto", "", "Sandálias"),
+        ("Mala de ombro", "", "Acessórios"),
+        ("Fato de banho", "", "Fatos de banho"),
+        ("Soutien sem aros", "", "Roupa interior"),
+        ("Pijama de flanela", "", "Pijamas"),
+        ("Macacão de alças", "", "Macacões"),
+        # Sem pistas no nome, a categoria decide; sem nenhuma, fica «Outros».
+        ("Peça 250562", "Vestidos", "Vestidos"),
+        ("Peça 250562", "", "Outros"),
+    ],
+)
+def test_tipo_de_peca(nome, categoria, esperado):
+    assert servico.tipo_de_peca(nome, categoria) == esperado
+
+
+def test_oferta_guarda_o_tipo_de_peca():
+    """O tipo de peça é calculado na normalização — é o que o resumo agrega."""
+    oferta = servico.normalizar_oferta(
+        {"data": {"titulo": "Camisola de gola alta", "preco": "39,99 €"}},
+        loja={"id": "loja", "name": "Loja", "url": "https://loja.pt"},
+        benchmark={"slug": "demo", "match_on": "nome", "currency": "EUR", "field_map": {}},
+    )
+    assert oferta["garment_type"] == "Camisolas"
+
+
+# ---------------------------------------------------------------------------
 # Publicação no CMS
 # ---------------------------------------------------------------------------
 @pytest.fixture()

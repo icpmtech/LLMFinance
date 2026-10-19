@@ -329,6 +329,22 @@ ERC_OCS_INDEX = "finance_erc_ocs"
 # rendeu e eventuais erros.
 ERC_RECOLHAS_INDEX = "finance_erc_recolhas"
 
+# **Entidade para a Transparência** — declarações únicas dos titulares de cargos
+# políticos e altos cargos públicos. Quatro índices, alimentados por
+# `api/entidade_transparencia_service.py`:
+#
+# - `finance_ept_titulares`: um documento por titular (`_id` = id da EPT), com o
+#   resumo das declarações e a cascata entidade/cargo/órgão;
+# - `finance_ept_titularidades`: uma linha por entidade × cargo × titular, com
+#   as datas de exercício (é a tabela que a plataforma mostra na pesquisa);
+# - `finance_ept_declaracoes`: uma declaração única, com as secções
+#   normalizadas, as tabelas do registo de interesses e o texto pesquisável;
+# - `finance_ept_recolhas`: o manifesto da última recolha.
+EPT_TITULARES_INDEX = "finance_ept_titulares"
+EPT_TITULARIDADES_INDEX = "finance_ept_titularidades"
+EPT_DECLARACOES_INDEX = "finance_ept_declaracoes"
+EPT_RECOLHAS_INDEX = "finance_ept_recolhas"
+
 # **Arquivo.pt** — páginas da web preservadas pelo Arquivo.pt (FCT). Cada
 # documento é uma captura de uma página, recolhida via API pública de pesquisa
 # de texto completo (`textsearch`) ou CDX (`wayback/cdx`). Os campos principais
@@ -444,6 +460,40 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     MERCADO_RUNS_INDEX: {
         # Idem: títulos de mercado com acentos («Construção», «Saúde»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    EPT_TITULARES_INDEX: {
+        # Nomes de titulares e de entidades escrevem-se com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    EPT_TITULARIDADES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    EPT_DECLARACOES_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2727,6 +2777,117 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    ept_titulares_mappings = {
+        "properties": {
+            "titular_id": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            # Chave de comparação com `finance_people` (sem acentos/pontuação).
+            "nome_normalizado": {"type": "keyword"},
+            "declaracoes_total": {"type": "integer"},
+            "anos": {"type": "integer"},
+            "naturezas": {"type": "keyword"},
+            "entidades": {"type": "keyword", "ignore_above": 512},
+            "cargos": {"type": "keyword", "ignore_above": 256},
+            "orgaos": {"type": "keyword", "ignore_above": 256},
+            "ultima_declaracao": {"type": "date"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+            "fonte": {"type": "keyword"},
+        }
+    }
+
+    ept_titularidades_mappings = {
+        "properties": {
+            "titularidade_id": {"type": "keyword"},
+            "titular_id": {"type": "keyword"},
+            "titular": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "entidade_id": {"type": "keyword"},
+            "entidade": {"type": "keyword", "ignore_above": 512},
+            "cargo_id": {"type": "keyword"},
+            "cargo": {"type": "keyword", "ignore_above": 256},
+            "inicio": {"type": "date"},
+            "fim": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    ept_declaracoes_mappings = {
+        "properties": {
+            "declaracao_id": {"type": "keyword"},
+            "doc_id": {"type": "keyword"},
+            "titular_id": {"type": "keyword"},
+            "titular": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "titular_normalizado": {"type": "keyword"},
+            "ano": {"type": "integer"},
+            "natureza_codigo": {"type": "integer"},
+            "natureza": {"type": "keyword"},
+            "estado_codigo": {"type": "integer"},
+            "estado": {"type": "keyword"},
+            "entidade_id": {"type": "keyword"},
+            "entidade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "orgao_id": {"type": "keyword"},
+            "orgao": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "cargo_id": {"type": "keyword"},
+            "cargo": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "nif_entidade": {"type": "keyword"},
+            "inicio": {"type": "date"},
+            "fim": {"type": "date"},
+            "entrega": {"type": "date"},
+            "relacionada_id": {"type": "keyword"},
+            "secoes_inacessiveis": {"type": "keyword"},
+            "tem_registo_interesses": {"type": "boolean"},
+            # Árvore normalizada (secções, campos e tabelas) e registo de
+            # interesses já rotulado: lidos por id, não pesquisados campo a campo.
+            "secoes": {"type": "object", "enabled": False},
+            "interesses": {"type": "object", "enabled": False},
+            # Texto achatado de todas as secções (pesquisa livre).
+            "texto": {"type": "text", "analyzer": "world_folding", "search_analyzer": "world_folding"},
+            "fonte": {"type": "keyword"},
+            "fonte_url": {"type": "keyword", "ignore_above": 512},
+            "url_publica": {"type": "keyword", "ignore_above": 512},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    ept_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "totais": {"type": "object", "enabled": False},
+            "catalogo": {"type": "object", "enabled": False},
+            "atualizado_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     municipios_despesas_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -3572,6 +3733,12 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (ERC_PESSOAS_INDEX, erc_pessoas_mappings),
         (ERC_OCS_INDEX, erc_ocs_mappings),
         (ERC_RECOLHAS_INDEX, erc_recolhas_mappings),
+        # Entidade para a Transparência: titulares, titularidades, declarações
+        # únicas e o manifesto da recolha.
+        (EPT_TITULARES_INDEX, ept_titulares_mappings),
+        (EPT_TITULARIDADES_INDEX, ept_titularidades_mappings),
+        (EPT_DECLARACOES_INDEX, ept_declaracoes_mappings),
+        (EPT_RECOLHAS_INDEX, ept_recolhas_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
         (ARQUIVO_PT_INDEX, arquivo_pt_mappings),
@@ -19782,6 +19949,7 @@ def benchmark_items_mappings() -> Dict[str, Any]:
             "description": {"type": "text"},
             "brand": {"type": "keyword"},
             "category": {"type": "keyword"},
+            "garment_type": {"type": "keyword"},
             "sku": {"type": "keyword"},
             "ean": {"type": "keyword"},
             "store_id": {"type": "keyword"},
@@ -19846,6 +20014,18 @@ def ensure_benchmark_items_index(slug: str, *, client: Optional[Elasticsearch] =
                 settings={"number_of_shards": 1, "number_of_replicas": 0},
                 mappings=benchmark_items_mappings(),
             )
+        else:
+            # Campos novos (`garment_type`, por exemplo) entram nos índices que já
+            # existem: sem isto, um estudo antigo só passaria a ter as colunas
+            # novas depois de recriado — e recriá-lo apagava as ofertas.
+            mappings = benchmark_items_mappings()
+            try:
+                existente = cliente.indices.get_mapping(index=indice)[indice]["mappings"].get("properties", {})
+                em_falta = _missing_mapping_fields(existente, mappings.get("properties") or {})
+                if em_falta:
+                    cliente.indices.put_mapping(index=indice, body={"properties": em_falta})
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("put_mapping ignorado para %s: %s", indice, exc)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning("Não foi possível garantir o índice %s: %s", indice, exc)
@@ -20022,6 +20202,63 @@ def benchmark_store_stats(slug: str, *, es: Optional[Elasticsearch] = None) -> L
         )
     lojas.sort(key=lambda item: item.get("preco_medio") or 0)
     return lojas
+
+
+def benchmark_garment_stats(slug: str, *, es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
+    """Preço por **tipo de peça** — o resumo que compara marcas diferentes.
+
+    O produto a produto só é comparável quando as lojas vendem o mesmo artigo;
+    por tipo de peça (`Camisolas`, `Calças`, `Vestidos`…) já se pode comparar o
+    preço médio de cada loja, mesmo que sejam peças de marcas distintas.
+    """
+    client = es or get_es_client()
+    if not client:
+        return []
+    indice = benchmark_items_index(slug)
+    try:
+        if not client.indices.exists(index=indice):
+            return []
+        resp = client.search(
+            index=indice,
+            body={
+                "size": 0,
+                "query": {"match_all": {}},
+                "aggs": {
+                    "tipos": {
+                        "terms": {"field": "garment_type", "size": 40, "order": {"_count": "desc"}},
+                        "aggs": {
+                            "preco": {"stats": {"field": "price"}},
+                            "lojas": {"cardinality": {"field": "store_id"}},
+                            "mais_barata": {
+                                "terms": {"field": "store_name", "size": 1, "order": {"minimo": "asc"}},
+                                "aggs": {"minimo": {"min": {"field": "price"}}},
+                            },
+                        },
+                    }
+                },
+            },
+        )
+    except Exception:  # noqa: BLE001
+        return []
+    tipos: List[Dict[str, Any]] = []
+    for balde in ((resp.get("aggregations") or {}).get("tipos") or {}).get("buckets") or []:
+        preco = balde.get("preco") or {}
+        barata = ((balde.get("mais_barata") or {}).get("buckets") or [{}])[0]
+        tipos.append(
+            {
+                "garment_type": balde.get("key"),
+                "offers": balde.get("doc_count"),
+                "stores": int(balde.get("lojas", {}).get("value") or 0),
+                "price_min": round(preco["min"], 2) if preco.get("min") is not None else None,
+                "price_max": round(preco["max"], 2) if preco.get("max") is not None else None,
+                "price_avg": round(preco["avg"], 2) if preco.get("avg") is not None else None,
+                "cheapest_store": barata.get("key"),
+                "cheapest_price": round((barata.get("minimo") or {}).get("value"), 2)
+                if (barata.get("minimo") or {}).get("value") is not None
+                else None,
+            }
+        )
+    return tipos
 
 
 def benchmark_product_comparison(

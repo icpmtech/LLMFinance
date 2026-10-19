@@ -101,6 +101,9 @@ export type RigorbizRunnerState = {
   mode?: string;
   page?: number;
   start_page?: number;
+  prefix?: string | null;
+  queue_remaining?: number | null;
+  prefixes_done?: number | null;
   collected?: number;
   indexed?: number;
   unique_total?: number;
@@ -118,6 +121,12 @@ export type RigorbizRunnerState = {
 export type RigorbizCollectStatus = {
   runner: RigorbizRunnerState;
   checkpoint: { last_page?: number; total?: number | null; completed?: boolean };
+  prefixes?: {
+    queue: number;
+    done: number;
+    current?: string | null;
+    stats?: { collected?: number; indexed?: number; pages?: number };
+  };
   meta: RigorbizMeta;
   log_tail: string[];
 };
@@ -126,11 +135,13 @@ export function getRigorbizCollectStatus() {
   return request<RigorbizCollectStatus>("/rigorbiz/collect/status");
 }
 
-export function startRigorbizCollect(body: { mode?: string; pages?: number; delay?: number } = {}) {
+export function startRigorbizCollect(
+  body: { mode?: string; pages?: number; delay?: number } = {},
+) {
   return request<{ ok: boolean; message?: string; already_running?: boolean }>("/rigorbiz/collect", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: body.mode ?? "all", pages: body.pages ?? 1000, delay: body.delay ?? 4 }),
+    body: JSON.stringify({ mode: body.mode ?? "prefix", pages: body.pages ?? 1000, delay: body.delay ?? 4 }),
   });
 }
 

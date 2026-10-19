@@ -63,6 +63,91 @@ _SEM_ACENTOS = str.maketrans(
     "áàâãäçéèêëíìîïñóòôõöúùûüýÿ", "aaaaaceeeeiiiinooooouuuuyy"
 )
 
+#: Tipo que fica quando o nome e a categoria não dizem que peça é.
+TIPO_PECA_PADRAO = "Outros"
+
+#: Padrões (texto já sem acentos) que identificam cada tipo de peça. A **ordem
+#: manda**: o primeiro que casa vence, por isso o específico (`sapatilhas`,
+#: `jeans`) vem antes do genérico (`sapatos`, `calças`) e `vestido` antes de
+#: `vest` (colete), que é o mesmo radical.
+_TIPOS_PECA_PADROES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ("Sapatilhas", ("sapatilha", "sapatilhas", "sneaker", "sneakers", "tenis", "trainer", "trainers")),
+    ("Botas", ("bota", "botas", "botim", "botins", "boot", "boots")),
+    ("Sandálias", ("sandalia", "sandalias", "chinelo", "chinelos", "sandal", "sandals", "slides", "flip flop")),
+    (
+        "Sapatos",
+        (
+            "sapato", "sapatos", "mocassim", "mocassins", "bailarina", "bailarinas", "sabrina", "sabrinas",
+            "loafer", "loafers", "shoe", "shoes",
+        ),
+    ),
+    ("Calções", ("calcao", "calcoes", "short", "shorts", "bermuda", "bermudas")),
+    (
+        "Calças",
+        ("calca", "calcas", "pantalon", "pantalons", "trouser", "trousers", "pants", "jogger", "joggers", "legging", "leggings"),
+    ),
+    # `ganga`/`jeans` só depois das calças e dos calções: «calças de ganga» é uma
+    # calça (o tecido não muda a peça) e «calções de ganga» é um calção.
+    ("Jeans", ("jeans", "ganga")),
+    ("Saias", ("saia", "saias", "skirt", "skirts")),
+    ("Vestidos", ("vestido", "vestidos", "dress", "dresses")),
+    ("Macacões", ("macacao", "macacoes", "jumpsuit", "jumpsuits")),
+    ("Conjuntos", ("conjunto", "conjuntos", "jogging set", "tracksuit", "fato de treino")),
+    ("T-shirts", ("t shirt", "tshirt", "tshirts", "tee", "tees", "camiseta", "camisetas", "top", "tops", "polo", "polos")),
+    (
+        "Camisolas",
+        ("camisola", "camisolas", "sweater", "sweaters", "pullover", "pull", "malha", "cardigan", "cardigans", "tricot", "knit", "sweatshirt"),
+    ),
+    ("Camisas", ("camisa", "camisas", "blusa", "blusas", "shirt", "shirts", "blouse", "blouses")),
+    (
+        "Casacos",
+        (
+            "casaco", "casacos", "blusao", "blusoes", "blazao", "blazoes", "blazer", "blazers", "jacket", "jackets",
+            "parka", "parkas", "trench", "gabardina", "gabardinas", "capa", "cape", "sobretudo", "sobretudos", "coat",
+            "coats", "anorak", "colete", "coletes", "gilet", "vest",
+        ),
+    ),
+    ("Fatos de banho", ("fato de banho", "biquini", "biquinis", "swimsuit", "swimwear", "bikini")),
+    (
+        "Roupa interior",
+        ("cueca", "cuecas", "boxer", "boxers", "soutien", "soutiens", "lingerie", "meia", "meias", "socks", "collants"),
+    ),
+    ("Pijamas", ("pijama", "pijamas", "pajama", "pajamas", "pyjama", "pyjamas")),
+    (
+        "Acessórios",
+        (
+            "cinto", "cintos", "belt", "lenco", "lencos", "cachecol", "cachecois", "gorro", "gorros", "chapeu", "luva",
+            "luvas", "diadema", "alice band", "wand", "mala", "malas", "bag", "bags", "carteira", "carteiras", "wallet",
+            "oculos", "sunglasses", "relogio", "relogios", "watch", "brinco", "brincos", "colar", "colares", "pulseira",
+            "pulseiras", "anel", "aneis",
+        ),
+    ),
+)
+
+#: Os padrões já compilados, com fronteira de palavra (o texto é normalizado:
+#: só `[a-z0-9 ]`, por isso `\b` separa as palavras como se espera).
+_TIPOS_PECA: Tuple[Tuple[str, "re.Pattern[str]"], ...] = tuple(
+    (tipo, re.compile(r"\b(?:" + "|".join(padroes) + r")\b")) for tipo, padroes in _TIPOS_PECA_PADROES
+)
+
+
+def tipo_de_peca(nome: str = "", categoria: str = "") -> str:
+    """Tipo de peça de um produto (`Camisolas`, `Calças`, `Vestidos`…).
+
+    Lê primeiro o **nome** (é o que vem sempre preenchido) e só depois a
+    categoria. Serve para o resumo «preço por tipo de peça» do estudo, onde se
+    comparam médias de peças de marcas diferentes — o produto a produto só é
+    possível quando as lojas vendem o mesmo artigo.
+    """
+    for texto in (nome, categoria):
+        chave = _chave(texto)
+        if not chave:
+            continue
+        for tipo, padrao in _TIPOS_PECA:
+            if padrao.search(chave):
+                return tipo
+    return TIPO_PECA_PADRAO
+
 
 def _agora() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -233,6 +318,7 @@ def normalizar_oferta(
         "description": str(descricao).strip()[:2000] if descricao else None,
         "brand": str(marca).strip()[:120] if marca else None,
         "category": str(categoria).strip()[:120] if categoria else None,
+        "garment_type": tipo_de_peca(nome, str(categoria or "")),
         "sku": str(sku).strip()[:80] if sku else None,
         "ean": str(ean).strip()[:40] if ean else None,
         "store_id": loja.get("id"),
@@ -354,7 +440,7 @@ def recolher(
                 }
             )
             lidos = scraper_service.read_run_items(
-                str(corrida.get("run_id") or ""), source_id, limit=max(1, int(limite_por_loja))
+                str(corrida.get("run_id") or ""), source_id, limit=max(1, limite)
             )
             ofertas = []
             for item in lidos.get("items") or []:
@@ -595,6 +681,7 @@ def analise(slug: str, *, tamanho: int = 200) -> Dict[str, Any]:
         return {"error": "Benchmark não encontrado"}
 
     lojas = esc.benchmark_store_stats(slug)
+    tipos_peca = esc.benchmark_garment_stats(slug)
     comparacao = esc.benchmark_product_comparison(slug, order="dispersao", size=tamanho, from_=0, min_stores=1)
     if comparacao.get("error"):
         return {"error": comparacao["error"], "benchmark": benchmark}
@@ -635,8 +722,11 @@ def analise(slug: str, *, tamanho: int = 200) -> Dict[str, Any]:
             "max_spread_pct": max(dispersoes) if dispersoes else None,
             "potential_saving_eur": round(sum(poupanca), 2) if poupanca else None,
             "avg_price": media_global,
+            # Tipos de peça com ofertas (o «Outros» fica de fora: não é um tipo).
+            "garment_types": len([t for t in tipos_peca if t.get("garment_type") not in (None, "", TIPO_PECA_PADRAO)]),
         },
         "stores": lojas,
+        "garment_types": tipos_peca,
         "opportunities": comparaveis[:15],
         "exclusives": exclusivos[:10],
     }
@@ -759,6 +849,7 @@ def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
                 "items": [
                     {"title": f"{kpis['offers']}", "text": "ofertas recolhidas"},
                     {"title": f"{kpis['products']}", "text": "produtos no estudo"},
+                    {"title": f"{kpis.get('garment_types', 0)}", "text": "tipos de peça"},
                     {"title": f"{kpis['comparable_products']}", "text": "produtos em duas ou mais lojas"},
                     {
                         "title": _eur(kpis.get("potential_saving_eur")),
@@ -789,6 +880,31 @@ def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
                     "title": "Onde está mais barato",
                     "head": ["Produto", "Marca", "Mínimo", "Máximo", "Dispersão", "Loja mais barata", "Cobertura"],
                     "rows": linhas,
+                },
+            }
+        )
+    tipos_peca = [t for t in (estudo.get("garment_types") or []) if t.get("garment_type")]
+    if tipos_peca:
+        # Quando as lojas são marcas diferentes não há o mesmo produto dos dois
+        # lados; o tipo de peça é o nível em que a comparação ainda é honesta.
+        blocos.append(
+            {
+                "type": "tabela",
+                "data": {
+                    "title": "Preço por tipo de peça",
+                    "head": ["Tipo de peça", "Ofertas", "Lojas", "Média", "Mínimo", "Máximo", "Loja mais barata"],
+                    "rows": [
+                        [
+                            str(t.get("garment_type")),
+                            str(int(t.get("offers") or 0)),
+                            str(int(t.get("stores") or 0)),
+                            _eur(t.get("price_avg")),
+                            _eur(t.get("price_min")),
+                            _eur(t.get("price_max")),
+                            str(t.get("cheapest_store") or "—"),
+                        ]
+                        for t in tipos_peca
+                    ],
                 },
             }
         )
@@ -1325,6 +1441,32 @@ def html_publico(
 </div>
 """ if lojas_stats else ""
 
+    # Preço por tipo de peça — o resumo que continua a fazer sentido quando as
+    # lojas vendem marcas diferentes (o produto a produto só compara o mesmo
+    # artigo, que em lojas de marca não existe).
+    tipos_peca = [t for t in (estudo.get("garment_types") or []) if t.get("garment_type")]
+    linhas_tipos = "".join(
+        "<tr>"
+        f"<td>{escape(str(t.get('garment_type')))}</td>"
+        f"<td>{int(t.get('offers') or 0)}</td>"
+        f"<td>{int(t.get('stores') or 0)}</td>"
+        f"<td>{_eur(t.get('price_avg'))}</td>"
+        f"<td>{_eur(t.get('price_min'))}</td>"
+        f"<td>{_eur(t.get('price_max'))}</td>"
+        f"<td>{escape(str(t.get('cheapest_store') or '—'))} {_eur(t.get('cheapest_price'))}</td>"
+        "</tr>"
+        for t in tipos_peca
+    )
+    tipos_html = (
+        "<h2>Preço por tipo de peça</h2>"
+        '<p class="muted">Média das ofertas recolhidas em cada tipo de peça. Compara marcas '
+        "diferentes; a comparação produto a produto só existe quando as lojas vendem o mesmo artigo.</p>"
+        '<div class="bench-table-wrap"><table class="bench-table"><thead><tr>'
+        "<th>Tipo de peça</th><th>Ofertas</th><th>Lojas</th><th>Média</th><th>Mínimo</th>"
+        "<th>Máximo</th><th>Loja mais barata</th>"
+        f"</tr></thead><tbody>{linhas_tipos}</tbody></table></div>"
+    ) if linhas_tipos else ""
+
     corpo = f"""<div class="bench-hero"><div class="bench-wrap">
   <h1>{escape(titulo)}</h1>
   <p class="lead">{escape(descricao)}</p>
@@ -1334,12 +1476,15 @@ def html_publico(
     <div class="bench-kpi"><b>{kpis.get('offers', 0)}</b><span>ofertas recolhidas</span></div>
     <div class="bench-kpi"><b>{kpis.get('products', 0)}</b><span>produtos</span></div>
     <div class="bench-kpi"><b>{kpis.get('stores', 0)}</b><span>lojas</span></div>
+    <div class="bench-kpi"><b>{kpis.get('garment_types', 0)}</b><span>tipos de peça</span></div>
     <div class="bench-kpi"><b>{kpis.get('comparable_products', 0)}</b><span>produtos em 2+ lojas</span></div>
     <div class="bench-kpi"><b>{dispersao_media}</b><span>dispersão média</span></div>
     <div class="bench-kpi"><b>{_eur(kpis.get('potential_saving_eur'))}</b><span>poupança se escolher sempre o mínimo</span></div>
   </div>
 
   {cards_html}
+
+  {tipos_html}
 
   <h2>Pesquisar</h2>
   <form class="bench-pesquisa" method="get" action="{escape(caminho)}">
