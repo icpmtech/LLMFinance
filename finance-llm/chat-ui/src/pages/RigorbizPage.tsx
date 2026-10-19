@@ -5,7 +5,7 @@
  * existir). A pesquisa é por texto livre, CAE ou localização.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, ExternalLink, Loader2, MapPin, RefreshCw, Search, Briefcase } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, ExternalLink, Loader2, MapPin, RefreshCw, Search, Briefcase, Activity } from "lucide-react";
 
 import {
   getRigorbizMeta,
@@ -73,7 +73,7 @@ function CompanyCard({ company }: { company: RigorbizCompany }) {
   );
 }
 
-export default function RigorbizPage() {
+export default function RigorbizPage({ onOpenCollector }: { onOpenCollector?: () => void }) {
   const [meta, setMeta] = useState<RigorbizMeta | null>(null);
   const [items, setItems] = useState<RigorbizCompany[]>([]);
   const [total, setTotal] = useState(0);
@@ -154,6 +154,16 @@ export default function RigorbizPage() {
           <p className="max-w-2xl text-muted-foreground">
             Pesquisa no diretório de empresas portuguesas da RigorBiz.
           </p>
+          {onOpenCollector ? (
+            <button
+              type="button"
+              onClick={onOpenCollector}
+              className="mt-3 inline-flex items-center gap-2 rounded-xl glass-card px-3 py-2 text-sm transition hover:bg-white/5"
+            >
+              <Activity size={14} className="text-emerald-300" />
+              Ver recolha em direto
+            </button>
+          ) : null}
         </div>
 
         <div className="mb-6 grid grid-cols-1 gap-4 rounded-2xl glass-card p-4 md:grid-cols-4">

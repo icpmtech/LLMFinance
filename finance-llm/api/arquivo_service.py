@@ -24,8 +24,8 @@ SOURCE_ID = "arquivo-pt"
 
 SEARCH_FIELDS = (
     "title^3",
-    "url^2",
-    "domain^2",
+    "url.text^2",
+    "domain.text^2",
     "snippet",
     "text",
 )
@@ -117,7 +117,8 @@ def collect(
         min_interval=min_interval,
     )
     if ingest and result.get("items"):
-        ingest_result = index_items(result["items"], kind="search")
+        kind = "cdx" if result.get("fallback") == "cdx" else "search"
+        ingest_result = index_items(result["items"], kind=kind)
         result["ingest"] = ingest_result
     return result
 
@@ -191,7 +192,7 @@ def search(
     elif sort == "date_asc":
         sort_clause = [{"capture_date": {"order": "asc"}}, "_score"]
     elif sort == "domain":
-        sort_clause = [{"domain.keyword": {"order": "asc"}}, "_score"]
+        sort_clause = [{"domain": {"order": "asc"}}, "_score"]
 
     body = {
         "query": query,

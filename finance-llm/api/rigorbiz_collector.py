@@ -288,7 +288,8 @@ def _load_checkpoint() -> Dict[str, Any]:
     if not CHECKPOINT_PATH.exists():
         return {"last_page": 0, "total": None, "completed": False}
     try:
-        return json.loads(CHECKPOINT_PATH.read_text(encoding="utf-8"))
+        # `utf-8-sig` tolera o BOM que alguns editores (PowerShell) acrescentam.
+        return json.loads(CHECKPOINT_PATH.read_text(encoding="utf-8-sig"))
     except Exception:
         return {"last_page": 0, "total": None, "completed": False}
 

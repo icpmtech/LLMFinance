@@ -12,6 +12,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   Archive,
   BarChart3,
   BookOpen,
@@ -381,6 +382,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Building2,
     gradient: "from-blue-200 via-cyan-500 to-teal-700",
     accent: "6,182,212",
+  },
+  {
+    id: "rigorbiz-collector",
+    label: "Collector · RigorBiz",
+    hint: "Monitor em direto da recolha paginada e da indexação em Elasticsearch",
+    icon: Activity,
+    gradient: "from-emerald-200 via-teal-500 to-cyan-700",
+    accent: "16,185,129",
   },
   {
     id: "social",

@@ -48,7 +48,15 @@ export type RigorbizQuery = {
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  // A leitura é pública; os POST de recolha precisam do token da sessão.
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("finance-llm-token") : null;
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
+    },
+  });
   if (!response.ok) {
     let detail = `${response.status}`;
     try {
@@ -85,3 +93,48 @@ export function searchRigorbizCompanies(query: RigorbizQuery = {}) {
 export function getRigorbizCompany(nif: string) {
   return request<RigorbizCompany>(`/rigorbiz/${encodeURIComponent(nif)}`);
 }
+
+// ---------------------------------------------------------------- collector
+export type RigorbizRunnerState = {
+  running?: boolean;
+  stop_requested?: boolean;
+  mode?: string;
+  page?: number;
+  start_page?: number;
+  collected?: number;
+  indexed?: number;
+  unique_total?: number;
+  total_announced?: number;
+  completed?: boolean;
+  stopped?: boolean;
+  ok?: boolean;
+  error?: string | null;
+  started_at?: string;
+  updated_at?: string;
+  finished_at?: string;
+  delay?: number;
+};
+
+export type RigorbizCollectStatus = {
+  runner: RigorbizRunnerState;
+  checkpoint: { last_page?: number; total?: number | null; completed?: boolean };
+  meta: RigorbizMeta;
+  log_tail: string[];
+};
+
+export function getRigorbizCollectStatus() {
+  return request<RigorbizCollectStatus>("/rigorbiz/collect/status");
+}
+
+export function startRigorbizCollect(body: { mode?: string; pages?: number; delay?: number } = {}) {
+  return request<{ ok: boolean; message?: string; already_running?: boolean }>("/rigorbiz/collect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: body.mode ?? "all", pages: body.pages ?? 1000, delay: body.delay ?? 4 }),
+  });
+}
+
+export function stopRigorbizCollect() {
+  return request<{ ok: boolean; message?: string }>("/rigorbiz/collect/stop", { method: "POST" });
+}
+

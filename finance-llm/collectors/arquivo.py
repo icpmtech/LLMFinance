@@ -11,6 +11,7 @@ mínimo configurável entre pedidos.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -32,13 +33,29 @@ DEFAULT_MAX_PAGES = 10
 DEFAULT_MIN_INTERVAL = 0.5
 DEFAULT_TIMEOUT = 30.0
 
+# A pesquisa de texto do Arquivo.pt recusa termos que parecem URLs/domínios
+# (`400`, a remeter para o CDX), por isso esses casos são detetados antes do
+# pedido e encaminhados para o índice de capturas.
+_URL_QUERY_RE = re.compile(
+    r"^(?:https?://)?[a-z0-9][a-z0-9._-]*\.[a-z]{2,}(?:[/?#].*)?$", re.IGNORECASE
+)
+
+
+def looks_like_url_query(q: str) -> bool:
+    """Diz se a pesquisa é um URL/domínio em vez de termos de texto."""
+    value = (q or "").strip()
+    if not value or " " in value:
+        return False
+    return bool(_URL_QUERY_RE.match(value))
+
 
 def _domain_from_url(url: str) -> str:
-    """Extrai o domínio (host) de um URL."""
+    """Extrai o domínio (host) de um URL, sem credenciais nem porta."""
     try:
-        return urlparse(url).netloc or url
+        netloc = urlparse(url).netloc or url
     except Exception:  # noqa: BLE001
         return url
+    return netloc.rsplit("@", 1)[-1].split(":")[0].lower()
 
 
 def _host_key_to_domain(host_key: str) -> str:
@@ -182,22 +199,26 @@ class ArquivoClient:
             params["collapse"] = collapse
 
         response = self._get(CDX_URL, params)
-        lines = response.text.strip().splitlines()
+        lines = [line.strip() for line in response.text.strip().splitlines() if line.strip()]
         if not lines:
             return []
-        # Formato JSON: primeira linha é cabeçalho com nomes dos campos.
-        header = lines[0]
-        try:
-            keys = header.strip().split(" ") if not header.startswith("[") else []
-            if header.startswith("["):
-                import json
 
-                keys = json.loads(header)
+        # Formato atual: NDJSON — uma captura por linha.
+        if lines[0].startswith("{"):
             results: List[Dict[str, Any]] = []
+            for line in lines:
+                try:
+                    results.append(json.loads(line))
+                except ValueError:
+                    logger.debug("Linha CDX ignorada: %s", line[:120])
+            return results
+
+        # Formato antigo: cabeçalho (lista JSON ou campos separados por espaço)
+        # seguido de linhas com valores na mesma ordem.
+        try:
+            keys = json.loads(lines[0]) if lines[0].startswith("[") else lines[0].split(" ")
+            results = []
             for line in lines[1:]:
-                line = line.strip()
-                if not line:
-                    continue
                 if line.startswith("["):
                     values = json.loads(line)
                 else:
@@ -271,7 +292,12 @@ def normalize_cdx_result(item: Dict[str, Any], url: Optional[str] = None) -> Dic
     original_url = item.get("url") or url or ""
     capture_date = _parse_tstamp(tstamp)
 
+    path = urlparse(original_url).path.rstrip("/")
+    slug = path.rsplit("/", 1)[-1] if path else ""
+    title = slug.replace("-", " ").replace("_", " ").strip()
+
     return {
+        "title": title or _domain_from_url(original_url),
         "url": original_url,
         "domain": _domain_from_url(original_url),
         "tstamp": tstamp,
@@ -286,6 +312,55 @@ def normalize_cdx_result(item: Dict[str, Any], url: Optional[str] = None) -> Dic
         "link_to_no_frame": f"{BASE_URL}/noFrame/replay/{tstamp}/{original_url}" if tstamp else "",
         "link_to_original_file": f"{BASE_URL}/noFrame/replay/{tstamp}id_/{original_url}" if tstamp else "",
         "host_key": item.get("urlkey") or "",
+    }
+
+
+def collect_url(
+    url: str,
+    *,
+    max_items: int = DEFAULT_MAX_ITEMS,
+    from_ts: Optional[str] = None,
+    to_ts: Optional[str] = None,
+    min_interval: float = DEFAULT_MIN_INTERVAL,
+) -> Dict[str, Any]:
+    """Recolhe capturas de um URL/domínio através do CDX do Arquivo.pt.
+
+    Usado quando a pesquisa é um domínio ou endereço — caso em que a API de
+    texto responde `400` e remete para o índice de capturas.
+    """
+    target = url.strip()
+    if not target.lower().startswith(("http://", "https://")):
+        target = f"https://{target}"
+
+    after_scheme = target.split("://", 1)[-1]
+    # Um caminho explícito pede prefixo; um domínio isolado pede o domínio todo.
+    match_type = "prefix" if "/" in after_scheme.rstrip("/") else "domain"
+
+    client = ArquivoClient(min_interval=min_interval)
+    try:
+        rows = client.cdx(
+            target,
+            limit=max(1, min(max_items, 200)),
+            from_ts=from_ts,
+            to_ts=to_ts,
+            match_type=match_type,
+        )
+    finally:
+        client.close()
+
+    items = [normalize_cdx_result(row, url=target) for row in rows]
+    return {
+        "query": url,
+        "site": None,
+        "type": None,
+        "from_ts": from_ts,
+        "to_ts": to_ts,
+        "pages": 1 if items else 0,
+        "offset": len(items),
+        "collected": len(items),
+        "estimated_total": len(items),
+        "next_offset": None,
+        "items": items,
     }
 
 
@@ -304,6 +379,17 @@ def collect_search(
 
     Devolve resumo com total estimado, itens recolhidos e próxima página.
     """
+    if looks_like_url_query(q):
+        result = collect_url(
+            q,
+            max_items=max_items * max_pages,
+            from_ts=from_ts,
+            to_ts=to_ts,
+            min_interval=min_interval,
+        )
+        result["fallback"] = "cdx"
+        return result
+
     client = ArquivoClient(min_interval=min_interval)
     all_items: List[Dict[str, Any]] = []
     offset = 0
@@ -313,15 +399,30 @@ def collect_search(
 
     try:
         while pages < max_pages:
-            result = client.search(
-                q=q,
-                offset=offset,
-                max_items=max_items,
-                site=site,
-                type=type,
-                from_ts=from_ts,
-                to_ts=to_ts,
-            )
+            try:
+                result = client.search(
+                    q=q,
+                    offset=offset,
+                    max_items=max_items,
+                    site=site,
+                    type=type,
+                    from_ts=from_ts,
+                    to_ts=to_ts,
+                )
+            except httpx.HTTPStatusError as exc:
+                # A API de texto recusa termos que interpreta como URL; nesse
+                # caso a recolha continua pelo índice de capturas.
+                if exc.response.status_code == 400 and pages == 0:
+                    fallback = collect_url(
+                        q,
+                        max_items=max_items * max_pages,
+                        from_ts=from_ts,
+                        to_ts=to_ts,
+                        min_interval=min_interval,
+                    )
+                    fallback["fallback"] = "cdx"
+                    return fallback
+                raise
             estimated = result.get("estimated_nr_results") or estimated
             next_page = result.get("next_page")
             items = result.get("response_items") or []

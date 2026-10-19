@@ -480,15 +480,24 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     # Arquivo.pt: títulos, snippets e texto extraído de páginas preservadas
     # podem conter acentos; o analisador `world_folding` normaliza a pesquisa.
+    # O tokenizer parte em pontuação para que domínios e URLs
+    # («www.portugal.gov.pt/noticias») sejam pesquisáveis por partes — com o
+    # `standard` ficavam num único token e a pesquisa por «portugal» não os via.
     ARQUIVO_PT_INDEX: {
         "analysis": {
+            "tokenizer": {
+                "arquivo_urls": {
+                    "type": "pattern",
+                    "pattern": "[^\\p{L}\\p{N}]+",
+                }
+            },
             "analyzer": {
                 "world_folding": {
                     "type": "custom",
-                    "tokenizer": "standard",
+                    "tokenizer": "arquivo_urls",
                     "filter": ["lowercase", "asciifolding"],
                 }
-            }
+            },
         }
     },
     # Portal da Transparência da ERC: nomes de entidades e pessoas escritos com
@@ -3459,8 +3468,16 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 "analyzer": "world_folding",
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
             },
-            "url": {"type": "keyword", "ignore_above": 1024},
-            "domain": {"type": "keyword", "ignore_above": 256},
+            "url": {
+                "type": "keyword",
+                "ignore_above": 1024,
+                "fields": {"text": {"type": "text", "analyzer": "world_folding"}},
+            },
+            "domain": {
+                "type": "keyword",
+                "ignore_above": 256,
+                "fields": {"text": {"type": "text", "analyzer": "world_folding"}},
+            },
             "tstamp": {"type": "keyword", "ignore_above": 16},
             "capture_date": {"type": "date"},
             "digest": {"type": "keyword", "ignore_above": 64},
