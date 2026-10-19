@@ -303,6 +303,8 @@ from api.empresas_recolha_routes import router as empresas_recolha_router
 # Sites oficiais e logótipos das empresas: descoberta por pesquisa web + IA,
 # extração do logótipo do site e cache local (marca as empresas no benchmark).
 from api.empresas_perfil_routes import router as empresas_perfil_router
+# RigorBiz: diretório de empresas portuguesas (recolha + pesquisa).
+from api.rigorbiz_routes import router as rigorbiz_router
 # Descoberta: painel de controlo de uma empresa — NIF → recolha total → grafo de
 # informação → ontologia → análise citada pelo Hermes.
 from api.descoberta_routes import router as descoberta_router
@@ -848,6 +850,8 @@ app.include_router(societario_router)
 app.include_router(societario_recolha_router)
 app.include_router(empresas_recolha_router)
 app.include_router(empresas_perfil_router)
+# RigorBiz: diretório de empresas portuguesas (recolha + pesquisa).
+app.include_router(rigorbiz_router)
 # Descoberta: uma empresa, todas as fontes, o grafo de informação, a ontologia e
 # a análise do Hermes (`/descoberta/*`).
 app.include_router(descoberta_router)

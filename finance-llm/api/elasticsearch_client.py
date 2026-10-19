@@ -209,6 +209,9 @@ ANALISES_EMPRESA_INDEX = "finance_analises_empresa"
 #: de total e um de meta, calculados por agregação sobre o índice inteiro.
 GLOBAL_PADROES_INDEX = "finance_padroes_global"
 
+# Diretório de empresas recolhido do Rigorbiz (nome, NIF, CAE, morada).
+RIGORBIZ_INDEX = "finance_rigorbiz"
+
 # GLEIF — «Golden Copy» dos registos LEI (Legal Entity Identifier). Um documento
 # por LEI, com o nível 1 (quem é quem: nome legal, endereço, jurisdição, forma
 # jurídica, estado, datas) e os identificadores associados (BIC, MIC, OCID, QCC,
@@ -1979,6 +1982,36 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # RigorBiz: diretório de empresas portuguesas recolhido do site.
+    # Campos de topo para pesquisa e filtros simples.
+    rigorbiz_mappings = {
+        "properties": {
+            "name": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nif": {"type": "keyword"},
+            "cae_code": {"type": "keyword"},
+            "cae_description": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+            },
+            "location": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "path": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "source_url": {"type": "keyword", "ignore_above": 1024},
+            "collected_at": {"type": "date"},
+        }
+    }
+
     # Pesquisa social: uma publicação de rede social por documento. As métricas
     # de interação têm campos próprios (para filtrar/ordenar/agregar) e os dados
     # específicos de cada plataforma vivem em `data` (`flattened`).
@@ -3472,6 +3505,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (CRM_RBAC_INDEX, crm_rbac_mappings),
         (SCRAPED_INDEX, scraped_mappings),
         (SOCIAL_INDEX, social_mappings),
+        (RIGORBIZ_INDEX, rigorbiz_mappings),
         (AGENT_CONFIGS_INDEX, agent_configs_mappings),
         # World Model (estado, eventos, relações), rede neuronal dinâmica,
         # simulações de futuro e investigações.

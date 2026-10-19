@@ -256,6 +256,7 @@ def collect(
     delay: float = 1.0,
     page_delay: float = 0.2,
     timeout: int = 30,
+    stop_on_empty_pages: int = 3,
 ) -> Iterator[Dict[str, Any]]:
     """Percorre as páginas de resultados e devolve as empresas (com ficha).
 
@@ -266,6 +267,7 @@ def collect(
     """
     session = make_session()
     emitted = 0
+    empty_pages = 0
     base = DISTRICT_URL.format(slug=_slug(distrito)) if distrito else LIST_URL
     for page in range(1, max(1, pages) + 1):
         params: Dict[str, Any] = {"q": q, "sort": SORT_PARAMS.get(sort, "score")}
@@ -278,7 +280,12 @@ def collect(
         rows = parse_list(html)
         logger.info("Página %s: %s empresas", page, len(rows))
         if not rows:
-            break
+            empty_pages += 1
+            if empty_pages >= stop_on_empty_pages:
+                logger.info("Páginas vazias consecutivas; termina a recolha.")
+                break
+            continue
+        empty_pages = 0
         for row in rows:
             if limit is not None and emitted >= limit:
                 return
@@ -393,6 +400,7 @@ def main() -> int:
             with_detail=not args.no_detail,
             delay=args.delay,
             page_delay=args.page_delay,
+            stop_on_empty_pages=3,
         )
     )
     if not items:
