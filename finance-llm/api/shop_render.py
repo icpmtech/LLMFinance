@@ -1485,6 +1485,7 @@ def _layout(
     # loja, não de quem compra: aí o widget não entra.
     if not preview:
         meta.append(tawk.TAWK_SNIPPET)
+        meta.append(tawk.TAWK_TRADUCAO_SNIPPET)
     cores = _pwa_cores(settings)
     meta.extend(
         [

@@ -1646,6 +1646,7 @@ def _layout(
     # de quem visita o site: aí o widget não entra.
     if not preview:
         meta.append(tawk.TAWK_SNIPPET)
+        meta.append(tawk.TAWK_TRADUCAO_SNIPPET)
     if json_ld:
         meta.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
     if breadcrumb and len(breadcrumb) >= 2:

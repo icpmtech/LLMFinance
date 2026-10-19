@@ -19,6 +19,8 @@
  */
 import { useEffect } from "react";
 
+import { instalarTraducaoTawk } from "./tawkTraducao";
+
 const TAWK_PROPERTY = "6ac786035f2ded34cbd1cbeb/1k4dm7048";
 const TAWK_SRC = `https://embed.tawk.to/${TAWK_PROPERTY}`;
 /** Marca o `<script>` para não o injetar duas vezes. */
@@ -84,6 +86,7 @@ export function TawkChat() {
     window.Tawk_LoadStart = window.Tawk_LoadStart ?? new Date();
     paginasComWidget += 1;
     instalarOnLoad(api);
+    instalarTraducaoTawk();
 
     if (document.getElementById(TAWK_SCRIPT_ID)) aplicar();
     else injetarScript();

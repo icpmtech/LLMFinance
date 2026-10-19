@@ -605,7 +605,7 @@ def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
             cta=("Explorar o blog", "/site/blog"),
             align="centro",
         ),
-        b.numeros("O que já está indexado", NUMEROS_DA_PLATAFORMA),
+        b.numeros("O que já sabemos.", NUMEROS_DA_PLATAFORMA),
         b.texto(
             "O que é o Sabemos Studio",
             "O **Sabemos Studio** é um estúdio de produtos de dados: pegamos no que já é público — "
@@ -852,7 +852,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     alt="Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos",
                     caption="Os três andares: o que entra, como se liga e o que sai.",
                 ),
-                b.numeros("O que já está indexado", NUMEROS_DA_PLATAFORMA),
+                b.numeros("O que já sabemos.", NUMEROS_DA_PLATAFORMA),
                 b.cta("Não encontrou a sua área?", "Diga-nos a pergunta e verificamos se os dados abertos a respondem.", "Falar connosco", "/site/contactos"),
             ],
         )

@@ -61,23 +61,41 @@ def test_site_publico_leva_o_widget() -> None:
     html = _layout_do_site()
 
     assert tawk.TAWK_SNIPPET in html
+    assert tawk.TAWK_TRADUCAO_SNIPPET in html
     assert f"https://embed.tawk.to/{tawk.TAWK_PROPERTY}" in html
 
 
 def test_pre_visualizacao_do_site_nao_leva_o_widget() -> None:
-    assert tawk.TAWK_SNIPPET not in _layout_do_site(preview=True)
+    html = _layout_do_site(preview=True)
+
+    assert tawk.TAWK_SNIPPET not in html
+    assert tawk.TAWK_TRADUCAO_SNIPPET not in html
 
 
 def test_loja_publica_leva_o_widget(instalacao_limpa: Any) -> None:
     html = shop_render.render_home(settings=instalacao_limpa.get_settings())
 
     assert tawk.TAWK_SNIPPET in html
+    assert tawk.TAWK_TRADUCAO_SNIPPET in html
 
 
 def test_pre_visualizacao_da_loja_nao_leva_o_widget(instalacao_limpa: Any) -> None:
     html = shop_render.render_home(settings=instalacao_limpa.get_settings(), preview=True)
 
     assert tawk.TAWK_SNIPPET not in html
+    assert tawk.TAWK_TRADUCAO_SNIPPET not in html
+
+
+def test_traducao_cobre_os_textos_do_widget() -> None:
+    """O widget vem em pt, mas o conteúdo do agente chega sempre em inglês."""
+    for original, traduzido in (
+        ("Hi! How can we help?", "Olá! Em que podemos ajudar?"),
+        ("👋 Hi! How can we help?", "👋 Olá! Em que podemos ajudar?"),
+        ("I have a question", "Tenho uma pergunta"),
+        ("Tell me more", "Quero saber mais"),
+        ("Customer Support", "Apoio ao cliente"),
+    ):
+        assert f'"{original}": "{traduzido}"' in tawk.TAWK_TRADUCAO_SNIPPET
 
 
 @pytest.mark.parametrize("pagina", ["LandingPage.tsx", "LoginPage.tsx"])
@@ -86,3 +104,13 @@ def test_spa_monta_o_widget_nas_paginas_publicas(pagina: str) -> None:
 
     assert 'from "../components/TawkChat"' in fonte
     assert "<TawkChat />" in fonte
+
+
+def test_spa_traduz_o_conteudo_do_widget() -> None:
+    componente = (RAIZ / "chat-ui" / "src" / "components" / "TawkChat.tsx").read_text(encoding="utf-8")
+    traducao = (RAIZ / "chat-ui" / "src" / "components" / "tawkTraducao.ts").read_text(encoding="utf-8")
+
+    assert 'from "./tawkTraducao"' in componente
+    assert "instalarTraducaoTawk()" in componente
+    assert '"Hi! How can we help?"' in traducao
+    assert '"Olá! Em que podemos ajudar?"' in traducao
