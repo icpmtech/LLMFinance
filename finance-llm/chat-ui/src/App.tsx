@@ -99,6 +99,8 @@ import MarketPage from "./pages/MarketPage";
 import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
+import GovernoPage from "./pages/GovernoPage";
+import GovernoFichaPage from "./pages/GovernoFichaPage";
 import RemuneracoesPage from "./pages/RemuneracoesPage";
 import RemuneracoesApPage from "./pages/RemuneracoesApPage";
 import MunicipiosDespesasPage from "./pages/MunicipiosDespesasPage";
@@ -230,6 +232,10 @@ type AppView =
   | "remuneracoes"
   | "remuneracoes-ap"
   | "entidade-transparencia"
+  | "governo"
+  | `governo-ficha:${string}`
+  | `governo-pessoa:${string}`
+  | `governo-area:${string}`
   | "municipios-despesas"
   | "partidos"
   | "erc"
@@ -424,6 +430,22 @@ function pathForView(
   // Remunerações da Administração Pública (DGAEP): vive dentro de `/remuneracoes`.
   if (view === "remuneracoes-ap") return "/remuneracoes/ap";
   if (view === "entidade-transparencia") return "/entidade-transparencia";
+  if (view === "governo") return "/governo";
+  // Ficha de um membro do Governo (`governo-ficha:<item_id>`).
+  if (view.startsWith("governo-ficha:")) {
+    const id = view.slice("governo-ficha:".length);
+    return id ? `/governo/ficha/${encodeURIComponent(id)}` : "/governo";
+  }
+  // Ficha de uma pessoa de entidade (`governo-pessoa:<nif>`).
+  if (view.startsWith("governo-pessoa:")) {
+    const nif = view.slice("governo-pessoa:".length);
+    return nif ? `/governo/pessoa/${encodeURIComponent(nif)}` : "/governo";
+  }
+  // Pasta do Governo escolhida no grafo (`governo-area:<slug>`).
+  if (view.startsWith("governo-area:")) {
+    const slug = view.slice("governo-area:".length);
+    return slug ? `/governo/pasta/${encodeURIComponent(slug)}` : "/governo";
+  }
   if (view === "municipios-despesas") return "/municipios/despesas";
   if (view === "partidos") return "/partidos";
   if (view === "erc") return "/erc";
@@ -506,7 +528,9 @@ function isDetailView(view: string): boolean {
     view.startsWith("region-detail:") ||
     view.startsWith("gleif-region:") ||
     view.startsWith("crm-account:") ||
-    view.startsWith("crm-edit:")
+    view.startsWith("crm-edit:") ||
+    view.startsWith("governo-ficha:") ||
+    view.startsWith("governo-pessoa:")
   );
 }
 
@@ -671,6 +695,18 @@ export default function App() {
     if (path === "/administracao-central" || path.startsWith("/administracao-central/")) return "administracao-central";
     if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) return "remuneracoes-ap";
     if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) return "entidade-transparencia";
+    // Governo: `/governo` (grafo e lista), `/governo/pasta/<slug>`,
+    // `/governo/ficha/<id>` e `/governo/pessoa/<nif>`.
+    if (path === "/governo") return "governo";
+    if (path.startsWith("/governo/pasta/")) {
+      return `governo-area:${decodeURIComponent(path.slice("/governo/pasta/".length))}` as AppView;
+    }
+    if (path.startsWith("/governo/ficha/")) {
+      return `governo-ficha:${decodeURIComponent(path.slice("/governo/ficha/".length))}` as AppView;
+    }
+    if (path.startsWith("/governo/pessoa/")) {
+      return `governo-pessoa:${decodeURIComponent(path.slice("/governo/pessoa/".length))}` as AppView;
+    }
     if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) return "remuneracoes";
     if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) return "municipios-despesas";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
@@ -842,6 +878,13 @@ export default function App() {
       else if (path === "/administracao-central" || path.startsWith("/administracao-central/")) next = "administracao-central";
       else if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) next = "remuneracoes-ap";
       else if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) next = "entidade-transparencia";
+      else if (path === "/governo") next = "governo";
+      else if (path.startsWith("/governo/pasta/"))
+        next = `governo-area:${decodeURIComponent(path.slice("/governo/pasta/".length))}` as AppView;
+      else if (path.startsWith("/governo/ficha/"))
+        next = `governo-ficha:${decodeURIComponent(path.slice("/governo/ficha/".length))}` as AppView;
+      else if (path.startsWith("/governo/pessoa/"))
+        next = `governo-pessoa:${decodeURIComponent(path.slice("/governo/pessoa/".length))}` as AppView;
       else if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) next = "remuneracoes";
       else if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) next = "municipios-despesas";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
@@ -1740,6 +1783,30 @@ export default function App() {
     if (target === "remuneracoes") return <RemuneracoesPage />;
     if (target === "remuneracoes-ap") return <RemuneracoesApPage />;
     if (target === "entidade-transparencia") return <EntidadeTransparenciaPage />;
+    // Governo: grafo de relações (ministério → membro → gabinete) e as fichas
+    // do membro do Governo e da pessoa de entidade, abertas a partir da pesquisa.
+    if (target === "governo" || target.startsWith("governo-area:")) {
+      const area = target.startsWith("governo-area:") ? target.slice("governo-area:".length) : "";
+      return <GovernoPage initialArea={area} onOpenView={handleOpenSearchView} />;
+    }
+    if (target.startsWith("governo-ficha:")) {
+      return (
+        <GovernoFichaPage
+          memberId={target.slice("governo-ficha:".length)}
+          onNavigate={handleOpenSearchView}
+          onBack={() => voltarDaFicha(target)}
+        />
+      );
+    }
+    if (target.startsWith("governo-pessoa:")) {
+      return (
+        <GovernoFichaPage
+          nif={target.slice("governo-pessoa:".length)}
+          onNavigate={handleOpenSearchView}
+          onBack={() => voltarDaFicha(target)}
+        />
+      );
+    }
     // Despesas das câmaras municipais: despesa por classificador económico
     // (INE/DGAL) e contratação pública por município (Portal BASE).
     if (target === "municipios-despesas") return <MunicipiosDespesasPage />;

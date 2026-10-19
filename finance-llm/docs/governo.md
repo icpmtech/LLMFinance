@@ -106,6 +106,46 @@ secretários de Estado). O Primeiro-Ministro entra como `tipo`
 `coesao-territorial` nas nomeações — o coletor normaliza os dois para a mesma
 chave.
 
+## Fichas, remunerações e grafo de relações
+
+O módulo expõe os dados recolhidos como ontologia navegável — `api/governo_service.py`
+constrói as fichas e os grafos, `api/governo_routes.py` serve as rotas e o
+frontend (`chat-ui/src/pages/GovernoPage.tsx` e `GovernoFichaPage.tsx`) desenha-os
+com o `GraphCanvas` dos restantes grafos do IQ OS.
+
+| Rota | Devolve |
+| --- | --- |
+| `GET /governo/overview` | Totais, 18 pastas, 59 membros e o grafo geral |
+| `GET /governo/graph` | Só o grafo ministério → membro → gabinete |
+| `GET /governo/membros?q=&area=&size=&offset=` | Lista/pesquisa de membros |
+| `GET /governo/ficha/{item_id}` | Ficha do membro: detalhe, remunerações, relações e grafo |
+| `GET /governo/pessoa/{nif}` | Ficha de uma pessoa de entidade, com a ligação ao Governo |
+| `GET /governo/pesquisa?q=` | Membros do Governo e pessoas com o mesmo nome |
+
+Páginas da interface: `/governo` (grafo e lista), `/governo/pasta/<slug>` (pasta
+escolhida), `/governo/ficha/<item_id>` e `/governo/pessoa/<nif>`.
+
+**Remunerações.** A ficha de um membro agrega as nomeações do **seu** gabinete —
+as linhas da área cujo `membro` («Gabinete da Ministra da Cultura») contém o
+`cargo` da composição — e mostra o total, a média, o mínimo, o máximo, a
+distribuição por função e a tabela de despachos com bruto, líquido e ligação ao
+Diário da República.
+
+**Relações.** A ficha liga o membro ao ministério (titular/secretário), ao
+gabinete, aos despachos e — quando o nome coincide com uma pessoa indexada em
+`finance_people` — à ficha dessa pessoa, com os cargos e as empresas dela.
+
+**Grafo.** Cada nó tem `type` (`ministerio`, `membro`, `gabinete`, `nomeacao`,
+`pessoa`, `empresa`) e cada aresta tem `label`/`role`; o `meta` segue o formato
+`StudioGraph`, para o `GraphCanvas` o desenhar sem conversão. O grafo geral tem
+95 nós e 136 relações (18 ministérios + 18 gabinetes + 59 membros); a ficha de um
+membro desenha até 60 nomeações, para o layout continuar legível.
+
+**Pesquisa.** Os documentos `governo-*` de `finance_scraped` levam `open` para o
+cartão da pesquisa abrir a ficha: `governo-composicao` abre
+`/governo/ficha/<item_id>` e os restantes (`governo-ministerios`,
+`governo-nomeacoes`) abrem `/governo/pasta/<area_slug>`.
+
 ## Notas de manutenção
 
 - A página do índice de nomeações e a da composição são renderizadas no browser.

@@ -129,6 +129,17 @@ def _write_manifest(manifest: Dict[str, Any]) -> None:
     _substituir(temporario, caminho)
 
 
+def _contar_linhas(caminho: Path) -> int:
+    """Registos de um JSONL (uma entrada por linha, sem `json.loads`)."""
+    if not caminho.exists():
+        return 0
+    total = 0
+    with caminho.open("r", encoding="utf-8") as ficheiro:
+        for _ in ficheiro:
+            total += 1
+    return total
+
+
 def _append_jsonl(caminho: Path, linhas: Iterable[Dict[str, Any]]) -> int:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     total = 0
@@ -1088,7 +1099,10 @@ def validar(
         "fichas_de_titular_guardadas": len(documentos_titular),
         "declaracoes_guardadas": len(por_id),
         "divergencias": divergencias,
-        "verificacoes": seccoes,
+        "verificacoes": {
+            chave: {campo: valor for campo, valor in (seccao or {}).items() if campo != "amostra"}
+            for chave, seccao in seccoes.items()
+        },
     }
     relatorio["estado"] = "ok" if divergencias == 0 and not relatorio["errors"] else "divergencias"
     relatorio["terminado_em"] = _now()
@@ -1726,19 +1740,34 @@ def _titular_por_nome(nome: str, *, limiar: float = 0.88, es: Any = None) -> Opt
             )
         if candidatos:
             break
-    if not candidatos:
-        # Sem índice (ou sem resultados): percorre os titulares em disco.
-        for item in _iter_unicos(_titulares_jsonl(), "titular_id"):
-            candidato = ept.normalize_name(item.get("nome"))
-            pontuacao = _pontuacao_nome(alvo, candidato)
-            if pontuacao >= limiar:
-                candidatos.append(
-                    {
-                        "titular_id": item.get("titular_id"),
-                        "nome": item.get("nome"),
-                        "pontuacao": round(pontuacao, 3),
-                    }
-                )
+
+    def _melhor() -> Optional[Dict[str, Any]]:
+        if not candidatos:
+            return None
+        melhor = max(candidatos, key=lambda item: item["pontuacao"])
+        return melhor if melhor["pontuacao"] >= limiar else None
+
+    encontrado = _melhor()
+    if encontrado:
+        return encontrado
+    # Nenhuma pesquisa por termo chegou ao limiar: varre-se o catálogo completo
+    # (12 372 nomes em cache), porque o PessoasIQ usa nomes curtos e a EPT o
+    # nome completo — «António Costa» não é substring de «António Luís Santos
+    # da Costa», mas os tokens estão lá todos.
+    vistos = {str(item.get("titular_id")) for item in candidatos}
+    for fonte in (_ler_cache_bruta("titulares") or []) or _iter_unicos(_titulares_jsonl(), "titular_id"):
+        titular_id = fonte.get("id") or fonte.get("titular_id")
+        if not titular_id or str(titular_id) in vistos:
+            continue
+        pontuacao = _pontuacao_nome(alvo, ept.normalize_name(fonte.get("nome")))
+        if pontuacao >= limiar:
+            candidatos.append(
+                {
+                    "titular_id": str(titular_id),
+                    "nome": fonte.get("nome"),
+                    "pontuacao": round(pontuacao, 3),
+                }
+            )
     candidatos.sort(key=lambda item: item["pontuacao"], reverse=True)
     return candidatos[0] if candidatos and candidatos[0]["pontuacao"] >= limiar else None
 
@@ -1749,15 +1778,25 @@ def pessoa_declaracoes(nif: str, *, size: int = 100, es: Any = None) -> Dict[str
     if pessoa.get("error"):
         return {"nif": str(nif), "pessoa": None, "total": 0, "items": [], "error": pessoa["error"]}
     nome = pessoa.get("name") or ""
+    limite = max(1, min(int(size), 200))
     titular = _titular_por_nome(nome, es=es) if nome else None
     if titular and titular.get("titular_id"):
-        declaracoes = search_declaracoes(titular_id=titular["titular_id"], size=max(1, min(int(size), 200)), es=es)
+        declaracoes = search_declaracoes(titular_id=titular["titular_id"], size=limite, es=es)
     else:
-        declaracoes = search_declaracoes(titular=nome, size=max(1, min(int(size), 200)), es=es)
+        declaracoes = search_declaracoes(titular=nome, size=limite, es=es)
         if not declaracoes.get("items"):
             # Ocasionalmente o nome do PessoasIQ tem partículas a mais; procura-se
             # pelo nome normalizado exato antes de desistir.
             declaracoes = _search_declaracoes_por_nome(nome, size=size, es=es)
+    if titular and titular.get("titular_id") and not declaracoes.get("items"):
+        # Titular já identificado mas ainda não recolhido: lê-se a lista ao vivo,
+        # para que a ficha do político não fique vazia a meio de uma recolha.
+        try:
+            cliente = ept.make_client()
+            metas = ept.fetch_declarations(cliente, str(titular["titular_id"]))[:limite]
+            declaracoes = {"total": len(metas), "items": metas, "ao_vivo": True}
+        except Exception as exc:  # noqa: BLE001 - sem rede, fica o que há em disco
+            logger.debug("EPT: declarações de %s não lidas ao vivo (%s)", titular.get("titular_id"), exc)
     if not titular and declaracoes.get("items"):
         primeira = declaracoes["items"][0]
         titular = {"titular_id": primeira.get("titular_id"), "nome": primeira.get("titular")}
@@ -1767,6 +1806,7 @@ def pessoa_declaracoes(nif: str, *, size: int = 100, es: Any = None) -> Dict[str
         "titular": titular,
         "total": declaracoes.get("total", 0),
         "items": declaracoes.get("items") or [],
+        "ao_vivo": bool(declaracoes.get("ao_vivo")),
         "fonte": "entidade-transparencia",
     }
 
@@ -1811,20 +1851,22 @@ def _contagem_indice(indice: str, cliente: Any = None) -> Optional[int]:
 
 
 def stats(es: Any = None) -> Dict[str, Any]:
-    """Volumetria do módulo (índice, com recurso ao manifesto/disco)."""
+    """Volumetria do módulo, juntando o índice ao que está em disco.
+
+    Uma recolha longa deixa o índice atrás do disco; as contagens mostram o
+    maior dos dois (nunca andam para trás) e `indice_desatualizado` diz que
+    falta indexar.
+    """
     cliente = _cliente(es)
     manifest = read_manifest()
     totais = dict(manifest.get("totais") or {})
-    declaracoes = _contagem_indice(esc.EPT_DECLARACOES_INDEX, cliente)
-    titulares = _contagem_indice(esc.EPT_TITULARES_INDEX, cliente)
-    titularidades = _contagem_indice(esc.EPT_TITULARIDADES_INDEX, cliente)
-    if declaracoes is None:
-        declaracoes = sum(1 for _ in _iter_unicos(_declaracoes_jsonl(), "declaracao_id"))
-    if titulares is None:
-        titulares = len(manifest.get("titulares") or {})
-    if titularidades is None:
-        titularidades = sum(1 for _ in _iter_unicos(_titularidades_jsonl(), "titularidade_id"))
-    com_interesses = totais.get("com_registo_interesses")
+    titulares_disco = len(manifest.get("titulares") or {})
+    declaracoes_disco = int(totais.get("declaracoes") or 0)
+    titularidades_disco = _contar_linhas(_titularidades_jsonl())
+    declaracoes_indice = _contagem_indice(esc.EPT_DECLARACOES_INDEX, cliente)
+    titulares_indice = _contagem_indice(esc.EPT_TITULARES_INDEX, cliente)
+    titularidades_indice = _contagem_indice(esc.EPT_TITULARIDADES_INDEX, cliente)
+    com_interesses: Optional[int] = totais.get("com_registo_interesses")
     if cliente:
         try:
             com_interesses = int(
@@ -1837,15 +1879,19 @@ def stats(es: Any = None) -> Dict[str, Any]:
         except Exception:  # noqa: BLE001 - índice ainda não criado
             com_interesses = None
     return {
-        "titulares": titulares,
-        "declaracoes": declaracoes,
-        "titularidades": titularidades,
+        "titulares": max(titulares_disco, titulares_indice or 0),
+        "declaracoes": max(declaracoes_disco, declaracoes_indice or 0),
+        "titularidades": max(titularidades_disco, titularidades_indice or 0),
         "entidades": (manifest.get("catalogo") or {}).get("entidades"),
         "cargos": (manifest.get("catalogo") or {}).get("cargos"),
         "orgaos": (manifest.get("catalogo") or {}).get("orgaos"),
         "com_registo_interesses": com_interesses,
         "atualizado_em": manifest.get("atualizado_em"),
         "fonte_indexada": cliente is not None,
+        "titulares_indexados": titulares_indice,
+        "declaracoes_indexadas": declaracoes_indice,
+        "indice_desatualizado": bool(cliente)
+        and ((titulares_indice or 0) < titulares_disco or (declaracoes_indice or 0) < declaracoes_disco),
     }
 
 

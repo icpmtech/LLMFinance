@@ -124,6 +124,7 @@ SEGMENTOS_DA_APP = frozenset(
         "finder",
         "forecast",
         "gleif",
+        "governo",
         "hermes",
         "iframe-pages",
         "import",

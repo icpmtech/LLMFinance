@@ -567,6 +567,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "59,130,246",
   },
   {
+    id: "governo",
+    label: "Governo",
+    hint: "Ministérios, membros da composição e nomeações dos gabinetes (portugal.gov.pt e Diário da República) com fichas e grafo de relações",
+    icon: Landmark,
+    gradient: "from-amber-200 via-rose-400 to-indigo-700",
+    accent: "244,114,182",
+  },
+  {
     id: "partidos",
     label: "Partidos e contas",
     hint: "Contas anuais e financiamento partidário (Tribunal Constitucional) e registo oficial dos partidos (CNE)",

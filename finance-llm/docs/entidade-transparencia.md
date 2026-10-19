@@ -72,6 +72,8 @@ Leitura aberta; recolha e indexação exigem sessão de escrita.
 | POST | `/entidade-transparencia/exportar` | grava um JSON por entidade (segundo plano) |
 | GET | `/entidade-transparencia/exportar/indice` | índice do último export por entidade |
 | GET | `/entidade-transparencia/entidades/{id}/export.json` | ficheiro JSON de uma entidade |
+| GET | `/entidade-transparencia/validar` | último relatório de validação |
+| POST | `/entidade-transparencia/validar` | valida catálogo, cascata e detalhes (segundo plano) |
 | POST | `/entidade-transparencia/indexar` | indexa o que está em disco |
 | POST | `/entidade-transparencia/titular/{id}/recolher` | recolhe um único titular |
 | GET | `/entidade-transparencia/jobs[/{id}]` | progresso dos trabalhos |
@@ -114,6 +116,7 @@ data/entidade-transparencia/
 │   ├── 4216.json
 │   ├── _index.json
 │   └── ...
+├── _validacao.json
 └── _manifest.json
 ```
 
@@ -143,6 +146,36 @@ ficheiro por entidade com todos os titulares e declarações normalizadas:
 `cargos` lista apenas posições (cargo); os órgãos declarados ficam em `orgaos`.
 O `_index.json` resume cada entidade (`titulares`, `declaracoes`, `cargos`,
 `orgaos`, `ficheiro`). A recolha exporta automaticamente no fim.
+
+## Validação contra a plataforma
+
+`validar()` (e `POST /entidade-transparencia/validar`) confronta o que está em
+disco com a API pública. A cascata completa — **todas as entidades, cargos e
+nomes de titulares** — é validada a partir da listagem de titularidades
+(`/publicquery`, 17 084 registos em 18 páginas), sem um pedido por entidade:
+
+| Verificação | Fonte ao vivo | Fonte local |
+| --- | --- | --- |
+| entidades | `getallentities` | `catalogo/entidades.json` |
+| cargos | `getallroles` | `catalogo/cargos.json` |
+| órgãos | `getallboards` | `catalogo/orgaos.json` |
+| nomes de titulares | `getallholders` | `catalogo/titulares.json` |
+| pares entidade × cargo | `/publicquery` | `catalogo/titularidades.jsonl` |
+| pares cargo × titular | `/publicquery` | `catalogo/titularidades.jsonl` |
+| titularidades (ids e datas) | `/publicquery` | `catalogo/titularidades.jsonl` |
+| declarações de cada titular | `/publicquery/search` | `_normalized/declaracoes.jsonl` |
+| conteúdo das declarações | `/publicquery/getdeclaration` | `_normalized/declaracoes.jsonl` |
+
+Parâmetros: `limite_titulares` (0 = não validar fichas, `null` = todas; os
+valores intermédios são repartidos pelo catálogo) e `limite_declaracoes`
+(`null` = todas as que estão em disco). Cada secção devolve `em_falta`, `a_mais`
+e uma `amostra` dos divergentes; o relatório fica em `_validacao.json` e o
+`estado` é `ok` ou `divergencias`.
+
+```bash
+python scripts/recolher_entidade_transparencia.py --validar
+python scripts/recolher_entidade_transparencia.py --validar --validar-titulares 50
+```
 
 ## Scraper fora da API
 

@@ -22,6 +22,7 @@ checkpoints/
 *.pid
 *.log
 *.err
+*.tmp
 model/mistral-finance/
 model/gpt2-finance/
 model/mistral-finance/checkpoints/

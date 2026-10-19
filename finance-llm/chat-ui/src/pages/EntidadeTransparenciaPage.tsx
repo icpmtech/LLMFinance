@@ -53,9 +53,11 @@ import {
   getEptStats,
   getEptTitular,
   getEptTitulares,
+  getEptValidacao,
   indexarEpt,
   recolherEpt,
   recolherEptTitular,
+  validarEpt,
   type EptDeclaracao,
   type EptDeclaracaoResumo,
   type EptJob,
@@ -64,6 +66,7 @@ import {
   type EptSecao,
   type EptStats,
   type EptTitular,
+  type EptValidacao,
 } from "../entidadeTransparenciaApi";
 
 type Aba = "pesquisa" | "recolha";
@@ -307,10 +310,24 @@ export default function EntidadeTransparenciaPage() {
   const [forcar, setForcar] = useState(false);
   const [indexarNoFim, setIndexarNoFim] = useState(true);
   const [aRecolher, setARecolher] = useState(false);
+  const [validacao, setValidacao] = useState<EptValidacao | null>(null);
+  const [validacaoTitulares, setValidacaoTitulares] = useState("25");
+  const [validacaoDeclaracoes, setValidacaoDeclaracoes] = useState("100");
+  const [validacaoErro, setValidacaoErro] = useState<string | null>(null);
 
   const pollRef = useRef<number | null>(null);
 
   /* ------------------------------------------------------------ carregar */
+
+  const carregarValidacao = useCallback(async () => {
+    try {
+      const dados = await getEptValidacao();
+      setValidacao(dados);
+      setValidacaoErro(null);
+    } catch {
+      setValidacao(null);
+    }
+  }, []);
 
   const carregarResumo = useCallback(async () => {
     try {
@@ -365,6 +382,7 @@ export default function EntidadeTransparenciaPage() {
 
   useEffect(() => {
     void carregarResumo();
+    void carregarValidacao();
     (async () => {
       try {
         const resposta = await getEptEntidades();
@@ -521,6 +539,7 @@ export default function EntidadeTransparenciaPage() {
             if (pollRef.current) window.clearInterval(pollRef.current);
             pollRef.current = null;
             void carregarResumo();
+            void carregarValidacao();
             if (titular) void abrirTitular(titular.titular.titular_id);
           }
         } catch {
@@ -528,7 +547,7 @@ export default function EntidadeTransparenciaPage() {
         }
       }, 2500);
     },
-    [carregarResumo, abrirTitular, titular],
+    [carregarResumo, carregarValidacao, abrirTitular, titular],
   );
 
   useEffect(() => {
@@ -583,8 +602,21 @@ export default function EntidadeTransparenciaPage() {
     }
   }, [entidadeId, acompanharJob]);
 
-  const recolherTitular = useCallback(async () => {
-    if (!titular) return;
+  const iniciarValidacao = useCallback(async () => {
+    setValidacaoErro(null);
+    setErro(null);
+    try {
+      const resposta = await validarEpt({
+        limite_titulares: Number(validacaoTitulares) > 0 ? Number(validacaoTitulares) : 0,
+        limite_declaracoes: validacaoDeclaracoes ? Number(validacaoDeclaracoes) : null,
+      });
+      acompanharJob(resposta);
+    } catch (err) {
+      setValidacaoErro(err instanceof Error ? err.message : "Erro ao validar contra a EPT");
+    }
+  }, [validacaoTitulares, validacaoDeclaracoes, acompanharJob]);
+
+  const recolherTitular = useCallback(async () => {    if (!titular) return;
     setARecolher(true);
     try {
       const resposta = await recolherEptTitular(titular.titular.titular_id);
@@ -1171,10 +1203,16 @@ export default function EntidadeTransparenciaPage() {
                       <p className="text-[10px] text-muted-foreground">
                         {job.tipo === "exportar"
                           ? `${contagem(job.progress?.registos)} entidade(s) exportada(s) em JSON`
-                          : job.progress?.titulares_total
-                            ? `${contagem(job.progress.titulares_done)} / ${contagem(job.progress.titulares_total)} titulares`
-                            : `${contagem(job.progress?.registos)} registos`}
-                        {job.tipo !== "exportar" && job.progress?.declaracoes
+                          : job.tipo === "validar"
+                            ? job.progress?.titulares_total
+                              ? `${contagem(job.progress.titulares_done)} / ${contagem(
+                                  job.progress.titulares_total,
+                                )} titulares verificados`
+                              : "a comparar catálogo, cargos e nomes com a EPT"
+                            : job.progress?.titulares_total
+                              ? `${contagem(job.progress.titulares_done)} / ${contagem(job.progress.titulares_total)} titulares`
+                              : `${contagem(job.progress?.registos)} registos`}
+                        {job.tipo === "recolher" && job.progress?.declaracoes
                           ? ` · ${contagem(job.progress.declaracoes)} declarações novas`
                           : ""}
                         {job.progress?.current ? ` · ${job.progress.current}` : ""}
@@ -1199,8 +1237,13 @@ export default function EntidadeTransparenciaPage() {
                     <ValorCampo rotulo="Com interesses" valor={stats?.com_registo_interesses ?? 0} />
                   </div>
                   <p>
-                    Índice: {stats?.fonte_indexada ? "Elasticsearch" : "disco (Elasticsearch indisponível)"} · atualizado{" "}
-                    {dataCurta(stats?.atualizado_em)}
+                    Índice: {stats?.fonte_indexada ? "Elasticsearch" : "disco (Elasticsearch indisponível)"}
+                    {stats?.indice_desatualizado
+                      ? ` · atrasado (${contagem(stats?.titulares_indexados ?? 0)} titulares, ${contagem(
+                          stats?.declaracoes_indexadas ?? 0,
+                        )} declarações indexadas)`
+                      : ""}{" "}
+                    · atualizado {dataCurta(stats?.atualizado_em)}
                   </p>
                   {meta && (
                     <>
@@ -1233,6 +1276,110 @@ export default function EntidadeTransparenciaPage() {
                         </a>
                       </p>
                     </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle icon={<ShieldCheck size={15} />}>Validação contra a EPT</CardTitle>
+                </CardHeader>
+                <CardContent className="mt-3 space-y-3 text-[11px] text-muted-foreground">
+                  <p>
+                    Confronta as entidades, os cargos e os nomes de titulares guardados com a listagem de
+                    titularidades da plataforma e revê os detalhes das declarações. Sem limites, valida tudo (demora
+                    horas); o padrão valida uma amostra repartida pelo catálogo.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="ept-validar-titulares">Titulares em detalhe</Label>
+                      <Input
+                        id="ept-validar-titulares"
+                        type="number"
+                        min={0}
+                        value={validacaoTitulares}
+                        onChange={(evento) => setValidacaoTitulares(evento.target.value)}
+                        className="w-28"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="ept-validar-declaracoes">Declarações em detalhe</Label>
+                      <Input
+                        id="ept-validar-declaracoes"
+                        type="number"
+                        min={1}
+                        value={validacaoDeclaracoes}
+                        onChange={(evento) => setValidacaoDeclaracoes(evento.target.value)}
+                        placeholder="Todas"
+                        className="w-28"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<ShieldCheck size={13} />}
+                      loading={job?.tipo === "validar" && job.status === "running"}
+                      onClick={() => void iniciarValidacao()}
+                    >
+                      Validar tudo
+                    </Button>
+                  </div>
+                  {validacaoErro && <p className="text-destructive">{validacaoErro}</p>}
+                  {validacao ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {validacao.estado === "ok" ? (
+                          <Badge variant="success">
+                            <CheckCircle2 size={11} /> sem divergências
+                          </Badge>
+                        ) : (
+                          <Badge variant="danger">
+                            <TriangleAlert size={11} /> {contagem(validacao.resumo?.divergencias)} divergência(s)
+                          </Badge>
+                        )}
+                        <span>{dataCurta(validacao.terminado_em || validacao.gerado_em)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <ValorCampo rotulo="Entidades" valor={validacao.catalogos?.entidades?.ao_vivo ?? "—"} />
+                        <ValorCampo rotulo="Cargos" valor={validacao.catalogos?.cargos?.ao_vivo ?? "—"} />
+                        <ValorCampo rotulo="Titulares" valor={validacao.catalogos?.titulares?.ao_vivo ?? "—"} />
+                        <ValorCampo rotulo="Titularidades" valor={validacao.titularidades?.ao_vivo ?? "—"} />
+                        <ValorCampo
+                          rotulo="Pares entidade × cargo"
+                          valor={validacao.cascata?.cargos?.ao_vivo ?? "—"}
+                        />
+                        <ValorCampo
+                          rotulo="Cargos × titulares"
+                          valor={validacao.cascata?.titulares?.ao_vivo ?? "—"}
+                        />
+                      </div>
+                      <ul className="space-y-1">
+                        {Object.entries(validacao.resumo?.verificacoes || {}).map(([nome, seccao]) => {
+                          const falhas = seccao.divergencias ?? 0;
+                          return (
+                            <li key={nome} className="flex items-center justify-between gap-2">
+                              <span className="truncate">{nome.replace(/_/g, " ")}</span>
+                              {seccao.ok === null || seccao.ok === undefined ? (
+                                <Badge variant="default">n/d</Badge>
+                              ) : falhas > 0 ? (
+                                <Badge variant="danger">{contagem(falhas)}</Badge>
+                              ) : (
+                                <Badge variant="success">
+                                  <CheckCircle2 size={10} /> ok
+                                </Badge>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {validacao.ficheiro && (
+                        <p className="break-all">
+                          Relatório: <code className="rounded bg-muted px-1">{validacao.ficheiro}</code>
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p>Ainda sem validação registada neste ambiente.</p>
                   )}
                 </CardContent>
               </Card>

@@ -281,3 +281,151 @@ def test_exportacao_por_entidade_gera_um_json_por_entidade(pasta):
 def test_start_job_recusa_tipo_desconhecido():
     with pytest.raises(ValueError):
         svc.start_job("apagar-tudo")
+
+
+# ---------------------------------------------------------------------------
+# Validação contra a plataforma
+# ---------------------------------------------------------------------------
+
+
+_POSICAO = {
+    "titularidade_id": "900",
+    "titular_id": "40",
+    "titular": "Maria de Sousa Example",
+    "entidade_id": "10",
+    "entidade": "Entidade Exemplo",
+    "cargo_id": "30",
+    "cargo": "Presidente",
+    "inicio": "2024-01-02",
+    "fim": "2024-12-31",
+}
+
+
+def _preparar_disco() -> None:
+    svc._guardar_cache("entidades", [{"id": "10", "nome": "Entidade Exemplo"}])
+    svc._guardar_cache("cargos", [{"id": "30", "nome": "Presidente"}])
+    svc._guardar_cache("orgaos", [{"id": "20", "nome": "Conselho de Administração"}])
+    svc._guardar_cache("titulares", [{"id": "40", "nome": "Maria de Sousa Example"}])
+    svc._append_jsonl(svc._titularidades_jsonl(), [_POSICAO])
+    documento = ept.normalize_declaration(_declaracao(), recolhido_em="2026-01-01T00:00:00+00:00")
+    svc._append_jsonl(svc._declaracoes_jsonl(), [documento])
+    svc._append_jsonl(svc._titulares_jsonl(), [ept.titular_document("40", "Maria de Sousa Example", [documento])])
+
+
+def _api_falsa(monkeypatch: pytest.MonkeyPatch, *, posicoes=None, entidades=None) -> None:
+    posicoes = posicoes or [_POSICAO]
+    entidades = entidades or [{"id": "10", "nome": "Entidade Exemplo"}]
+    monkeypatch.setattr(ept, "fetch_entities", lambda *args, **kwargs: entidades)
+    monkeypatch.setattr(ept, "fetch_roles", lambda *args, **kwargs: [{"id": "30", "nome": "Presidente"}])
+    monkeypatch.setattr(ept, "fetch_boards", lambda *args, **kwargs: [{"id": "20", "nome": "Conselho de Administração"}])
+    monkeypatch.setattr(ept, "fetch_holders", lambda *args, **kwargs: [{"id": "40", "nome": "Maria de Sousa Example"}])
+    monkeypatch.setattr(ept, "iter_positions", lambda *args, **kwargs: iter([dict(posicao) for posicao in posicoes]))
+    monkeypatch.setattr(
+        ept,
+        "fetch_declarations",
+        lambda *args, **kwargs: [{"declaracao_id": "123", "titular_id": "40", "ano": 2024}],
+    )
+    monkeypatch.setattr(ept, "fetch_declaration", lambda *args, **kwargs: _declaracao())
+
+
+def test_validacao_confirma_entidades_cargos_titulares_e_detalhes(pasta, monkeypatch: pytest.MonkeyPatch):
+    _preparar_disco()
+    _api_falsa(monkeypatch)
+
+    relatorio = svc.validar(pausa=0, limite_titulares=1, limite_declaracoes=None)
+
+    assert relatorio["estado"] == "ok", relatorio["resumo"]
+    assert relatorio["catalogos"]["entidades"]["ao_vivo"] == 1
+    assert relatorio["catalogos"]["titulares"]["nomes_divergentes"] == 0
+    assert relatorio["cascata"]["titulares"]["ao_vivo"] == 1
+    assert relatorio["titularidades"]["a_mais"] == 0
+    assert relatorio["detalhes"]["declaracoes"]["verificadas"] == 1
+    assert relatorio["detalhes"]["declaracoes"]["divergentes"] == 0
+    assert svc.ler_validacao()["estado"] == "ok"
+
+
+def test_validacao_denuncia_catalogo_e_cascata_desatualizados(pasta, monkeypatch: pytest.MonkeyPatch):
+    _preparar_disco()
+    _api_falsa(
+        monkeypatch,
+        entidades=[{"id": "10", "nome": "Entidade Exemplo"}, {"id": "11", "nome": "Entidade Nova"}],
+        posicoes=[
+            _POSICAO,
+            {
+                **_POSICAO,
+                "titularidade_id": "901",
+                "titular_id": "41",
+                "titular": "José Novo",
+                "entidade_id": "11",
+                "entidade": "Entidade Nova",
+            },
+        ],
+    )
+
+    relatorio = svc.validar(pausa=0, limite_titulares=0, limite_declaracoes=0)
+
+    assert relatorio["estado"] == "divergencias"
+    assert relatorio["catalogos"]["entidades"]["em_falta"] == 1
+    assert relatorio["catalogos"]["entidades"]["amostra"]["em_falta"][0]["id"] == "11"
+    assert relatorio["cascata"]["entidades"]["em_falta"] == 1
+    assert relatorio["cascata"]["titulares"]["em_falta"] == 1
+    assert relatorio["cascata"]["titulares"]["amostra"]["em_falta"][0]["titular"] == "José Novo"
+    assert relatorio["titularidades"]["em_falta"] == 1
+    assert relatorio["resumo"]["divergencias"] >= 4
+
+
+def test_validacao_detecta_declaracao_divergente(pasta, monkeypatch: pytest.MonkeyPatch):
+    _preparar_disco()
+    _api_falsa(monkeypatch)
+    alterada = _declaracao()
+    alterada["stateType"] = 1  # rascunho, em vez de publicada
+    monkeypatch.setattr(ept, "fetch_declaration", lambda *args, **kwargs: alterada)
+
+    relatorio = svc.validar(pausa=0, limite_titulares=0, limite_declaracoes=None)
+
+    assert relatorio["detalhes"]["declaracoes"]["divergentes"] == 1
+    campos = {item["campo"]: item for item in relatorio["detalhes"]["declaracoes"]["amostra"][0]["campos"]}
+    assert campos["estado"]["ao_vivo"] == "Rascunho"
+    assert campos["estado"]["guardado"] == "Publicada"
+    assert relatorio["estado"] == "divergencias"
+
+
+def test_nome_curto_do_pessoasiq_encontra_o_nome_completo_da_ept(pasta, monkeypatch: pytest.MonkeyPatch):
+    """«Antonio Costa» ⊂ «António Luís Santos da Costa» — via catálogo completo."""
+    svc._guardar_cache("titulares", [{"id": "4952", "nome": "António Luís Santos da Costa"}])
+    monkeypatch.setattr(svc, "search_titulares", lambda *args, **kwargs: {"total": 0, "items": []})
+
+    encontrado = svc._titular_por_nome("Antonio Costa")
+
+    assert encontrado is not None
+    assert encontrado["titular_id"] == "4952"
+    assert encontrado["pontuacao"] >= 0.88
+
+
+def test_pessoa_declaracoes_le_ao_vivo_quando_o_titular_ainda_nao_foi_recolhido(
+    pasta, monkeypatch: pytest.MonkeyPatch
+):
+    svc._guardar_cache("titulares", [{"id": "4952", "nome": "António Luís Santos da Costa"}])
+    monkeypatch.setattr(svc, "search_titulares", lambda *args, **kwargs: {"total": 0, "items": []})
+    monkeypatch.setattr(esc, "get_person_by_nif", lambda nif, es=None: {"nif": nif, "name": "Antonio Costa"})
+    monkeypatch.setattr(ept, "make_client", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        ept,
+        "fetch_declarations",
+        lambda *args, **kwargs: [{"declaracao_id": "833", "titular_id": "4952", "ano": 2024}],
+    )
+
+    resultado = svc.pessoa_declaracoes("150341148")
+
+    assert resultado["titular"]["titular_id"] == "4952"
+    assert resultado["total"] == 1
+    assert resultado["ao_vivo"] is True
+
+
+def test_amostra_uniforme_interpreta_zero_como_nenhum():
+    itens = list(range(10))
+    assert svc._amostra_uniforme(itens, 0) == []
+    assert svc._amostra_uniforme(itens, None) == itens
+    assert len(svc._amostra_uniforme(itens, 3)) == 3
+    assert svc._amostra_uniforme(itens, 3)[-1] >= 6
+    assert svc._amostra_uniforme(itens, 20) == itens

@@ -15,6 +15,8 @@ Uso::
     python scripts/recolher_entidade_transparencia.py --entidade 2 --limite 50
     python scripts/recolher_entidade_transparencia.py --titular 4952
     python scripts/recolher_entidade_transparencia.py --tudo --indexar
+    python scripts/recolher_entidade_transparencia.py --so-exportar
+    python scripts/recolher_entidade_transparencia.py --validar
 """
 from __future__ import annotations
 
@@ -63,6 +65,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Não recolher: gerar só os .json por entidade a partir do que está em disco",
     )
+    parser.add_argument(
+        "--validar",
+        action="store_true",
+        help="Não recolher: validar entidades, cargos e nomes de titulares contra a plataforma",
+    )
+    parser.add_argument(
+        "--validar-titulares",
+        type=int,
+        default=0,
+        help="Quantos titulares validar em detalhe (0 = nenhum; reparte a amostra pelo catálogo)",
+    )
+    parser.add_argument(
+        "--validar-declaracoes",
+        type=int,
+        default=None,
+        help="Quantas declarações validar em detalhe (por omissão, todas as que estão em disco)",
+    )
     parser.add_argument("--tudo", action="store_true", help="Percorrer o catálogo completo (sem filtros)")
     args = parser.parse_args(argv)
 
@@ -70,6 +89,21 @@ def main(argv: list[str] | None = None) -> int:
         resultado = ept.exportar_entidades_json()
         print(json.dumps(resultado, ensure_ascii=False, indent=2))
         return 0
+
+    if args.validar:
+        inicio = time.time()
+        relatorio = ept.validar(
+            pausa=args.pausa,
+            limite_titulares=args.validar_titulares,
+            limite_declaracoes=args.validar_declaracoes,
+        )
+        print(f"validação em {time.time() - inicio:.0f}s · estado: {relatorio['estado']}")
+        print(json.dumps(relatorio.get("resumo", {}), ensure_ascii=False, indent=2, default=str))
+        if relatorio.get("errors"):
+            print(f"\n{len(relatorio['errors'])} erro(s):")
+            for erro in relatorio["errors"][:20]:
+                print(f"  {erro}")
+        return 0 if relatorio["estado"] == "ok" else 1
 
     if not args.tudo and not any((args.entidade, args.cargo, args.titular)):
         parser.error("Indique --entidade/--cargo/--titular, ou --tudo para o catálogo completo.")

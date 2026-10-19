@@ -120,6 +120,9 @@ function openLabel(item: SearchItem): string | null {
   if (!item.open) return null;
   if (item.open.view === "company-detail") return "Abrir ficha da empresa";
   if (item.open.view === "contract-detail") return "Abrir ficha do contrato";
+  // Recolha do Governo: o cartão abre a ficha do membro (ou o grafo da pasta).
+  if (item.open.view === "governo-ficha") return "Abrir ficha do Governo";
+  if (item.open.view === "governo-area" || item.open.view === "governo") return "Abrir no grafo do Governo";
   if (item.open.view === CONTRATOS_ES_VIEW) {
     return item.open.mode ? "Ver contratos desta entidade" : "Abrir em Contratos Espanha";
   }

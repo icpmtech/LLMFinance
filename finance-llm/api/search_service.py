@@ -382,6 +382,23 @@ def _scraped_values(data: Dict[str, Any]) -> Dict[str, Any]:
     return valores
 
 
+def _governo_open_view(hit: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Ficha a abrir para um documento do Governo recolhido em `finance_scraped`.
+
+    Os membros e os ministérios têm ficha própria (`/governo/ficha/<id>` e
+    `/governo?area=<slug>`); as nomeações abrem o grafo da área respetiva, porque
+    são linhas de gabinete e não pessoas.
+    """
+    source = str(hit.get("source_id") or "")
+    if not source.startswith("governo-"):
+        return None
+    if source == "governo-composicao":
+        item_id = str(hit.get("item_id") or "")
+        return {"view": "governo-ficha", "arg": item_id} if item_id else {"view": "governo", "arg": ""}
+    area = str(hit.get("data", {}).get("area_slug") if isinstance(hit.get("data"), dict) else "")
+    return {"view": "governo-area", "arg": area} if area else None
+
+
 def _search_scraped_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     source = (filters or {}).get("fonte")
     result = search_scraped(
@@ -411,6 +428,7 @@ def _search_scraped_group(q: str, size: int, offset: int, filters: Optional[Dict
                 if hit.get("sentiment")
                 else None,
                 extra={"valores": _scraped_values(data)},
+                open_view=_governo_open_view(hit),
             )
         )
     total = int(result.get("total") or 0)

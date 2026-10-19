@@ -390,6 +390,11 @@ from api.benchmark_routes import router as benchmark_router
 # contratos do portal BASE — contratos adjudicados e empresas adjudicatárias
 # de cada entidade.
 from api.administracao_central_routes import router as administracao_central_router
+# Governo: ministérios, membros, gabinetes e nomeações recolhidos do
+# portugal.gov.pt — fichas com remunerações e grafo de relações
+# (`finance_governo_ministerios`, `finance_governo_composicao`,
+# `finance_governo_nomeacoes` e `finance_scraped`).
+from api.governo_routes import router as governo_router
 from api.benchmarks_routes import router as benchmarks_router, site_router as benchmarks_site_router
 # Importação dos Contratos Públicos do Portal Base (IMPIC) publicados em dados.gov.pt:
 # catálogo dos ficheiros por ano, formato do ZIP e importação para o Elasticsearch.
@@ -959,6 +964,20 @@ app.include_router(erc_router)
 app.include_router(entidade_transparencia_router)
 app.include_router(benchmark_router)
 app.include_router(administracao_central_router)
+# Governo (`/governo/*`): visão geral, membros, fichas e grafo de relações.
+app.include_router(governo_router)
+
+
+@app.get("/governo")
+def serve_governo_spa_page(request: Request):
+    """Página do módulo **Governo** — ministérios, membros e grafo de relações."""
+    return spa_page_response(str(request.url.path))
+
+
+@app.get("/governo/{path:path}")
+def serve_governo_spa_page_deep(request: Request, path: str):
+    """Deep links do módulo Governo (`/governo/ficha/<id>`, `/governo/pessoa/<nif>`)."""
+    return spa_page_response(str(request.url.path))
 
 
 @app.get("/benchmark")

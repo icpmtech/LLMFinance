@@ -79,6 +79,7 @@ export type AppView =
   | "administracao-central"
   | "remuneracoes"
   | "entidade-transparencia"
+  | "governo"
   | "municipios-despesas"
   | "partidos"
   | "erc"
@@ -223,6 +224,18 @@ const APP_MATCH: Record<string, AppView[]> = {
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],
   "iframe-pages": [],
+};
+
+/**
+ * Sub-vistas com identificador no nome (`governo-ficha:<id>`,
+ * `governo-pessoa:<nif>`, `governo-area:<slug>`) e a aplicação de menu a que
+ * pertencem. Sem isto, abrir uma ficha a partir da pesquisa deixava o menu sem
+ * o item realçado — e o grupo «Dados públicos» fechado.
+ */
+const DYNAMIC_VIEW_BASE: Record<string, string> = {
+  "governo-ficha": "governo",
+  "governo-pessoa": "governo",
+  "governo-area": "governo",
 };
 
 function appItem(app: DockApp): NavItem {
@@ -487,6 +500,10 @@ export function normalize(text: string) {
 export function isActive(view: AppView, item: NavItem): boolean {
   if (view === item.id) return true;
   if (item.match?.includes(view)) return true;
+  // Fichas e sub-páginas dinâmicas (`governo-ficha:<id>`) realçam a aplicação
+  // de onde foram abertas.
+  const base = DYNAMIC_VIEW_BASE[String(view).split(":")[0]];
+  if (base && (base === item.id || item.match?.includes(base as AppView))) return true;
   return false;
 }
 

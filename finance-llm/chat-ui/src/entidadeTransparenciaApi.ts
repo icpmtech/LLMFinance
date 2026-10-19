@@ -74,12 +74,15 @@ export type EptStats = {
   com_registo_interesses?: number | null;
   atualizado_em?: string | null;
   fonte_indexada: boolean;
+  titulares_indexados?: number | null;
+  declaracoes_indexadas?: number | null;
+  indice_desatualizado?: boolean;
 };
 
 /** Trabalho de recolha/indexação. */
 export type EptJob = {
   job_id: string;
-  tipo: "recolher" | "indexar" | "exportar";
+  tipo: "recolher" | "indexar" | "exportar" | "validar";
   status: "running" | "done" | "error";
   started_at?: string | null;
   finished_at?: string | null;
@@ -287,6 +290,67 @@ export function eptEntidadeJsonUrl(entidadeId: string): string {
 
 export function eptExportIndiceUrl(): string {
   return `${API_BASE}/entidade-transparencia/exportar/indice`;
+}
+
+/** Uma verificação da validação (catálogo, cascata ou detalhes). */
+export type EptVerificacao = {
+  ok?: boolean | null;
+  ao_vivo?: number;
+  guardados?: number;
+  guardadas?: number;
+  verificados?: number;
+  verificadas?: number;
+  em_falta?: number;
+  a_mais?: number;
+  nomes_divergentes?: number;
+  datas_divergentes?: number;
+  divergentes?: number;
+  divergencias?: number;
+  ilegiveis?: number;
+  nota?: string;
+  amostra?: Record<string, unknown[]>;
+};
+
+/** Relatório de validação do catálogo e dos detalhes contra a plataforma. */
+export type EptValidacao = {
+  gerado_em: string;
+  terminado_em?: string | null;
+  estado: "ok" | "divergencias";
+  fonte: string;
+  fonte_url?: string;
+  parametros?: Record<string, unknown>;
+  resumo: {
+    entidades_ao_vivo?: number;
+    cargos_ao_vivo?: number;
+    titulares_ao_vivo?: number;
+    titularidades_ao_vivo?: number;
+    entidades_guardadas?: number;
+    titulares_guardados?: number;
+    fichas_de_titular_guardadas?: number;
+    declaracoes_guardadas?: number;
+    divergencias: number;
+    verificacoes?: Record<string, EptVerificacao>;
+  };
+  catalogos?: Record<string, EptVerificacao>;
+  cascata?: EptVerificacao & Record<string, EptVerificacao | undefined>;
+  titularidades?: EptVerificacao;
+  detalhes?: { titulares?: EptVerificacao; declaracoes?: EptVerificacao };
+  errors?: { fonte?: string; error?: string }[];
+  ficheiro?: string;
+};
+
+export type EptValidarParams = {
+  limite_titulares?: number | null;
+  limite_declaracoes?: number | null;
+  pausa?: number | null;
+};
+
+export function getEptValidacao(): Promise<EptValidacao> {
+  return pedir("/entidade-transparencia/validar");
+}
+
+export function validarEpt(params: EptValidarParams = {}): Promise<EptJob> {
+  return enviar("/entidade-transparencia/validar", params);
 }
 
 export function getEptJob(jobId: string): Promise<EptJob> {
