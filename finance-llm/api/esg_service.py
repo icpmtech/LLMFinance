@@ -44,6 +44,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
 from api import esg_sources as tax
+from api import esg_taxonomy as tax_eu
 from api import padroes_service as padroes
 from api.elasticsearch_client import (
     CIRE_INDEX,
@@ -962,6 +963,274 @@ def _setor_e_dimensao(
     }
 
 
+def _indicadores_presentes(valores: Dict[str, Any], codigos: Sequence[str]) -> List[str]:
+    presentes: List[str] = []
+    for codigo in codigos:
+        if _to_float((valores or {}).get(codigo)) is not None:
+            presentes.append(codigo)
+    return presentes
+
+
+def taxonomia_de_empresa(
+    *,
+    cae: Optional[str],
+    setor: Optional[str],
+    valores: Optional[Dict[str, Any]] = None,
+    cpv_top: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Liga a empresa à Taxonomia UE sem declarar alinhamento.
+
+    A empresa é **elegível** quando o CAE/NACE coincide com atividades do
+    Compass. O alinhamento exige três coisas que os dados abertos raramente
+    provam: critérios técnicos, ausência de prejuízo significativo (DNSH) e
+    salvaguardas sociais mínimas. Por isso o estado máximo é
+    ``elegivel_nao_verificado``; os indicadores declarados só reduzem a
+    incerteza, nunca substituem a avaliação oficial.
+    """
+    valores = valores or {}
+    secao = tax_eu.secao_de_cae(cae) or str(setor or "").upper()
+    nace = tax_eu.nace_de_cae(cae)
+    atividades = tax_eu.atividades_por_nace(cae)
+    match = "nace"
+    if not atividades and secao:
+        atividades = tax_eu.atividades_por_secao(secao)
+        match = "setor"
+    atividades = atividades[:16]
+
+    objetivos: Dict[int, Dict[str, Any]] = {}
+    for atividade in atividades:
+        for objetivo in atividade.get("objetivos") or []:
+            oid = int(objetivo["id"])
+            definicao = tax_eu.OBJETIVO_BY_ID.get(oid) or {}
+            entrada = objetivos.setdefault(
+                oid,
+                {
+                    "id": oid,
+                    "label": definicao.get("label") or f"Objetivo {oid}",
+                    "curto": definicao.get("curto") or f"Objetivo {oid}",
+                    "cor": definicao.get("cor") or "#94a3b8",
+                    "n_atividades": 0,
+                    "tipos": set(),
+                    "atividades": [],
+                },
+            )
+            entrada["n_atividades"] += 1
+            entrada["tipos"].add(str(objetivo.get("tipo") or "Contribui significativamente"))
+            if len(entrada["atividades"]) < 5:
+                entrada["atividades"].append({"id": atividade["id"], "nome": atividade["nome"]})
+
+    dnsh: List[Dict[str, Any]] = []
+    for criterio in tax_eu.DNSH:
+        definicao = tax_eu.OBJETIVO_BY_ID.get(int(criterio["objetivo"])) or {}
+        presentes = _indicadores_presentes(valores, criterio.get("indicadores") or [])
+        dnsh.append(
+            {
+                "objetivo": criterio["objetivo"],
+                "label": definicao.get("curto") or f"Objetivo {criterio['objetivo']}",
+                "cor": definicao.get("cor") or "#94a3b8",
+                "indicadores": presentes,
+                "status": "com indicador" if presentes else "sem evidência",
+            }
+        )
+
+    salvaguardas: List[Dict[str, Any]] = []
+    for requisito in tax_eu.SALVAGUARDAS:
+        presentes = _indicadores_presentes(valores, requisito.get("indicadores") or [])
+        if len(presentes) >= 2:
+            estado = "evidência parcial"
+        elif presentes:
+            estado = "evidência limitada"
+        else:
+            estado = "sem evidência"
+        salvaguardas.append(
+            {
+                "id": requisito["id"],
+                "label": requisito["label"],
+                "descricao": requisito["descricao"],
+                "fonte": requisito.get("fonte"),
+                "indicadores": presentes,
+                "status": estado,
+            }
+        )
+
+    n_dnsh = sum(1 for item in dnsh if item["status"] == "com indicador")
+    n_salv = sum(1 for item in salvaguardas if item["status"] != "sem evidência")
+    cobertura_verificacao = (n_dnsh + n_salv) / float(len(dnsh) + len(salvaguardas) or 1)
+
+    if not cae and not secao:
+        estado = "sem_dados"
+    elif not atividades:
+        estado = "nao_elegivel"
+    else:
+        estado = "elegivel_nao_verificado"
+
+    grupos_indicadores = {
+        str((tax.INDICADOR_BY_CODIGO.get(codigo) or {}).get("grupo") or "")
+        for codigo in valores
+        if _to_float(valores.get(codigo)) is not None
+    }
+    ods: List[Dict[str, Any]] = []
+    for objetivo in tax_eu.ODS:
+        coincidencias = sorted(set(objetivo.get("grupos") or []) & grupos_indicadores)
+        if coincidencias:
+            ods.append(
+                {
+                    "id": objetivo["id"],
+                    "label": objetivo["label"],
+                    "cor": objetivo.get("cor"),
+                    "grupos": coincidencias,
+                }
+            )
+    ods.sort(key=lambda item: (-len(item["grupos"]), item["id"]))
+
+    temas = list(tax_eu.MATERIALIDADE.get(secao, []))
+    for item in (cpv_top or [])[:3]:
+        label = str(item.get("label") or "").strip()
+        if label and label not in temas:
+            temas.append(label)
+    materialidade = [
+        {"tema": tema, "relevancia": "alta" if index < 4 else "média", "origem": "setor/CPV"}
+        for index, tema in enumerate(temas[:6])
+    ]
+
+    objetivos_lista = []
+    for oid in sorted(objetivos):
+        entrada = objetivos[oid]
+        entrada["tipos"] = sorted(entrada["tipos"])
+        objetivos_lista.append(entrada)
+
+    elegivel = bool(atividades)
+    avisos = [
+        "Elegibilidade não é alinhamento: os critérios técnicos, o DNSH e as salvaguardas mínimas têm de ser documentados e verificados.",
+    ]
+    if elegivel and cobertura_verificacao < 0.5:
+        avisos.append(
+            "A empresa tem atividades elegíveis, mas faltam indicadores declarados para verificar DNSH e salvaguardas mínimas."
+        )
+    if not cae:
+        avisos.append("Sem CAE: a ligação às atividades usa o setor/CPV como proxy (menor confiança).")
+
+    return {
+        "fonte": tax_eu.FONTE,
+        "nace": nace,
+        "secao": secao,
+        "match": match if atividades else None,
+        "elegivel": elegivel,
+        "alinhamento": estado,
+        "alinhamento_label": {
+            "sem_dados": "Sem dados para avaliar",
+            "nao_elegivel": "Sem atividade elegível identificada",
+            "elegivel_nao_verificado": "Elegível — alinhamento por verificar",
+        }.get(estado, estado),
+        "cobertura_verificacao": _round(cobertura_verificacao, 4),
+        "n_atividades": len(atividades),
+        "atividades": [
+            {
+                **atividade,
+                "url": tax_eu.url_atividade(atividade["id"]),
+                "setor_url": None,
+            }
+            for atividade in atividades
+        ],
+        "objetivos": objetivos_lista,
+        "dnsh": dnsh,
+        "salvaguardas": salvaguardas,
+        "ods": ods[:8],
+        "materialidade": materialidade,
+        "avisos": avisos,
+        "url_compass": tax_eu.FONTE["url"],
+    }
+
+
+def taxonomia_panorama() -> Dict[str, Any]:
+    """Visão estática da Taxonomia UE, com contagens oficiais por objetivo."""
+    objetivos = []
+    for objetivo in tax_eu.OBJETIVOS:
+        atividades = tax_eu.atividades_por_objetivo(objetivo["id"])
+        objetivos.append(
+            {
+                **objetivo,
+                "n_atividades": len(atividades),
+                "atividades": [{"id": item["id"], "nome": item["nome"]} for item in atividades[:8]],
+            }
+        )
+    setores: Dict[str, int] = {}
+    for atividade in tax_eu.ATIVIDADES:
+        setores[atividade["setor"]] = setores.get(atividade["setor"], 0) + 1
+    return {
+        "fonte": tax_eu.FONTE,
+        "objetivos": objetivos,
+        "total_atividades": len(tax_eu.ATIVIDADES),
+        "setores": [{"setor": nome, "n": n} for nome, n in sorted(setores.items(), key=lambda item: (-item[1], item[0]))],
+        "salvaguardas": [dict(item) for item in tax_eu.SALVAGUARDAS],
+        "dnsh": [dict(item) for item in tax_eu.DNSH],
+        "normas_relato": [dict(item) for item in tax_eu.NORMAS_RELATO],
+        "ods": [dict(item) for item in tax_eu.ODS],
+        "passos": [dict(item) for item in tax_eu.PASSOS],
+        "materialidade": {chave: list(valor) for chave, valor in tax_eu.MATERIALIDADE.items()},
+    }
+
+
+def taxonomia_atividades(
+    *,
+    q: Optional[str] = None,
+    setor: Optional[str] = None,
+    objetivo: Optional[int] = None,
+    nace: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+) -> Dict[str, Any]:
+    """Pesquisa as atividades oficiais do Compass (sem rede)."""
+    texto = padroes.fold(str(q or ""))
+    alvo_nace = tax_eu.nace_de_cae(nace) if nace else ""
+    itens = []
+    for atividade in tax_eu.ATIVIDADES:
+        if setor and atividade["setor"].lower() != str(setor).lower():
+            continue
+        if objetivo is not None and not any(int(item["id"]) == int(objetivo) for item in atividade.get("objetivos") or []):
+            continue
+        if alvo_nace and not any(
+            (prefixo := tax_eu.normalizar_nace(codigo)) and alvo_nace.startswith(prefixo)
+            for codigo in atividade.get("nace") or []
+        ):
+            continue
+        if texto and texto not in padroes.fold(f"{atividade['nome']} {atividade['setor']} {' '.join(atividade.get('nace') or [])}"):
+            continue
+        itens.append(
+            {
+                **atividade,
+                "url": tax_eu.url_atividade(atividade["id"]),
+                "objetivos": [
+                    {
+                        **objetivo_item,
+                        "label": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo_item["id"])) or {}).get("label"),
+                        "curto": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo_item["id"])) or {}).get("curto"),
+                        "cor": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo_item["id"])) or {}).get("cor"),
+                    }
+                    for objetivo_item in atividade.get("objetivos") or []
+                ],
+            }
+        )
+    itens.sort(key=lambda item: (item["setor"], item["nome"]))
+    total = len(itens)
+    inicio = max(0, int(from_))
+    return {"total": total, "itens": itens[inicio : inicio + max(1, min(int(size), 100))], "filtros": {"q": q, "setor": setor, "objetivo": objetivo, "nace": nace}}
+
+
+def taxonomia_empresa(*, nif: str, pais: str = "PT") -> Dict[str, Any]:
+    """Taxonomia da empresa a partir da fotografia ESG (calculada ao vivo)."""
+    doc = calcular_empresa(nif=nif, pais=pais, indexar=False, incluir_benchmark=False, incluir_fornecedores=False)
+    if doc.get("error"):
+        return doc
+    return {
+        "empresa": doc.get("empresa") or {"nif": nif, "nome": doc.get("name")},
+        "ano": doc.get("ano"),
+        "taxonomia": doc.get("taxonomia") or {},
+        "avisos": (doc.get("taxonomia") or {}).get("avisos") or [],
+        "cartao_modelo": {"versao": tax.MODELO_VERSAO, "aviso": tax.AVISO_GERAL},
+    }
+
+
 def _benchmark(
     client: Elasticsearch,
     *,
@@ -1150,6 +1419,12 @@ def calcular_empresa(
     valores_ref, detalhes_ref, fontes_ind = _valores_indicadores(docs_indicadores, ano_ref)
     indices_ref = indicadores_score(valores_ref)
     avaliacao = avaliar(features, indicadores=indices_ref)
+    taxonomia = taxonomia_de_empresa(
+        cae=setor_info.get("cae_principal"),
+        setor=setor_info.get("setor"),
+        valores=valores_ref,
+        cpv_top=features.get("cpv_top"),
+    )
     if rows and not any(_to_int(row.get("ano")) == ano_ref for row in rows):
         avaliacao["avisos"].append(
             f"Não há contratos em {ano_ref}; a leitura usa a janela de {anos_janela} anos e o ano de referência é indicativo."
@@ -1293,6 +1568,14 @@ def calcular_empresa(
         },
         "evidencias": evidencias,
         "fornecedores": fornecedores,
+        "taxonomia": taxonomia,
+        "taxonomia_elegivel": bool(taxonomia.get("elegivel")),
+        "taxonomia_alinhamento": taxonomia.get("alinhamento"),
+        "taxonomia_nace": taxonomia.get("nace"),
+        "taxonomia_objetivos": [int(item["id"]) for item in taxonomia.get("objetivos") or []],
+        "taxonomia_atividades": [int(item["id"]) for item in taxonomia.get("atividades") or []],
+        "taxonomia_cobertura_verificacao": taxonomia.get("cobertura_verificacao"),
+        "ods": [int(item["id"]) for item in taxonomia.get("ods") or []],
     }
 
     if indexar:
@@ -1419,7 +1702,7 @@ def pesquisa(
             "query": {"bool": {"filter": filtros}},
             "sort": _ordenar_esg(ordenar, pilar),
             "_source": {
-                "includes": ["nif", "name", "pais", "setor", "setor_label", "dimensao", "dimensao_label", "score", "nivel", "nivel_label", "cor", "cobertura", "confianca", "pilares", "contratos", "valor", "benchmark", "ano"],
+                "includes": ["nif", "name", "pais", "setor", "setor_label", "dimensao", "dimensao_label", "score", "nivel", "nivel_label", "cor", "cobertura", "confianca", "pilares", "contratos", "valor", "benchmark", "ano", "taxonomia_elegivel", "taxonomia_alinhamento", "taxonomia_objetivos", "ods"],
                 "excludes": ["historico", "componentes", "evidencias", "fornecedores", "score_detalhe", "pilares_detalhe", "indicadores"],
             },
         }
@@ -1489,6 +1772,10 @@ def _item_lista(src: Dict[str, Any]) -> Dict[str, Any]:
         "valor": src.get("valor"),
         "ano": src.get("ano"),
         "benchmark": src.get("benchmark"),
+        "taxonomia_elegivel": src.get("taxonomia_elegivel"),
+        "taxonomia_alinhamento": src.get("taxonomia_alinhamento"),
+        "taxonomia_objetivos": src.get("taxonomia_objetivos") or [],
+        "ods": src.get("ods") or [],
     }
 
 
@@ -1543,7 +1830,7 @@ def ranking(
         "query": {"bool": {"filter": filtros}},
         "sort": _ordenar_esg(ordenar, pilar),
         "_source": {
-            "includes": ["nif", "name", "pais", "setor", "setor_label", "dimensao", "dimensao_label", "score", "nivel", "nivel_label", "cor", "cobertura", "confianca", "pilares", "contratos", "valor", "ano", "benchmark"],
+            "includes": ["nif", "name", "pais", "setor", "setor_label", "dimensao", "dimensao_label", "score", "nivel", "nivel_label", "cor", "cobertura", "confianca", "pilares", "contratos", "valor", "ano", "benchmark", "taxonomia_elegivel", "taxonomia_alinhamento", "taxonomia_objetivos", "ods"],
             "excludes": ["historico", "componentes", "evidencias", "fornecedores", "score_detalhe", "pilares_detalhe", "indicadores"],
         },
     }
@@ -1600,6 +1887,10 @@ def analitica(
             "dimensoes": {"terms": {"field": "dimensao_label", "size": 10}, "aggs": {"score": {"avg": {"field": "score"}}}},
             "distritos": {"terms": {"field": "location.distrito", "size": 15}, "aggs": {"score": {"avg": {"field": "score"}}}},
             "anos": {"terms": {"field": "ano", "size": 10}, "aggs": {"score": {"avg": {"field": "score"}}}},
+            "taxonomia_alinhamento": {"terms": {"field": "taxonomia_alinhamento", "size": 10}},
+            "taxonomia_objetivos": {"terms": {"field": "taxonomia_objetivos", "size": 10}},
+            "taxonomia_elegivel": {"terms": {"field": "taxonomia_elegivel", "size": 2}},
+            "ods": {"terms": {"field": "ods", "size": 17}},
         },
     }
     resposta = _search(client, ESG_EMPRESAS_INDEX, corpo, timeout=60)
@@ -1621,6 +1912,54 @@ def analitica(
     media_score = (aggs.get("media_score") or {}).get("value")
     destaques_positivos = ranking(pais=pais, setor=setor, dimensao=dimensao, nivel=nivel, ano=ano, ordenar="score", size=8)["itens"] if total else []
     destaques_negativos = ranking(pais=pais, setor=setor, dimensao=dimensao, nivel=nivel, ano=ano, ordenar="score_asc", size=8)["itens"] if total else []
+
+    alinhamento_buckets = _buckets("taxonomia_alinhamento")
+    avaliadas = sum(int(bucket.get("doc_count") or 0) for bucket in alinhamento_buckets)
+    mapa_alinhamento = {
+        "sem_dados": "Sem dados para avaliar",
+        "nao_elegivel": "Sem atividade elegível identificada",
+        "elegivel_nao_verificado": "Elegível — alinhamento por verificar",
+    }
+    objetivos_buckets = _buckets("taxonomia_objetivos")
+    ods_buckets = _buckets("ods")
+    taxonomia = {
+        "avaliadas": avaliadas,
+        "sem_dados": max(0, total - avaliadas),
+        "elegiveis": next(
+            (int(bucket.get("doc_count") or 0) for bucket in _buckets("taxonomia_elegivel") if bucket.get("key") in (True, 1, "true")),
+            0,
+        ),
+        "alinhamento": [
+            {
+                "id": bucket.get("key"),
+                "label": mapa_alinhamento.get(str(bucket.get("key")), str(bucket.get("key"))),
+                "n": bucket.get("doc_count"),
+            }
+            for bucket in alinhamento_buckets
+        ],
+        "objetivos": [
+            {
+                "id": int(bucket.get("key")),
+                "label": (tax_eu.OBJETIVO_BY_ID.get(int(bucket.get("key"))) or {}).get("label") or f"Objetivo {bucket.get('key')}",
+                "curto": (tax_eu.OBJETIVO_BY_ID.get(int(bucket.get("key"))) or {}).get("curto") or f"Objetivo {bucket.get('key')}",
+                "cor": (tax_eu.OBJETIVO_BY_ID.get(int(bucket.get("key"))) or {}).get("cor") or "#94a3b8",
+                "n": bucket.get("doc_count"),
+            }
+            for bucket in objetivos_buckets
+            if str(bucket.get("key")).isdigit()
+        ],
+        "ods": [
+            {
+                "id": int(bucket.get("key")),
+                "label": next((item["label"] for item in tax_eu.ODS if item["id"] == int(bucket.get("key"))), f"ODS {bucket.get('key')}"),
+                "cor": next((item.get("cor") for item in tax_eu.ODS if item["id"] == int(bucket.get("key"))), "#94a3b8"),
+                "n": bucket.get("doc_count"),
+            }
+            for bucket in ods_buckets
+            if str(bucket.get("key")).isdigit()
+        ],
+        "fonte": tax_eu.FONTE,
+    }
 
     return {
         "disponivel": True,
@@ -1666,6 +2005,7 @@ def analitica(
         ],
         "destaques_positivos": destaques_positivos,
         "destaques_negativos": destaques_negativos,
+        "taxonomia": taxonomia,
         "filtros": {"pais": pais, "setor": setor, "dimensao": dimensao, "nivel": nivel, "ano": ano, "q": q},
     }
 
@@ -2385,6 +2725,7 @@ def meta() -> Dict[str, Any]:
         ],
         "indicadores": [dict(item) for item in tax.INDICADORES],
         "fontes": [dict(item) for item in tax.FONTES],
+        "taxonomia": taxonomia_panorama(),
         "aviso": tax.AVISO_GERAL,
     }
 
@@ -2410,7 +2751,7 @@ def exportar_csv(
     )
     buffer = io.StringIO()
     escritor = csv.writer(buffer)
-    escritor.writerow(["posicao", "nif", "nome", "pais", "setor", "dimensao", "score", "nivel", "pilares_e", "pilares_s", "pilares_g", "cobertura", "confianca", "contratos", "valor", "ano"])
+    escritor.writerow(["posicao", "nif", "nome", "pais", "setor", "dimensao", "score", "nivel", "pilares_e", "pilares_s", "pilares_g", "cobertura", "confianca", "contratos", "valor", "ano", "taxonomia_elegivel", "taxonomia_alinhamento", "taxonomia_objetivos", "ods"])
     for item in dados.get("itens") or []:
         pilares = item.get("pilares") or {}
         escritor.writerow(
@@ -2431,6 +2772,10 @@ def exportar_csv(
                 item.get("contratos"),
                 item.get("valor"),
                 item.get("ano"),
+                item.get("taxonomia_elegivel"),
+                item.get("taxonomia_alinhamento"),
+                ";".join(str(oid) for oid in item.get("taxonomia_objetivos") or []),
+                ";".join(str(oid) for oid in item.get("ods") or []),
             ]
         )
     return buffer.getvalue()

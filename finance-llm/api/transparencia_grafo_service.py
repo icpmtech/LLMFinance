@@ -366,15 +366,18 @@ def _id_cargo(cargo_id: Any, nome: Any) -> str:
 def _id_alvo(grafo: _Grafo, nome: str, nif: Optional[str], natureza: Optional[str]) -> Tuple[str, str]:
     """Id e tipo do destino de uma linha de interesses.
 
-    Um NIF que já é uma entidade do catálogo da EPT continua a ser **entidade
-    pública**; os restantes organismos públicos sem id no catálogo entram como
-    `entidade:nif:<nif>` (a partir da natureza/nome). Tudo o resto é empresa.
+    O **NIF** é a chave: um organismo que já é entidade do catálogo da EPT fica
+    como entidade pública; os restantes NIFs entram sempre como `empresa:<nif>`,
+    para que a mesma organização não se divida em dois nós só porque uma linha
+    diz «setor público» e outra não. Sem NIF, decide a natureza/nome.
     """
     if nif and nif in grafo.nif_entidade:
         return _id_entidade(grafo.nif_entidade[nif]), "entidade"
+    if nif:
+        return f"empresa:{nif}", "empresa"
     if _parece_publico(nome, natureza):
-        return (f"entidade:nif:{nif}" if nif else f"entidade:nome:{_slug(nome)}"), "entidade"
-    return (f"empresa:{nif}" if nif else f"empresa:nome:{_slug(nome)}"), "empresa"
+        return f"entidade:nome:{_slug(nome)}", "entidade"
+    return f"empresa:nome:{_slug(nome)}", "empresa"
 
 
 def _ler_titularidades() -> Iterator[Dict[str, Any]]:

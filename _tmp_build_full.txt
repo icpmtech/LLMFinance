@@ -1,5 +1,0 @@
-﻿tempo 18.7
-totais {"nos": 23103, "arestas": 31058, "pessoas": 12478, "cargos": 293, "entidades": 5868, "empresas": 4464, "com_geo": 4389}
-relacoes {"EXERCE": 14119, "ATIVIDADE": 8186, "CARGO_EM": 7679, "PARTICIPACAO": 1074}
-concelhos [{"concelho": "Lisboa", "lat": 38.72509, "lon": -9.1498, "empresas": 587}, {"concelho": "Porto", "lat": 41.1485, "lon": -8.61097, "empresas": 137}, {"concelho": "Braga", "lat": 41.5514, "lon": -8.42311, "empresas": 61}, {"concelho": "Coimbra", "lat": 40.20686, "lon": -8.41996, "empresas": 60}, {"concelho": "Funchal", "lat": 32.66568, "lon": -16.92547, "empresas": 47}, {"concelho": "Ponta Delgada", "lat": 37.73952, "lon": -25.66874, "empresas": 37}, {"concelho": "Oeiras", "lat": 38.69105, "lon": -9.31085, "empresas": 33}, {"concelho": "Matosinhos", "lat": 41.18207, "lon": -8.68908, "empresas": 30}]
-tamanho nos 11277003 arestas 9293035

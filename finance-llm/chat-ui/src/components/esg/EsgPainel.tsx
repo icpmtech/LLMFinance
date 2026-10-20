@@ -6,7 +6,7 @@
  * uma empresa ou executar o cálculo em lote) em vez de mostrar zeros.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Building2, Gauge, Layers, Leaf, Loader2, RefreshCw, Target } from "lucide-react";
+import { BarChart3, Building2, Gauge, Landmark, Layers, Leaf, Loader2, RefreshCw, Target } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -178,6 +178,51 @@ export function EsgPainel({ meta, onAbrir }: { meta: EsgMeta | null; onAbrir: (i
         <Kpi icon={Leaf} label="Pilar Ambiente (média)" value={dados.media_pilares?.e?.toFixed(1) ?? "—"} sub={`Social ${dados.media_pilares?.s?.toFixed(1) ?? "—"} · Governação ${dados.media_pilares?.g?.toFixed(1) ?? "—"}`} color="text-teal-300" />
         <Kpi icon={Target} label="Última atualização" value={data(dados.ultima_atualizacao)} sub="fotografias no índice" color="text-sky-300" glow="glow-blue" />
       </div>
+
+      {dados.taxonomia && (
+        <SectionCard
+          title="Taxonomia Europeia"
+          subtitle="Elegibilidade face aos seis objetivos ambientais; alinhamento exige critérios técnicos, DNSH e salvaguardas verificadas."
+          icon={Landmark}
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Avaliadas</p>
+              <p className="mt-1 font-mono text-xl">{num(dados.taxonomia.avaliadas)}</p>
+              <p className="text-[10px] text-muted-foreground">{num(dados.taxonomia.sem_dados)} sem dados</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Elegíveis</p>
+              <p className="mt-1 font-mono text-xl text-amber-300">{num(dados.taxonomia.elegiveis)}</p>
+              <p className="text-[10px] text-muted-foreground">alinhamento por verificar</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sem atividade elegível</p>
+              <p className="mt-1 font-mono text-xl">{num(dados.taxonomia.alinhamento.find((item) => item.id === "nao_elegivel")?.n)}</p>
+              <p className="text-[10px] text-muted-foreground">CAE/NACE sem correspondência</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Objetivos com empresas</p>
+              <p className="mt-1 font-mono text-xl">{num(dados.taxonomia.objetivos.length)}/6</p>
+              <p className="text-[10px] text-muted-foreground">contributo significativo potencial</p>
+            </div>
+          </div>
+          {dados.taxonomia.objetivos.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {dados.taxonomia.objetivos.map((objetivo) => (
+                <span
+                  key={objetivo.id}
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]"
+                  style={{ borderColor: `${objetivo.cor}55`, backgroundColor: `${objetivo.cor}14`, color: objetivo.cor }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: objetivo.cor }} />
+                  {objetivo.id} · {objetivo.curto || objetivo.label} ({objetivo.n})
+                </span>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="Média por pilar" subtitle="Escala 0–100; barras sem valor significam pilar sem dados." icon={BarChart3}>

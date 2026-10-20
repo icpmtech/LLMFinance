@@ -3837,6 +3837,13 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "valor": {"type": "float"},
             "adjudicantes": {"type": "integer"},
             "fornecedores_count": {"type": "integer"},
+            "taxonomia_elegivel": {"type": "boolean"},
+            "taxonomia_alinhamento": {"type": "keyword"},
+            "taxonomia_nace": {"type": "keyword", "ignore_above": 32},
+            "taxonomia_objetivos": {"type": "integer"},
+            "taxonomia_atividades": {"type": "integer"},
+            "taxonomia_cobertura_verificacao": {"type": "float"},
+            "ods": {"type": "integer"},
             "ano": {"type": "integer"},
             "anos": {"type": "integer"},
             "modelo_versao": {"type": "keyword", "ignore_above": 32},
@@ -3863,6 +3870,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "indicadores": {"type": "object", "enabled": False},
             "evidencias": {"type": "object", "enabled": False},
             "fornecedores": {"type": "object", "enabled": False},
+            "taxonomia": {"type": "object", "enabled": False},
             "cartao_modelo": {"type": "object", "enabled": False},
         }
     }

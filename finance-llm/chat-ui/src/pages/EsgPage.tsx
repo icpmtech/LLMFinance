@@ -6,14 +6,16 @@
  *
  * 1. **Painel** — médias por pilar, distribuições e destaques;
  * 2. **Empresas** — ranking e pesquisa (a primeira consulta calcula e guarda);
- * 3. **Carteira** — análise ESG de um conjunto de fornecedores;
- * 4. **Modelo e fontes** — pesos, limiares, catálogo GRI/ESRS e taxonomia CPV.
+ * 3. **Taxonomia UE** — elegibilidade face aos seis objetivos ambientais,
+ *    atividades do Compass, DNSH e salvaguardas mínimas;
+ * 4. **Carteira** — análise ESG de um conjunto de fornecedores;
+ * 5. **Modelo e fontes** — pesos, limiares, catálogo GRI/ESRS, ODS e Taxonomia UE.
  *
  * O dossiê de uma empresa abre num separador próprio e vive na query string
  * (`?tab=dossie&nif=…&pais=…`), para o link poder ser partilhado.
  */
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Leaf, Search, Users, BookOpen, Gauge } from "lucide-react";
+import { BarChart3, Leaf, Search, Users, BookOpen, Gauge, Landmark } from "lucide-react";
 
 import { getEsgMeta } from "../esgApi";
 import type { EsgEmpresaResumo, EsgMeta } from "../esgApi";
@@ -22,13 +24,15 @@ import { EsgDossie } from "../components/esg/EsgDossie";
 import { EsgEmpresas } from "../components/esg/EsgEmpresas";
 import { EsgModelo } from "../components/esg/EsgModelo";
 import { EsgPainel } from "../components/esg/EsgPainel";
+import { EsgTaxonomia } from "../components/esg/EsgTaxonomia";
 import { EmptyState, Loading } from "../components/padroes/padroesKit";
 
-type Aba = "painel" | "empresas" | "carteira" | "modelo" | "dossie";
+type Aba = "painel" | "empresas" | "taxonomia" | "carteira" | "modelo" | "dossie";
 
 const ABAS: { id: Aba; label: string; icon: typeof BarChart3 }[] = [
   { id: "painel", label: "Painel", icon: BarChart3 },
   { id: "empresas", label: "Empresas", icon: Search },
+  { id: "taxonomia", label: "Taxonomia UE", icon: Landmark },
   { id: "carteira", label: "Carteira de fornecedores", icon: Users },
   { id: "modelo", label: "Modelo e fontes", icon: BookOpen },
 ];
@@ -39,7 +43,7 @@ function lerUrl(): { tab: Aba; alvo: Alvo | null } {
   if (typeof window === "undefined") return { tab: "painel", alvo: null };
   const params = new URLSearchParams(window.location.search);
   const pedido = params.get("tab");
-  const tab = (["painel", "empresas", "carteira", "modelo", "dossie"].includes(String(pedido)) ? pedido : "painel") as Aba;
+  const tab = (["painel", "empresas", "taxonomia", "carteira", "modelo", "dossie"].includes(String(pedido)) ? pedido : "painel") as Aba;
   const nif = params.get("nif");
   if (!nif) return { tab, alvo: null };
   return { tab: "dossie", alvo: { nif, nome: params.get("nome") || nif, pais: params.get("pais") || "PT" } };
@@ -105,7 +109,8 @@ export default function EsgPage() {
             </h1>
             <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
               Score ESG por empresa (0–100) nas vertentes Ambiente, Social e Governação, com cobertura e confiança, série de três anos,
-              benchmark de setor e dimensão, indicadores dos relatórios de sustentabilidade e análise da carteira de fornecedores.
+              benchmark de setor e dimensão, indicadores dos relatórios de sustentabilidade, análise da carteira de fornecedores e
+              elegibilidade face à Taxonomia Europeia (com DNSH e salvaguardas mínimas por verificar).
             </p>
           </div>
           {meta && (
@@ -148,6 +153,7 @@ export default function EsgPage() {
 
         {meta && tab === "painel" && <EsgPainel meta={meta} onAbrir={abrir} />}
         {meta && tab === "empresas" && <EsgEmpresas meta={meta} onAbrir={abrir} />}
+        {meta && tab === "taxonomia" && <EsgTaxonomia meta={meta} />}
         {meta && tab === "carteira" && <EsgCarteiraPage onAbrir={(nif, nome) => abrirPorNif(nif, nome, "PT")} />}
         {meta && tab === "modelo" && <EsgModelo meta={meta} />}
         {meta && tab === "dossie" && alvo && (

@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 #: Versão do cartão do modelo. Sobe quando pesos, limiares ou indicadores mudam:
 #: dois números de datas diferentes não devem ser comparados como se usassem o
 #: mesmo modelo.
-MODELO_VERSAO = "esg-1.0.0"
+MODELO_VERSAO = "esg-1.1.0"
 
 #: Aviso obrigatório em todos os números.
 AVISO_GERAL = (
@@ -337,6 +337,23 @@ INDICADORES: List[Dict[str, Any]] = [
     _ind("g_remuneracao_ceo_ratio", "Rácio de remuneração CEO/mediana", "g", "×", 100, 10, "Remuneração", "Relação entre a remuneração do CEO e a mediana dos trabalhadores.", "GRI 2-21"),
     _ind("g_taxa_conformidade_fornecedores_pct", "Fornecedores com conformidade avaliada", "g", "%", 0, 100, "Cadeia de valor", "Parte dos fornecedores com avaliação de conformidade.", "GRI 414-2"),
     _ind("g_objetivos_climaticos_governacao", "Metas climáticas aprovadas pelo conselho", "g", "0/1", 0, 1, "Estratégia", "Metas climáticas formalmente aprovadas pelo órgão de administração."),
+    # Novos indicadores alinhados com a Taxonomia UE e com o percurso IAPMEI.
+    # Sem eles, a verificação de DNSH e das salvaguardas mínimas fica
+    # explicitamente «sem evidência» — não se presume conformidade.
+    _ind("e_politica_ambiental", "Política ambiental formal", "e", "0/1", 0, 1, "Gestão ambiental", "Política ambiental aprovada e publicada.", "ISO 14001 / ESRS E1"),
+    _ind("e_gestao_ambiental", "Sistema de gestão ambiental", "e", "0/1", 0, 1, "Gestão ambiental", "Sistema de gestão ambiental implementado e auditado.", "ISO 14001 / EMAS"),
+    _ind("e_risco_climatico", "Avaliação de risco climático", "e", "0/1", 0, 1, "Clima", "Riscos físicos e de transição avaliados e geridos.", "TCFD / ESRS E1"),
+    _ind("e_biodiversidade", "Gestão da biodiversidade", "e", "0/1", 0, 1, "Biodiversidade", "Dependências e impactos na biodiversidade avaliados e mitigados.", "TNFD / ESRS E4"),
+    _ind("e_economia_circular", "Estratégia de economia circular", "e", "0/1", 0, 1, "Economia circular", "Objetivos de circularidade de materiais e produtos.", "ESRS E5"),
+    _ind("e_gestao_agua", "Gestão do risco hídrico", "e", "0/1", 0, 1, "Água", "Avaliação de stress hídrico e gestão do consumo de água.", "ESRS E3"),
+    _ind("s_salario_digno", "Salário digno", "s", "0/1", 0, 1, "Emprego", "Compromisso com salário digno e respetiva monitorização.", "GRI 202-1 / ESRS S1"),
+    _ind("s_direitos_humanos", "Política de direitos humanos", "s", "0/1", 0, 1, "Direitos humanos", "Compromisso com direitos humanos e mecanismos de reparação.", "UNGP / ESRS S1-S2"),
+    _ind("s_condicoes_trabalho", "Condições de trabalho avaliadas", "s", "0/1", 0, 1, "Emprego", "Avaliação de condições de trabalho na empresa e na cadeia de valor.", "OIT / ESRS S1"),
+    _ind("g_direitos_humanos", "Due diligence de direitos humanos", "g", "0/1", 0, 1, "Direitos humanos", "Processo de due diligence em direitos humanos documentado.", "UNGP / OCDE"),
+    _ind("g_due_diligence", "Due diligence ESG da cadeia de valor", "g", "0/1", 0, 1, "Cadeia de valor", "Diligência devida sobre fornecedores e parceiros.", "OCDE / ESRS G1"),
+    _ind("g_codigo_fornecedores", "Código de conduta para fornecedores", "g", "0/1", 0, 1, "Cadeia de valor", "Código para fornecedores com critérios ESG e mecanismos de controlo.", "GRI 308 / 414"),
+    _ind("g_politica_fiscal", "Política fiscal responsável", "g", "0/1", 0, 1, "Fiscalidade", "Política de transparência fiscal e controlo de práticas de elisão.", "OCDE"),
+    _ind("g_politica_remuneracao", "Política de remuneração transparente", "g", "0/1", 0, 1, "Remuneração", "Política de remuneração publicada e ligada ao desempenho sustentável.", "ESRS G1"),
 ]
 
 INDICADOR_BY_CODIGO: Dict[str, Dict[str, Any]] = {item["codigo"]: item for item in INDICADORES}
@@ -423,11 +440,53 @@ FONTES: List[Dict[str, Any]] = [
         "uso": "Contexto de setor, dimensão e território.",
     },
     {
-        "id": "iapmei",
-        "label": "IAPMEI — PME",
+        "id": "iapmei_esg",
+        "label": "IAPMEI — alinhamento do negócio com fatores ESG",
         "tipo": "referencia",
-        "url": "https://www.iapmei.pt/",
-        "uso": "Definições de dimensão e apoio à transição das PME.",
+        "url": "https://www.iapmei.pt/pt/saber-mais/industria-e-sustentabilidade/sustentabilidade-empresarial/esg-e-financas-sustentaveis/alinhamento-do-negocio-com-fatores-esg/",
+        "uso": "Percurso de cinco passos para PME, temas materiais por pilar, ODS, normas de relato (ESRS/VSME) e ligação à Taxonomia UE.",
+    },
+    {
+        "id": "eu_taxonomy_compass",
+        "label": "EU Taxonomy Compass — Comissão Europeia",
+        "tipo": "referencia",
+        "url": "https://ec.europa.eu/sustainable-finance-taxonomy/taxonomy-compass",
+        "uso": "Seis objetivos ambientais, atividades elegíveis, códigos NACE, contributo significativo, DNSH e critérios técnicos oficiais.",
+    },
+    {
+        "id": "sdg_compass",
+        "label": "SDG Compass (GRI, UN Global Compact, WBCSD)",
+        "tipo": "referencia",
+        "url": "https://www.unglobalcompact.org/library/3101",
+        "uso": "Ligação entre estratégia empresarial, temas materiais e os 17 ODS.",
+    },
+    {
+        "id": "vsme",
+        "label": "VSME — norma voluntária de relato para PME",
+        "tipo": "referencia",
+        "url": "https://finance.ec.europa.eu/publications/commission-presents-voluntary-sustainability-reporting-standard-ease-burden-smes_en",
+        "uso": "Modelo simplificado para PME responderem a pedidos de clientes e financiadores.",
+    },
+    {
+        "id": "tcfd",
+        "label": "TCFD — Task Force on Climate-related Financial Disclosures",
+        "tipo": "referencia",
+        "url": "https://www.fsb-tcfd.org/",
+        "uso": "Governação, estratégia, gestão de risco e métricas climáticas.",
+    },
+    {
+        "id": "tnfd",
+        "label": "TNFD — Taskforce on Nature-related Financial Disclosures",
+        "tipo": "referencia",
+        "url": "https://tnfd.global/",
+        "uso": "Dependências, impactos, riscos e oportunidades relacionados com a natureza.",
+    },
+    {
+        "id": "certificacoes_esg",
+        "label": "B Corp, EcoVadis e Sedex",
+        "tipo": "referencia",
+        "url": "https://www.bcorporation.net/",
+        "uso": "Certificações e avaliações privadas usadas por PME exportadoras e por grandes compradores.",
     },
     {
         "id": "apa",

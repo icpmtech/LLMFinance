@@ -1,5 +1,0 @@
-﻿tempo 12.3
-totais {"nos": 23498, "arestas": 32015, "pessoas": 12478, "cargos": 293, "entidades": 6481, "empresas": 4246, "com_geo": 4120}
-relacoes {"EXERCE": 14119, "ATIVIDADE": 8188, "CARGO_EM": 7679, "PARTICIPACAO": 1074, "BENEFICIO": 507, "SERVICO": 448}
-empresas top [{"label": "Partido Social Democrata", "grau": 41, "concelho": "Lisboa", "lat": 38.72509}, {"label": "Partido Socialista", "grau": 39, "concelho": "Lisboa", "lat": 38.72509}, {"label": "PARTIDO CHEGA", "grau": 20, "concelho": "LISBOA", "lat": 38.72509}, {"label": "ANMP", "grau": 17, "concelho": "Coimbra", "lat": 40.20686}, {"label": "Parlamento Europeu", "grau": 15, "concelho": "Bruxelas", "lat": 50.8503}]
-detalhe Partido Social Democrata 41 ATIVIDADE

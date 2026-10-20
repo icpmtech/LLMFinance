@@ -7,14 +7,22 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   BarChart3,
   Building2,
   Calendar,
+  CheckCircle2,
   FileText,
+  Globe2,
   Info,
+  Landmark,
+  Layers,
   Leaf,
   Package,
+  ShieldCheck,
+  Target,
   Users,
 } from "lucide-react";
 import {
@@ -29,7 +37,7 @@ import {
 } from "recharts";
 
 import { getEsgEmpresa, getEsgFornecedores } from "../../esgApi";
-import type { EsgCarteira, EsgEmpresa, EsgMeta } from "../../esgApi";
+import type { EsgCarteira, EsgEmpresa, EsgMeta, EsgTaxonomiaEmpresa } from "../../esgApi";
 import { Chip, EmptyState, Kpi, Loading, SectionCard } from "../padroes/padroesKit";
 import { CarteiraResultado } from "./EsgCarteira";
 import {
@@ -49,13 +57,14 @@ import {
   pct,
 } from "./esgKit";
 
-type Aba = "visao" | "componentes" | "historico" | "indicadores" | "contratos" | "fornecedores";
+type Aba = "visao" | "componentes" | "historico" | "indicadores" | "taxonomia" | "contratos" | "fornecedores";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "visao", label: "Visão geral" },
   { id: "componentes", label: "Componentes" },
   { id: "historico", label: "Evolução" },
   { id: "indicadores", label: "Indicadores declarados" },
+  { id: "taxonomia", label: "Taxonomia UE" },
   { id: "contratos", label: "Contratos" },
   { id: "fornecedores", label: "Fornecedores" },
 ];
@@ -68,6 +77,154 @@ function LinhaIndicador({ label, valor, unidade, pontos }: { label: string; valo
         {num(valor, 1)} <span className="text-[10px] text-muted-foreground">{unidade || ""}</span>
         {pontos !== null && pontos !== undefined && <span className="ml-1 text-[10px] text-muted-foreground">({pontos.toFixed(0)}/100)</span>}
       </span>
+    </div>
+  );
+}
+
+function SecaoTaxonomia({ tax }: { tax: EsgTaxonomiaEmpresa }) {
+  const tone = tax.alinhamento === "elegivel_nao_verificado" ? "amber" : tax.alinhamento === "nao_elegivel" ? "rose" : "neutral";
+  return (
+    <div className="space-y-4">
+      <SectionCard
+        title="Taxonomia UE — elegibilidade"
+        subtitle={`CAE/NACE ${tax.nace || "n/d"} · ${tax.match === "nace" ? "correspondência por CAE/NACE" : tax.match === "setor" ? "proxy pelo setor/CPV" : "sem correspondência"}`}
+        icon={Landmark}
+        actions={
+          <a href={tax.url_compass} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-sky-300 hover:underline">
+            Compass <ArrowUpRight size={11} />
+          </a>
+        }
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Estado</p>
+            <p className="text-sm font-medium">{tax.alinhamento_label}</p>
+          </div>
+          <Chip tone={tone}>{tax.elegivel ? `${num(tax.n_atividades)} atividade(s) elegível(is)` : "sem atividade elegível"}</Chip>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Objetivos</p>
+            <p className="mt-1 font-mono text-xl">{num(tax.objetivos?.length)}/6</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Verificação</p>
+            <p className="mt-1 font-mono text-xl">{pct(tax.cobertura_verificacao, 0)}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">ODS com evidência</p>
+            <p className="mt-1 font-mono text-xl">{num(tax.ods?.length)}</p>
+          </div>
+        </div>
+        {tax.objetivos?.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {tax.objetivos.map((objetivo) => (
+              <span key={objetivo.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]" style={{ borderColor: `${objetivo.cor}55`, backgroundColor: `${objetivo.cor}14`, color: objetivo.cor }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: objetivo.cor }} />
+                {objetivo.id} · {objetivo.curto || objetivo.label}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-[10.5px] text-amber-100">
+          <p className="flex items-start gap-1.5">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            <span>{tax.avisos?.[0] || "Elegibilidade não é alinhamento: os critérios técnicos, o DNSH e as salvaguardas têm de ser verificados."}</span>
+          </p>
+        </div>
+      </SectionCard>
+
+      {tax.atividades?.length > 0 && (
+        <SectionCard title="Atividades elegíveis" subtitle="Lista oficial do EU Taxonomy Compass para o CAE/NACE desta empresa." icon={Layers}>
+          <div className="max-h-[360px] overflow-auto rounded-xl border border-white/10">
+            <table className="w-full min-w-[560px] text-left text-[11px]">
+              <thead className="sticky top-0 bg-[#0b1116] text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-white/10">
+                  <th className="px-2 py-1.5">Atividade</th>
+                  <th className="px-2 py-1.5">Setor</th>
+                  <th className="px-2 py-1.5">NACE</th>
+                  <th className="px-2 py-1.5">Objetivos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tax.atividades.map((atividade) => (
+                  <tr key={atividade.id} className="border-b border-white/5 last:border-0">
+                    <td className="max-w-[260px] px-2 py-1.5">
+                      <a href={atividade.url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1 hover:text-sky-300">
+                        <span className="line-clamp-2">{atividade.nome}</span>
+                        <ArrowUpRight size={10} className="mt-0.5 shrink-0" />
+                      </a>
+                    </td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{atividade.setor}</td>
+                    <td className="px-2 py-1.5 font-mono text-[10px] text-muted-foreground">{atividade.nace_match || atividade.nace.slice(0, 2).join(", ") || "—"}</td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {atividade.objetivos.map((objetivo) => (
+                          <Chip key={`${atividade.id}-${objetivo.id}`} tone="neutral">{objetivo.id} · {objetivo.curto || objetivo.label}</Chip>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="DNSH — sem prejuízo significativo" subtitle="Indicadores declarados que o módulo consegue associar a cada objetivo." icon={ShieldCheck}>
+          <div className="space-y-1">
+            {(tax.dnsh || []).map((item) => (
+              <div key={item.objetivo} className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1.5 text-[10.5px]">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.cor }} />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                <Chip tone={item.status === "com indicador" ? "teal" : "neutral"}>{item.status === "com indicador" ? `${item.indicadores.length} indicador(es)` : "sem evidência"}</Chip>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+        <SectionCard title="Salvaguardas mínimas" subtitle="Direitos humanos, trabalho, anticorrupção e fiscalidade." icon={CheckCircle2}>
+          <div className="space-y-1">
+            {(tax.salvaguardas || []).map((item) => (
+              <div key={item.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1.5 text-[10.5px]" title={item.descricao}>
+                <div className="flex items-center justify-between gap-2">
+                  <span>{item.label}</span>
+                  <Chip tone={item.status === "sem evidência" ? "rose" : item.status === "evidência parcial" ? "teal" : "amber"}>{item.status}</Chip>
+                </div>
+                {item.indicadores.length > 0 && <p className="mt-0.5 truncate font-mono text-[9.5px] text-muted-foreground">{item.indicadores.join(" · ")}</p>}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+
+      {(tax.ods?.length > 0 || tax.materialidade?.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {tax.ods?.length > 0 && (
+            <SectionCard title="ODS com evidência" subtitle="Objetivos de Desenvolvimento Sustentável ligados aos indicadores declarados." icon={Globe2}>
+              <div className="flex flex-wrap gap-1.5">
+                {tax.ods.map((ods) => (
+                  <span key={ods.id} className="rounded-full border px-2 py-0.5 text-[10px]" style={{ borderColor: `${ods.cor}55`, backgroundColor: `${ods.cor}14`, color: ods.cor }}>
+                    ODS {ods.id} · {ods.label}
+                  </span>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+          {tax.materialidade?.length > 0 && (
+            <SectionCard title="Temas materiais" subtitle="Ponto de partida do passo 2 do percurso IAPMEI." icon={Target}>
+              <div className="flex flex-wrap gap-1.5">
+                {tax.materialidade.map((tema) => (
+                  <Chip key={tema.tema} tone={tema.relevancia === "alta" ? "amber" : "neutral"} title={tema.origem}>{tema.tema}</Chip>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +567,16 @@ export function EsgDossie({
             </>
           )}
         </div>
+      )}
+
+      {aba === "taxonomia" && (
+        doc.taxonomia ? (
+          <SecaoTaxonomia tax={doc.taxonomia} />
+        ) : (
+          <EmptyState tone="warn">
+            A empresa ainda não tem leitura de Taxonomia UE. Recalcule o dossiê para gerar a ligação ao CAE/NACE e às atividades do Compass.
+          </EmptyState>
+        )
       )}
 
       {aba === "contratos" && (

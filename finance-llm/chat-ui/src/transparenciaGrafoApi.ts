@@ -215,6 +215,32 @@ export type TgMapaResposta = {
   precisoes: Record<string, string>;
 };
 
+export type TgConcelhoResposta = {
+  concelho: string;
+  lat?: number | null;
+  lon?: number | null;
+  total: number;
+  offset: number;
+  limite: number;
+  com_contratos: number;
+  contratos_total: number;
+  valor_contratos: number;
+  contratacao_disponivel: boolean;
+  empresas: (TgEmpresa & {
+    relacoes: Record<string, number>;
+    ligados: { no_id: string; nome?: string | null; tipo?: string | null }[];
+    contratacao?: {
+      contratos: number;
+      valor: number;
+      anos?: number[];
+      adjudicantes?: { nome?: string | null; nif?: string | null; contratos?: number; valor?: number }[];
+      disponivel?: boolean;
+    } | null;
+  })[];
+  tipos: Record<string, { label: string; curto: string; cor: string }>;
+  relacoes: Record<string, { label: string; curto: string }>;
+};
+
 export type TgJob = {
   job_id: string;
   tipo: "construir" | "indexar";

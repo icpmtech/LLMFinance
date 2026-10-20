@@ -67,6 +67,112 @@ export type EsgFonte = {
   uso: string;
 };
 
+export type EsgTaxonomiaObjetivo = {
+  id: number;
+  label: string;
+  curto: string;
+  cor: string;
+  descricao?: string;
+  n_atividades?: number;
+  atividades?: { id: number; nome: string }[];
+  tipos?: string[];
+  n?: number;
+};
+
+export type EsgTaxonomiaAtividade = {
+  id: number;
+  nome: string;
+  setor_id?: number;
+  setor: string;
+  nace: string[];
+  objetivos: { id: number; tipo: string; label?: string | null; curto?: string | null; cor?: string | null }[];
+  url?: string;
+  match?: string;
+  nace_match?: string | null;
+  especificidade?: number;
+};
+
+export type EsgTaxonomiaSalvaguarda = {
+  id: string;
+  label: string;
+  descricao: string;
+  fonte?: string | null;
+  indicadores: string[];
+  status: "evidência parcial" | "evidência limitada" | "sem evidência" | string;
+};
+
+export type EsgTaxonomiaDnsh = {
+  objetivo: number;
+  label: string;
+  cor: string;
+  indicadores: string[];
+  status: "com indicador" | "sem evidência" | string;
+};
+
+export type EsgTaxonomiaEmpresa = {
+  fonte: EsgTaxonomiaFonte;
+  nace: string;
+  secao: string;
+  match: string | null;
+  elegivel: boolean;
+  alinhamento: "sem_dados" | "nao_elegivel" | "elegivel_nao_verificado" | string;
+  alinhamento_label: string;
+  cobertura_verificacao: number;
+  n_atividades: number;
+  atividades: EsgTaxonomiaAtividade[];
+  objetivos: EsgTaxonomiaObjetivo[];
+  dnsh: EsgTaxonomiaDnsh[];
+  salvaguardas: EsgTaxonomiaSalvaguarda[];
+  ods: { id: number; label: string; cor: string; grupos: string[] }[];
+  materialidade: { tema: string; relevancia: string; origem: string }[];
+  avisos: string[];
+  url_compass: string;
+};
+
+export type EsgTaxonomiaFonte = {
+  id: string;
+  label: string;
+  url: string;
+  api: string;
+  sincronizado_em: string;
+  aviso: string;
+};
+
+export type EsgNormaRelato = {
+  id: string;
+  label: string;
+  url: string;
+  uso: string;
+  ambito: string;
+};
+
+export type EsgOds = {
+  id: number;
+  label: string;
+  cor: string;
+  grupos: string[];
+};
+
+export type EsgPasso = {
+  id: number;
+  label: string;
+  descricao: string;
+  no_iqos: string;
+};
+
+export type EsgTaxonomiaPanorama = {
+  fonte: EsgTaxonomiaFonte;
+  objetivos: EsgTaxonomiaObjetivo[];
+  total_atividades: number;
+  setores: { setor: string; n: number }[];
+  salvaguardas: { id: string; label: string; descricao: string; indicadores: string[]; fonte?: string }[];
+  dnsh: { objetivo: number; indicadores: string[] }[];
+  normas_relato: EsgNormaRelato[];
+  ods: EsgOds[];
+  passos: EsgPasso[];
+  materialidade: Record<string, string[]>;
+};
+
 export type EsgComponente = {
   id: string;
   pilar: EsgPilarId;
@@ -284,6 +390,14 @@ export type EsgEmpresa = EsgEmpresaBase & {
     por_ano: { ano: number; contratos: number; valor: number }[];
   };
   fornecedores?: EsgCarteira | null;
+  taxonomia?: EsgTaxonomiaEmpresa;
+  taxonomia_elegivel?: boolean;
+  taxonomia_alinhamento?: string;
+  taxonomia_nace?: string;
+  taxonomia_objetivos?: number[];
+  taxonomia_atividades?: number[];
+  taxonomia_cobertura_verificacao?: number;
+  ods?: number[];
   cartao_modelo?: EsgCartao;
 };
 
@@ -307,6 +421,10 @@ export type EsgEmpresaResumo = {
   ano?: number | null;
   benchmark?: EsgBenchmark | null;
   posicao?: number;
+  taxonomia_elegivel?: boolean;
+  taxonomia_alinhamento?: string;
+  taxonomia_objetivos?: number[];
+  ods?: number[];
 };
 
 export type EsgAnalitica = {
@@ -325,6 +443,15 @@ export type EsgAnalitica = {
   anos?: { ano: number; n: number; score_medio: number | null }[];
   destaques_positivos?: EsgEmpresaResumo[];
   destaques_negativos?: EsgEmpresaResumo[];
+  taxonomia?: {
+    avaliadas: number;
+    sem_dados: number;
+    elegiveis: number;
+    alinhamento: { id: string; label: string; n: number }[];
+    objetivos: EsgTaxonomiaObjetivo[];
+    ods: EsgOds[];
+    fonte: EsgTaxonomiaFonte;
+  };
   filtros?: Record<string, unknown>;
 };
 
@@ -342,6 +469,7 @@ export type EsgMeta = {
   cpv_taxonomia: { divisao: string; label: string; verde?: boolean; social?: boolean; circular?: boolean; marrom?: boolean }[];
   indicadores: EsgIndicadorDef[];
   fontes: EsgFonte[];
+  taxonomia: EsgTaxonomiaPanorama;
   aviso: string;
 };
 
@@ -483,6 +611,33 @@ export async function getEsgIndicadores(pais: string, nif: string, ano?: number)
   return getJson<{ nif: string; pais: string; total: number; itens: Record<string, unknown>[] }>(
     `/esg/empresa/${encodeURIComponent(pais)}/${encodeURIComponent(nif)}/indicadores${query({ ano })}`,
   );
+}
+
+export async function getEsgTaxonomia() {
+  return getJson<EsgTaxonomiaPanorama>("/esg/taxonomia");
+}
+
+export async function getEsgTaxonomiaAtividades(params: {
+  q?: string;
+  setor?: string;
+  objetivo?: number;
+  nace?: string;
+  size?: number;
+  from?: number;
+} = {}) {
+  return getJson<{ total: number; itens: EsgTaxonomiaAtividade[]; filtros: Record<string, unknown> }>(
+    `/esg/taxonomia/atividades${query(params)}`,
+  );
+}
+
+export async function getEsgTaxonomiaEmpresa(pais: string, nif: string) {
+  return getJson<{
+    empresa: EsgEmpresaBase;
+    ano: number;
+    taxonomia: EsgTaxonomiaEmpresa;
+    avisos: string[];
+    cartao_modelo: { versao: string; aviso: string };
+  }>(`/esg/empresa/${encodeURIComponent(pais)}/${encodeURIComponent(nif)}/taxonomia`);
 }
 
 export async function analisarCarteiraEsg(payload: {

@@ -20,6 +20,9 @@ Endpoints:
 - `GET  /esg/empresa/{pais}/{nif}/historico`— série de 3 anos + benchmark
 - `GET  /esg/empresa/{pais}/{nif}/fornecedores` — carteira de fornecedores do comprador
 - `GET  /esg/empresa/{pais}/{nif}/indicadores`  — indicadores declarados por ano/fonte
+- `GET  /esg/taxonomia`                     — Taxonomia UE: objetivos, atividades, DNSH e salvaguardas
+- `GET  /esg/taxonomia/atividades`          — pesquisa de atividades oficiais do Compass
+- `GET  /esg/empresa/{pais}/{nif}/taxonomia`— ligação da empresa à Taxonomia UE (elegibilidade)
 - `POST /esg/carteira/analise`              — analisa uma carteira de fornecedores indicada
 - `POST /esg/indicadores`                   — ingere indicadores de um relatório        (sessão)
 - `POST /esg/calcular`                      — calcula e indexa um lote de empresas      (sessão)
@@ -306,6 +309,45 @@ def esg_empresa_indicadores(
     """Indicadores guardados por ano e fonte (o que a empresa publicou)."""
     _validar_pais(pais)
     return service.indicadores_empresa(nif=nif, pais=service.pais_codigo(pais), ano=ano)
+
+
+@router.get("/taxonomia", summary="Taxonomia UE: objetivos, atividades, DNSH e salvaguardas")
+def esg_taxonomia() -> Dict[str, Any]:
+    """Panorama da Taxonomia Europeia usado pelo módulo.
+
+    Inclui os seis objetivos ambientais, as 151 atividades do Compass, as
+    salvaguardas sociais mínimas, os critérios DNSH que o módulo consegue
+    acompanhar, as normas de relato (ESRS/VSME/GRI/ISSB/TCFD/TNFD), os ODS e o
+    percurso de cinco passos do IAPMEI/UN Global Compact.
+    """
+    return service.taxonomia_panorama()
+
+
+@router.get("/taxonomia/atividades", summary="Pesquisar atividades da Taxonomia UE")
+def esg_taxonomia_atividades(
+    q: Optional[str] = Query(None, max_length=200, description="Nome, setor ou código NACE"),
+    setor: Optional[str] = Query(None, max_length=120, description="Setor do Compass (ex.: Energy)"),
+    objetivo: Optional[int] = Query(None, ge=41, le=46, description="Objetivo ambiental (41–46)"),
+    nace: Optional[str] = Query(None, max_length=20, description="CAE/NACE para testar elegibilidade"),
+    size: int = Query(20, ge=1, le=100),
+    from_: int = Query(0, ge=0, le=151, alias="from"),
+) -> Dict[str, Any]:
+    """Lista local (sem rede) das atividades oficiais e respetivos objetivos."""
+    return service.taxonomia_atividades(q=q, setor=setor, objetivo=objetivo, nace=nace, size=size, from_=from_)
+
+
+@router.get("/empresa/{pais}/{nif}/taxonomia", summary="Ligação de uma empresa à Taxonomia UE")
+async def esg_empresa_taxonomia(pais: str, nif: str) -> Dict[str, Any]:
+    """Atividades elegíveis, objetivos, DNSH e salvaguardas mínimas.
+
+    A resposta distingue sempre **elegibilidade** de **alinhamento**: sem os
+    critérios técnicos e as evidências documentadas, o estado máximo é
+    «elegível — alinhamento por verificar».
+    """
+    _validar_pais(pais)
+    return _ou_erro(
+        await run_in_threadpool(service.taxonomia_empresa, nif=nif, pais=service.pais_codigo(pais))
+    )
 
 
 @router.post("/carteira/analise", summary="Analisar uma carteira de fornecedores")

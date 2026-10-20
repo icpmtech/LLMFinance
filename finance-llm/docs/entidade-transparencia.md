@@ -206,6 +206,16 @@ Na interface, a ficha do titular tem **«Abrir ficha do político»**; a ficha d
 político em `/pessoas-iq/politicos` tem o separador **Transparência** com as
 declarações da EPT e aceita a ligação direta `?nif=<NIF>`.
 
+## Grafo da Transparência
+
+As declarações alimentam também o módulo
+[Grafo da Transparência](./transparencia-grafo.md) (`/transparencia-grafo`), que
+liga **pessoas → cargos → entidades públicas** e as **empresas** do registo de
+interesses (atividades, filiação, sociedades, apoios e serviços), com a sede de
+cada empresa geocodificada para o mapa. A construção lê
+`_normalized/declaracoes.jsonl` e `catalogo/titularidades.jsonl`; não faz novos
+pedidos à EPT.
+
 ## Notas
 
 - A plataforma publica a **publicidade dos registos de interesses**; as secções

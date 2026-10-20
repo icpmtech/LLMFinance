@@ -49,6 +49,7 @@ import {
 } from "../components/transparencia/grafo";
 import {
   construirTg,
+  getTgConcelho,
   getTgEmpresas,
   getTgGrafo,
   getTgJob,
@@ -58,6 +59,7 @@ import {
   getTgStats,
   indexarTg,
   tgExportUrl,
+  type TgConcelhoResposta,
   type TgEmpresa,
   type TgGrafoResposta,
   type TgJob,
@@ -99,6 +101,23 @@ function anosTexto(anos?: number[]): string {
   if (!anos?.length) return "—";
   if (anos.length === 1) return String(anos[0]);
   return `${anos[0]}–${anos[anos.length - 1]}`;
+}
+
+const EURO_FORMAT = new Intl.NumberFormat("pt-PT", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+});
+
+function formatarEuro(valor?: number | null): string {
+  const numero = Number(valor ?? 0);
+  if (Math.abs(numero) >= 1_000_000_000) {
+    return `${(numero / 1_000_000_000).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} mil M€`;
+  }
+  if (Math.abs(numero) >= 1_000_000) {
+    return `${(numero / 1_000_000).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} M€`;
+  }
+  return EURO_FORMAT.format(numero);
 }
 
 function formatarDetalhe(detalhe: Record<string, unknown>): { rotulo: string; valor: string }[] {
@@ -153,6 +172,8 @@ export default function TransparenciaGrafoPage() {
   const [mapaQ, setMapaQ] = useState("");
   const [mapaTipo, setMapaTipo] = useState("empresa");
   const [concelhoAtivo, setConcelhoAtivo] = useState<string | null>(null);
+  const [concelhoDetalhe, setConcelhoDetalhe] = useState<TgConcelhoResposta | null>(null);
+  const [aCarregarConcelho, setACarregarConcelho] = useState(false);
   const [aCarregarMapa, setACarregarMapa] = useState(false);
 
   // Empresas
@@ -224,6 +245,7 @@ export default function TransparenciaGrafoPage() {
     async (concelho?: string) => {
       setACarregarMapa(true);
       setConcelhoAtivo(concelho ?? null);
+      if (!concelho) setConcelhoDetalhe(null);
       try {
         setMapa(
           await getTgMapa({
@@ -242,8 +264,33 @@ export default function TransparenciaGrafoPage() {
     [mapaQ, mapaTipo],
   );
 
-  const carregarEmpresas = useCallback(
-    async (pagina = 0) => {
+  /**
+   * Abre um concelho no mapa: filtra as sedes, carrega as empresas com as
+   * relações no grafo e a contratação pública e mostra a lista no painel.
+   */
+  const abrirConcelho = useCallback(
+    async (nome: string) => {
+      setConcelhoAtivo(nome);
+      setACarregarConcelho(true);
+      try {
+        setConcelhoDetalhe(await getTgConcelho(nome, { limite: 80 }));
+      } catch (err) {
+        setErro(err instanceof Error ? err.message : "Erro ao abrir o concelho");
+        setConcelhoDetalhe(null);
+      } finally {
+        setACarregarConcelho(false);
+      }
+      await carregarMapa(nome);
+    },
+    [carregarMapa],
+  );
+
+  const fecharConcelho = useCallback(() => {
+    setConcelhoDetalhe(null);
+    void carregarMapa();
+  }, [carregarMapa]);
+
+  const carregarEmpresas = useCallback(    async (pagina = 0) => {
       setACarregarEmpresas(true);
       try {
         const dados = await getTgEmpresas({
@@ -440,6 +487,36 @@ export default function TransparenciaGrafoPage() {
             <p className="text-foreground">{contagem(detalhe.no.declaracoes)}</p>
           </div>
         </div>
+
+        {detalhe.no.nif && (
+          <div className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-2 py-1.5 text-[11px]">
+            <p className="text-[10px] uppercase tracking-wide text-sky-200/80">
+              Contratação pública · portal BASE
+            </p>
+            {detalhe.contratacao?.disponivel ? (
+              detalhe.contratacao.contratos ? (
+                <>
+                  <p className="text-foreground">
+                    {contagem(detalhe.contratacao.contratos)} contrato(s) ·{" "}
+                    <span className="font-medium">{formatarEuro(detalhe.contratacao.valor)}</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {detalhe.contratacao.adjudicantes?.length
+                      ? `Principais adjudicantes (maiores contratos): ${detalhe.contratacao.adjudicantes.join(" · ")}`
+                      : "Sem adjudicantes identificados"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{anosTexto(detalhe.contratacao.anos)}</p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">Sem contratos públicos registados para este NIF.</p>
+              )
+            ) : (
+              <p className="text-muted-foreground">
+                {detalhe.contratacao ? "Índice de contratos indisponível neste momento." : "A carregar contratação pública…"}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-1.5">
           <Button
@@ -820,7 +897,7 @@ export default function TransparenciaGrafoPage() {
                     Concelho: {concelhoAtivo}
                     <button
                       type="button"
-                      onClick={() => void carregarMapa()}
+                      onClick={fecharConcelho}
                       className="ml-1 opacity-70 hover:opacity-100"
                       aria-label="Limpar filtro de concelho"
                     >
@@ -829,7 +906,7 @@ export default function TransparenciaGrafoPage() {
                   </Badge>
                   <button
                     type="button"
-                    onClick={() => void carregarMapa()}
+                    onClick={fecharConcelho}
                     className="text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                   >
                     ver todos os concelhos
@@ -846,10 +923,11 @@ export default function TransparenciaGrafoPage() {
                   modo={modoMapa}
                   onSelecionar={(ponto) => {
                     if (ponto.id.startsWith("concelho:")) {
-                      void carregarMapa(ponto.nome);
+                      void abrirConcelho(ponto.nome);
                     } else {
+                      // A empresa abre na ficha (modal) sem sair do mapa.
                       void abrirNo(ponto.id);
-                      setAba("grafo");
+                      setFichaModal(true);
                     }
                   }}
                 />
@@ -857,42 +935,125 @@ export default function TransparenciaGrafoPage() {
 
               <Card className="!p-0">
                 <CardHeader className="border-b border-border px-3 py-2">
-                  <CardTitle icon={<MapPin size={14} />}>Concelhos com mais empresas</CardTitle>
+                  <CardTitle icon={<MapPin size={14} />}>
+                    {concelhoDetalhe ? concelhoDetalhe.concelho : "Concelhos com mais empresas"}
+                  </CardTitle>
+                  {concelhoDetalhe && (
+                    <button
+                      type="button"
+                      onClick={fecharConcelho}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="Fechar lista do concelho"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </CardHeader>
                 <CardContent className="max-h-[480px] overflow-y-auto p-3">
-                  {(mapa?.concelhos ?? []).map((item) => {
-                    const maximo = Math.max(1, ...(mapa?.concelhos ?? []).map((outro) => outro.empresas));
-                    return (
+                  {aCarregarConcelho ? (
+                    <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Loader2 size={12} className="animate-spin" /> a abrir o concelho…
+                    </p>
+                  ) : concelhoDetalhe ? (
+                    <div className="space-y-2">
+                      <p className="text-[10.5px] text-muted-foreground">
+                        {contagem(concelhoDetalhe.total)} empresa(s) · {contagem(concelhoDetalhe.com_contratos)} com
+                        contratos públicos · {formatarEuro(concelhoDetalhe.valor_contratos)} contratados
+                      </p>
+                      {concelhoDetalhe.empresas.map((empresa) => (
+                        <button
+                          key={empresa.no_id}
+                          type="button"
+                          onClick={() => {
+                            void abrirNo(empresa.no_id);
+                            setFichaModal(true);
+                          }}
+                          className="w-full rounded-lg border border-border/70 bg-muted/30 px-2 py-1.5 text-left hover:bg-muted/60"
+                          title="Abrir a ficha da empresa"
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-[11.5px] text-foreground">{empresa.nome}</span>
+                            <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">
+                              {empresa.nif ?? "—"}
+                            </span>
+                          </span>
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {Object.entries(empresa.relacoes).map(([rel, total]) => (
+                              <Badge key={rel} variant="secondary" className="!px-1.5 !py-0 text-[9.5px]">
+                                {meta?.relacoes?.[rel]?.curto ?? rel} ×{total}
+                              </Badge>
+                            ))}
+                            {!Object.keys(empresa.relacoes).length && (
+                              <span className="text-[9.5px] text-muted-foreground">sem relações no grafo</span>
+                            )}
+                          </span>
+                          {empresa.ligados.length > 0 && (
+                            <span className="mt-1 block truncate text-[10px] text-muted-foreground">
+                              {empresa.ligados
+                                .slice(0, 3)
+                                .map((ligado) => ligado.nome)
+                                .join(" · ")}
+                              {empresa.ligados.length > 3 ? ` +${empresa.ligados.length - 3}` : ""}
+                            </span>
+                          )}
+                          <span className="mt-0.5 block text-[10px]">
+                            {empresa.contratacao?.disponivel === false ? (
+                              <span className="text-muted-foreground">Contratação pública indisponível</span>
+                            ) : empresa.contratacao?.contratos ? (
+                              <span className="text-sky-300">
+                                {contagem(empresa.contratacao.contratos)} contrato(s) ·{" "}
+                                {formatarEuro(empresa.contratacao.valor)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Sem contratos públicos</span>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                      {concelhoDetalhe.total > concelhoDetalhe.empresas.length && (
+                        <p className="text-[10px] text-muted-foreground">
+                          A mostrar as {concelhoDetalhe.empresas.length} com mais contratação/ligações de{" "}
+                          {contagem(concelhoDetalhe.total)}.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {(mapa?.concelhos ?? []).map((item) => {
+                        const maximo = Math.max(1, ...(mapa?.concelhos ?? []).map((outro) => outro.empresas));
+                        return (
+                          <button
+                            key={item.concelho}
+                            type="button"
+                            onClick={() => void abrirConcelho(item.concelho)}
+                            className="mb-1.5 w-full text-left"
+                            title={`Ver as empresas de ${item.concelho}`}
+                          >
+                            <span className="flex items-center justify-between text-[11px] text-foreground">
+                              <span className="truncate">{item.concelho}</span>
+                              <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">{contagem(item.empresas)}</span>
+                            </span>
+                            <span className="mt-0.5 block h-1 overflow-hidden rounded-full bg-border">
+                              <span
+                                className="block h-full rounded-full bg-sky-400/70"
+                                style={{ width: `${Math.max(4, Math.round((item.empresas / maximo) * 100))}%` }}
+                              />
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {!mapa?.concelhos?.length && (
+                        <p className="text-[11px] text-muted-foreground">Sem concelhos para os filtros atuais.</p>
+                      )}
                       <button
-                        key={item.concelho}
                         type="button"
-                        onClick={() => void carregarMapa(item.concelho)}
-                        className="mb-1.5 w-full text-left"
-                        title={`Ver apenas ${item.concelho}`}
+                        onClick={() => void carregarMapa()}
+                        className="mt-2 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                       >
-                        <span className="flex items-center justify-between text-[11px] text-foreground">
-                          <span className="truncate">{item.concelho}</span>
-                          <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">{contagem(item.empresas)}</span>
-                        </span>
-                        <span className="mt-0.5 block h-1 overflow-hidden rounded-full bg-border">
-                          <span
-                            className="block h-full rounded-full bg-sky-400/70"
-                            style={{ width: `${Math.max(4, Math.round((item.empresas / maximo) * 100))}%` }}
-                          />
-                        </span>
+                        Limpar filtro de concelho
                       </button>
-                    );
-                  })}
-                  {!mapa?.concelhos?.length && (
-                    <p className="text-[11px] text-muted-foreground">Sem concelhos para os filtros atuais.</p>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void carregarMapa()}
-                    className="mt-2 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    Limpar filtro de concelho
-                  </button>
                 </CardContent>
               </Card>
             </div>

@@ -193,9 +193,9 @@ def test_geocodifica_a_sede_e_exclui_o_que_nao_e_lugar(grafo):
     assert vanguard["lat"] == pytest.approx(38.72509, abs=0.01)
     assert vanguard["precisao_geo"] in {"cidade", "alias"}
 
-    # «Avenida da Liberdade, 180A» não é um concelho: fica sem ponto em vez de errado.
+    # O mesmo NIF tem de ser o mesmo nó, mesmo que a natureza mude entre linhas.
     ifruu = por_nome["Estrutura de Gestão do IFRRU"]
-    assert ifruu["tipo"] == "entidade"
+    assert ifruu["tipo"] == "empresa"
     assert ifruu["lat"] is None or ifruu["concelho"] != "Avenida"
 
     # Sede estrangeira continua a entrar no mapa.
@@ -236,9 +236,59 @@ def test_mapa_agrega_por_concelho(grafo):
     assert mapa["concelhos"]
     assert mapa["concelhos"][0]["empresas"] >= 1
     assert all(ponto["lat"] is not None for ponto in mapa["pontos"])
+
+
+def test_concelho_lista_empresas_com_relacoes_e_contratacao(grafo):
+    dados = svc.concelho_detalhe("Lisboa", limite=10, incluir_contratacao=False)
+    assert dados["concelho"] == "Lisboa"
+    assert dados["total"] >= 1
+    empresa = next(item for item in dados["empresas"] if item["nome"] == "Vanguard Asset Management")
+    assert empresa["relacoes"].get("ATIVIDADE") == 1
+    assert empresa["ligados"][0]["nome"] == "Maria de Sousa Exemplo"
+    assert "contratacao" in empresa
+    assert svc.concelho_detalhe("Concelho Inexistente").get("error")
+
+
+def test_adjudicantes_da_amostra_aceita_raw_e_parsed():
+    amostra = {
+        "hits": {
+            "hits": [
+                {"_source": {"adjudicantes": {"raw": ["500000000 - Município A"], "parsed": [{"nome": "Município A"}]}}},
+                {"_source": {"adjudicantes": ["500000001 - Município B"]}},
+            ]
+        }
+    }
+    assert svc._adjudicantes_da_amostra(amostra) == ["Município A", "Município B"]
+
+
+def test_mapa_lista_entidades_sem_coordenadas(monkeypatch):
+    com_geo = {
+        "total": 1,
+        "items": [
+            {
+                "no_id": "empresa:com-geo",
+                "nome": "Com Geo",
+                "concelho": "Lisboa",
+                "lat": 38.7,
+                "lon": -9.1,
+                "ligacoes": 1,
+            }
+        ],
+    }
+    sem_geo = {
+        "total": 1,
+        "items": [{"no_id": "empresa:sem-geo", "nome": "Sem Geo", "lat": None, "lon": None}],
+    }
+
+    def fake_empresas(**kwargs):
+        return com_geo if kwargs.get("com_geo") else sem_geo
+
+    monkeypatch.setattr(svc, "empresas", fake_empresas)
+    mapa = svc.mapa(limite_sem_geo=5)
     # As entidades sem coordenadas não vão ao mapa, mas são listadas para se
     # poderem abrir na ficha (não ficam escondidas atrás de um contador).
-    assert mapa["sem_geo"] == len(mapa["sem_geo_itens"])
+    assert mapa["sem_geo"] == len(mapa["sem_geo_itens"]) == 1
+    assert mapa["sem_geo_itens"] == sem_geo["items"]
     assert all(item["lat"] is None for item in mapa["sem_geo_itens"])
 
 

@@ -1,5 +1,0 @@
-﻿== Quotas, a��es e outras partes sociais (Portugal) colunas: {}
-[{"Coluna col1": "2", "Coluna col17": "0.0001"}]
-== Quotas, a��es e outras partes sociais (Portugal) colunas: {}
-[{"Coluna col1": "2", "Coluna col17": "0.0001"}]
-mostrados 2

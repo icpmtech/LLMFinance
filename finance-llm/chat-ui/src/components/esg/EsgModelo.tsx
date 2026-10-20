@@ -6,7 +6,7 @@
  * GRI/ESRS e a taxonomia CPV que serve de proxy.
  */
 import { useState } from "react";
-import { BookOpen, Database, Leaf, Search, Server, SlidersHorizontal } from "lucide-react";
+import { BookOpen, Database, Globe2, Landmark, Leaf, ListChecks, Search, Server, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import type { EsgMeta } from "../../esgApi";
 import { Chip, EmptyState, SectionCard } from "../padroes/padroesKit";
@@ -100,6 +100,79 @@ export function EsgModelo({ meta }: { meta: EsgMeta | null }) {
               </div>
             );
           })}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Enquadramento europeu e IAPMEI" subtitle="Taxonomia UE, ODS, normas de relato e percurso de alinhamento." icon={Landmark}>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="flex items-center gap-2 text-xs font-medium text-emerald-200"><Landmark size={14} /> Taxonomia Europeia</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {num(meta.taxonomia?.total_atividades)} atividades oficiais, {num(meta.taxonomia?.objetivos?.length)} objetivos ambientais e{" "}
+              {num(meta.taxonomia?.salvaguardas?.length)} salvaguardas mínimas. Fonte: {meta.taxonomia?.fonte?.label}.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {(meta.taxonomia?.objetivos || []).map((objetivo) => (
+                <Chip key={objetivo.id} tone="neutral" title={objetivo.label}>{objetivo.id} · {objetivo.curto}</Chip>
+              ))}
+            </div>
+            <a href={meta.taxonomia?.fonte?.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[10px] text-sky-300 hover:underline">
+              {meta.taxonomia?.fonte?.url}
+            </a>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="flex items-center gap-2 text-xs font-medium text-sky-200"><ShieldCheck size={14} /> Salvaguardas e DNSH</p>
+            <div className="mt-2 grid gap-1 sm:grid-cols-2">
+              {(meta.taxonomia?.salvaguardas || []).map((item) => (
+                <div key={item.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1 text-[10px]">
+                  <p className="font-medium">{item.label}</p>
+                  <p className="truncate text-muted-foreground" title={item.descricao}>{item.descricao}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              O módulo acompanha indicadores declarados; não substitui os critérios técnicos nem a verificação oficial.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="flex items-center gap-2 text-xs font-medium text-violet-200"><Globe2 size={14} /> ODS</p>
+            <div className="mt-2 grid gap-1 sm:grid-cols-2">
+              {(meta.taxonomia?.ods || []).map((ods) => (
+                <div key={ods.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1 text-[10px]">
+                  <p style={{ color: ods.cor }}>ODS {ods.id} · {ods.label}</p>
+                  <p className="truncate text-muted-foreground">{ods.grupos.join(" · ")}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="flex items-center gap-2 text-xs font-medium text-amber-200"><BookOpen size={14} /> Normas de relato</p>
+            <div className="mt-2 space-y-1">
+              {(meta.taxonomia?.normas_relato || []).map((norma) => (
+                <a key={norma.id} href={norma.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1 text-[10px] hover:border-sky-400/30">
+                  <p className="flex items-center justify-between gap-2"><span>{norma.label}</span><span className="text-muted-foreground">{norma.ambito}</span></p>
+                  <p className="truncate text-muted-foreground">{norma.uso}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+          <p className="flex items-center gap-2 text-xs font-medium text-teal-200"><ListChecks size={14} /> Percurso IAPMEI / UN Global Compact</p>
+          <div className="mt-2 grid gap-1 md:grid-cols-5">
+            {(meta.taxonomia?.passos || []).map((passo) => (
+              <div key={passo.id} className="rounded-lg border border-white/5 bg-white/[0.02] p-2 text-[10px]">
+                <p className="font-mono text-[9px] text-emerald-300">PASSO {passo.id}</p>
+                <p className="font-medium">{passo.label}</p>
+                <p className="mt-0.5 text-muted-foreground">{passo.descricao}</p>
+                <p className="mt-1 text-sky-200/80">{passo.no_iqos}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </SectionCard>
 

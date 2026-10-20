@@ -1119,6 +1119,22 @@ export function GraphCanvas({
     return () => canvas.removeEventListener("wheel", onWheel);
   }, []);
 
+  /** `setPointerCapture` lança se o pointer não estiver ativo (eventos sintéticos). */
+  const capturarPonteiro = (element: HTMLCanvasElement, pointerId: number) => {
+    try {
+      element.setPointerCapture(pointerId);
+    } catch {
+      /* sem captura: os eventos continuam a chegar pelo elemento */
+    }
+  };
+  const libertarPonteiro = (element: HTMLCanvasElement, pointerId: number) => {
+    try {
+      element.releasePointerCapture(pointerId);
+    } catch {
+      /* idem */
+    }
+  };
+
   const toGraphCoords = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -1278,14 +1294,14 @@ export function GraphCanvas({
               setHoveredEdge(null);
               dragMovedRef.current = false;
               lastPointerRef.current = { x: event.clientX, y: event.clientY };
-              event.currentTarget.setPointerCapture?.(event.pointerId);
+              capturarPonteiro(event.currentTarget, event.pointerId);
               return;
             }
           }
           draggingRef.current = true;
           dragMovedRef.current = false;
           lastPointerRef.current = { x: event.clientX, y: event.clientY };
-          event.currentTarget.setPointerCapture?.(event.pointerId);
+          capturarPonteiro(event.currentTarget, event.pointerId);
         }}
         onPointerMove={handlePointerMove}
         onPointerUp={(event) => {
@@ -1293,7 +1309,7 @@ export function GraphCanvas({
           nodeDragRef.current = null;
           setNodeDragging(false);
           draggingRef.current = false;
-          event.currentTarget.releasePointerCapture?.(event.pointerId);
+          libertarPonteiro(event.currentTarget, event.pointerId);
         }}
         onPointerLeave={() => {
           nodeDragRef.current = null;

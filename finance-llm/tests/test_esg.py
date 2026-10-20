@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 
 from api import esg_service as esg  # noqa: E402
 from api import esg_sources as tax  # noqa: E402
+from api import esg_taxonomy as tax_eu  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -238,3 +239,55 @@ def test_carteira_reparte_valor_e_nao_inventa_score() -> None:
     assert valores == [50.0, 50.0]
     assert payload["distribuicao"]["niveis"][0]["id"] == "sem_score"
     assert payload["alertas"]
+
+
+# ---------------------------------------------------------------------------
+# Taxonomia Europeia
+# ---------------------------------------------------------------------------
+def test_taxonomia_panorama_tem_os_seis_objetivos_e_151_atividades() -> None:
+    panorama = esg.taxonomia_panorama()
+    assert len(panorama["objetivos"]) == 6
+    assert panorama["total_atividades"] == 151
+    assert {item["id"] for item in panorama["objetivos"]} == {41, 42, 43, 44, 45, 46}
+    assert panorama["salvaguardas"]
+    assert panorama["normas_relato"]
+    assert len(panorama["ods"]) == 17
+    assert len(panorama["passos"]) == 5
+
+
+def test_atividades_por_nace_prefere_o_prefixo_mais_especifico() -> None:
+    atividades = tax_eu.atividades_por_nace("42910")
+    assert atividades
+    assert all(item["especificidade"] >= 4 for item in atividades)
+    assert any("F42.9" in (item.get("nace_match") or "") for item in atividades)
+
+
+def test_taxonomia_de_empresa_elege_mas_nao_declara_alinhamento() -> None:
+    payload = esg.taxonomia_de_empresa(
+        cae="42910",
+        setor="F",
+        valores={"e_emissoes_scope1": 10, "e_agua_m3": 100, "g_codigo_etica": 1},
+    )
+    assert payload["nace"] == "F42910"
+    assert payload["elegivel"] is True
+    assert payload["alinhamento"] == "elegivel_nao_verificado"
+    assert payload["objetivos"]
+    assert payload["dnsh"]
+    assert next(item for item in payload["dnsh"] if item["objetivo"] == 41)["status"] == "com indicador"
+    assert next(item for item in payload["dnsh"] if item["objetivo"] == 43)["status"] == "com indicador"
+    assert any(item["status"] != "sem evid?ncia" for item in payload["salvaguardas"])
+    assert any(item["id"] == 16 for item in payload["ods"])
+    assert payload["avisos"]
+
+
+def test_taxonomia_sem_cae_nao_inventa_elegibilidade() -> None:
+    payload = esg.taxonomia_de_empresa(cae="", setor="", valores={})
+    assert payload["elegivel"] is False
+    assert payload["alinhamento"] == "sem_dados"
+    assert payload["atividades"] == []
+
+
+def test_pesquisa_de_atividades_por_objetivo() -> None:
+    payload = esg.taxonomia_atividades(objetivo=44, size=100)
+    assert payload["total"] > 0
+    assert all(any(item["id"] == 44 for item in atividade["objetivos"]) for atividade in payload["itens"])
