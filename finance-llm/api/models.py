@@ -1694,6 +1694,19 @@ class EntityItem(BaseModel):
     source: Optional[str] = None
     ingested_at: Optional[str] = None
     doc_id: Optional[str] = None
+    # Campos complementares do diretório Racius (quando a entidade vem de
+    # `finance_racius` e não do cadastro de entidades/contratos públicos).
+    racius_source_id: Optional[str] = None
+    racius_source_name: Optional[str] = None
+    distrito: Optional[str] = None
+    concelho: Optional[str] = None
+    forma_juridica: Optional[str] = None
+    capital_social_eur: Optional[float] = None
+    morada: Optional[str] = None
+    atividade: Optional[str] = None
+    url: Optional[str] = None
+    localizacao: Optional[str] = None
+    racius_ficha: Optional[Dict[str, Any]] = None
 
 
 class EntityDetailResponse(EntityItem):

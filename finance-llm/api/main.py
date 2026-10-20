@@ -217,6 +217,7 @@ from api.elasticsearch_client import (
     TRADEMARKS_INDEX,
     ARQUIVO_PT_INDEX,
 )
+from api.entities_service import search_entities_with_racius
 from api.rag_service import get_contracts_chat_answer
 from api.contract_agent import analyze_contract
 from api.openapi_meta import (
@@ -311,6 +312,8 @@ from api.descoberta_routes import router as descoberta_router
 # Descoberta de pessoas: uma ou várias empresas → quem nelas tem cargos, a rede de
 # cada pessoa e (com duas ou mais empresas) quem as liga (`/descoberta/pessoas/*`).
 from api.descoberta_pessoas_routes import router as descoberta_pessoas_router
+# Pesquisa PessoasIQ: pesquisa Google-like de pessoas em várias fontes (`/pessoas-iq/pesquisa/*`).
+from api.pessoas_iq_pesquisa_routes import router as pessoas_iq_pesquisa_router
 # Arquivo.pt — páginas da web preservadas pela FCT (API pública).
 from api.arquivo_routes import router as arquivo_router
 from api.cire_routes import router as cire_router
@@ -883,6 +886,8 @@ app.include_router(rigorbiz_router)
 # a análise do Hermes (`/descoberta/*`).
 app.include_router(descoberta_router)
 app.include_router(descoberta_pessoas_router)
+# Pesquisa PessoasIQ: pesquisa Google-like de pessoas em várias fontes (`/pessoas-iq/pesquisa/*`).
+app.include_router(pessoas_iq_pesquisa_router)
 # Arquivo.pt: recolha e pesquisa de páginas preservadas (`/arquivo/*`).
 app.include_router(arquivo_router)
 
@@ -2007,7 +2012,7 @@ def entities_search_get(
     from_: int = Query(0, ge=0, alias="from"),
 ):
     """Pesquisa de empresas no cadastro de entidades importado."""
-    res = search_entities(
+    res = search_entities_with_racius(
         q=q,
         country=country,
         only_with_nif=only_with_nif,
@@ -2038,7 +2043,7 @@ def entities_search_get(
 @app.post("/entities/search", response_model=EntitySearchResponse)
 def entities_search_post(req: EntitySearchRequest):
     """Pesquisa de empresas no cadastro de entidades (variante POST)."""
-    res = search_entities(
+    res = search_entities_with_racius(
         q=req.q,
         country=req.country,
         only_with_nif=req.only_with_nif,
@@ -2221,6 +2226,7 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/contracts/ecologicos")
 @app.get("/empresas-iq")
 @app.get("/pessoas-iq")
+@app.get("/pessoas-iq/pesquisa")
 @app.get("/pessoas-iq/politicos")
 @app.get("/pessoas-iq/autarquicas")
 @app.get("/pessoas-iq/vereadores")

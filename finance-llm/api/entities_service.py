@@ -25,6 +25,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
+from api.elasticsearch_client import search_directory, search_entities
+from api.racius_service import INDEX as RACIUS_INDEX, available as racius_available
+
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -204,6 +207,175 @@ def entity_doc_id(doc: Dict[str, Any]) -> str:
     )
     digest = hashlib.sha1(canonical.encode("utf-8")).hexdigest()
     return f"nome:{digest[:24]}"
+
+
+#: Campos do Racius que queremos expor como complemento no cadastro de entidades.
+_RACIUS_ITEM_FIELDS: tuple = (
+    "nome",
+    "nif",
+    "concelho",
+    "distrito",
+    "forma_juridica",
+    "capital_social_eur",
+    "morada",
+    "atividade",
+    "cae",
+    "url",
+    "ficha",
+    "scraped_at",
+    "source_id",
+    "source_name",
+    "localizacao",
+)
+
+
+def _normalize_racius_item(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte um documento do Racius num dicionário compatível com EntityItem."""
+    item: Dict[str, Any] = {}
+    for name in _RACIUS_ITEM_FIELDS:
+        value = source.get(name)
+        if value not in (None, "", [], {}):
+            item[name] = value
+    item["source"] = "racius"
+    item["has_nif"] = bool(item.get("nif"))
+    item["name"] = item.get("nome", "(sem nome)")
+    item["country"] = "Portugal"
+    item["country_code"] = "PT"
+    item["contracts_count"] = 0
+    item["as_adjudicante_count"] = 0
+    item["as_adjudicatario_count"] = 0
+    item["total_value"] = 0.0
+    item["as_adjudicante_value"] = 0.0
+    item["cae_principal"] = item.pop("cae", None)
+    item["ingested_at"] = item.get("scraped_at")
+    item["racius_source_id"] = item.pop("source_id", None)
+    item["racius_source_name"] = item.pop("source_name", None)
+    item["racius_ficha"] = item.pop("ficha", None)
+    item["doc_id"] = source.get("_id") or source.get("item_id")
+    return item
+
+
+def _deduplicate_and_merge(
+    entities: List[Dict[str, Any]],
+    racius: List[Dict[str, Any]],
+    *,
+    prefer_racius_for_missing: bool = True,
+) -> List[Dict[str, Any]]:
+    """Junta entidades do cadastro com Racius, removendo duplicados por NIF.
+
+    Estratégia:
+    1. Preserva a ordem e prioridade do cadastro de entidades (elas têm dados de
+       contratos públicos, mais relevantes para a plataforma).
+    2. Empresas do Racius que já existem no cadastro são descartadas, a menos
+       que seja para enriquecer campos vazios (ex.: CAE, morada) — isso é
+       controlado por `prefer_racius_for_missing`.
+    3. Empresas do Racius sem NIF ou cujo NIF não existe no cadastro são
+       adicionadas no final como complemento.
+    """
+    seen: Dict[str, Dict[str, Any]] = {}
+    result: List[Dict[str, Any]] = []
+
+    for item in entities:
+        nif = str(item.get("nif") or "").strip()
+        result.append(item)
+        if nif:
+            seen[nif] = item
+
+    for raw in racius:
+        item = _normalize_racius_item(raw)
+        nif = str(item.get("nif") or "").strip()
+        if nif and nif in seen:
+            if prefer_racius_for_missing:
+                existing = seen[nif]
+                for key in ("cae_principal", "morada", "atividade", "localizacao"):
+                    if not existing.get(key) and item.get(key):
+                        existing[key] = item[key]
+                for racius_key in ("distrito", "concelho", "forma_juridica", "capital_social_eur"):
+                    if existing.get(racius_key) is None and item.get(racius_key) is not None:
+                        existing[racius_key] = item[racius_key]
+                if not existing.get("url") and item.get("url"):
+                    existing["url"] = item["url"]
+            continue
+        result.append(item)
+
+    return result
+
+
+def search_entities_with_racius(
+    *,
+    q: Optional[str] = None,
+    country: Optional[str] = None,
+    only_with_nif: Optional[bool] = None,
+    min_contracts: Optional[int] = None,
+    max_contracts: Optional[int] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    role: Optional[str] = "all",
+    cae: Optional[str | list[str]] = None,
+    cpv: Optional[str] = None,
+    sort_by: Optional[str] = "total_value",
+    sort_order: Optional[str] = "desc",
+    size: int = 20,
+    from_: int = 0,
+    racius_size: int = 50,
+) -> Dict[str, Any]:
+    """Pesquisa o cadastro de entidades e complementa com resultados do Racius.
+
+    Os resultados do cadastro vêm primeiro (ordenados pelos critérios habituais).
+    Empresas do Racius que não existem no cadastro são adicionadas depois,
+    sem duplicar entradas por NIF.
+    """
+    entities = search_entities(
+        q=q,
+        country=country,
+        only_with_nif=only_with_nif,
+        min_contracts=min_contracts,
+        max_contracts=max_contracts,
+        min_value=min_value,
+        max_value=max_value,
+        role=role,
+        cae=cae,
+        cpv=cpv,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        size=size,
+        from_=from_,
+    )
+
+    if entities.get("error"):
+        return entities
+
+    racius_items: List[Dict[str, Any]] = []
+    if racius_available():
+        racius_result = search_directory(
+            RACIUS_INDEX,
+            q=q,
+            sort="relevance" if q else "recent",
+            size=racius_size,
+            offset=0,
+            search_fields=("nome^4", "nif^2", "morada^2", "atividade", "acerca", "localizacao", "data.*"),
+        )
+        if not racius_result.get("error"):
+            racius_items = racius_result.get("items", [])
+
+    merged = _deduplicate_and_merge(entities.get("items", []), racius_items)
+
+    total = len(merged)
+    page = merged[from_: from_ + size]
+
+    notes = list(entities.get("notes", []))
+    racius_count = len([it for it in merged if it.get("source") == "racius"])
+    if racius_count:
+        notes.append(f"+{racius_count} resultado(s) do diretório Racius.")
+
+    return {
+        "query": q,
+        "total": total,
+        "items": page,
+        "from": from_,
+        "size": size,
+        "notes": notes,
+    }
 
 
 def iter_normalized_entities(path: Optional[Path] = None) -> Iterator[Dict[str, Any]]:

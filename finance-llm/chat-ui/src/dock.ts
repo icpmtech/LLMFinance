@@ -144,6 +144,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "pessoas-iq-pesquisa",
+    label: "Pesquisa PessoasIQ",
+    hint: "Pesquisa Google-like de pessoas em várias fontes",
+    icon: Search,
+    gradient: "from-rose-200 via-rose-400 to-red-500",
+    accent: "244,63,94",
+  },
+  {
     id: "pessoas-iq-politicos",
     label: "Políticos Portugal",
     hint: "Deputados do Parlamento.pt e políticos da Wikipédia PT",

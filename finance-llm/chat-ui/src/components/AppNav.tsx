@@ -114,6 +114,7 @@ export type AppView =
   | "entities-compare"
   | "empresas-iq"
   | "pessoas-iq"
+  | "pessoas-iq-pesquisa"
   | "descoberta-pessoas"
   | "companies-global"
   | "crm"
@@ -237,6 +238,7 @@ const DYNAMIC_VIEW_BASE: Record<string, string> = {
   "governo-ficha": "governo",
   "governo-pessoa": "governo",
   "governo-area": "governo",
+  "pessoas-iq-pesquisa": "pessoas-iq-pesquisa",
 };
 
 function appItem(app: DockApp): NavItem {
