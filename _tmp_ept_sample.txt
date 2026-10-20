@@ -1,0 +1,274 @@
+﻿{
+ "interesses": [
+  {
+   "tipo": "Atividades profissionais, cargos e fun��es",
+   "valores": {
+    "Cargo/Fun��o/Atividade": "Presidente",
+    "Entidade": "EStrutura de gest�o do IFRRU 2020",
+    "Natureza e �rea de atua��o da entidade": "Setor publico",
+    "Local da sede": "Avenida columbano bordal pinheiro m�5; 7� andar; Lisboa",
+    "Remunera��o (se aplic�vel)": "Sim",
+    "Data de in�cio": "2015-07-23T13:40:00Z",
+    "Data de termo": "2024-04-29T23:00:00Z",
+    "NIF/NIPC": "600086739"
+   }
+  },
+  {
+   "tipo": "Atividades profissionais, cargos e fun��es",
+   "valores": {
+    "Cargo/Fun��o/Atividade": "Chief investment ofiicer",
+    "Entidade": "Vanguard asset managemnt",
+    "Natureza e �rea de atua��o da entidade": "Imobili�rio",
+    "Local da sede": "Avenida da liberdade 180A",
+    "Remunera��o (se aplic�vel)": "Sim",
+    "Data de in�cio": "2024-04-30T23:00:00Z",
+    "Data de termo": "2026-09-30T13:48:00Z",
+    "NIF/NIPC": "514114215"
+   }
+  }
+ ]
+}
+SECOES:
+[
+ {
+  "chave": "dab5b2ca-921a-4c8a-950a-5413e46625aa",
+  "titulo": "Anexos",
+  "campos": [],
+  "tabelas": [],
+  "subsecoes": []
+ },
+ {
+  "chave": "358af850-b811-494a-8a38-81eadaf9d695",
+  "titulo": "Facto determinante da declara��o",
+  "campos": [
+   {
+    "chave": "22cdd43f-aebd-43c1-8b47-0eafedb644c8",
+    "rotulo": "",
+    "valor": null
+   },
+   {
+    "chave": "c83b94a9-5d7a-4061-a001-0c3522d2e533",
+    "rotulo": "",
+    "valor": null
+   },
+   {
+    "chave": "6a4b3e2d-c82c-49f8-a1c0-5ad86ddb0d67",
+    "rotulo": "",
+    "valor": null
+   },
+   {
+    "chave": "f649defc-e001-4866-9c2b-01ed9fa80eef",
+    "rotulo": "Natureza da declara��o",
+    "valor": "Inicial"
+   },
+   {
+    "chave": "418cdc5e-7f77-4922-b0b7-3ab6b2f84c6f",
+    "rotulo": "Data de in�cio de fun��es",
+    "valor": "2026-01-27T13:55:00Z"
+   },
+   {
+    "chave": "5783eba6-4662-4e01-a1ab-14dbe7bb693c",
+    "rotulo": "Data de cessa��o de fun��es",
+    "valor": "2027-12-31T13:56:00Z"
+   },
+   {
+    "chave": "b8de313d-cc0d-445d-b211-368794d7a2df",
+    "rotulo": "Exerc�cio de fun��es em regime de exclusividade",
+    "valor": "Sim"
+   }
+  ],
+  "tabelas": [],
+  "subsecoes": []
+ },
+ {
+  "chave": "7df770a3-e06b-4448-b5ac-c1b162c80fcc",
+  "titulo": "Dados pessoais, morada e contactos",
+  "campos": [],
+  "tabelas": [],
+  "subsecoes": [
+   {
+    "chave": "56786e7c-a8bb-43aa-9250-eaf8fa82002f",
+    "titulo": "Dados pessoais",
+    "campos": [
+     {
+      "chave": "c0a2f813-fb84-4923-b7a1-55cef0c5fc1b",
+      "rotulo": "Nome completo",
+      "valor": "Abel Artur Cruz Torres Mascarenhas"
+     },
+     {
+      "chave": "54854c64-5845-40bb-a536-8c03da55420a",
+      "rotulo": "Sexo",
+      "valor": "Masculino"
+     },
+     {
+      "chave": "a5bf96eb-8af0-4c05-bb76-a15f57f8490d",
+      "rotulo": "Naturalidade",
+      "valor": "Portuguesa"
+     },
+     {
+      "chave": "25fa81a1-70d2-4fca-8292-4717ba2e8cdb",
+      "rotulo": "Data de nascimento",
+      "valor": "1973-04-24T00:00:00"
+     },
+     {
+      "chave": "ed9a8413-b9f0-4d32-89bd-03593c826211",
+      "rotulo": "Estado civil",
+      "valor": "Divorciado(a)"
+     },
+     {
+      "chave": "ed9a8413-b9f0-4d32-89bd-03593c826212",
+      "rotulo": "Regime de bens",
+      "valor": null
+     },
+     {
+      "chave": "ed9a8413-b9f0-4d32-89bd-03593c826213",
+      "rotulo": "Nome do c�njuge ou unido/a de facto",
+      "valor": null
+     }
+    ],
+    "tabelas": [],
+    "subsecoes": []
+   },
+   {
+    "chave": "6a3c614b-2c9e-42f3-b5af-49cc8b078204",
+    "titulo": "Morada",
+    "campos": [
+     {
+      "chave": "2b75bfd8-392e-49d7-866f-1353a5e765c3",
+      "rotulo": "Concelho",
+      "valor": "Loures"
+     }
+    ],
+    "tabelas": [],
+    "subsecoes": []
+   },
+   {
+    "chave": "b437d8f1-e201-4fc0-a304-e5f78ca1a063",
+    "titulo": "Contactos",
+    "campos": [],
+    "tabelas": [],
+    "subsecoes": []
+   }
+  ]
+ },
+ {
+  "chave": "ecc58cb2-0808-4d2f-bb2b-64b87617a4ac",
+  "titulo": "Rendimentos",
+  "campos": [],
+  "tabelas": [],
+  "subsecoes": [
+   {
+    "chave": "45b8a3d2-374f-4531-b167-ac62b950ad6b",
+    "titulo": "Rendimentos",
+    "campos": [],
+    "tabelas": [
+     {
+      "chave": "da9c415a-e950-4ce9-ab58-5ce1c1b5af53",
+      "nome": "Trabalho dependente",
+      "colunas": {
+       "col1": "Valor monet�rio",
+       "col2": "Designa��o da entidade pagadora",
+       "col3": "NIF/NIPC",
+       "col4": "Rendimento obtido no estrangeiro?"
+      },
+      "registos": [
+       {
+        "Rendimento obtido no estrangeiro?": "N�o"
+       },
+       {
+        "Rendimento obtido no estrangeiro?": "N�o"
+       },
+       {
+        "Rendimento obtido no estrangeiro?": "N�o"
+       }
+      ],
+      "total": 3
+     }
+    ],
+    "subsecoes": []
+   },
+   {
+    "chave": "1a24058c-9ebe-4c14-9876-e5181310fb19",
+    "titulo": "Ativo patrimonial",
+    "campos": [],
+    "tabelas": [],
+    "subsecoes": [
+     {
+      "chave": "888d8680-77d1-40ef-8fac-d69586bf37ba",
+      "titulo": "Ativo patrimonial � Portugal",
+      "campos": [],
+      "tabelas": [
+       {
+        "chave": "112c6561-4a51-4f79-b637-bbd8d2c0c74c",
+        "nome": "Patrim�nio imobili�rio (Portugal)",
+        "colunas": {},
+        "registos": [],
+        "total": 0
+       },
+       {
+        "chave": "70fdd906-58d5-4682-967d-90ae90805436",
+        "nome": "Quotas, a��es e outras partes sociais (Portugal)",
+        "colunas": {},
+        "registos": [],
+        "total": 0
+       },
+       {
+        "chave": "53168cfb-433e-41e6-9b23-33c1eac7fa6f",
+        "nome": "Barcos, aeronaves e ve�culos (Portugal)",
+        "colunas": {},
+        "registos": [
+         {
+          "Coluna col1": "2"
+         }
+        ],
+        "total": 1
+       },
+       {
+        "chave": "8a7cfdae-1d47-41f9-a366-5ba020c1b90f",
+        "nome": "Outros elementos do ativo patrimonial (Portugal)",
+        "colunas": {},
+        "registos": [],
+        "total": 0
+       }
+      ],
+      "subsecoes": [
+       {
+        "chave": "05d711d3-08cd-4944-8be9-dc5f40a201fc",
+        "titulo": "Aplica��es e dep�sitos",
+        "campos": [],
+        "tabelas": [
+         {
+          "chave": "1a5d2580-aaf3-4874-9e20-68ce10671263",
+          "nome": "Carteiras de t�tulos (Portugal)",
+          "colunas": {},
+          "registos": [],
+          "total": 0
+         },
+         {
+          "chave": "e498015f-062e-4fcd-93a8-c5f1393f568b",
+          "nome": "Contas banc�rias a prazo (Portugal)",
+          "colunas": {},
+          "registos": [],
+          "total": 0
+         },
+         {
+          "chave": "7bf6ccdd-f797-4339-8c76-18a248882016",
+          "nome": "Aplica��es financeiras (Portugal)",
+          "colunas": {},
+          "registos": [],
+          "total": 0
+         }
+        ],
+        "subsecoes": []
+       },
+       {
+        "chave": "879401c9-2273-465a-91c7-7d8f080da762",
+        "titulo": "Sec��o",
+        "campos": [],
+        "tabelas": [],
+        "subsecoes": [
+         {
+          "chave": "873b46af-f3a5-4329-9aa0-a04fd1114467",
+          "titulo": "Sec��o",
+          "campos": [],
+     

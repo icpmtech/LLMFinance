@@ -1,0 +1,10 @@
+﻿== entidades list 4461
+{"id": "908", "nome": "ABMG - �guas do Baixo Mondego e G�ndara, E.I.M., S.A."}
+== cargos list 292
+{"id": "242", "nome": "Acionista"}
+== orgaos list 160
+{"id": "180", "nome": "Administrador"}
+== titulares list 12372
+{"id": "11697", "nome": "Abel Artur Cruz Torres Mascarenhas"}
+titularidade: {"titularidade_id": "1078", "titular_id": "963", "titular": "Em�lio Augusto Ferreira Torr�o", "entidade_id": "908", "entidade": "ABMG - �guas do Baixo Mondego e G�ndara, E.I.M., S.A.", "cargo_id": "18", "cargo": "Vogal", "inicio": "2023-01-11T00:00:00", "fim": "2023-12-31T00:00:00"}
+titularidade: {"titularidade_id": "1077", "titular_id": "4110", "titular": "M�rio Jorge da Costa Rodrigues Nunes", "entidade_id": "908", "entidade": "ABMG - �guas do Baixo Mondego e G�ndara, E.I.M., S.A.", "cargo_id": "12", "cargo": "Presidente", "inicio": "2023-01-11T00:00:00", "fim": "2023-12-31T00:00:00"}

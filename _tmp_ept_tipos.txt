@@ -1,0 +1,21 @@
+﻿declaracoes 11257
+
+== Atividades profissionais, cargos e fun��es 15464
+  chaves: {'Cargo/Fun��o/Atividade': 15464, 'Entidade': 15464, 'Natureza e �rea de atua��o da entidade': 15464, 'Local da sede': 15464, 'Remunera��o (se aplic�vel)': 15464, 'Data de in�cio': 15464, 'Data de termo': 8678, 'NIF/NIPC': 15453, 'Coluna col8': 7665}
+  exemplo: {"Cargo/Fun��o/Atividade": "Presidente", "Entidade": "EStrutura de gest�o do IFRRU 2020", "Natureza e �rea de atua��o da entidade": "Setor publico", "Local da sede": "Avenida columbano bordal pinheiro m�5; 7� andar; Lisboa", "Remunera��o (se aplic�vel)": "Sim", "Data de in�cio": "2015-07-23T13:40:00Z", "Data de termo": "2024-04-29T23:00:00Z", "NIF/NIPC": "600086739"}
+
+== Sociedades 1856
+  chaves: {'Coluna col1': 1856, 'Coluna col2': 1856, 'Coluna col3': 1856, 'Coluna col4': 1856, 'Coluna col5': 1856, 'Coluna col6': 1856, 'Coluna col7': 1856, 'Coluna col8': 1463}
+  exemplo: {"Coluna col1": "FRUCAR", "Coluna col2": "COMERCIO DE FRUTA", "Coluna col3": "CARRAZEDA DE ANSIAES", "Coluna col4": "6259901", "Coluna col5": "0.1225", "Coluna col6": "2", "Coluna col7": "502839619", "Coluna col8": "3"}
+
+== Apoios ou benef�cios 1205
+  chaves: {'Coluna col1': 1205, 'Coluna col2': 1205, 'Coluna col3': 1205, 'Coluna col4': 1205, 'Coluna col5': 1205, 'Coluna col6': 1205, 'Coluna col8': 1139, 'Coluna col7': 541, 'Coluna col9': 23}
+  exemplo: {"Coluna col1": "Desemprego", "Coluna col2": "Instituto da Seguran�a Social", "Coluna col3": "Seguran�a Social", "Coluna col4": "Desemprego", "Coluna col5": "2025-11-18T00:00:00Z", "Coluna col6": "505305500", "Coluna col8": "0"}
+
+== Servi�os prestados 1074
+  chaves: {'Coluna col1': 1074, 'Coluna col2': 1074, 'Coluna col3': 1074, 'Coluna col4': 1074, 'Coluna col5': 1074, 'Coluna col6': 1072, 'Coluna col7': 685, 'Coluna col8': 293}
+  exemplo: {"Coluna col1": "J�ri de atribui��o de bolsas", "Coluna col2": "Funda��o para a Ci�ncia e a Tecnologia", "Coluna col3": "Membro do J�ri", "Coluna col4": "Lisboa", "Coluna col5": "2023-06-02T23:00:00Z", "Coluna col6": "503904040", "Coluna col7": "2025-06-02T14:31:00Z", "Coluna col8": "false"}
+
+== Outras situa��es 432
+  chaves: {'Coluna col1': 432, 'Coluna col2': 222, 'Coluna col4': 424, 'Coluna col5': 432, 'Coluna col6': 261, 'Coluna col3': 63}
+  exemplo: {"Coluna col1": "6", "Coluna col2": "2021-08-01T16:19:00Z", "Coluna col4": "Coordenador de Projecto Cient�fico EU-Adapt", "Coluna col5": "Outra situa��o", "Coluna col6": "false"}

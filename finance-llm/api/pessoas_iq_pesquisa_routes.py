@@ -15,8 +15,9 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 
 from api import pessoas_iq_pesquisa_service as service
 from api.auth_routes import CurrentSession, optional_session
@@ -26,6 +27,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pessoas-iq/pesquisa", tags=["pessoas-iq-pesquisa"])
 
 Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
+
+
+def _spa_para_browser(request: Request) -> Optional[Response]:
+    """Devolve a SPA quando o pedido vem de um browser, senão `None`.
+
+    `/pessoas-iq/pesquisa` é, ao mesmo tempo, a página do módulo e o endpoint
+    JSON: o `fetch` da aplicação pede JSON, um browser a abrir o endereço pede
+    HTML. O `import` é local porque `api.main` importa este módulo.
+    """
+    aceita = request.headers.get("accept") or ""
+    if "text/html" not in aceita:
+        return None
+    from api.main import spa_page_response
+
+    return spa_page_response(str(request.url.path))
 
 
 @router.get("/fontes", summary="Fontes disponíveis para a pesquisa de pessoas")
@@ -50,13 +66,17 @@ async def pesquisa_suggest(
 
 @router.get("", summary="Pesquisa unificada de pessoas")
 async def pesquisa_pessoas(
+    request: Request,
     q: Annotated[Optional[str], Query(description="Nome, NIF, cargo ou parte do nome")] = None,
     fonte: Annotated[Optional[str], Query(description="Fonte: todas, pessoas, politicos, devedores, municipios, governo, ept")] = "todas",
     page: Annotated[int, Query(ge=1, le=100)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     session: Session = None,
-) -> Dict[str, Any]:
+) -> Any:
     """Pesquisa Google-like de pessoas em todas as fontes conhecidas."""
+    pagina = _spa_para_browser(request)
+    if pagina is not None:
+        return pagina
     try:
         result = await run_in_threadpool(
             service.pesquisar,

@@ -345,6 +345,19 @@ EPT_TITULARIDADES_INDEX = "finance_ept_titularidades"
 EPT_DECLARACOES_INDEX = "finance_ept_declaracoes"
 EPT_RECOLHAS_INDEX = "finance_ept_recolhas"
 
+# **Grafo da Transparência** — rede de pessoas, cargos, entidades públicas e
+# empresas extraída das declarações da EPT (`api/transparencia_grafo_service.py`):
+#
+# - `finance_ept_grafo_nos`: um nó por pessoa, cargo, entidade pública ou empresa,
+#   com o grau, os anos em que aparece e, nas empresas, a sede geocodificada
+#   (`location` como `geo_point`) para o mapa;
+# - `finance_ept_grafo_arestas`: uma aresta por par de nós e relação (exerce o
+#   cargo, cargo na entidade, atividade em, participação em, apoio, serviço);
+# - `finance_ept_grafo_recolhas`: o manifesto da última construção do grafo.
+TRANSPARENCIA_GRAFO_NOS_INDEX = "finance_ept_grafo_nos"
+TRANSPARENCIA_GRAFO_ARESTAS_INDEX = "finance_ept_grafo_arestas"
+TRANSPARENCIA_GRAFO_RECOLHAS_INDEX = "finance_ept_grafo_recolhas"
+
 # **Arquivo.pt** — páginas da web preservadas pelo Arquivo.pt (FCT). Cada
 # documento é uma captura de uma página, recolhida via API pública de pesquisa
 # de texto completo (`textsearch`) ou CDX (`wayback/cdx`). Os campos principais
@@ -494,6 +507,18 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     EPT_DECLARACOES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    TRANSPARENCIA_GRAFO_NOS_INDEX: {
+        # Nomes de pessoas, entidades e empresas escrevem-se com acentos.
         "analysis": {
             "analyzer": {
                 "world_folding": {

@@ -14,7 +14,7 @@
  *
  * Ao alterar este ficheiro, incrementar `VERSION`.
  */
-const VERSION = "v7";
+const VERSION = "v8";
 /** Prefixos de cache do IQ OS (e o antigo, para limpar instalações anteriores). */
 const CACHE_PREFIXES = ["iq-os-", "finance-llm-"];
 const SHELL_CACHE = `iq-os-shell-${VERSION}`;
@@ -40,6 +40,7 @@ const SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
+  "/favicon.ico",
   "/favicon.svg",
   "/favicon-32.png",
   "/apple-touch-icon.png",
