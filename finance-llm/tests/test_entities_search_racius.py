@@ -130,7 +130,7 @@ class TestSearchEntitiesWithRacius:
             "search_entities",
             lambda **_: {"error": "Elasticsearch indisponível", "items": [], "total": 0},
         )
-        monkeypatch.setattr(service.racius_service, "available", lambda: False)
+        monkeypatch.setattr(service, "racius_available", lambda: False)
 
         res = service.search_entities_with_racius(q="alpha", size=10)
 
@@ -146,7 +146,7 @@ class TestSearchEntitiesWithRacius:
                 "notes": [],
             },
         )
-        monkeypatch.setattr(service.racius_service, "available", lambda: True)
+        monkeypatch.setattr(service, "racius_available", lambda: True)
 
         racius_hits = [
             _racius(nome="Beta, Lda", nif="100000002"),
@@ -180,7 +180,7 @@ class TestSearchEntitiesWithRacius:
                 "notes": [],
             },
         )
-        monkeypatch.setattr(service.racius_service, "available", lambda: False)
+        monkeypatch.setattr(service, "racius_available", lambda: False)
 
         res = service.search_entities_with_racius(q="alpha", size=10)
 

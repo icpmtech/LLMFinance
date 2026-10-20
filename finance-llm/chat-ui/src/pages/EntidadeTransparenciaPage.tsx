@@ -273,6 +273,21 @@ function DeclaracaoDetalhe({
 
 /* --------------------------------------------------------------- Página */
 
+/**
+ * Caminho canónico da página, para o URL refletir a navegação interna.
+ *
+ * A ficha também tem um endereço próprio (`/entidade-transparencia/titular/<id>`)
+ * que serve de link partilhável; a partir do momento em que a página está
+ * aberta, os parâmetros (`?titular=`, `?declaracao=`) vivem na raiz do módulo,
+ * e voltar a um deles não pode deixar o URL preso no endereço da ficha.
+ */
+function caminhoDaPagina(): string {
+  if (/^\/entidade-transparencia\/titular\/[^/]+\/?$/.test(window.location.pathname)) {
+    return "/entidade-transparencia";
+  }
+  return window.location.pathname;
+}
+
 export default function EntidadeTransparenciaPage() {
   const [aba, setAba] = useState<Aba>("pesquisa");
   const [meta, setMeta] = useState<EptMeta | null>(null);
@@ -350,7 +365,7 @@ export default function EntidadeTransparenciaPage() {
       params.set("titular", id);
       if (declaracaoId) params.set("declaracao", declaracaoId);
       else params.delete("declaracao");
-      window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+      window.history.replaceState(null, "", `${caminhoDaPagina()}?${params.toString()}`);
       if (declaracaoId) {
         void abrirDeclaracao(declaracaoId);
       } else {
@@ -372,7 +387,7 @@ export default function EntidadeTransparenciaPage() {
       setDeclaracao(dados);
       const params = new URLSearchParams(window.location.search);
       if (params.get("titular")) params.set("declaracao", id);
-      window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+      window.history.replaceState(null, "", `${caminhoDaPagina()}?${params.toString()}`);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao abrir a declaração");
     } finally {
@@ -392,7 +407,11 @@ export default function EntidadeTransparenciaPage() {
       }
     })();
     const params = new URLSearchParams(window.location.search);
-    const titularParam = params.get("titular");
+    // Duas formas de abrir a ficha: `?titular=<id>` (links internos) e
+    // `/entidade-transparencia/titular/<id>` (link partilhável, servido como
+    // SPA pelo backend quando quem pede aceita HTML).
+    const daRota = window.location.pathname.match(/^\/entidade-transparencia\/titular\/([^/]+)\/?$/);
+    const titularParam = params.get("titular") || (daRota ? decodeURIComponent(daRota[1]) : null);
     if (titularParam) {
       void abrirTitular(titularParam, params.get("declaracao"));
     } else {
@@ -924,7 +943,7 @@ export default function EntidadeTransparenciaPage() {
                           const params = new URLSearchParams(window.location.search);
                           params.delete("titular");
                           params.delete("declaracao");
-                          window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`);
+                          window.history.replaceState(null, "", `${caminhoDaPagina()}${params.toString() ? `?${params}` : ""}`);
                         }}
                         className="rounded-lg border border-border p-1.5 text-muted-foreground hover:text-foreground"
                         aria-label="Fechar ficha"
@@ -1056,7 +1075,7 @@ export default function EntidadeTransparenciaPage() {
                           setDeclaracao(null);
                           const params = new URLSearchParams(window.location.search);
                           params.delete("declaracao");
-                          window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`);
+                          window.history.replaceState(null, "", `${caminhoDaPagina()}${params.toString() ? `?${params}` : ""}`);
                         }}
                       />
                     </CardContent>

@@ -34,7 +34,7 @@ import json
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -48,6 +48,25 @@ router = APIRouter(prefix="/entidade-transparencia", tags=["entidade-transparenc
 
 Session = Annotated[CurrentSession, Depends(require_session)]
 ReadSession = Annotated[CurrentSession, Depends(optional_session)]
+
+
+def _spa_para_browser(request: Request) -> Optional[Response]:
+    """Devolve a SPA quando o pedido vem de um browser (deep link), senão `None`.
+
+    O endereço da ficha do titular é o mesmo para a API e para a página: o
+    `fetch` do frontend (e qualquer cliente HTTP) pede JSON; um browser a abrir
+    o link diretamente envia `Accept: text/html` e recebe a aplicação, que
+    volta a pedir a ficha por JSON. Sem isto, clicar num resultado abria um
+    JSON em vez da ficha.
+
+    O `import` é local porque `api.main` importa este módulo.
+    """
+    aceita = request.headers.get("accept") or ""
+    if "text/html" not in aceita:
+        return None
+    from api.main import spa_page_response
+
+    return spa_page_response(str(request.url.path))
 
 
 class EptRecolherRequest(BaseModel):
@@ -320,14 +339,18 @@ def ept_job(job_id: str, session: ReadSession = None) -> Dict[str, Any]:
 @router.get("/titular/{titular_id}")
 def ept_titular(
     titular_id: str,
+    request: Request,
     ao_vivo: bool = Query(
         True,
         description="Se ainda não estiver indexado, ler a ficha na EPT (mais lento)",
     ),
     limite: int = Query(100, ge=1, le=200),
     session: ReadSession = None,
-) -> Dict[str, Any]:
+) -> Any:
     """Ficha do titular: posições, declarações e ligação ao PessoasIQ."""
+    pagina = _spa_para_browser(request)
+    if pagina is not None:
+        return pagina
     try:
         return ept.titular_detail(titular_id, ao_vivo=ao_vivo, limite=limite)
     except Exception as exc:  # noqa: BLE001

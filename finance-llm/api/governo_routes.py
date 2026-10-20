@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from api import governo_service
@@ -25,6 +26,21 @@ from api.elasticsearch_client import search_people
 router = APIRouter(prefix="/governo", tags=["governo"])
 
 ReadSession = Annotated[Optional[CurrentSession], Depends(optional_session)]
+
+
+def _spa_para_browser(request: Request) -> Optional[Response]:
+    """Devolve a SPA quando o pedido vem de um browser (deep link), senão `None`.
+
+    O endereço da ficha serve a API (JSON, para o `fetch` do frontend) e a
+    página (HTML, para quem abre o link diretamente). O `import` é local
+    porque `api.main` importa este módulo.
+    """
+    aceita = request.headers.get("accept") or ""
+    if "text/html" not in aceita:
+        return None
+    from api.main import spa_page_response
+
+    return spa_page_response(str(request.url.path))
 
 
 @router.get("/overview")
@@ -53,8 +69,11 @@ async def governo_membros(
 
 
 @router.get("/ficha/{member_id}")
-async def governo_ficha(member_id: str, session: ReadSession = None) -> Dict[str, Any]:
+async def governo_ficha(member_id: str, request: Request, session: ReadSession = None) -> Any:
     """Ficha de um membro do Governo: detalhe, remunerações, relações e grafo."""
+    pagina = _spa_para_browser(request)
+    if pagina is not None:
+        return pagina
     detail = await run_in_threadpool(governo_service.member_detail, member_id)
     if detail.get("error"):
         raise HTTPException(status_code=404, detail=detail["error"])

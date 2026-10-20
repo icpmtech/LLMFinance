@@ -637,6 +637,8 @@ export default function App() {
    * da ficha devolve o utilizador a este módulo em vez de o deixar preso.
    */
   const [detalheOrigem, setDetalheOrigem] = useState<AppView | null>(null);
+  /** NIF passado pelo URL `/pessoas-iq/<NIF>` para a ficha no PessoasIQ. */
+  const [pessoasIqNif, setPessoasIqNif] = useState<string | null>(null);
   /** Benchmark de produtos aberto (`/benchmarks/<slug>`). */
   const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -788,7 +790,14 @@ export default function App() {
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path === "/pessoas-iq/pesquisa") return "pessoas-iq-pesquisa";
     if (path === "/pessoas-iq/politicos") return "pessoas-iq-politicos";
-    if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) return "pessoas-iq";
+    if (path.startsWith("/pessoas-iq/")) {
+      const nif = path.replace("/pessoas-iq/", "").split("/")[0];
+      if (nif && /^\d{9}$/.test(nif)) {
+        setPessoasIqNif(nif);
+        return "pessoas-iq";
+      }
+    }
+    if (path === "/pessoas-iq") return "pessoas-iq";
     if (path === "/descoberta" || path.startsWith("/descoberta/")) return "descoberta";
     if (path === "/descoberta-pessoas" || path.startsWith("/descoberta-pessoas/")) return "descoberta-pessoas";
     if (path === "/empresas-global") return "companies-global";
@@ -946,7 +955,14 @@ export default function App() {
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path === "/pessoas-iq/pesquisa") next = "pessoas-iq-pesquisa";
       else if (path === "/pessoas-iq/politicos") next = "pessoas-iq-politicos";
-      else if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) next = "pessoas-iq";
+      else if (path.startsWith("/pessoas-iq/")) {
+        const nif = path.replace("/pessoas-iq/", "").split("/")[0];
+        if (nif && /^\d{9}$/.test(nif)) {
+          setPessoasIqNif(nif);
+        }
+        next = "pessoas-iq";
+      }
+      else if (path === "/pessoas-iq") next = "pessoas-iq";
       else if (path === "/descoberta" || path.startsWith("/descoberta/")) next = "descoberta";
       else if (path === "/descoberta-pessoas" || path.startsWith("/descoberta-pessoas/")) next = "descoberta-pessoas";
       else if (path === "/empresas-global") next = "companies-global";
@@ -1624,7 +1640,7 @@ export default function App() {
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "analise") return <AnalisePage onNavigate={handleSwitchView} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
-    if (target === "pessoas-iq") return <PessoasIQPage />;
+    if (target === "pessoas-iq") return <PessoasIQPage nif={pessoasIqNif ?? undefined} />;
     if (target === "descoberta") return <DescobertaPage onBack={() => setViewAndHistory("chat")} />;
     if (target === "descoberta-pessoas") return <DescobertaPessoasPage onBack={() => setViewAndHistory("chat")} />;
     if (target === "pessoas-iq-pesquisa") return <PessoasIQPesquisaPage />;

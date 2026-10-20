@@ -2213,6 +2213,12 @@ def entities_report_dossie_pdf(nif: str):
 
 # Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API
 # para que os endpoints JSON sejam resolvidos antes do catch-all da SPA.
+#
+# Deep links que partilham o endereço com um endpoint JSON (ficha do titular da
+# EPT, ficha do membro do Governo) não se resolvem aqui: nesses handlers a
+# resposta é escolhida pelo `Accept` do pedido (HTML → SPA, resto → JSON). Ver
+# `_spa_para_browser` em `api/entidade_transparencia_routes.py` e
+# `api/governo_routes.py`.
 
 @app.get("/forecast")
 @app.get("/trading")
@@ -2220,18 +2226,50 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/rag")
 @app.get("/elastic")
 @app.get("/contracts")
+def serve_contracts_spa_page(request: Request):
+    """Página do módulo **Contratos públicos** (SPA)."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/contracts/search")
 @app.get("/contracts/dashboard")
 @app.get("/contracts/map")
 @app.get("/contracts/ecologicos")
+def serve_contracts_spa_page_sub(request: Request):
+    """Sub-rotas do módulo Contratos (SPA)."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/empresas-iq")
+def serve_empresas_iq_spa_page(request: Request):
+    """Página do módulo **EmpresasIQ** (SPA)."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/pessoas-iq")
+@app.get("/pessoas-iq/{nif}")
 @app.get("/pessoas-iq/pesquisa")
+@app.get("/pessoas-iq/pesquisa/{path:path}")
 @app.get("/pessoas-iq/politicos")
 @app.get("/pessoas-iq/autarquicas")
 @app.get("/pessoas-iq/vereadores")
 @app.get("/pessoas-iq/municipio")
 @app.get("/pessoas-iq/executivo")
+def serve_pessoas_iq_spa_page(request: Request, nif: str = "", path: str = ""):
+    """Páginas do módulo **PessoasIQ** (SPA)."""
+    return spa_page_response(str(request.url.path))
+
+
+# Deep links da EPT e do Governo chegam aqui só quando nenhuma rota do router
+# casar; as fichas (`/titular/{id}`, `/ficha/{id}`) são tratadas no respetivo
+# router, com escolha SPA/JSON pelo `Accept`.
+@app.get("/entidade-transparencia")
+@app.get("/entidade-transparencia/{path:path}")
+def serve_entidade_transparencia_spa_page(request: Request, path: str = ""):
+    """Página da Entidade para a Transparência (SPA) — deep links incluídos."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/empresas-risco")
 @app.get("/crm")
 @app.get("/crm/contas")

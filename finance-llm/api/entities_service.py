@@ -236,9 +236,12 @@ def _normalize_racius_item(source: Dict[str, Any]) -> Dict[str, Any]:
         value = source.get(name)
         if value not in (None, "", [], {}):
             item[name] = value
+    # Campos identificadores têm de existir sempre, mesmo quando vazios.
+    item.setdefault("nif", "")
+    item.setdefault("nome", "(sem nome)")
     item["source"] = "racius"
     item["has_nif"] = bool(item.get("nif"))
-    item["name"] = item.get("nome", "(sem nome)")
+    item["name"] = item.pop("nome")
     item["country"] = "Portugal"
     item["country_code"] = "PT"
     item["contracts_count"] = 0

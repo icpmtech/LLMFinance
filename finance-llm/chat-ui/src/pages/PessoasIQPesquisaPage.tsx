@@ -249,13 +249,21 @@ export default function PessoasIQPesquisaPage({ initialQuery = "" }: PessoasIQPe
       }
       const href =
         view === "pessoas-iq" && arg
-          ? `/pessoas-iq?nif=${encodeURIComponent(arg)}`
+          ? `/pessoas-iq/${encodeURIComponent(arg)}`
           : view === "governo-ficha" && arg
             ? `/governo/ficha/${encodeURIComponent(arg)}`
             : view === "entidade-transparencia" && arg
               ? `/entidade-transparencia/titular/${encodeURIComponent(arg)}`
               : null;
-      if (href) window.location.href = href;
+      if (href) {
+        window.location.href = href;
+        return;
+      }
+      // Fallback genérico para vistas que não têm URL própria definida.
+      if (view) {
+        const target = view.includes(":") || !arg ? view : `${view}:${arg}`;
+        openWindow(target, undefined, { title: item.nome || "Pessoa" });
+      }
     },
     [windowMode],
   );
