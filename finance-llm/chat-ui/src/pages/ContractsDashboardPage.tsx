@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw, Filter, Download, FileSpreadsheet, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw, Filter, Download, FileSpreadsheet, Sparkles, LayoutGrid, Plus, Save, Bookmark, FolderOpen, Loader2, Trash2, X, Printer, TriangleAlert } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -19,10 +19,128 @@ import {
 import type { Formatter as RechartsFormatter } from "recharts/types/component/DefaultTooltipContent";
 import { getContractAnalytics, getContractYears, getContractStatus, exportContractsExcel, exportContractsPdf } from "../api";
 import type { ContractAnalyticsResponse, ContractAnalyticsFilters, ContractAnalyticsRow } from "../types";
+import { FieldPanel } from "../components/visualizador/FieldPanel";
+import { VisualCard } from "../components/visualizador/VisualCard";
+import { formatCell } from "../components/visualizador/VisualChart";
+import { exportDashboardCsv, printVisualizador } from "../visualizadorExport";
+import {
+  deleteVisualizadorDashboard,
+  duplicateVisualizadorDashboard,
+  getVisualizadorDashboard,
+  getVisualizadorDataset,
+  getVisualizadorMeta,
+  getVisualRecords,
+  listVisualizadorDashboards,
+  saveVisualizadorDashboard,
+  type DashboardList,
+  type DatasetDetail,
+  type QueryRow,
+  type VisualConfig,
+  type VisualSuggestion,
+  type VisualizadorMeta,
+} from "../visualizadorApi";
 
 interface ContractsDashboardPageProps {
   onSwitchView: () => void;
   onSwitchSearch?: () => void;
+}
+
+/** Larguras de grelha disponíveis para os visuais dinâmicos. */
+const WIDTH_OPTIONS = [
+  { id: 12, label: "1/1", className: "lg:col-span-12" },
+  { id: 8, label: "2/3", className: "lg:col-span-8" },
+  { id: 6, label: "1/2", className: "lg:col-span-6" },
+  { id: 4, label: "1/3", className: "lg:col-span-4" },
+];
+
+function spanClass(width: number): string {
+  return (WIDTH_OPTIONS.find((option) => option.id === width) ?? WIDTH_OPTIONS[2]).className;
+}
+
+/** Quantas dimensões o tipo de gráfico usa. */
+function dimensionSlots(chart: string): number {
+  if (chart === "kpi") return 0;
+  if (chart === "stacked" || chart === "matrix" || chart === "treemap") return 2;
+  return 1;
+}
+
+/** Cria um visual por omissão para o dataset corrente. */
+function newVisual(detail: DatasetDetail | null, title?: string): VisualConfig {
+  const defaults = detail?.defaults ?? {};
+  const dimensionId = defaults.dimension ?? detail?.dimensions[0]?.id ?? "";
+  const dimension = detail?.dimensions.find((entry) => entry.id === dimensionId);
+  const catalog = detail?.measures ?? [];
+  const measureId = defaults.measure
+    || catalog.find((measure) => measure.kind === "soma")?.id
+    || catalog[0]?.id
+    || "contagem";
+  return {
+    id: `v${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`,
+    title: title || "Novo visual",
+    chart: "bar",
+    dimensions: dimensionId ? [{ id: dimensionId, interval: dimension?.type === "date" ? defaults.dimension_interval || "ano" : undefined }] : [],
+    measures: [measureId],
+    formulas: [],
+    limit: 25,
+    top_n: 0,
+    others: false,
+    sort: { by: "", order: "desc" },
+    width: 6,
+  };
+}
+
+/** Templates pré-configurados para o dataset de contratos (campos alinhados com a ontologia do Visualizador). */
+const CONTRACTS_TEMPLATES: { id: string; label: string; description: string; visuals: Omit<VisualConfig, "id">[] }[] = [
+  {
+    id: "executive",
+    label: "Visão executiva",
+    description: "KPIs principais, evolução anual e top entidades/CPV.",
+    visuals: [
+      { title: "Total de contratos", chart: "kpi", dimensions: [], measures: ["contagem"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 4 },
+      { title: "Valor total adjudicado", chart: "kpi", dimensions: [], measures: ["soma_preco"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 4 },
+      { title: "Valor médio por contrato", chart: "kpi", dimensions: [], measures: ["media_preco"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 4 },
+      { title: "Contratos por ano", chart: "bar", dimensions: [{ id: "ano", interval: "ano" }], measures: ["contagem"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Evolução por ano", chart: "area", dimensions: [{ id: "ano", interval: "ano" }], measures: ["soma_preco"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Maiores adjudicatários", chart: "bar-h", dimensions: [{ id: "adjudicatario" }], measures: ["contagem", "soma_preco"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Tipo de contrato", chart: "donut", dimensions: [{ id: "tipo_contrato" }], measures: ["contagem"], formulas: [], limit: 8, top_n: 8, others: true, sort: { by: "", order: "desc" }, width: 3 },
+      { title: "Tipo de procedimento", chart: "donut", dimensions: [{ id: "procedimento" }], measures: ["contagem"], formulas: [], limit: 8, top_n: 8, others: true, sort: { by: "", order: "desc" }, width: 3 },
+    ],
+  },
+  {
+    id: "timeline",
+    label: "Evolução temporal",
+    description: "Tendências ao longo do tempo por mês, trimestre e ano.",
+    visuals: [
+      { title: "Contratos por mês", chart: "line", dimensions: [{ id: "data", interval: "mes" }], measures: ["contagem"], formulas: [], limit: 50, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 12 },
+      { title: "Valor por mês", chart: "area", dimensions: [{ id: "data", interval: "mes" }], measures: ["soma_preco"], formulas: [], limit: 50, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 12 },
+      { title: "Contratos por trimestre", chart: "bar", dimensions: [{ id: "data", interval: "trimestre" }], measures: ["contagem"], formulas: [], limit: 40, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Contratos por ano", chart: "bar", dimensions: [{ id: "ano", interval: "ano" }], measures: ["contagem"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 6 },
+    ],
+  },
+  {
+    id: "entities",
+    label: "Entidades",
+    description: "Análise das entidades adjudicantes e adjudicatárias.",
+    visuals: [
+      { title: "Maiores adjudicantes", chart: "bar-h", dimensions: [{ id: "adjudicante" }], measures: ["contagem"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Maiores adjudicatárias", chart: "bar-h", dimensions: [{ id: "adjudicatario" }], measures: ["contagem"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Adjudicatárias por valor", chart: "bar-h", dimensions: [{ id: "adjudicatario" }], measures: ["soma_preco"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 12 },
+    ],
+  },
+  {
+    id: "cpv",
+    label: "CPV e categorias",
+    description: "Distribuição por códigos CPV e descrições.",
+    visuals: [
+      { title: "Top CPV por contratos", chart: "bar-h", dimensions: [{ id: "cpv" }], measures: ["contagem"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Top CPV por valor", chart: "bar-h", dimensions: [{ id: "cpv" }], measures: ["valor"], formulas: [], limit: 10, top_n: 10, others: true, sort: { by: "", order: "desc" }, width: 6 },
+      { title: "Evolução CPV por ano", chart: "line", dimensions: [{ id: "ano", interval: "ano" }], measures: ["valor"], formulas: [], limit: 25, top_n: 0, others: false, sort: { by: "", order: "desc" }, width: 12 },
+    ],
+  },
+];
+
+function makeTemplateVisuals(templates: Omit<VisualConfig, "id">[]): VisualConfig[] {
+  return templates.map((template) => ({ ...template, id: `v${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}${Math.random().toString(36).slice(2, 5)}` }));
 }
 
 const countFormatter: RechartsFormatter = (value) => [formatNumber(Number(value)), "Contratos"];
@@ -190,7 +308,589 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
     [topCpv],
   );
 
-  return (
+  // ---------------------------------------------------------------------------
+  // Modo dinâmico — Visualizador embutido para contratos
+  // ---------------------------------------------------------------------------
+  const [dynamicMode, setDynamicMode] = useState(false);
+  const [meta, setMeta] = useState<VisualizadorMeta | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [datasetId, setDatasetId] = useState<string>("contrato");
+  const [detail, setDetail] = useState<DatasetDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [workspace, setWorkspace] = useState<{
+    name: string;
+    dashboardId: string | null;
+    dataset: string;
+    filters: Record<string, unknown>;
+    search: string;
+    visuals: VisualConfig[];
+  }>({ name: "Dashboard de contratos", dashboardId: null, dataset: "contrato", filters: {}, search: "", visuals: [] });
+  const [activeVisualId, setActiveVisualId] = useState<string | null>(null);
+  const [dashboards, setDashboards] = useState<DashboardList | null>(null);
+  const [showDashboards, setShowDashboards] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [dynamicStatus, setDynamicStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [drill, setDrill] = useState<{ title: string; rows: QueryRow[]; loading: boolean; error?: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!dynamicMode) return;
+    let cancelled = false;
+    getVisualizadorMeta()
+      .then((response) => {
+        if (cancelled) return;
+        setMeta(response);
+        if (!response.datasets.some((dataset) => dataset.id === datasetId)) {
+          const first = response.datasets.find((dataset) => dataset.available);
+          if (first) setDatasetId(first.id);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setMetaError(error instanceof Error ? error.message : "Não foi possível carregar o catálogo.");
+      });
+    return () => { cancelled = true; };
+  }, [dynamicMode]);
+
+  useEffect(() => {
+    if (!dynamicMode) return;
+    let cancelled = false;
+    setLoadingDetail(true);
+    getVisualizadorDataset(datasetId)
+      .then((response) => {
+        if (cancelled) return;
+        setDetail(response);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setDetail(null);
+        setMetaError(error instanceof Error ? error.message : "Não foi possível abrir o dataset.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false);
+      });
+    return () => { cancelled = true; };
+  }, [dynamicMode, datasetId]);
+
+  useEffect(() => {
+    if (!dynamicMode || !detail) return;
+    if (workspace.visuals.length > 0) return;
+    const visual = newVisual(detail);
+    setWorkspace((current) => ({ ...current, visuals: [visual] }));
+  }, [dynamicMode, detail, workspace.visuals.length]);
+
+  const activeVisual = useMemo(
+    () => workspace.visuals.find((visual) => visual.id === activeVisualId) ?? workspace.visuals[0] ?? null,
+    [workspace.visuals, activeVisualId],
+  );
+
+  const patchWorkspace = useCallback((patch: Partial<typeof workspace>) => {
+    setWorkspace((current) => ({ ...current, ...patch }));
+  }, []);
+
+  const updateVisual = useCallback((id: string, patch: Partial<VisualConfig>) => {
+    setWorkspace((current) => ({
+      ...current,
+      visuals: current.visuals.map((visual) => (visual.id === id ? { ...visual, ...patch } : visual)),
+    }));
+  }, []);
+
+  const addVisual = useCallback(() => {
+    if (!detail) return;
+    const visual = newVisual(detail);
+    setWorkspace((current) => ({ ...current, visuals: [...current.visuals, visual] }));
+    setActiveVisualId(visual.id);
+  }, [detail]);
+
+  const removeVisual = useCallback((id: string) => {
+    setWorkspace((current) => ({ ...current, visuals: current.visuals.filter((visual) => visual.id !== id) }));
+  }, []);
+
+  const duplicateVisual = useCallback((id: string) => {
+    setWorkspace((current) => {
+      const source = current.visuals.find((visual) => visual.id === id);
+      if (!source) return current;
+      const copy: VisualConfig = { ...source, id: `v${Date.now().toString(36)}`, title: `${source.title} (cópia)` };
+      return { ...current, visuals: [...current.visuals, copy] };
+    });
+  }, []);
+
+  const addField = useCallback(
+    (kind: "dimension" | "measure", fieldId: string) => {
+      if (!detail) return;
+      const target = activeVisual;
+      if (!target) {
+        const visual = newVisual(detail);
+        visual.dimensions = kind === "dimension"
+          ? [{ id: fieldId, interval: detail.dimensions.find((entry) => entry.id === fieldId)?.type === "date" ? "mes" : undefined }]
+          : [];
+        visual.measures = kind === "measure" ? [fieldId] : ["contagem"];
+        setWorkspace((current) => ({ ...current, visuals: [...current.visuals, visual] }));
+        setActiveVisualId(visual.id);
+        return;
+      }
+      if (kind === "measure") {
+        if (target.measures.some((spec) => (typeof spec === "string" ? spec : spec.id) === fieldId)) return;
+        updateVisual(target.id, { measures: [...target.measures, { id: fieldId }] });
+        return;
+      }
+      const dimension = detail.dimensions.find((entry) => entry.id === fieldId);
+      const slots = Math.max(1, dimensionSlots(target.chart));
+      const dimensions = [...target.dimensions];
+      const emptySlot = dimensions.findIndex((entry) => !entry.id);
+      const position = emptySlot >= 0 ? emptySlot : dimensions.length;
+      const entry = { id: fieldId, interval: dimension?.type === "date" ? "mes" : undefined };
+      if (position < slots) dimensions[position] = entry;
+      else if (dimensions.length < 3) dimensions.push(entry);
+      else dimensions[slots - 1] = entry;
+      const chart = target.chart === "kpi" ? "bar" : target.chart;
+      updateVisual(target.id, { dimensions, chart });
+    },
+    [activeVisual, detail, updateVisual],
+  );
+
+  const applySuggestion = useCallback(
+    (suggestion: VisualSuggestion) => {
+      if (!detail) return;
+      const visual: VisualConfig = {
+        ...newVisual(detail, suggestion.title),
+        chart: suggestion.chart,
+        dimensions: [{ id: suggestion.dimension, interval: suggestion.interval || undefined }],
+        measures: [suggestion.measure],
+        top_n: suggestion.chart === "bar-h" ? 10 : 0,
+        others: false,
+      };
+      setWorkspace((current) => ({ ...current, visuals: [...current.visuals, visual] }));
+      setActiveVisualId(visual.id);
+    },
+    [detail],
+  );
+
+  const applyTemplate = useCallback(
+    (templateId: string) => {
+      if (!detail) return;
+      const template = CONTRACTS_TEMPLATES.find((t) => t.id === templateId);
+      if (!template) return;
+      const visuals = makeTemplateVisuals(template.visuals);
+      setWorkspace((current) => ({
+        ...current,
+        name: `${template.label} — ${current.name || "Dashboard de contratos"}`,
+        dataset: detail.dataset.id,
+        visuals,
+      }));
+      setActiveVisualId(visuals[0]?.id ?? null);
+      setShowTemplates(false);
+      setDynamicStatus({ kind: "ok", message: `Template «${template.label}» aplicado com ${visuals.length} visuais.` });
+    },
+    [detail],
+  );
+
+  const openDrill = useCallback(
+    async (row: QueryRow, visual: VisualConfig) => {
+      if (!detail) return;
+      const extra: Record<string, unknown> = {};
+      for (const dimension of visual.dimensions) {
+        if (!dimension.id) continue;
+        const value = row[dimension.id];
+        if (value === null || value === undefined || value === "" || value === "Outros") continue;
+        if (row._key === "__outros__") continue;
+        extra[dimension.id] = value;
+      }
+      setDrill({ title: `${visual.title} — registos`, rows: [], loading: true, error: null });
+      try {
+        const records = await getVisualRecords({
+          dataset: detail.dataset.id,
+          filters: { ...workspace.filters, ...extra },
+          search: workspace.search || null,
+          size: 40,
+        });
+        setDrill({ title: `${visual.title} — ${records.total.toLocaleString("pt-PT")} registos`, rows: records.items as QueryRow[], loading: false, error: records.error ?? null });
+      } catch (error) {
+        setDrill({ title: `${visual.title} — registos`, rows: [], loading: false, error: error instanceof Error ? error.message : "Não foi possível abrir os registos." });
+      }
+    },
+    [detail, workspace.filters, workspace.search],
+  );
+
+  const refreshDashboards = useCallback(async () => {
+    try {
+      setDashboards(await listVisualizadorDashboards());
+    } catch (error) {
+      setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "Não foi possível listar os dashboards." });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (dynamicMode && showDashboards) void refreshDashboards();
+  }, [dynamicMode, showDashboards, refreshDashboards]);
+
+  const saveDashboard = useCallback(async () => {
+    if (!detail) return;
+    setSaving(true);
+    setDynamicStatus(null);
+    try {
+      const tags = new Set(["contracts-dashboard", ...(detail.dataset.id === "contrato" ? [] : [detail.dataset.id])]);
+      const saved = await saveVisualizadorDashboard({
+        id: workspace.dashboardId ?? undefined,
+        name: workspace.name,
+        dataset: detail.dataset.id,
+        filters: workspace.filters,
+        visuals: workspace.visuals,
+        description: `${detail.dataset.label} · ${workspace.visuals.length} visual(is)`,
+        tags: Array.from(tags),
+      });
+      patchWorkspace({ dashboardId: saved.id, name: saved.name });
+      setDynamicStatus({ kind: "ok", message: `Dashboard «${saved.name}» guardado.` });
+      void refreshDashboards();
+    } catch (error) {
+      setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "Não foi possível guardar." });
+    } finally {
+      setSaving(false);
+    }
+  }, [detail, workspace, patchWorkspace, refreshDashboards]);
+
+  const openDashboard = useCallback(async (id: string) => {
+    try {
+      const dashboard = await getVisualizadorDashboard(id);
+      if (dashboard.dataset) setDatasetId(dashboard.dataset);
+      setWorkspace({
+        name: dashboard.name,
+        dashboardId: dashboard.id ?? null,
+        dataset: dashboard.dataset ?? datasetId,
+        filters: dashboard.filters ?? {},
+        search: "",
+        visuals: dashboard.visuals ?? [],
+      });
+      setShowDashboards(false);
+      setDynamicStatus({ kind: "ok", message: `Dashboard «${dashboard.name}» aberto.` });
+    } catch (error) {
+      setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "Não foi possível abrir o dashboard." });
+    }
+  }, [datasetId]);
+
+  const exportAllCsv = useCallback(async () => {
+    if (!detail || workspace.visuals.length === 0) return;
+    try {
+      const exported = await exportDashboardCsv(workspace.name, workspace.visuals, detail.dataset.id, workspace.filters, workspace.search);
+      setDynamicStatus({
+        kind: exported > 0 ? "ok" : "error",
+        message: exported > 0 ? `${exported} visual(is) exportado(s) em CSV.` : "Não foi possível exportar: os visuais não devolveram dados.",
+      });
+    } catch (error) {
+      setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "A exportação falhou." });
+    }
+  }, [detail, workspace.visuals, workspace.filters, workspace.search, workspace.name]);
+
+  const chartTypes = meta?.chart_types ?? [];
+
+  // --- Render helpers do modo dinâmico --------------------------------------
+  const dynamicBodyElement = (
+    <div className="visualizador-root min-h-screen w-full bg-background text-foreground orbit-bg">
+      <style>{`
+@media print {
+  body.visualizador-printing { background: #ffffff !important; }
+  body.visualizador-printing .visualizador-root { background: #ffffff !important; color: #111827 !important; }
+  body.visualizador-printing .visualizador-noprint { display: none !important; }
+  body.visualizador-printing .glass-card,
+  body.visualizador-printing .glass-panel,
+  body.visualizador-printing .glass-modal {
+    background: #ffffff !important; backdrop-filter: none !important; box-shadow: none !important;
+    border: 1px solid #d1d5db !important;
+  }
+  body.visualizador-printing .gradient-border::before { display: none !important; }
+  body.visualizador-printing .text-muted-foreground { color: #4b5563 !important; }
+  body.visualizador-printing .orbit-bg::before { display: none !important; }
+  body.visualizador-printing .fade-in { animation: none !important; }
+  body.visualizador-printing .visualizador-grid > * { break-inside: avoid; page-break-inside: avoid; }
+}
+      `}</style>
+
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 py-8">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-card text-xs text-teal-300 mb-3">
+              <LayoutGrid size={14} /> {meta ? `${meta.datasets.length} datasets · ${meta.datasets.filter((item) => item.aggregation).length} analisáveis` : "a carregar catálogo…"}
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
+              <span className="p-2 rounded-2xl bg-gradient-to-br from-teal-500/25 to-blue-500/20 border border-white/10">
+                <BarChart3 size={30} className="text-teal-300" />
+              </span>
+              Dashboard dinâmico de contratos
+            </h1>
+            <p className="text-muted-foreground mt-2 max-w-2xl">
+              Escolha dimensões e medidas do catálogo de contratos, construa visuais, filtre os dados e guarde dashboards personalizados.
+            </p>
+          </div>
+
+          <div className="visualizador-noprint flex flex-wrap items-center gap-2">
+            <input
+              value={workspace.name}
+              onChange={(event) => patchWorkspace({ name: event.target.value })}
+              aria-label="Nome do dashboard"
+              className="px-3 py-2 rounded-xl glass-card text-sm w-56"
+              placeholder="Nome do dashboard"
+            />
+            <button type="button" onClick={saveDashboard} disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-sm hover:bg-white/5 disabled:opacity-50">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar
+            </button>
+            <button type="button" onClick={() => setShowDashboards((value) => !value)}
+                    className={["flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm", showDashboards ? "glass-card bg-primary/10 text-primary" : "glass-card hover:bg-white/5"].join(" ")}>
+              <Bookmark size={14} /> Guardados
+            </button>
+            <button type="button" onClick={addVisual} disabled={!detail}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-sm hover:bg-white/5 disabled:opacity-50"
+                    title="Adicionar um visual em branco">
+              <Plus size={14} /> Novo visual
+            </button>
+            <button type="button" onClick={() => setShowTemplates((v) => !v)}
+                    className={["flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm", showTemplates ? "glass-card bg-primary/10 text-primary" : "glass-card hover:bg-white/5"].join(" ")}
+                    title="Escolher um template pré-configurado">
+              <LayoutGrid size={14} /> Templates
+            </button>
+            <button type="button" onClick={printVisualizador}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-sm hover:bg-white/5">
+              <Printer size={14} /> PDF
+            </button>
+            <button type="button" onClick={exportAllCsv} disabled={workspace.visuals.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-sm hover:bg-white/5 disabled:opacity-50">
+              <FolderOpen size={14} /> CSV dos visuais
+            </button>
+            <button type="button" onClick={() => setDynamicMode(false)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-sm hover:bg-white/5">
+              <X size={14} /> Sair
+            </button>
+          </div>
+        </div>
+
+        {(metaError || dynamicStatus) && (
+          <div className={["mb-5 p-3 rounded-2xl flex items-center gap-2 text-sm",
+            (dynamicStatus?.kind === "error" || metaError) ? "bg-rose-500/10 border border-rose-500/20 text-rose-300" : "bg-teal-500/10 border border-teal-500/20 text-teal-200"].join(" ")}>
+            {(dynamicStatus?.kind === "error" || metaError) ? <TriangleAlert size={16} /> : <BarChart3 size={16} />}
+            <span className="flex-1">{metaError ?? dynamicStatus?.message}</span>
+            <button type="button" onClick={() => { setMetaError(null); setDynamicStatus(null); }} aria-label="Fechar aviso"
+                    className="visualizador-noprint text-xs opacity-70 hover:opacity-100"><X size={13} /></button>
+          </div>
+        )}
+
+        {showTemplates && (
+          <section className="visualizador-noprint glass-card gradient-border rounded-2xl p-4 mb-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-sm font-semibold flex items-center gap-2"><LayoutGrid size={15} /> Templates</h2>
+              <button type="button" onClick={() => setShowTemplates(false)} className="text-[11px] text-muted-foreground hover:text-foreground">Fechar</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              {CONTRACTS_TEMPLATES.map((template) => (
+                <div key={template.id} className="glass-card rounded-xl p-3 flex flex-col gap-2 hover:bg-white/[0.03] transition">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{template.label}</p>
+                    <p className="text-[11px] text-muted-foreground">{template.description}</p>
+                    <p className="text-[10px] text-teal-300 mt-1">{template.visuals.length} visual(is)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => applyTemplate(template.id)}
+                    disabled={!detail}
+                    className="mt-auto px-2 py-1.5 rounded-lg glass-card text-[11px] hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Aplicar template
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {showDashboards && (
+          <section className="visualizador-noprint glass-card gradient-border rounded-2xl p-4 mb-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-sm font-semibold flex items-center gap-2"><FolderOpen size={15} /> Dashboards guardados</h2>
+              {dashboards?.stats && (
+                <span className="text-[11px] text-muted-foreground">
+                  {dashboards.stats.dashboards} dashboard(s) · {dashboards.stats.visuals} visual(is)
+                </span>
+              )}
+            </div>
+            {dashboards?.note && <p className="text-xs text-amber-300">{dashboards.note}</p>}
+            {dashboards && dashboards.items.length === 0 && !dashboards.note && (
+              <p className="text-xs text-muted-foreground">Ainda não há dashboards guardados. Configure os visuais e clique em «Guardar».</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {(dashboards?.items ?? []).map((item) => (
+                <div key={item.id} className="glass-card rounded-xl p-3 flex flex-col gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {item.dataset ?? "—"} · {item.visuals} visual(is) · {item.tags.join(", ")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => void openDashboard(item.id)}
+                            className="px-2 py-1 rounded-lg glass-card text-[11px] hover:bg-white/5">Abrir</button>
+                    <button type="button" onClick={async () => {
+                      try {
+                        await duplicateVisualizadorDashboard(item.id);
+                        void refreshDashboards();
+                      } catch (error) {
+                        setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "Não foi possível duplicar." });
+                      }
+                    }} className="px-2 py-1 rounded-lg glass-card text-[11px] hover:bg-white/5">Duplicar</button>
+                    {item.mine && (
+                      <button type="button" onClick={async () => {
+                        try {
+                          await deleteVisualizadorDashboard(item.id);
+                          if (workspace.dashboardId === item.id) patchWorkspace({ dashboardId: null });
+                          void refreshDashboards();
+                        } catch (error) {
+                          setDynamicStatus({ kind: "error", message: error instanceof Error ? error.message : "Não foi possível remover." });
+                        }
+                      }} className="p-1 rounded-lg glass-card text-muted-foreground hover:text-rose-300" aria-label="Remover dashboard">
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-[330px_minmax(0,1fr)] gap-6">
+          <div className="visualizador-noprint">
+            <FieldPanel
+              meta={meta}
+              detail={detail}
+              datasetId={datasetId}
+              onSelectDataset={setDatasetId}
+              filters={workspace.filters}
+              onFiltersChange={(filters) => patchWorkspace({ filters })}
+              search={workspace.search}
+              onSearchChange={(search) => patchWorkspace({ search })}
+              onAddField={addField}
+              onApplySuggestion={applySuggestion}
+              onNewVisual={addVisual}
+            />
+          </div>
+
+          <main className="space-y-4">
+            {loadingDetail && !detail && (
+              <div className="flex justify-center py-16"><Loader2 size={26} className="animate-spin text-teal-400" /></div>
+            )}
+
+            {detail && !detail.dataset.aggregation && (
+              <div className="glass-card gradient-border rounded-2xl p-5 text-sm text-amber-300 flex items-start gap-2">
+                <TriangleAlert size={16} className="mt-0.5" />
+                <div>
+                  <p className="font-semibold">Este dataset não suporta agregações.</p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    {(detail.dataset.notes ?? [])[0] ?? "É um dataset resolvido em memória a partir de várias fontes: os totais não seriam exatos."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {detail && workspace.visuals.length > 0 && (
+              <div className="visualizador-noprint flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                <span>Visual ativo: <strong className="text-foreground">{activeVisual?.title ?? "—"}</strong></span>
+                <span className="mx-1">·</span>
+                <span>Largura</span>
+                {WIDTH_OPTIONS.map((option) => (
+                  <button key={option.id} type="button"
+                          onClick={() => activeVisual && updateVisual(activeVisual.id, { width: option.id })}
+                          className={["px-2 py-0.5 rounded-lg glass-card", activeVisual?.width === option.id ? "text-primary bg-primary/10" : "hover:bg-white/5"].join(" ")}>
+                    {option.label}
+                  </button>
+                ))}
+                {!activeVisual?.measures.length && <span className="text-amber-300">· sem medidas</span>}
+              </div>
+            )}
+
+            <div className="visualizador-grid grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {detail && workspace.visuals.map((visual) => (
+                <div key={visual.id} className={spanClass(visual.width)}>
+                  <VisualCard
+                    config={visual}
+                    dataset={detail}
+                    chartTypes={chartTypes}
+                    filters={workspace.filters}
+                    search={workspace.search}
+                    active={activeVisual?.id === visual.id}
+                    onActivate={() => setActiveVisualId(visual.id)}
+                    onChange={(patch) => updateVisual(visual.id, patch)}
+                    onRemove={() => removeVisual(visual.id)}
+                    onDuplicate={() => duplicateVisual(visual.id)}
+                    onDrill={(row) => void openDrill(row, visual)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {detail && workspace.visuals.length === 0 && (
+              <div className="glass-card gradient-border rounded-2xl p-8 text-center space-y-3">
+                <BarChart3 size={28} className="mx-auto text-teal-400" />
+                <p className="text-sm text-muted-foreground">
+                  Ainda não há visuais. Clique em «Novo visual», numa sugestão do painel esquerdo, ou diretamente numa dimensão/medida para começar.
+                </p>
+                <button type="button" onClick={addVisual}
+                        className="px-4 py-2 rounded-xl glass-card text-sm hover:bg-white/5 inline-flex items-center gap-1.5">
+                  <Plus size={14} /> Criar o primeiro visual
+                </button>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+
+      {drill && (
+        <div className="visualizador-noprint fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={() => setDrill(null)} role="dialog" aria-modal="true">
+          <div className="glass-modal rounded-2xl border border-white/10 w-full max-w-6xl max-h-[85vh] flex flex-col"
+               onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-white/10">
+              <h3 className="text-sm font-semibold truncate">{drill.title}</h3>
+              <button type="button" onClick={() => setDrill(null)} aria-label="Fechar"
+                      className="p-1.5 rounded-lg glass-card text-muted-foreground hover:text-foreground"><X size={14} /></button>
+            </div>
+            <div className="p-4 overflow-auto">
+              {drill.loading && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-teal-400" /></div>}
+              {drill.error && <p className="text-sm text-rose-300">{drill.error}</p>}
+              {!drill.loading && !drill.error && drill.rows.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sem registos para este ponto.</p>
+              )}
+              {!drill.loading && drill.rows.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-card/95">
+                    <tr>
+                      {Object.keys(drill.rows[0]).filter((key) => !key.startsWith("_")).map((key) => (
+                        <th key={key} className="text-left px-2 py-1.5 font-semibold text-muted-foreground whitespace-nowrap">{key}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drill.rows.map((row, index) => (
+                      <tr key={index} className="border-t border-white/5 hover:bg-white/[0.03]">
+                        {Object.keys(drill.rows[0]).filter((key) => !key.startsWith("_")).map((key) => (
+                          <td key={key} className="px-2 py-1.5 align-top max-w-[22rem] truncate" title={String(row[key] ?? "")}>
+                            {typeof row[key] === "number" ? formatCell(row[key] as number) : String(row[key] ?? "—")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ---------------------------------------------------------------------------
+  // JSX principal
+  // ---------------------------------------------------------------------------
+  const dynamicBody = dynamicBodyElement;
+
+  const staticBody = (
     <div className="@container min-h-screen w-full bg-background text-foreground orbit-bg">
         <div className="mx-auto max-w-7xl px-4 py-8 @2xl:px-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
@@ -284,6 +984,13 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                 <span className="hidden sm:inline">Pesquisar</span>
               </button>
             )}
+            <button
+              onClick={() => setDynamicMode(true)}
+              className="px-3 py-2 rounded-xl glass-card bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition flex items-center gap-2 text-sm"
+            >
+              <LayoutGrid size={16} />
+              <span className="hidden sm:inline">Modo dinâmico</span>
+            </button>
           </div>
         </div>
 
@@ -778,4 +1485,6 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
       </div>
     </div>
   );
+
+  return dynamicMode ? dynamicBody : staticBody;
 }
