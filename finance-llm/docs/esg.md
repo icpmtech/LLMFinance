@@ -54,6 +54,30 @@ principal; sem CAE, usa-se o CPV dominante e diz-se que é proxy.
 - **Referências abertas** — GRI, ISSB/IFRS S1-S2, EFRAG/ESRS, INE, IAPMEI, APA e
   DGEG (catálogo em `GET /esg/meta`).
 
+## Taxonomia Europeia e percurso IAPMEI
+
+O módulo segue o quadro descrito pelo IAPMEI em
+[Alinhamento do negócio com fatores ESG](https://www.iapmei.pt/pt/saber-mais/industria-e-sustentabilidade/sustentabilidade-empresarial/esg-e-financas-sustentaveis/alinhamento-do-negocio-com-fatores-esg/)
+e os dados oficiais do
+[EU Taxonomy Compass](https://ec.europa.eu/sustainable-finance-taxonomy/taxonomy-compass).
+
+- **Seis objetivos ambientais** do Regulamento (UE) 2020/852: mitigação,
+  adaptação, água e mares, economia circular, poluição e biodiversidade.
+- **151 atividades oficiais** com setor, códigos NACE e objetivos, carregadas
+  em `api/esg_taxonomy.py` a partir da API do Compass.
+- **Elegibilidade** é calculada pelo CAE/NACE da empresa. Sem CAE, usa-se o
+  setor/CPV como proxy e diz-se que é proxy.
+- **Alinhamento não é declarado.** A resposta máxima é
+  `elegivel_nao_verificado`; o alinhamento exige critérios técnicos, DNSH e
+  salvaguardas sociais mínimas documentados e verificados.
+- **DNSH e salvaguardas** são acompanhados por indicadores declarados; a
+  ausência de indicador fica «sem evidência», nunca «conforme».
+- **ODS, temas materiais e normas de relato** (ESRS, VSME, GRI, ISSB, TCFD,
+  TNFD, SDG Compass, B Corp, EcoVadis, Sedex) estão em `GET /esg/meta` e no
+  separador **Taxonomia UE**.
+- O percurso de cinco passos do IAPMEI/UN Global Compact está modelado em
+  `passos` e ligado às funcionalidades do módulo.
+
 ## Endpoints
 
 | Método | Caminho | Descrição |
@@ -69,6 +93,9 @@ principal; sem CAE, usa-se o CPV dominante e diz-se que é proxy.
 | GET | `/esg/empresa/{pais}/{nif}/historico` | Série de três anos + mediana dos pares |
 | GET | `/esg/empresa/{pais}/{nif}/fornecedores` | Carteira de fornecedores do comprador |
 | GET | `/esg/empresa/{pais}/{nif}/indicadores` | Indicadores declarados por ano/fonte |
+| GET | `/esg/taxonomia` | Objetivos, atividades, DNSH, salvaguardas, ODS e normas de relato |
+| GET | `/esg/taxonomia/atividades?q=&setor=&objetivo=&nace=` | Pesquisa local das atividades do Compass |
+| GET | `/esg/empresa/{pais}/{nif}/taxonomia` | Elegibilidade da empresa e evidência DNSH/salvaguardas |
 | POST | `/esg/carteira/analise` | Analisa uma carteira indicada por NIF/nome |
 | POST | `/esg/indicadores` | Ingere indicadores de um relatório (sessão) |
 | POST | `/esg/calcular` | Calcula e indexa um lote de empresas (sessão) |
@@ -130,3 +157,10 @@ e dimensão.
   componentes de emissões, formação, acidentes e governance ficam
   indisponíveis e a cobertura baixa.
 - O score não substitui due diligence, certificação ou auditoria.
+- A Taxonomia UE é usada para **elegibilidade indicativa**. O IQ OS não tem
+  acesso automático aos critérios técnicos dos atos delegados, às provas de DNSH
+  ou às salvaguardas mínimas de cada empresa; por isso nunca apresenta uma
+  empresa como «alinhada».
+- A correspondência CAE/NACE → atividade usa o prefixo NACE mais específico e,
+  quando não há CAE, o setor do Compass como proxy. Atividades sem código NACE
+  ficam disponíveis para pesquisa, mas não são atribuídas automaticamente.

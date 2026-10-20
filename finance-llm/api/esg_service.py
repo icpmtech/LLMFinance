@@ -995,6 +995,7 @@ def taxonomia_de_empresa(
     if not atividades and secao:
         atividades = tax_eu.atividades_por_secao(secao)
         match = "setor"
+    total_atividades = len(atividades)
     atividades = atividades[:16]
 
     objetivos: Dict[int, Dict[str, Any]] = {}
@@ -1123,12 +1124,20 @@ def taxonomia_de_empresa(
             "elegivel_nao_verificado": "Elegível — alinhamento por verificar",
         }.get(estado, estado),
         "cobertura_verificacao": _round(cobertura_verificacao, 4),
-        "n_atividades": len(atividades),
+        "n_atividades": total_atividades,
         "atividades": [
             {
                 **atividade,
                 "url": tax_eu.url_atividade(atividade["id"]),
-                "setor_url": None,
+                "objetivos": [
+                    {
+                        **objetivo,
+                        "label": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo["id"])) or {}).get("label"),
+                        "curto": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo["id"])) or {}).get("curto"),
+                        "cor": (tax_eu.OBJETIVO_BY_ID.get(int(objetivo["id"])) or {}).get("cor"),
+                    }
+                    for objetivo in atividade.get("objetivos") or []
+                ],
             }
             for atividade in atividades
         ],
