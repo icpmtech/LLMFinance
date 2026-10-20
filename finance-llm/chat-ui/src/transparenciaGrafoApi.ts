@@ -136,6 +136,17 @@ export type TgVizinho = {
   detalhe: Record<string, unknown>;
 };
 
+export type TgContratacao = {
+  /** Contratos públicos do NIF no portal BASE. */
+  contratos: number;
+  valor: number;
+  anos: number[];
+  /** Adjudicantes dos maiores contratos (amostra). */
+  adjudicantes: string[];
+  /** `false` quando o índice de contratos não respondeu (≠ «sem contratos»). */
+  disponivel: boolean;
+};
+
 export type TgNoDetalhe = {
   no: {
     no_id: string;
@@ -159,6 +170,7 @@ export type TgNoDetalhe = {
   };
   vizinhos: TgVizinho[];
   total_vizinhos: number;
+  contratacao?: TgContratacao | null;
   error?: string;
 };
 
@@ -254,6 +266,11 @@ export const getTgEmpresas = (params: {
 
 export const getTgMapa = (params: { q?: string; concelho?: string; tipo?: string; limite_pontos?: number }) =>
   pedir<TgMapaResposta>(`/transparencia-grafo/mapa${queryString(params)}`);
+
+export const getTgConcelho = (concelho: string, params: { limite?: number; offset?: number; incluir_contratacao?: boolean } = {}) =>
+  pedir<TgConcelhoResposta>(
+    `/transparencia-grafo/concelhos/${encodeURIComponent(concelho)}${queryString(params)}`,
+  );
 
 export const construirTg = (payload: { forcar?: boolean; indexar?: boolean; limite_declaracoes?: number | null }) =>
   enviar<TgJob>("/transparencia-grafo/construir", payload);

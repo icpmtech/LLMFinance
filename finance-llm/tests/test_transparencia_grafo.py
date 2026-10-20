@@ -236,6 +236,10 @@ def test_mapa_agrega_por_concelho(grafo):
     assert mapa["concelhos"]
     assert mapa["concelhos"][0]["empresas"] >= 1
     assert all(ponto["lat"] is not None for ponto in mapa["pontos"])
+    # As entidades sem coordenadas não vão ao mapa, mas são listadas para se
+    # poderem abrir na ficha (não ficam escondidas atrás de um contador).
+    assert mapa["sem_geo"] == len(mapa["sem_geo_itens"])
+    assert all(item["lat"] is None for item in mapa["sem_geo_itens"])
 
 
 def test_export_csv_inclui_as_empresas(grafo):

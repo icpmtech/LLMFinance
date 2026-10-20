@@ -430,6 +430,7 @@ export function GraphCanvas({
   /** Nó a ser arrastado (posição guardada para não saltar para o cursor). */
   const nodeDragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const dragMovedRef = useRef(false);
+  const lastDragEndRef = useRef(0);
   const userMovedRef = useRef(false);
   const layoutVersionRef = useRef(layoutVersion);
   /**
@@ -1176,7 +1177,7 @@ export function GraphCanvas({
         position.vx = 0;
         position.vy = 0;
       }
-      if (Math.abs(event.clientX - lastPointerRef.current.x) > 1 || Math.abs(event.clientY - lastPointerRef.current.y) > 1) {
+      if (Math.abs(event.clientX - lastPointerRef.current.x) > 3 || Math.abs(event.clientY - lastPointerRef.current.y) > 3) {
         dragMovedRef.current = true;
       }
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
@@ -1190,7 +1191,7 @@ export function GraphCanvas({
       const dx = event.clientX - lastPointerRef.current.x;
       const dy = event.clientY - lastPointerRef.current.y;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dragMovedRef.current = true;
         userMovedRef.current = true;
         setOffset((current) => ({ x: current.x + dx, y: current.y + dy }));
@@ -1209,7 +1210,10 @@ export function GraphCanvas({
   };
 
   const handleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (dragMovedRef.current) return;
+    // Um arrastar (nó ou panorama) não deve abrir a ficha do nó onde o gesto
+    // terminou. A janela de 250 ms cobre os cliques sintéticos que alguns
+    // browsers emitem logo após o pointerup.
+    if (dragMovedRef.current || Date.now() - lastDragEndRef.current < 250) return;
     const point = toGraphCoords(event.clientX, event.clientY);
     const node = hitNode(point.x, point.y);
     if (node) {
@@ -1285,6 +1289,7 @@ export function GraphCanvas({
         }}
         onPointerMove={handlePointerMove}
         onPointerUp={(event) => {
+          if (dragMovedRef.current) lastDragEndRef.current = Date.now();
           nodeDragRef.current = null;
           setNodeDragging(false);
           draggingRef.current = false;

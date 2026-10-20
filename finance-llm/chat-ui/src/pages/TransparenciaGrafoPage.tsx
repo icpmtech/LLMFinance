@@ -359,6 +359,10 @@ export default function TransparenciaGrafoPage() {
     </Card>
   ) : null;
 
+  // Compatibilidade com um backend anterior à lista: o contador pode existir
+  // sem `sem_geo_itens` (e a página não pode rebentar por isso).
+  const semGeoItens = mapa?.sem_geo_itens ?? [];
+
   const jobProgresso = useMemo(() => {
     const progresso = job?.progress || {};
     if (progresso.registos) return Math.min(100, Math.round((progresso.registos / Math.max(1, stats?.nos ?? 1)) * 100));
@@ -905,11 +909,11 @@ export default function TransparenciaGrafoPage() {
                   <p className="border-b border-border px-3 py-2 text-[10.5px] text-muted-foreground">
                     Estas entidades não têm coordenadas resolvidas na sede e, por isso, não são colocadas no mapa.
                     Continuam no grafo e podem ser abertas na ficha — a lista respeita a pesquisa e o concelho ativos.
-                    {mapa.sem_geo_itens.length < mapa.sem_geo
-                      ? ` A mostrar ${contagem(mapa.sem_geo_itens.length)} de ${contagem(mapa.sem_geo)}.`
+                    {semGeoItens.length < mapa.sem_geo
+                      ? ` A mostrar ${contagem(semGeoItens.length)} de ${contagem(mapa.sem_geo)}.`
                       : ""}
                   </p>
-                  {mapa.sem_geo_itens.length === 0 ? (
+                  {semGeoItens.length === 0 ? (
                     <p className="px-3 py-3 text-[11px] text-muted-foreground">Sem entidades para os filtros atuais.</p>
                   ) : (
                     <div className="max-h-[360px] overflow-y-auto">
@@ -926,7 +930,7 @@ export default function TransparenciaGrafoPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {mapa.sem_geo_itens.map((item) => (
+                          {semGeoItens.map((item) => (
                             <tr key={item.no_id} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
                               <td className="max-w-[260px] truncate px-3 py-1.5" title={item.nome}>{item.nome}</td>
                               <td className="px-3 py-1.5 font-mono text-[10.5px] text-muted-foreground">{item.nif || "—"}</td>

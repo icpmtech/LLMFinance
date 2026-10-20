@@ -130,9 +130,27 @@ def grafo_empresas(
     )
 
 
+@router.get("/concelhos/{concelho}")
+def grafo_concelho(
+    concelho: str,
+    limite: int = Query(100, ge=1, le=1000, description="Empresas a devolver"),
+    offset: int = Query(0, ge=0),
+    incluir_contratacao: bool = Query(True, description="Cruzar cada NIF com a contratação pública (portal BASE)"),
+) -> Dict[str, Any]:
+    """Empresas de um concelho com as relações no grafo e a contratação pública."""
+    resultado = svc.concelho_detalhe(
+        concelho,
+        limite=limite,
+        offset=offset,
+        incluir_contratacao=incluir_contratacao,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=404, detail=resultado["error"])
+    return resultado
+
+
 @router.get("/mapa")
-def grafo_mapa(
-    q: Optional[str] = Query(None, description="Pesquisa por nome, NIF ou concelho"),
+def grafo_mapa(    q: Optional[str] = Query(None, description="Pesquisa por nome, NIF ou concelho"),
     concelho: Optional[str] = Query(None, description="Restringe a um concelho"),
     tipo: str = Query("empresa", description="Tipos com sede no mapa (empresa,entidade)"),
     limite_pontos: int = Query(1500, ge=0, le=20_000, description="Pontos individuais a devolver"),

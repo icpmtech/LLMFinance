@@ -866,6 +866,17 @@ def indexar(*, progresso: Optional[Dict[str, Any]] = None, es: Any = None) -> Di
 _CACHE: Dict[str, Any] = {"assinatura": None, "nos": [], "arestas": [], "por_id": {}, "vistos_em": 0.0}
 _CACHE_LOCK = threading.Lock()
 
+#: Contratação pública por NIF (portal BASE): evita repetir a agregação ao abrir
+#: fichas e concelhos seguidos.
+_CONTRATO_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_CONTRATO_TTL = 900.0
+
+#: Contratação pública por NIF, na ficha do nó. Evita consultar o Portal BASE
+#: (via Elasticsearch) sempre que se abre a mesma empresa; `_CONTRATO_TTL`
+#: limita a idade do valor guardado.
+_CONTRATO_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_CONTRATO_TTL = 300.0
+
 
 def _invalidar_cache() -> None:
     with _CACHE_LOCK:
@@ -1130,6 +1141,30 @@ def no_detail(no_id: str) -> Dict[str, Any]:
     return resultado
 
 
+def _adjudicantes_da_amostra(amostra: Any) -> List[str]:
+    """Nomes dos adjudicantes a partir dos documentos de amostra do top_hits."""
+    nomes: List[str] = []
+    for hit in ((amostra or {}).get("hits") or {}).get("hits") or []:
+        partes = (hit.get("_source") or {}).get("adjudicantes") or []
+        if isinstance(partes, dict):
+            for parte in partes.get("parsed") or []:
+                nome = (parte or {}).get("nome")
+                if nome and nome not in nomes:
+                    nomes.append(nome)
+            for bruto in partes.get("raw") or []:
+                nome = str(bruto).split(" - ", 1)[-1].strip()
+                if nome and nome not in nomes:
+                    nomes.append(nome)
+        elif isinstance(partes, list):
+            for bruto in partes:
+                nome = str(bruto).split(" - ", 1)[-1].strip()
+                if nome and nome not in nomes:
+                    nomes.append(nome)
+        if len(nomes) >= 3:
+            break
+    return nomes[:3]
+
+
 def _contratacao(nifs: Iterable[Optional[str]]) -> Dict[str, Dict[str, Any]]:
     """Contratação pública (portal BASE) de cada NIF, numa só consulta.
 
@@ -1148,78 +1183,81 @@ def _contratacao(nifs: Iterable[Optional[str]]) -> Dict[str, Dict[str, Any]]:
         if nif in unicos and agora - quando < _CONTRATO_TTL
     }
     faltam = [nif for nif in unicos if nif not in saida]
-    cliente = _cliente() if faltam else None
-    if falta_cliente := (faltam and not cliente):
+    if not faltam:
+        return saida
+    cliente = _cliente()
+    if not cliente:
         for nif in faltam:
             saida[nif] = {"contratos": 0, "valor": 0.0, "anos": [], "adjudicantes": [], "disponivel": False}
-    if cliente and faltam:
-        corpo = {
-            "size": 0,
-            "query": {
-                "nested": {
-                    "path": "adjudicatarios.parsed",
-                    "query": {"terms": {"adjudicatarios.parsed.nif": faltam}},
-                }
-            },
-            "aggs": {
-                "empresas": {
-                    "nested": {"path": "adjudicatarios.parsed"},
-                    "aggs": {
-                        "nifs": {
-                            "terms": {"field": "adjudicatarios.parsed.nif", "size": len(faltam)},
-                            "aggs": {
-                                "raiz": {
-                                    "reverse_nested": {},
-                                    "aggs": {
-                                        "valor": {"sum": {"field": "precoContratual"}},
-                                        "anos": {"terms": {"field": "Ano", "size": 20, "order": {"_key": "desc"}}},
-                                        "adjudicantes": {
-                                            "nested": {"path": "adjudicantes.parsed"},
-                                            "aggs": {
-                                                "nomes": {"terms": {"field": "adjudicantes.parsed.nome.keyword", "size": 3}}
-                                            },
-                                        },
+        return saida
+    corpo = {
+        "size": 0,
+        "query": {
+            "nested": {
+                "path": "adjudicatarios.parsed",
+                "query": {"terms": {"adjudicatarios.parsed.nif": faltam}},
+            }
+        },
+        "aggs": {
+            "empresas": {
+                "nested": {"path": "adjudicatarios.parsed"},
+                "aggs": {
+                    "nifs": {
+                        "terms": {"field": "adjudicatarios.parsed.nif", "size": len(faltam)},
+                        "aggs": {
+                            "raiz": {
+                                "reverse_nested": {},
+                                "aggs": {
+                                    "valor": {"sum": {"field": "precoContratual"}},
+                                    "anos": {"terms": {"field": "Ano", "size": 20, "order": {"_key": "desc"}}},
+                                    # Os adjudicantes vivem noutra lista `nested`; uma
+                                    # agregação `nested` dentro de `reverse_nested` não
+                                    # devolve os termos, por isso leem-se 4 documentos.
+                                    "amostra": {
+                                        "top_hits": {
+                                            "size": 4,
+                                            "sort": [{"precoContratual": {"order": "desc", "missing": "_last"}}],
+                                            "_source": {"includes": ["adjudicantes"]},
+                                        }
                                     },
-                                }
-                            },
-                        }
-                    },
-                }
-            },
-        }
-        try:
-            resposta = cliente.search(index=esc.CONTRACTS_INDEX, body=corpo)
-            baldes = (((resposta.get("aggregations") or {}).get("empresas") or {}).get("nifs") or {}).get("buckets") or []
-            for balde in baldes:
-                nif = str(balde.get("key"))
-                raiz = balde.get("raiz") or {}
-                dados = {
-                    "contratos": int(raiz.get("doc_count") or 0),
-                    "valor": float((raiz.get("valor") or {}).get("value") or 0),
-                    "anos": [int(item.get("key")) for item in (raiz.get("anos") or {}).get("buckets") or [] if item.get("key")],
-                    "adjudicantes": [
-                        item.get("key")
-                        for item in (((raiz.get("adjudicantes") or {}).get("nomes") or {}).get("buckets") or [])
-                    ],
-                    "disponivel": True,
-                }
-                saida[nif] = dados
-                _CONTRATO_CACHE[nif] = (agora, dados)
-        except Exception as exc:  # noqa: BLE001 - a ficha continua sem contratação
-            logger.debug("Contratação pública indisponível (%s)", exc)
-            falta_cliente = True
-    if cliente and faltam:
-        for nif in faltam:
-            if nif in saida:
-                continue
-            dados = {"contratos": 0, "valor": 0.0, "anos": [], "adjudicantes": [], "disponivel": True}
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    try:
+        resposta = cliente.search(index=esc.CONTRACTS_INDEX, body=corpo)
+        baldes = (((resposta.get("aggregations") or {}).get("empresas") or {}).get("nifs") or {}).get("buckets") or []
+        for balde in baldes:
+            nif = str(balde.get("key"))
+            raiz = balde.get("raiz") or {}
+            dados = {
+                "contratos": int(raiz.get("doc_count") or 0),
+                "valor": float((raiz.get("valor") or {}).get("value") or 0),
+                "anos": [
+                    int(item.get("key"))
+                    for item in (raiz.get("anos") or {}).get("buckets") or []
+                    if item.get("key")
+                ],
+                "adjudicantes": _adjudicantes_da_amostra(raiz.get("amostra")),
+                "disponivel": True,
+            }
             saida[nif] = dados
             _CONTRATO_CACHE[nif] = (agora, dados)
-    elif falta_cliente:
+    except Exception as exc:  # noqa: BLE001 - a ficha continua sem contratação
+        logger.debug("Contratação pública indisponível (%s)", exc)
         for nif in faltam:
-            saida.setdefault(
-                nif, {"contratos": 0, "valor": 0.0, "anos": [], "adjudicantes": [], "disponivel": False}
-            )
+            saida[nif] = {"contratos": 0, "valor": 0.0, "anos": [], "adjudicantes": [], "disponivel": False}
+        return saida
+    for nif in faltam:
+        if nif in saida:
+            continue
+        dados = {"contratos": 0, "valor": 0.0, "anos": [], "adjudicantes": [], "disponivel": True}
+        saida[nif] = dados
+        _CONTRATO_CACHE[nif] = (agora, dados)
     return saida
 
 
@@ -1336,7 +1374,9 @@ def concelho_detalhe(
     }
 
 
-
+def empresas(
+    *,
+    q: Optional[str] = None,
     concelho: Optional[str] = None,
     com_geo: Optional[bool] = None,
     tipo: str = "empresa",
@@ -1522,6 +1562,7 @@ def meta() -> Dict[str, Any]:
             "grafo": "/transparencia-grafo/grafo",
             "no": "/transparencia-grafo/nos/{id}",
             "empresas": "/transparencia-grafo/empresas",
+            "concelho": "/transparencia-grafo/concelhos/{concelho}",
             "mapa": "/transparencia-grafo/mapa",
             "construir": "/transparencia-grafo/construir",
             "indexar": "/transparencia-grafo/indexar",
@@ -1655,6 +1696,7 @@ __all__ = [
     "RELACOES",
     "TIPOS_NO",
     "csv_bytes",
+    "concelho_detalhe",
     "construir",
     "data_dir",
     "empresas",

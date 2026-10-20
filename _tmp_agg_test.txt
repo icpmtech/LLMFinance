@@ -1,0 +1,10 @@
+﻿.venv\Scripts\python.exe :   File "<stdin>", line 5
+At line:13 char:6
++ '@ | .venv\Scripts\python.exe - 2>&1 | Out-File -Encoding utf8 C:\LLM ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  File "<stdin>", line 5:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    corpo = {
+            ^
+SyntaxError: '{' was never closed
