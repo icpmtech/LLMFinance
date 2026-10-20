@@ -86,6 +86,7 @@ SEGMENTOS_DA_APP = frozenset(
         "empresas-recolha",
         "empresas-risco",
         "entidade-transparencia",
+        "transparencia-grafo",
         "entidades",
         "entities",
         "municipios",
@@ -105,6 +106,7 @@ SEGMENTOS_DA_APP = frozenset(
         "trading",
         "world",
         # Análise, investigação e assistentes
+        "analise",
         "administracao-central",
         "arquivo",
         "benchmark",
@@ -121,6 +123,7 @@ SEGMENTOS_DA_APP = frozenset(
         "documentos",
         "elastic",
         "erc",
+        "esg",
         "finder",
         "forecast",
         "gleif",

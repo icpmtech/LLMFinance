@@ -341,6 +341,9 @@ from api.mercado_routes import router as mercado_router
 # Peças do procedimento do Portal Vortal: descarga para disco + índice Elasticsearch.
 from api.vortal_routes import router as vortal_router
 from api.risco_routes import router as risco_router
+# ESG: score por empresa (pilares E/S/G), benchmark de setor e dimensão,
+# indicadores dos relatórios de sustentabilidade e carteira de fornecedores.
+from api.esg_routes import router as esg_router
 # MiroFish: simulações de previsão por enxame de agentes alimentadas com dados
 # do sistema (ficha de empresa, tema do Pesquisa 360, notícias, documentos).
 from api.mirofish_routes import router as mirofish_router
@@ -384,6 +387,9 @@ from api.erc_routes import router as erc_router
 # titular e indexadas em `finance_ept_titulares`, `finance_ept_titularidades` e
 # `finance_ept_declaracoes`.
 from api.entidade_transparencia_routes import router as entidade_transparencia_router
+# Grafo da Transparência: pessoas, cargos, entidades públicas e empresas
+# extraídos das declarações da EPT, com a sede das empresas no mapa.
+from api.transparencia_grafo_routes import router as transparencia_grafo_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
@@ -708,6 +714,9 @@ _NO_STORE_PREFIXES = (
     # As declarações da Entidade para a Transparência e o progresso da recolha
     # também não podem vir do cache do browser.
     "/entidade-transparencia",
+    # O grafo da Transparência e o mapa das empresas são reconstruídos a partir
+    # das declarações: nunca servir uma versão em cache.
+    "/transparencia-grafo",
     # O índice da Administração Central e as agregações dos contratos mudam a
     # cada leitura (e a cada reconstrução do índice).
     "/administracao-central",
@@ -937,6 +946,9 @@ app.include_router(vortal_router)
 # Empresas & Risco: nível de risco por empresa (ML + regras), pesquisa tipo
 # motor de busca, contratos associados, comparação e grafos analíticos 360.
 app.include_router(risco_router)
+# ESG: leitura aberta em `/esg/*`; ingestão de indicadores e cálculo em lote
+# exigem sessão (escrita no módulo `esg`).
+app.include_router(esg_router)
 # MiroFish: semente a partir dos dados do sistema + condução da simulação
 # (projeto → grafo no Zep → personas → execução → relatório).
 app.include_router(mirofish_router)
@@ -967,6 +979,9 @@ app.include_router(partidos_router)
 # Portal da Transparência da ERC (entidades, pessoas dos órgãos sociais e OCS).
 app.include_router(erc_router)
 app.include_router(entidade_transparencia_router)
+# Grafo da Transparência (`/transparencia-grafo/*`): rede de pessoas, cargos,
+# entidades públicas e empresas, com mapa das sedes.
+app.include_router(transparencia_grafo_router)
 app.include_router(benchmark_router)
 app.include_router(administracao_central_router)
 # Governo (`/governo/*`): visão geral, membros, fichas e grafo de relações.
@@ -993,6 +1008,13 @@ def serve_benchmark_spa_page(path: str = ""):
     Serve o index.html com meta tags de SEO adaptadas à sub-rota.
     """
     return spa_page_response(f"/benchmark/{path}" if path else "/benchmark")
+
+
+@app.get("/esg")
+@app.get("/esg/{path:path}")
+def serve_esg_spa_page(request: Request, path: str = ""):
+    """Página do módulo **ESG** — score, dossiê, carteira de fornecedores e fontes."""
+    return spa_page_response(str(request.url.path))
 
 
 @app.get("/osint")
@@ -2267,6 +2289,13 @@ def serve_pessoas_iq_spa_page(request: Request, nif: str = "", path: str = ""):
 @app.get("/entidade-transparencia/{path:path}")
 def serve_entidade_transparencia_spa_page(request: Request, path: str = ""):
     """Página da Entidade para a Transparência (SPA) — deep links incluídos."""
+    return spa_page_response(str(request.url.path))
+
+
+@app.get("/transparencia-grafo")
+@app.get("/transparencia-grafo/{path:path}")
+def serve_transparencia_grafo_spa_page(request: Request, path: str = ""):
+    """Página do Grafo da Transparência (SPA) — deep links incluídos."""
     return spa_page_response(str(request.url.path))
 
 

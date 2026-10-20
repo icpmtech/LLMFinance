@@ -135,6 +135,35 @@ ESTRANGEIRO: Dict[str, Tuple[str, float, float]] = {
 _POSTAL_RE = re.compile(r"\b(\d{4})-?(\d{3})\b")
 _NUMERO_RE = re.compile(r"\b\d{3,}\b")
 
+#: Palavras que não são lugares (evita resolver «Rua» como a freguesia de Rua).
+_NAO_LUGARES = {
+    "rua",
+    "avenida",
+    "av",
+    "praca",
+    "praça",
+    "largo",
+    "travessa",
+    "estrada",
+    "caminho",
+    "beco",
+    "calçada",
+    "calcada",
+    "rotunda",
+    "edificio",
+    "edifício",
+    "andar",
+    "bloco",
+    "lote",
+    "apartado",
+    "apartamento",
+    "sede",
+    "sede social",
+    "sem local fisico",
+    "nao aplicavel",
+    "varios",
+}
+
 
 def _fold(value: Any) -> str:
     """Minúsculas sem acentos, com hífenes e pontuação convertidos em espaço."""
@@ -211,10 +240,14 @@ def _pontos_da_frase(frase: str) -> Optional[Tuple[str, Tuple[float, float], str
     for inicio in range(len(palavras)):
         for tamanho in range(min(5, len(palavras) - inicio), 0, -1):
             chave = " ".join(palavras[inicio : inicio + tamanho])
+            if chave in _NAO_LUGARES:
+                continue
             ponto = cidades.get(chave)
             if ponto:
                 return chave, ponto, "cidade"
     for palavra in palavras:
+        if palavra in _NAO_LUGARES:
+            continue
         encontrada = _gralha(palavra)
         if encontrada:
             chave, ponto = encontrada
@@ -261,7 +294,7 @@ def resolver_local(local: Any) -> Optional[Dict[str, Any]]:
             label = _titulo(chave)
             # Mantém a grafia da declaração quando o segmento é só o nome do local.
             original = segmento.strip(" .;,")
-            if _fold(original) == chave:
+            if _fold(original) == chave and not original.isupper():
                 label = original
             return {"local": bruto, "concelho": label, "lat": lat, "lon": lon, "precisao": precisao}
     return None

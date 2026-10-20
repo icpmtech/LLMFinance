@@ -1,0 +1,23 @@
+﻿warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+.venv\Scripts\python.exe : Traceback (most recent call last):
+At line:17 char:6
++ '@ | .venv\Scripts\python.exe - 2>&1 | Out-File -Encoding utf8 C:\LLM ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "<stdin>", line 12, in <module>
+  File 
+"C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\encodings\cp1252.py", 
+line 19, in encode
+/transparencia-grafo/meta 200 {'fonte': 'entidade-transparencia', 'fonte_url': 'https://entidadetransparencia.pt', 'descricao': 'Grafo de pessoas, cargos, entidades p�blicas e empresas extra�do das declara��es �nicas da Entidade para a Transpar�ncia,
+/transparencia-grafo/stats 200 {'nos': 23497, 'arestas': 32015, 'pessoas': 12478, 'cargos': 293, 'entidades': 6481, 'empresas': 4245, 'com_geo': 4119, 'atualizado_em': '2026-10-20T16:40:22+00:00', 'declaracoes_lidas': 11257, 'relacoes': {'EXERCE': 141
+/transparencia-grafo/dimensoes 200 {'tipos': {'pessoa': {'label': 'Pessoas (titulares)', 'curto': 'Pessoa', 'cor': '#f472b6'}, 'cargo': {'label': 'Cargos e fun��es', 'curto': 'Cargo', 'cor': '#fbbf24'}, 'entidade': {'label': 'Entidades p�blicas', 'curto':
+/transparencia-grafo/grafo?limit=10 200 {'nodes': [{'id': 'cargo:12', 'key': '12', 'label': 'Presidente', 'dimension': 'cargo', 'type': 'cargo', 'count': 8325, 'total_value': 0, 'grau': 8325, 'peso': 17262, 'nif': None, 'concelho': None, 'lat': None, 'lon': No
+/transparencia-grafo/mapa?limite_pontos=3 200 {'total': 4119, 'com_geo': 4119, 'sem_geo': 126, 'pontos': [{'no_id': 'empresa:500835012', 'nome': 'Partido Social Democrata', 'tipo': 'empresa', 'nif': '500835012', 'local_sede': 'LISBOA', 'concelho': 'Lisboa', 'precisa
+/transparencia-grafo/empresas?limit=3 200 {'total': 4245, 'offset': 0, 'limit': 3, 'items': [{'no_id': 'empresa:500835012', 'nome': 'Partido Social Democrata', 'tipo': 'empresa', 'nif': '500835012', 'local_sede': 'LISBOA', 'concelho': 'Lisboa', 'precisao_geo': '
+no empresa:500835012 200 Partido Social Democrata 41
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\ufeff' in position 0: character maps to <undefined>
+csv 200 text/csv; charset=utf-8 

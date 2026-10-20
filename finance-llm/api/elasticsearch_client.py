@@ -433,6 +433,20 @@ PLATFORM_MAIL_ACCOUNTS_INDEX = "finance_mail_accounts"
 # índice que serve a lista, a pesquisa e as contagens — o IMAP fica para o detalhe.
 PLATFORM_MAIL_MESSAGES_INDEX = "finance_mail_messages"
 
+# Módulo **ESG**: uma fotografia por empresa (score, pilares, componentes,
+# historico de 3 anos, benchmark de pares e evidencias). O `_id` é
+# `PAIS-NIF`, para que recalcular a mesma empresa atualize o mesmo documento.
+ESG_EMPRESAS_INDEX = "finance_esg_empresas"
+
+# Indicadores ESG declarados nos relatorios de sustentabilidade (uma entrada por
+# empresa, ano e fonte). O score usa-os quando existem; sem eles, fica só com os
+# indicadores calculados a partir dos dados abertos.
+ESG_INDICADORES_INDEX = "finance_esg_indicadores"
+
+# Registo das execucoes de calculo e de ingestao de indicadores (progresso,
+# contagens e erros), como nos restantes modulos de recolha.
+ESG_RECOLHAS_INDEX = "finance_esg_recolhas"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -968,6 +982,40 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     PARTIDOS_RECOLHAS_INDEX: {
         # As mensagens de erro das recolhas trazem acentos e maiúsculas.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ESG_EMPRESAS_INDEX: {
+        # Nomes de empresas e de setores vêm com acentos («Águas de Portugal»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ESG_INDICADORES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ESG_RECOLHAS_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2913,6 +2961,64 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    transparencia_grafo_nos_mappings = {
+        "properties": {
+            "no_id": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "subtipo": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nome_normalizado": {"type": "keyword"},
+            # Identificador de origem (id do titular/entidade/cargo na EPT ou NIF).
+            "ref_id": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "nif_entidade": {"type": "keyword"},
+            "url": {"type": "keyword", "ignore_above": 1024},
+            "entidade_ids": {"type": "keyword"},
+            "cargos": {"type": "keyword", "ignore_above": 512},
+            "anos": {"type": "integer"},
+            "declaracoes": {"type": "integer"},
+            "grau": {"type": "integer"},
+            "peso": {"type": "integer"},
+            "local_sede": {"type": "keyword", "ignore_above": 512},
+            "concelho": {"type": "keyword", "ignore_above": 256},
+            "precisao_geo": {"type": "keyword"},
+            "lat": {"type": "double"},
+            "lon": {"type": "double"},
+            "location": {"type": "geo_point"},
+            "detalhes": {"type": "object", "enabled": False},
+        }
+    }
+
+    transparencia_grafo_arestas_mappings = {
+        "properties": {
+            "aresta_id": {"type": "keyword"},
+            "origem": {"type": "keyword"},
+            "destino": {"type": "keyword"},
+            "origem_tipo": {"type": "keyword"},
+            "destino_tipo": {"type": "keyword"},
+            "relacao": {"type": "keyword"},
+            "peso": {"type": "integer"},
+            "anos": {"type": "integer"},
+            "detalhe": {"type": "object", "enabled": False},
+        }
+    }
+
+    transparencia_grafo_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "totais": {"type": "object", "enabled": False},
+            "relacoes": {"type": "object", "enabled": False},
+            "atualizado_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     municipios_despesas_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -3690,6 +3796,133 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # ESG — fotografia por empresa. Os campos que a UI consulta (score, pilares,
+    # cobertura, setor, dimensão) são indexados; os blocos grandes (componentes,
+    # histórico, benchmark, evidências e carteira de fornecedores) ficam
+    # `enabled: false` porque só são lidos por id.
+    esg_empresas_mappings = {
+        "properties": {
+            "nif": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "name_keyword": {"type": "keyword", "ignore_above": 512},
+            "names": {"type": "keyword", "ignore_above": 512},
+            "pais": {"type": "keyword"},
+            "cae_principal": {"type": "keyword"},
+            "cae_label": {"type": "keyword", "ignore_above": 256},
+            "setor": {"type": "keyword"},
+            "setor_label": {"type": "keyword", "ignore_above": 256},
+            "setor_fonte": {"type": "keyword"},
+            "dimensao": {"type": "keyword"},
+            "dimensao_label": {"type": "keyword", "ignore_above": 128},
+            "score": {"type": "float"},
+            "nivel": {"type": "keyword"},
+            "nivel_label": {"type": "keyword", "ignore_above": 64},
+            "cor": {"type": "keyword", "ignore_above": 16},
+            "cobertura": {"type": "float"},
+            "confianca": {"type": "keyword"},
+            "pilares": {
+                "properties": {
+                    "e": {"type": "float"},
+                    "s": {"type": "float"},
+                    "g": {"type": "float"},
+                    "economico": {"type": "float"},
+                }
+            },
+            "contratos": {"type": "integer"},
+            "valor": {"type": "float"},
+            "adjudicantes": {"type": "integer"},
+            "fornecedores_count": {"type": "integer"},
+            "ano": {"type": "integer"},
+            "anos": {"type": "integer"},
+            "modelo_versao": {"type": "keyword", "ignore_above": 32},
+            "gerado_em": {"type": "date"},
+            "atualizado_em": {"type": "date"},
+            "fontes": {"type": "keyword", "ignore_above": 128},
+            "avisos": {"type": "keyword", "ignore_above": 512},
+            "location": {
+                "properties": {
+                    "pais": {"type": "keyword"},
+                    "distrito": {"type": "keyword"},
+                    "concelho": {"type": "keyword"},
+                    "freguesia": {"type": "keyword"},
+                }
+            },
+            "search_text": {"type": "text", "analyzer": "world_folding"},
+            # Blocos lidos apenas por id.
+            "empresa": {"type": "object", "enabled": False},
+            "score_detalhe": {"type": "object", "enabled": False},
+            "pilares_detalhe": {"type": "object", "enabled": False},
+            "componentes": {"type": "object", "enabled": False},
+            "historico": {"type": "object", "enabled": False},
+            "benchmark": {"type": "object", "enabled": False},
+            "indicadores": {"type": "object", "enabled": False},
+            "evidencias": {"type": "object", "enabled": False},
+            "fornecedores": {"type": "object", "enabled": False},
+            "cartao_modelo": {"type": "object", "enabled": False},
+        }
+    }
+
+    # ESG — indicadores declarados nos relatórios de sustentabilidade. O `nested`
+    # permite filtrar por código/pilar e somar valores sem misturar indicadores
+    # do mesmo documento.
+    esg_indicadores_mappings = {
+        "properties": {
+            "nif": {"type": "keyword"},
+            "pais": {"type": "keyword"},
+            "empresa_nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "ano": {"type": "integer"},
+            "fonte": {"type": "keyword"},
+            "fonte_label": {"type": "keyword", "ignore_above": 256},
+            "url": {"type": "keyword", "ignore_above": 1024, "index": False},
+            "verificacao": {"type": "keyword"},
+            "origem": {"type": "keyword"},
+            "pilares": {"type": "keyword"},
+            "codigos": {"type": "keyword"},
+            "n_indicadores": {"type": "integer"},
+            "atualizado_em": {"type": "date"},
+            "indicadores": {
+                "type": "nested",
+                "properties": {
+                    "codigo": {"type": "keyword"},
+                    "label": {"type": "keyword", "ignore_above": 256},
+                    "pilar": {"type": "keyword"},
+                    "valor": {"type": "float"},
+                    "unidade": {"type": "keyword", "ignore_above": 64},
+                    "direcao": {"type": "keyword"},
+                },
+            },
+        }
+    }
+
+    esg_recolhas_mappings = {
+        "properties": {
+            "run_id": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "estado": {"type": "keyword"},
+            "pais": {"type": "keyword"},
+            "iniciado_em": {"type": "date"},
+            "concluido_em": {"type": "date"},
+            "duracao_s": {"type": "float"},
+            "total": {"type": "integer"},
+            "processados": {"type": "integer"},
+            "erros": {"type": "integer"},
+            "mensagem": {"type": "text", "analyzer": "world_folding"},
+            "user_id": {"type": "keyword", "ignore_above": 64},
+            "user_email": {"type": "keyword", "ignore_above": 256},
+            "parametros": {"type": "object", "enabled": False},
+            "detalhes": {"type": "object", "enabled": False},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -3764,9 +3997,19 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (EPT_TITULARIDADES_INDEX, ept_titularidades_mappings),
         (EPT_DECLARACOES_INDEX, ept_declaracoes_mappings),
         (EPT_RECOLHAS_INDEX, ept_recolhas_mappings),
+        # Grafo da Transparência: nós (pessoas, cargos, entidades e empresas),
+        # arestas entre eles e o manifesto da construção.
+        (TRANSPARENCIA_GRAFO_NOS_INDEX, transparencia_grafo_nos_mappings),
+        (TRANSPARENCIA_GRAFO_ARESTAS_INDEX, transparencia_grafo_arestas_mappings),
+        (TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, transparencia_grafo_recolhas_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
         (ARQUIVO_PT_INDEX, arquivo_pt_mappings),
+        # ESG: fotografia por empresa, indicadores dos relatórios e registo das
+        # execuções de cálculo/ingestão.
+        (ESG_EMPRESAS_INDEX, esg_empresas_mappings),
+        (ESG_INDICADORES_INDEX, esg_indicadores_mappings),
+        (ESG_RECOLHAS_INDEX, esg_recolhas_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}

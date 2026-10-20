@@ -126,10 +126,16 @@ export const APP_MODULES: AppModule[] = [
     ],
   },
   {
+    id: "sustentabilidade",
+    label: "Sustentabilidade",
+    hint: "Score ESG por empresa, pilares E/S/G, benchmark e carteira de fornecedores",
+    ids: ["esg"],
+  },
+  {
     id: "pessoas",
     label: "Pessoas",
     hint: "Pessoas, cargos, políticos e as contas dos partidos",
-    ids: ["descoberta-pessoas", "pessoas-iq-pesquisa", "pessoas-iq", "pessoas-iq-politicos", "partidos", "entidade-transparencia"],
+    ids: ["descoberta-pessoas", "pessoas-iq-pesquisa", "pessoas-iq", "pessoas-iq-politicos", "partidos", "entidade-transparencia", "transparencia-grafo"],
   },
   {
     id: "dados-publicos",

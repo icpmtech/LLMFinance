@@ -50,6 +50,7 @@ import DescobertaPessoasPage from "./pages/DescobertaPessoasPage";
 import PessoasIQPesquisaPage from "./pages/PessoasIQPesquisaPage";
 import PoliticosPortugalPage from "./pages/PoliticosPortugalPage";
 import EntidadeTransparenciaPage from "./pages/EntidadeTransparenciaPage";
+import TransparenciaGrafoPage from "./pages/TransparenciaGrafoPage";
 import { PessoasGraphWindow } from "./pages/PessoasGraphWindow";
 import { parseGraphWindowView } from "./components/people/peopleKit";
 import CompaniesGlobalPage from "./pages/CompaniesGlobalPage";
@@ -120,6 +121,7 @@ import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
+import EsgPage from "./pages/EsgPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
 import RigorbizPage from "./pages/RigorbizPage";
@@ -235,6 +237,7 @@ type AppView =
   | "remuneracoes"
   | "remuneracoes-ap"
   | "entidade-transparencia"
+  | "transparencia-grafo"
   | "governo"
   | `governo-ficha:${string}`
   | `governo-pessoa:${string}`
@@ -258,6 +261,7 @@ type AppView =
   | "deep-search"
   | "jarvis"
   | "risco"
+  | "esg"
   | "societario"
   | "empresas-recolha"
   | "arquivo"
@@ -435,6 +439,7 @@ function pathForView(
   // Remunerações da Administração Pública (DGAEP): vive dentro de `/remuneracoes`.
   if (view === "remuneracoes-ap") return "/remuneracoes/ap";
   if (view === "entidade-transparencia") return "/entidade-transparencia";
+  if (view === "transparencia-grafo") return "/transparencia-grafo";
   if (view === "governo") return "/governo";
   // Ficha de um membro do Governo (`governo-ficha:<item_id>`).
   if (view.startsWith("governo-ficha:")) {
@@ -471,6 +476,7 @@ function pathForView(
   if (view === "simulador") return "/simulador";
   if (view === "deep-search") return "/deep-search";
   if (view === "risco") return "/empresas-risco";
+  if (view === "esg") return "/esg";
   if (view === "societario") return "/societario";
   if (view === "empresas-recolha") return "/empresas-recolha";
   if (view === "arquivo") return "/arquivo";
@@ -703,6 +709,7 @@ export default function App() {
     if (path === "/administracao-central" || path.startsWith("/administracao-central/")) return "administracao-central";
     if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) return "remuneracoes-ap";
     if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) return "entidade-transparencia";
+    if (path === "/transparencia-grafo" || path.startsWith("/transparencia-grafo/")) return "transparencia-grafo";
     // Governo: `/governo` (grafo e lista), `/governo/pasta/<slug>`,
     // `/governo/ficha/<id>` e `/governo/pessoa/<nif>`.
     if (path === "/governo") return "governo";
@@ -739,6 +746,7 @@ export default function App() {
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
+    if (path === "/esg" || path.startsWith("/esg/")) return "esg";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) return "empresas-recolha";
     if (path === "/arquivo" || path.startsWith("/arquivo/")) return "arquivo";
@@ -895,6 +903,7 @@ export default function App() {
       else if (path === "/administracao-central" || path.startsWith("/administracao-central/")) next = "administracao-central";
       else if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) next = "remuneracoes-ap";
       else if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) next = "entidade-transparencia";
+      else if (path === "/transparencia-grafo" || path.startsWith("/transparencia-grafo/")) next = "transparencia-grafo";
       else if (path === "/governo") next = "governo";
       else if (path.startsWith("/governo/pasta/"))
         next = `governo-area:${decodeURIComponent(path.slice("/governo/pasta/".length))}` as AppView;
@@ -917,6 +926,7 @@ export default function App() {
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/deep-search" || path.startsWith("/deep-search/")) next = "deep-search";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
+      else if (path === "/esg" || path.startsWith("/esg/")) next = "esg";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) next = "empresas-recolha";
       else if (path === "/arquivo" || path.startsWith("/arquivo/")) next = "arquivo";
@@ -1814,6 +1824,7 @@ export default function App() {
     if (target === "remuneracoes") return <RemuneracoesPage />;
     if (target === "remuneracoes-ap") return <RemuneracoesApPage />;
     if (target === "entidade-transparencia") return <EntidadeTransparenciaPage />;
+    if (target === "transparencia-grafo") return <TransparenciaGrafoPage />;
     // Governo: grafo de relações (ministério → membro → gabinete) e as fichas
     // do membro do Governo e da pessoa de entidade, abertas a partir da pesquisa.
     if (target === "governo" || target.startsWith("governo-area:")) {
@@ -1891,6 +1902,7 @@ export default function App() {
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
+    if (target === "esg") return <EsgPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;
     if (target === "arquivo") return <ArquivoPage />;

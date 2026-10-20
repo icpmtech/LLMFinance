@@ -427,6 +427,8 @@ export function GraphCanvas({
   const positionsRef = useRef(new Map<string, NodePosition>());
   const fitToViewRef = useRef<(() => void) | null>(null);
   const draggingRef = useRef(false);
+  /** Nó a ser arrastado (posição guardada para não saltar para o cursor). */
+  const nodeDragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const dragMovedRef = useRef(false);
   const userMovedRef = useRef(false);
   const layoutVersionRef = useRef(layoutVersion);
@@ -449,6 +451,7 @@ export function GraphCanvas({
   const [hoveredEdge, setHoveredEdge] = useState<StudioEdge | null>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [settled, setSettled] = useState(false);
+  const [nodeDragging, setNodeDragging] = useState(false);
 
   const degree = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1161,6 +1164,28 @@ export function GraphCanvas({
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (nodeDragRef.current) {
+      // Arrastar um nó: a posição do layout é atualizada no sítio (Map mutável)
+      // e o canvas redesenha; a física não volta a correr porque o `layoutKey`
+      // não mudou. O deslocamento inicial evita o nó «saltar» para o cursor.
+      const point = toGraphCoords(event.clientX, event.clientY);
+      const position = positionsRef.current.get(nodeDragRef.current.id);
+      if (position) {
+        position.x = point.x + nodeDragRef.current.dx;
+        position.y = point.y + nodeDragRef.current.dy;
+        position.vx = 0;
+        position.vy = 0;
+      }
+      if (Math.abs(event.clientX - lastPointerRef.current.x) > 1 || Math.abs(event.clientY - lastPointerRef.current.y) > 1) {
+        dragMovedRef.current = true;
+      }
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      userMovedRef.current = true;
+      setHovered(null);
+      setHoveredEdge(null);
+      draw();
+      return;
+    }
     if (draggingRef.current) {
       const dx = event.clientX - lastPointerRef.current.x;
       const dy = event.clientY - lastPointerRef.current.y;
@@ -1233,11 +1258,26 @@ export function GraphCanvas({
         tabIndex={0}
         aria-label={`Grafo com ${nodes.length} nós e ${edges.length} ligações${
           drawn.omittedNodes > 0 ? ` (mais ${drawn.omittedNodes} nós não desenhados por limite de desempenho)` : ""
-        }. Setas para mover, mais e menos para zoom, zero para ajustar à vista.`}
+        }. Arraste um nó para o mover; clique para abrir a ficha. Setas para mover, mais e menos para zoom, zero para ajustar à vista.`}
         className={`h-full w-full rounded-xl bg-[#07151b] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50 ${
-          tooltipVisible ? "cursor-pointer" : "cursor-move"
+          nodeDragging ? "cursor-grabbing" : hovered ? "cursor-grab" : tooltipVisible ? "cursor-pointer" : "cursor-move"
         }`}
         onPointerDown={(event) => {
+          const point = toGraphCoords(event.clientX, event.clientY);
+          const node = hitNode(point.x, point.y);
+          if (node) {
+            const position = positionsRef.current.get(node.id);
+            if (position) {
+              nodeDragRef.current = { id: node.id, dx: position.x - point.x, dy: position.y - point.y };
+              setNodeDragging(true);
+              setHovered(node);
+              setHoveredEdge(null);
+              dragMovedRef.current = false;
+              lastPointerRef.current = { x: event.clientX, y: event.clientY };
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              return;
+            }
+          }
           draggingRef.current = true;
           dragMovedRef.current = false;
           lastPointerRef.current = { x: event.clientX, y: event.clientY };
@@ -1245,10 +1285,14 @@ export function GraphCanvas({
         }}
         onPointerMove={handlePointerMove}
         onPointerUp={(event) => {
+          nodeDragRef.current = null;
+          setNodeDragging(false);
           draggingRef.current = false;
           event.currentTarget.releasePointerCapture?.(event.pointerId);
         }}
         onPointerLeave={() => {
+          nodeDragRef.current = null;
+          setNodeDragging(false);
           draggingRef.current = false;
           setHovered(null);
           setHoveredEdge(null);

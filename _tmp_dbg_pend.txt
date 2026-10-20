@@ -1,0 +1,4 @@
+﻿tipos {'Atividades profissionais, cargos e fun��es': 2014, 'Sociedades': 195, 'Apoios ou benef�cios': 195, 'Outras situa��es': 58, 'Servi�os prestados': 310}
+pendentes 2209 Counter({'ATIVIDADE': 2014, 'PARTICIPACAO': 195})
+exemplo apoios []
+exemplo servico []

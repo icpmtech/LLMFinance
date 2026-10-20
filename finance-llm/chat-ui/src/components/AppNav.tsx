@@ -80,6 +80,7 @@ export type AppView =
   | "administracao-central"
   | "remuneracoes"
   | "entidade-transparencia"
+  | "transparencia-grafo"
   | "governo"
   | "municipios-despesas"
   | "partidos"
@@ -94,6 +95,7 @@ export type AppView =
   | "mirofish"
   | "simulador"
   | "risco"
+  | "esg"
   | "societario"
   | "empresas-recolha"
   | "gleif"
@@ -222,6 +224,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   social: ["social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   world: ["world-rede"],
+  esg: [],
   gleif: ["gleif-mapa", "gleif-ingestao"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],

@@ -116,6 +116,7 @@ MODULES: Tuple[Dict[str, Any], ...] = (
     {"id": "benchmarks", "label": "Benchmarks de produtos", "group": "Análise", "content": True},
     {"id": "padroes", "label": "Padrões", "group": "Análise", "content": True},
     {"id": "risco", "label": "Risco", "group": "Análise", "content": True},
+    {"id": "esg", "label": "ESG", "group": "Análise", "content": True},
     {"id": "lorenz", "label": "Lorenz", "group": "Análise", "content": True},
     {"id": "descoberta", "label": "Descoberta", "group": "Análise", "content": True},
     {"id": "osint", "label": "OSINT", "group": "Análise", "content": True},

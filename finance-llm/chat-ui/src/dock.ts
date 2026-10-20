@@ -599,6 +599,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "16,185,129",
   },
   {
+    id: "transparencia-grafo",
+    label: "Grafo da Transparência",
+    hint: "Rede de pessoas, cargos, entidades públicas e empresas das declarações únicas — com o mapa das sedes das empresas",
+    icon: Network,
+    gradient: "from-sky-200 via-cyan-500 to-indigo-700",
+    accent: "56,189,248",
+  },
+  {
     id: "erc",
     label: "ERC · Comunicação social",
     hint: "Entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais, os OCS detidos e a estrutura de propriedade",
@@ -653,6 +661,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: ShieldAlert,
     gradient: "from-amber-200 via-rose-400 to-rose-700",
     accent: "251,113,133",
+  },
+  {
+    id: "esg",
+    label: "ESG · Sustentabilidade",
+    hint: "Score ESG por empresa (Ambiente, Social e Governação), evolução de 3 anos, benchmark de setor e dimensão, indicadores dos relatórios e carteira de fornecedores",
+    icon: Leaf,
+    gradient: "from-emerald-200 via-teal-500 to-cyan-700",
+    accent: "52,211,153",
   },
   {
     id: "societario",

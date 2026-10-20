@@ -1,0 +1,4 @@
+﻿tempo 16.4
+{"nos": 23497, "arestas": 32015, "pessoas": 12478, "cargos": 293, "entidades": 6481, "empresas": 4245, "com_geo": 4119}
+{"EXERCE": 14119, "ATIVIDADE": 8188, "CARGO_EM": 7679, "PARTICIPACAO": 1074, "BENEFICIO": 507, "SERVICO": 448}
+pasta C:\LLMFinance\finance-llm\data\transparencia-grafo\grafo

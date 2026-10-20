@@ -426,6 +426,18 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "esg",
+        "description": (
+            "ESG por empresa: score de 0 a 100 e pilares Ambiente, Social e "
+            "Governação, com cobertura e confiança; série de 3 anos; benchmark "
+            "de setor e dimensão de carteira; indicadores declarados nos "
+            "relatórios de sustentabilidade (catálogo GRI/ESRS); carteira de "
+            "fornecedores e painel agregado. Indexa em `finance_esg_empresas`, "
+            "`finance_esg_indicadores` e `finance_esg_recolhas`. Os indicadores "
+            "de contratação pública são proxies; o módulo não certifica empresas."
+        ),
+    },
+    {
         "name": "erc",
         "description": (
             "Portal da Transparência da ERC: entidades proprietárias de órgãos "
@@ -448,6 +460,19 @@ TAGS_METADATA: List[Dict[str, str]] = [
             "`finance_ept_titulares`, `finance_ept_titularidades` e "
             "`finance_ept_declaracoes`; serve pesquisa, ficha do titular e a "
             "ligação ao PessoasIQ."
+        ),
+    },
+    {
+        "name": "transparencia-grafo",
+        "description": (
+            "Grafo da Transparência: rede de pessoas, cargos, entidades públicas "
+            "e empresas extraída das declarações únicas da EPT. Liga cada titular "
+            "ao cargo e à entidade onde o exerceu e às empresas do registo de "
+            "interesses (atividades, filiação, sociedades, apoios e serviços), "
+            "geocodifica o «Local da sede» e indexa em "
+            "`finance_ept_grafo_nos`, `finance_ept_grafo_arestas` e "
+            "`finance_ept_grafo_recolhas`; serve o grafo, a ficha de cada nó, a "
+            "lista de empresas e o mapa das sedes."
         ),
     },
     {
@@ -528,6 +553,7 @@ SPA_PATHS: Tuple[str, ...] = (
     "/contracts/map",
     "/contratos-es",
     "/contribuintes",
+    "/esg",
     "/world",
     "/world/rede",
     "/gleif",
@@ -542,6 +568,8 @@ SPA_PATHS: Tuple[str, ...] = (
 
 # Prefixo → grupo, aplicado por ordem (o mais específico primeiro).
 PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
+    # Deep links de `/esg/...` são a mesma matéria; `/esg` em si é a página SPA.
+    ("/esg", "esg"),
     ("/adjudicat", "spa"),
     ("/empresas", "spa"),
     ("/pesquisa", "spa"),

@@ -456,13 +456,12 @@ function GrupoCard({
           <p className="border-b border-white/5 px-4 py-2 text-xs text-rose-300">{grupo.error}</p>
         )}
         <ul className="divide-y divide-white/5">
-          {grupo.items.map((item) => (
-            <li key={item.id} className="group">
-              <button
-                type="button"
-                onClick={() => onOpen(item)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04]"
-              >
+          {grupo.items.map((item) => {
+            // Resultados sem ficha para abrir (por exemplo um executivo municipal
+            // sem NIF conhecido) não são botões: um clique sem efeito parece avaria.
+            const abrivel = Boolean(item.open);
+            const corpo = (
+              <>
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5">
                   <Icon size={16} className={tone.text} />
                 </div>
@@ -480,10 +479,27 @@ function GrupoCard({
                     ))}
                   </div>
                 </div>
-                <ChevronLeft size={16} className="mt-1 shrink-0 rotate-180 text-muted-foreground" />
-              </button>
-            </li>
-          ))}
+                {abrivel && (
+                  <ChevronLeft size={16} className="mt-1 shrink-0 rotate-180 text-muted-foreground" />
+                )}
+              </>
+            );
+            return (
+              <li key={item.id} className="group">
+                {abrivel ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(item)}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04]"
+                  >
+                    {corpo}
+                  </button>
+                ) : (
+                  <div className="flex w-full items-start gap-3 px-4 py-3">{corpo}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
         {podeCarregarMais && (
           <div className="px-4 py-2">
