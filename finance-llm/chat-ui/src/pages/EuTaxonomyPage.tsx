@@ -1,13 +1,20 @@
 /**
- * Página do módulo **EU Taxonomy Navigator**.
+ * Módulo **EU Taxonomy Navigator**.
  *
- * Mostra o panorama oficial da Taxonomia UE (objetivos, setores, contagens),
- * permite pesquisar atividades em inglês e português, filtrar por setor,
- * objetivo e NACE, e acionar a recolha/tradução para administradores.
+ * Mostra o panorama oficial da Taxonomia Europeia (seis objetivos ambientais,
+ * setores e contagens de atividades do Compass), permite pesquisar atividades
+ * em inglês e português — com filtro por setor, objetivo e código NACE — e
+ * abrir a ficha de cada atividade com a descrição original e a tradução.
+ *
+ * A recolha (download da API oficial, normalização, índice Elasticsearch e
+ * snapshot JSON) e a tradução para PT exigem sessão com permissão de escrita
+ * no módulo `eu-taxonomy` (administradores e gestores de plataforma).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpRight,
   BookOpen,
+  ExternalLink,
   Globe2,
   Layers,
   Loader2,
@@ -17,16 +24,7 @@ import {
   Target,
 } from "lucide-react";
 
-import {
-  Chip,
-  EmptyState,
-  Kpi,
-  Loading,
-  SearchInput,
-  SectionCard,
-} from "../components/padroes/padroesKit";
 import { useAuth } from "../auth";
-import { useToast } from "../toast";
 import {
   coletarEuTaxonomy,
   getEuTaxonomyActivity,
@@ -37,6 +35,7 @@ import {
   type EuTaxonomyActivity,
   type EuTaxonomyPanorama,
 } from "../euTaxonomyApi";
+import { EmptyState, Loading } from "../components/padroes/padroesKit";
 
 const OBJECTIVE_COLORS: Record<number, string> = {
   41: "#34d399",
@@ -47,11 +46,36 @@ const OBJECTIVE_COLORS: Record<number, string> = {
   46: "#fb7185",
 };
 
+function num(value?: number | null): string {
+  if (value === undefined || value === null) return "—";
+  return new Intl.NumberFormat("pt-PT").format(value);
+}
+
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "sky" | "emerald" | "violet";
+}) {
+  const tones: Record<string, string> = {
+    neutral: "border-white/10 bg-white/5 text-muted-foreground",
+    sky: "border-sky-400/30 bg-sky-400/10 text-sky-200",
+    emerald: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
+    violet: "border-violet-400/30 bg-violet-400/10 text-violet-200",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
 function ObjectivePill({ id, label }: { id: number; label?: string }) {
   const cor = OBJECTIVE_COLORS[id] || "#94a3b8";
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px]"
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]"
       style={{ borderColor: `${cor}55`, backgroundColor: `${cor}14`, color: cor }}
       title={label || `Objetivo ${id}`}
     >
@@ -61,199 +85,233 @@ function ObjectivePill({ id, label }: { id: number; label?: string }) {
   );
 }
 
-function ActivityRow({
-  item,
-  onSelect,
-}: {
-  item: EuTaxonomyActivity;
-  onSelect: (id: number) => void;
-}) {
-  const name = item.name_pt || item.name_en;
+function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 hover:border-white/20">
+    <div className="glass-card gradient-border rounded-2xl p-4">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="stat-value mt-1 text-xl font-bold md:text-2xl">{value}</p>
+      {sub ? <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p> : null}
+    </div>
+  );
+}
+
+function ActivityCard({ item, onSelect }: { item: EuTaxonomyActivity; onSelect: (id: number) => void }) {
+  return (
+    <article className="glass-card rounded-2xl p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="cursor-pointer text-sm font-medium hover:text-teal-300" onClick={() => onSelect(item.activity_id)}>
-            {name}
+          <h3
+            className="cursor-pointer text-sm font-semibold hover:text-teal-200"
+            onClick={() => onSelect(item.activity_id)}
+            title="Abrir a ficha da atividade"
+          >
+            {item.name_pt || item.name_en}
           </h3>
-          {item.name_pt && item.name_en !== item.name_pt && (
-            <p className="text-[11px] text-muted-foreground">{item.name_en}</p>
-          )}
+          {item.name_pt && item.name_pt !== item.name_en ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{item.name_en}</p>
+          ) : null}
         </div>
-        <Chip tone="teal">{item.sector_pt || item.sector_en}</Chip>
+        <Badge tone="emerald">{item.sector_pt || item.sector_en}</Badge>
       </div>
+
       {item.description_pt || item.description_en ? (
-        <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
           {item.description_pt || item.description_en}
         </p>
       ) : null}
-      {item.objectives?.length > 0 && (
+
+      {(item.objectives?.length ?? 0) > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {item.objectives.map((obj) => (
-            <ObjectivePill key={obj.objective_id} id={obj.objective_id} label={obj.objective_short_pt || obj.objective_short_en} />
+          {item.objectives.map((objetivo) => (
+            <ObjectivePill
+              key={objetivo.objective_id}
+              id={objetivo.objective_id}
+              label={objetivo.objective_short_pt || objetivo.objective_short_en}
+            />
           ))}
         </div>
       )}
-      {item.nace_codes?.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {item.nace_codes.map((nace) => (
-            <span key={nace} className="font-mono text-[10px] text-muted-foreground">{nace}</span>
-          ))}
-        </div>
-      )}
-    </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {(item.nace_codes?.length ?? 0) > 0 && (
+          <span className="font-mono text-[10px] text-muted-foreground">NACE {item.nace_codes.join(", ")}</span>
+        )}
+        {item.url ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[10px] text-sky-200 hover:text-sky-100"
+          >
+            Ficha oficial <ExternalLink size={10} />
+          </a>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
 export default function EuTaxonomyPage() {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const isAdmin = user?.role === "admin" || user?.role === "manager";
+  const canWrite = user?.role === "admin" || user?.role === "manager";
 
   const [panorama, setPanorama] = useState<EuTaxonomyPanorama | null>(null);
-  const [status, setStatus] = useState<{ snapshot_exists: boolean; count?: number; es_available?: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    index: string;
+    snapshot_exists: boolean;
+    es_available: boolean;
+    count?: number;
+    error?: string;
+  } | null>(null);
+  const [results, setResults] = useState<{ total: number; items: EuTaxonomyActivity[] } | null>(null);
+  const [selected, setSelected] = useState<EuTaxonomyActivity | null>(null);
   const [q, setQ] = useState("");
   const [sector, setSector] = useState("");
   const [objectiveId, setObjectiveId] = useState<number | undefined>(undefined);
-  const [results, setResults] = useState<{ total: number; items: EuTaxonomyActivity[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [translating, setTranslating] = useState(false);
-  const [selected, setSelected] = useState<EuTaxonomyActivity | null>(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
 
-  const loadPanorama = async () => {
+  const loadPanorama = useCallback(async () => {
     try {
-      const data = await getEuTaxonomyPanorama();
-      setPanorama(data);
-    } catch (error) {
-      toast({ message: String(error), tone: "error" });
+      setPanorama(await getEuTaxonomyPanorama());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível carregar o panorama da Taxonomia.");
     }
-  };
+  }, []);
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
-      const data = await getEuTaxonomyStatus();
-      setStatus(data);
-    } catch {
-      setStatus({ snapshot_exists: false });
+      setStatus(await getEuTaxonomyStatus());
+    } catch (err) {
+      setStatus({ index: "finance_eu_taxonomy", snapshot_exists: false, es_available: false, error: String(err) });
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadPanorama();
     loadStatus();
+  }, [loadPanorama, loadStatus]);
+
+  const pesquisar = useCallback(async (termo: string, setorAlvo: string, objetivo: number | undefined) => {
+    setLoading(true);
+    try {
+      const resposta = await searchEuTaxonomy({
+        q: termo || undefined,
+        kind: "activity",
+        sector: setorAlvo || undefined,
+        objective_id: objetivo,
+        size: 50,
+      });
+      setResults({
+        total: resposta.total,
+        items: resposta.items.filter((item) => item.kind === "activity") as EuTaxonomyActivity[],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "A pesquisa falhou.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await searchEuTaxonomy({
-          q: q || undefined,
-          kind: "activity",
-          sector: sector || undefined,
-          objective_id: objectiveId,
-          size: 50,
-        });
-        setResults({
-          total: data.total,
-          items: data.items.filter((it) => it.kind === "activity") as EuTaxonomyActivity[],
-        });
-      } catch (error) {
-        toast({ message: String(error), tone: "error" });
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
+    const timer = window.setTimeout(() => pesquisar(q, sector, objectiveId), 250);
     return () => window.clearTimeout(timer);
-  }, [q, sector, objectiveId]);
+  }, [q, sector, objectiveId, pesquisar]);
 
-  const sectors = useMemo(
-    () => (panorama?.sectors || []).map((s) => s.sector_pt || s.sector_en).sort(),
+  const setores = useMemo(
+    () => (panorama?.sectors || []).map((item) => item.sector_pt || item.sector_en).sort(),
     [panorama],
   );
 
-  const handleCollect = async () => {
+  const handleColetar = async () => {
     setCollecting(true);
+    setError("");
+    setAviso("");
     try {
-      const data = await coletarEuTaxonomy({ force: false, translate: false });
-      if (data.error) throw new Error(data.error);
-      toast({
-        message: `Recolhidos ${data.totals?.activities || 0} itens e indexados ${data.index?.indexed_count || 0}.`,
-        tone: "success",
-      });
+      const resposta = await coletarEuTaxonomy({ force: false, translate: false });
+      if (resposta.error) throw new Error(resposta.error);
+      setAviso(
+        `Recolha concluída: ${num(resposta.totals?.activities)} atividades, ` +
+          `${num(resposta.totals?.objectives)} objetivos e ${num(resposta.totals?.sectors)} setores; ` +
+          `${num(resposta.index?.indexed_count)} documentos indexados.`,
+      );
       await loadPanorama();
       await loadStatus();
-      const search = await searchEuTaxonomy({ kind: "activity", size: 50 });
-      setResults({ total: search.total, items: search.items as EuTaxonomyActivity[] });
-    } catch (error) {
-      toast({ message: String(error), tone: "error" });
+      await pesquisar(q, sector, objectiveId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "A recolha falhou.");
     } finally {
       setCollecting(false);
     }
   };
 
-  const handleTranslate = async () => {
+  const handleTraduzir = async () => {
     setTranslating(true);
+    setError("");
+    setAviso("");
     try {
-      const data = await traduzirEuTaxonomy({});
-      if (data.error) throw new Error(data.error);
-      toast({
-        message: `Traduzidos ${data.translated_names || 0} nomes e ${data.translated_descriptions || 0} descrições.`,
-        tone: "success",
-      });
+      const resposta = await traduzirEuTaxonomy({});
+      if (resposta.error) throw new Error(resposta.error);
+      setAviso(
+        `Tradução concluída: ${num(resposta.translated_names)} nomes e ` +
+          `${num(resposta.translated_descriptions)} descrições em português.`,
+      );
       await loadPanorama();
-      const search = await searchEuTaxonomy({ kind: "activity", size: 50 });
-      setResults({ total: search.total, items: search.items as EuTaxonomyActivity[] });
-    } catch (error) {
-      toast({ message: String(error), tone: "error" });
+      await pesquisar(q, sector, objectiveId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "A tradução falhou.");
     } finally {
       setTranslating(false);
     }
   };
 
-  const handleSelect = async (id: number) => {
+  const handleSelecionar = async (activityId: number) => {
     try {
-      const data = await getEuTaxonomyActivity(id);
-      setSelected(data);
-    } catch (error) {
-      toast({ message: String(error), tone: "error" });
+      setSelected(await getEuTaxonomyActivity(activityId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível abrir a atividade.");
     }
   };
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold">
-            <Sprout size={22} className="text-emerald-400" />
+            <Sprout size={22} className="text-emerald-300" />
             EU Taxonomy Navigator
           </h1>
-          <p className="text-[11px] text-muted-foreground">
-            Atividades, objetivos e setores oficiais do Compass da Comissão Europeia.
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Atividades, objetivos e setores oficiais do Compass da Comissão Europeia — original em inglês e tradução em
+            português.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2">
+          {canWrite ? (
             <>
               <button
-                onClick={handleCollect}
+                type="button"
+                onClick={handleColetar}
                 disabled={collecting}
-                className="neumorphic-btn flex items-center gap-1.5 text-xs"
+                className="neumorphic-btn flex items-center gap-1.5 text-xs disabled:opacity-50"
               >
                 {collecting ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 Recolher
               </button>
               <button
-                onClick={handleTranslate}
+                type="button"
+                onClick={handleTraduzir}
                 disabled={translating || !status?.snapshot_exists}
-                className="neumorphic-btn flex items-center gap-1.5 text-xs"
+                className="neumorphic-btn flex items-center gap-1.5 text-xs disabled:opacity-50"
               >
                 {translating ? <Loader2 size={14} className="animate-spin" /> : <Globe2 size={14} />}
                 Traduzir PT
               </button>
             </>
-          )}
+          ) : null}
           <a
             href="https://ec.europa.eu/sustainable-finance-taxonomy/home"
             target="_blank"
@@ -266,108 +324,189 @@ export default function EuTaxonomyPage() {
         </div>
       </header>
 
-      {panorama && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi icon={Layers} label="Atividades" value={String(panorama.totals.activities)} sub="oficiais do Compass" />
-          <Kpi icon={Target} label="Objetivos" value={String(panorama.totals.objectives)} sub="ambientais" />
-          <Kpi icon={Globe2} label="Setores" value={String(panorama.totals.sectors)} sub="económicos" />
-          <Kpi icon={Search} label="Indexados" value={String(status?.count ?? "—")} sub={status?.es_available ? "Elasticsearch" : "indisponível"} />
+      {error ? (
+        <div className="mb-4">
+          <EmptyState tone="warn">{error}</EmptyState>
         </div>
-      )}
+      ) : null}
+      {aviso ? (
+        <div className="mb-4">
+          <EmptyState>{aviso}</EmptyState>
+        </div>
+      ) : null}
 
-      {panorama && (
-        <SectionCard title="Objetivos ambientais" subtitle="Os seis objetivos do Regulamento (UE) 2020/852" icon={Target}>
+      {panorama ? (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Kpi label="Atividades" value={num(panorama.totals.activities)} sub="oficiais do Compass" />
+          <Kpi label="Objetivos" value={num(panorama.totals.objectives)} sub="ambientais" />
+          <Kpi label="Setores" value={num(panorama.totals.sectors)} sub="económicos" />
+          <Kpi
+            label="Indexados"
+            value={num(status?.count)}
+            sub={status?.es_available ? status.index : "Elasticsearch indisponível"}
+          />
+        </div>
+      ) : null}
+
+      {panorama ? (
+        <section className="glass-card gradient-border mb-5 rounded-2xl p-5">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+            <Target size={16} className="text-teal-300" />
+            Objetivos ambientais
+          </h2>
           <div className="flex flex-wrap gap-2">
-            {panorama.objectives.map((obj) => (
-              <button
-                key={obj.id}
-                onClick={() => setObjectiveId(objectiveId === obj.id ? undefined : obj.id)}
-                className={`rounded-full border px-3 py-1 text-[11px] transition ${
-                  objectiveId === obj.id ? "border-white/30 bg-white/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                }`}
-                style={{ color: obj.color }}
-              >
-                <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: obj.color }} />
-                {obj.id} · {obj.name_pt}
-              </button>
+            {panorama.objectives.map((objetivo) => {
+              const ativo = objectiveId === objetivo.id;
+              return (
+                <button
+                  key={objetivo.id}
+                  type="button"
+                  onClick={() => setObjectiveId(ativo ? undefined : objetivo.id)}
+                  className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                    ativo ? "border-white/30 bg-white/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                  }`}
+                  style={{ color: objetivo.color }}
+                  title={objetivo.name_en}
+                >
+                  <span
+                    className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                    style={{ backgroundColor: objetivo.color }}
+                  />
+                  {objetivo.id} · {objetivo.name_pt}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="glass-card gradient-border mb-5 rounded-2xl p-5">
+        <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Search size={16} className="text-teal-300" />
+              Pesquisar atividades
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Pesquise por nome (EN/PT), setor, objetivo ambiental ou código NACE/CAE.
+            </p>
+          </div>
+          <select
+            value={sector}
+            onChange={(event) => setSector(event.target.value)}
+            className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none"
+            aria-label="Filtrar por setor"
+          >
+            <option value="">Todos os setores</option>
+            {setores.map((nome) => (
+              <option key={nome} value={nome}>
+                {nome}
+              </option>
             ))}
-          </div>
-        </SectionCard>
-      )}
+          </select>
+        </header>
 
-      <SectionCard
-        title="Pesquisar atividades"
-        subtitle="Pesquise por nome (EN/PT), setor, objetivo ou NACE"
-        icon={Search}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={sector}
-              onChange={(e) => setSector(e.target.value)}
-              className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none"
-            >
-              <option value="">Todos os setores</option>
-              {sectors.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {objectiveId && (
-              <Chip tone="teal">
-                Objetivo {objectiveId}
-                <button onClick={() => setObjectiveId(undefined)} className="ml-1">×</button>
-              </Chip>
-            )}
-          </div>
-        }
-      >
-        <SearchInput value={q} onChange={setQ} placeholder="Ex.: afforestation, floresta, energia solar..." />
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+          <Search size={14} className="shrink-0 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            placeholder="Ex.: afforestation, floresta, energia solar, água…"
+            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
+          />
+          {q ? (
+            <button type="button" onClick={() => setQ("")} className="shrink-0 text-muted-foreground hover:text-foreground">
+              ×
+            </button>
+          ) : null}
+        </div>
 
-        {loading && <Loading label="A pesquisar..." />}
-
-        {!loading && results && results.total === 0 && (
-          <EmptyState tone="info">Nenhuma atividade encontrada para «{q || "(vazio)"}».</EmptyState>
-        )}
-
-        {!loading && results && results.total > 0 && (
-          <div className="mt-4 space-y-3">
-            <p className="text-[11px] text-muted-foreground">{results.total} resultado(s)</p>
-            {results.items.map((item) => (
-              <ActivityRow key={item.activity_id} item={item} onSelect={handleSelect} />
-            ))}
-          </div>
-        )}
-      </SectionCard>
-
-      {selected && (
-        <SectionCard title={selected.name_pt || selected.name_en} subtitle={selected.sector_pt || selected.sector_en} icon={BookOpen}>
-          <div className="space-y-3">
-            <p className="text-[11px] text-muted-foreground">ID: {selected.activity_id} · NACE: {selected.nace_codes.join(", ") || "—"}</p>
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <h4 className="mb-1 text-[11px] font-medium">Descrição (PT)</h4>
-              <p className="text-[12px] leading-relaxed text-foreground">{selected.description_pt || selected.description_en}</p>
-              {selected.description_pt && selected.description_en !== selected.description_pt && (
-                <>
-                  <h4 className="mb-1 mt-3 text-[11px] font-medium">Descrição original (EN)</h4>
-                  <p className="text-[12px] leading-relaxed text-muted-foreground">{selected.description_en}</p>
-                </>
-              )}
-            </div>
-            {selected.objectives?.length > 0 && (
-              <div>
-                <h4 className="mb-1 text-[11px] font-medium">Objetivos</h4>
-                <div className="flex flex-wrap gap-1">
-                  {selected.objectives.map((obj) => (
-                    <ObjectivePill key={obj.objective_id} id={obj.objective_id} label={obj.objective_short_pt || obj.objective_short_en} />
-                  ))}
-                </div>
+        <div className="mt-3">
+          {loading ? (
+            <Loading label="A pesquisar no Compass…" />
+          ) : results && results.total > 0 ? (
+            <>
+              <p className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <Layers size={12} />
+                {num(results.total)} atividade(s) encontrada(s)
+                {objectiveId ? <Badge tone="violet">objetivo {objectiveId}</Badge> : null}
+                {sector ? <Badge tone="sky">{sector}</Badge> : null}
+              </p>
+              <div className="space-y-3">
+                {results.items.map((item) => (
+                  <ActivityCard key={item.activity_id} item={item} onSelect={handleSelecionar} />
+                ))}
               </div>
-            )}
-            <a href={selected.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-sky-300 hover:underline">
-              Ver ficha oficial <ArrowUpRight size={12} />
-            </a>
+            </>
+          ) : results ? (
+            <EmptyState>
+              Nenhuma atividade encontrada{q ? ` para «${q}»` : ""}
+              {sector ? ` no setor «${sector}»` : ""}. Execute a recolha se o índice estiver vazio.
+            </EmptyState>
+          ) : null}
+        </div>
+      </section>
+
+      {selected ? (
+        <section className="glass-card gradient-border rounded-2xl p-5">
+          <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <BookOpen size={16} className="text-teal-300" />
+                {selected.name_pt || selected.name_en}
+              </h2>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Atividade {selected.activity_id} · {selected.sector_pt || selected.sector_en}
+                {selected.nace_codes?.length ? ` · NACE ${selected.nace_codes.join(", ")}` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              Fechar
+            </button>
+          </header>
+
+          {(selected.objectives?.length ?? 0) > 0 && (
+            <div className="mb-3 flex flex-wrap gap-1">
+              {selected.objectives.map((objetivo) => (
+                <ObjectivePill
+                  key={objetivo.objective_id}
+                  id={objetivo.objective_id}
+                  label={objetivo.objective_short_pt || objetivo.objective_short_en}
+                />
+              ))}
+            </div>
+          )}
+
+          {selected.description_pt ? (
+            <div className="mb-3">
+              <h3 className="mb-1 text-[11px] font-medium text-foreground">Descrição (português)</h3>
+              <p className="text-[12px] leading-relaxed text-foreground">{selected.description_pt}</p>
+            </div>
+          ) : null}
+
+          <div>
+            <h3 className="mb-1 text-[11px] font-medium text-foreground">
+              {selected.description_pt ? "Descrição original (inglês)" : "Descrição (inglês)"}
+            </h3>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">{selected.description_en || "—"}</p>
           </div>
-        </SectionCard>
-      )}
+
+          {selected.url ? (
+            <a
+              href={selected.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1 text-[11px] text-sky-200 hover:text-sky-100"
+            >
+              Ver ficha oficial no EU Taxonomy Navigator <ArrowUpRight size={12} />
+            </a>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

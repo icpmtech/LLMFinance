@@ -66,6 +66,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sparkles,
+  Sprout,
   Target,
   Telescope,
   TerminalSquare,
@@ -669,6 +670,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Leaf,
     gradient: "from-emerald-200 via-teal-500 to-cyan-700",
     accent: "52,211,153",
+  },
+  {
+    id: "eu-taxonomy",
+    label: "EU Taxonomy Navigator",
+    hint: "Atividades, objetivos e setores oficiais do EU Taxonomy Compass da Comissão Europeia — pesquisa em inglês e português, critérios e códigos NACE",
+    icon: Sprout,
+    gradient: "from-lime-200 via-emerald-400 to-teal-600",
+    accent: "132,204,22",
   },
   {
     id: "dora",

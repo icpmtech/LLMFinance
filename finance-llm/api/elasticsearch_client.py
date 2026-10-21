@@ -3308,6 +3308,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "source_url": {"type": "keyword", "ignore_above": 512, "index": False},
             "profile_url": {"type": "keyword", "ignore_above": 512, "index": False},
             "photo_url": {"type": "keyword", "ignore_above": 1024, "index": False},
+            "email": {"type": "keyword", "ignore_above": 256},
+            "curriculo_url": {"type": "keyword", "ignore_above": 512, "index": False},
             "raw_role": {"type": "text", "analyzer": "world_folding"},
             "ingested_at": {"type": "date"},
             "updated_at": {"type": "date"},
@@ -3331,6 +3333,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
             },
             "municipio_keyword": {"type": "keyword", "ignore_above": 128},
+            # Versões **sem acentos** (ver `CAMPOS_NORMALIZADOS` no serviço): a
+            # pesquisa por fragmento usa-as para «alcac» encontrar «ALCÁCER».
+            "municipio_fold": {"type": "keyword", "ignore_above": 128},
             "codigo_ine": {"type": "keyword", "ignore_above": 16},
             "nif": {"type": "keyword", "ignore_above": 32},
             "nome_presidente": {
@@ -3340,7 +3345,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
             },
             "nome_presidente_keyword": {"type": "keyword", "ignore_above": 256},
+            "nome_presidente_fold": {"type": "keyword", "ignore_above": 256},
             "morada": {"type": "text", "analyzer": "world_folding"},
+            "morada_fold": {"type": "keyword", "ignore_above": 512},
             "codigo_postal": {"type": "keyword", "ignore_above": 16},
             "localidade": {
                 "type": "text",
@@ -3348,7 +3355,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 "search_analyzer": "world_folding",
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
             },
+            "localidade_fold": {"type": "keyword", "ignore_above": 128},
+            "distrito_fold": {"type": "keyword", "ignore_above": 128},
             "email": {"type": "keyword", "ignore_above": 256},
+            "email_fold": {"type": "keyword", "ignore_above": 256},
             "telefone": {"type": "keyword", "ignore_above": 32},
             "site": {"type": "keyword", "ignore_above": 512, "index": False},
             "site_domain": {"type": "keyword", "ignore_above": 128},

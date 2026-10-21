@@ -16,6 +16,13 @@ que traz, para cada município:
 Os dados são normalizados e indexados em `finance_municipios_contactos`, com
 pesquisa por texto em vários campos (nome do município, presidente, e-mail,
 morada, distrito) — estilo «Google» — e filtros por distrito e por código INE.
+
+A pesquisa é **insensível a acentos**: cada campo de texto ganha uma versão
+dobrada em `*_fold` (ver `CAMPOS_NORMALIZADOS`), porque o `world_folding` do
+analisador só actua em campos `text` — um `wildcard` sobre um `keyword` compara
+os bytes tal como estão e «alcac» não encontrava «ALCÁCER». É assim que as
+pessoas escrevem numa caixa de pesquisa, e é o que faz «evor», «serta» e
+«braganca» devolverem o município certo.
 """
 from __future__ import annotations
 
@@ -70,6 +77,25 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", _fold(value)).strip("-")
 
 
+#: Campos de texto que ganham uma versão **sem acentos** para a pesquisa por
+#: fragmento. O `world_folding` do analisador só actua nos campos `text`; um
+#: `wildcard` sobre um `keyword` compara os bytes tal como estão, e por isso
+#: «alcac» não encontrava «ALCÁCER» nem «evor» encontrava «ÉVORA».
+CAMPOS_NORMALIZADOS = (
+    "municipio",
+    "nome_presidente",
+    "distrito",
+    "localidade",
+    "morada",
+    "email",
+)
+
+
+def _sem_acentos(value: str) -> str:
+    """Texto em minúsculas, sem acentos e sem pontuação — chave de pesquisa."""
+    return re.sub(r"[^a-z0-9@. ]+", " ", _fold(value)).strip()
+
+
 def _normalizar_texto(s: Any) -> str:
     if s is None:
         return ""
@@ -98,11 +124,13 @@ def _codigo_postal_localidade(cp: str) -> Tuple[str, str]:
 
 
 def _site_url(site: str) -> str:
-    if not site:
+    """Endereço completo do sítio. A coluna do Excel traz espaços à volta."""
+    limpo = str(site or "").strip().rstrip("/")
+    if not limpo:
         return ""
-    if site.startswith("http://") or site.startswith("https://"):
-        return site
-    return "https://" + site.lstrip("/")
+    if limpo.startswith("http://") or limpo.startswith("https://"):
+        return limpo
+    return "https://" + limpo.lstrip("/")
 
 
 def _linha_para_doc(r: pd.Series) -> Optional[Dict[str, Any]]:
@@ -120,7 +148,7 @@ def _linha_para_doc(r: pd.Series) -> Optional[Dict[str, Any]]:
     email = _normalizar_texto(r.iloc[7]).lower()
     telefone = re.sub(r"[^0-9+]", "", str(r.iloc[8] or ""))
     site = _site_url(_normalizar_texto(r.iloc[9]))
-    return {
+    doc = {
         "doc_id": codigo,
         "distrito": distrito,
         "distrito_keyword": distrito,
@@ -140,6 +168,9 @@ def _linha_para_doc(r: pd.Series) -> Optional[Dict[str, Any]]:
         "slug": _slug(municipio),
         "fonte": FONTE,
     }
+    for campo in CAMPOS_NORMALIZADOS:
+        doc[f"{campo}_fold"] = _sem_acentos(doc.get(campo) or "")
+    return doc
 
 
 def ler_excel(caminho: Optional[Path] = None) -> List[Dict[str, Any]]:
@@ -212,6 +243,10 @@ def indexar(docs: Iterable[Dict[str, Any]], substituir: bool = False) -> Dict[st
     actions = []
     for doc in docs:
         source = dict(doc)
+        # Uma cache antiga pode não trazer os campos sem acentos: calculam-se
+        # aqui para o índice ficar sempre pesquisável por fragmentos.
+        for campo in CAMPOS_NORMALIZADOS:
+            source.setdefault(f"{campo}_fold", _sem_acentos(source.get(campo) or ""))
         source.setdefault("ingested_at", now)
         source.setdefault("updated_at", now)
         actions.append({
@@ -274,13 +309,22 @@ def _build_text_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
         {"match": {"distrito": {"query": termo, "operator": "and", "boost": 2}}},
         {"match": {"email": {"query": termo, "operator": "and", "boost": 3}}},
     ]
-    # Wildcards úteis para pesquisas curtas ou fragmentos (ex.: "tirso")
-    termo_lower = termo.lower()
-    for field in ("municipio_keyword", "nome_presidente_keyword", "morada", "telefone", "codigo_ine", "distrito_keyword"):
-        should.append({"wildcard": {field: {"value": f"*{termo_lower}*", "case_insensitive": True, "boost": 1}}})
-    # E-mail é keyword exacto: wildcard sem tokenização.
-    if "@" in termo_lower or "." in termo_lower:
-        should.append({"wildcard": {"email": {"value": f"*{termo_lower}*", "case_insensitive": True, "boost": 5}}})
+    # Wildcards sobre os campos **sem acentos**: é o que faz «alcac» encontrar
+    # «ALCÁCER» e «evor» encontrar «ÉVORA». Os `keyword` originais continuam a
+    # apanhar o texto tal como foi escrito («ÁGUEDA»).
+    termo_fold = _sem_acentos(termo)
+    if termo_fold:
+        for campo in CAMPOS_NORMALIZADOS:
+            should.append({
+                "wildcard": {f"{campo}_fold": {"value": f"*{termo_fold}*", "boost": 2}}
+            })
+    for field in ("municipio_keyword", "nome_presidente_keyword", "codigo_ine"):
+        should.append({"wildcard": {field: {"value": f"*{termo}*", "case_insensitive": True}}})
+    # Telefone e código INE são só dígitos: um wildcard apanha o prefixo.
+    digitos = re.sub(r"[^0-9]", "", termo)
+    if digitos:
+        for field in ("telefone", "codigo_ine", "nif", "codigo_postal"):
+            should.append({"wildcard": {field: {"value": f"*{digitos}*"}}})
     return {
         "bool": {
             "should": should,

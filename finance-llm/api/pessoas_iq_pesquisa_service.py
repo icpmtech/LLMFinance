@@ -219,6 +219,11 @@ def _municipios(termo: str, page: int, size: int) -> Dict[str, Any]:
                 "partido": row.get("party"),
                 "eleicao": row.get("eleicao"),
                 "mandato": row.get("mandato"),
+                "pelouros": row.get("pelouros") or [],
+                "email": row.get("email"),
+                "photo_url": row.get("photo_url"),
+                "profile_url": row.get("profile_url"),
+                "curriculo_url": row.get("curriculo_url"),
             },
             "open": {"view": "pessoas-iq", "arg": row.get("nif")} if row.get("nif") else None,
         })

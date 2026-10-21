@@ -117,6 +117,7 @@ MODULES: Tuple[Dict[str, Any], ...] = (
     {"id": "padroes", "label": "Padrões", "group": "Análise", "content": True},
     {"id": "risco", "label": "Risco", "group": "Análise", "content": True},
     {"id": "esg", "label": "ESG", "group": "Análise", "content": True},
+    {"id": "eu-taxonomy", "label": "EU Taxonomy Navigator", "group": "Análise", "content": True},
     {"id": "lorenz", "label": "Lorenz", "group": "Análise", "content": True},
     {"id": "descoberta", "label": "Descoberta", "group": "Análise", "content": True},
     {"id": "osint", "label": "OSINT", "group": "Análise", "content": True},
@@ -362,3 +363,21 @@ def effective_for_user(user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def all_module_prefixes() -> Dict[str, str]:
     """Mapa prefixo → módulo, para documentação e testes."""
     return {module["id"]: "/" + module["id"] for module in MODULES}
+
+
+def require_write(module_id: str, session: Any) -> None:
+    """Exige escrita num módulo, dentro de uma rota que já tem sessão.
+
+    É o par certo de `can()` nas rotas que montam a sua própria sessão: em vez de
+    repetirem a comparação, chamam isto e recebem um `403` com a razão à frente.
+    """
+    from fastapi import HTTPException
+
+    user = getattr(session, "user", None)
+    dados = user.model_dump() if hasattr(user, "model_dump") else (user or None)
+    if can(dados if isinstance(dados, dict) else None, module_id, "write"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=f"A sua conta não tem permissão de escrita no módulo '{module_id}'.",
+    )

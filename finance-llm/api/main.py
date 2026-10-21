@@ -1031,6 +1031,13 @@ def serve_esg_spa_page(request: Request, path: str = ""):
     return spa_page_response(str(request.url.path))
 
 
+@app.get("/eu-taxonomy")
+@app.get("/eu-taxonomy/{path:path}")
+def serve_eu_taxonomy_spa_page(request: Request, path: str = ""):
+    """Página do módulo **EU Taxonomy Navigator** — atividades, objetivos e setores do Compass."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/dora")
 @app.get("/dora/{path:path}")
 def serve_dora_spa_page(request: Request, path: str = ""):

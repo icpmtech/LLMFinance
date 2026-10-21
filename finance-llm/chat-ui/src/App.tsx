@@ -123,6 +123,7 @@ import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
 import EsgPage from "./pages/EsgPage";
+import EuTaxonomyPage from "./pages/EuTaxonomyPage";
 import DoraPage from "./pages/DoraPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
@@ -264,6 +265,7 @@ type AppView =
   | "jarvis"
   | "risco"
   | "esg"
+  | "eu-taxonomy"
   | "dora"
   | "societario"
   | "empresas-recolha"
@@ -481,6 +483,7 @@ function pathForView(
   if (view === "deep-search") return "/deep-search";
   if (view === "risco") return "/empresas-risco";
   if (view === "esg") return "/esg";
+  if (view === "eu-taxonomy") return "/eu-taxonomy";
   if (view === "societario") return "/societario";
   if (view === "empresas-recolha") return "/empresas-recolha";
   if (view === "arquivo") return "/arquivo";
@@ -752,6 +755,7 @@ export default function App() {
     if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
     if (path === "/esg" || path.startsWith("/esg/")) return "esg";
+    if (path === "/eu-taxonomy" || path.startsWith("/eu-taxonomy/")) return "eu-taxonomy";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) return "empresas-recolha";
     if (path === "/arquivo" || path.startsWith("/arquivo/")) return "arquivo";
@@ -933,6 +937,7 @@ export default function App() {
       else if (path === "/deep-search" || path.startsWith("/deep-search/")) next = "deep-search";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
       else if (path === "/esg" || path.startsWith("/esg/")) next = "esg";
+      else if (path === "/eu-taxonomy" || path.startsWith("/eu-taxonomy/")) next = "eu-taxonomy";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) next = "empresas-recolha";
       else if (path === "/arquivo" || path.startsWith("/arquivo/")) next = "arquivo";
@@ -1911,6 +1916,7 @@ export default function App() {
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
     if (target === "esg") return <EsgPage />;
+    if (target === "eu-taxonomy") return <EuTaxonomyPage />;
     if (target === "dora") return <DoraPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;

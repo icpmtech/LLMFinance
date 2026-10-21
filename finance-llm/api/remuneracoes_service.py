@@ -2064,6 +2064,8 @@ def importar_executivo(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "atribuicoes": (membro.get("atribuicoes") or membro.get("pelouros") or None),
                 "url": membro.get("url"),
                 "foto_url": membro.get("foto_url") or membro.get("photo_url"),
+                "email": membro.get("email"),
+                "curriculo_url": membro.get("curriculo_url"),
             }
             for membro in membros
             if (membro.get("nome") or "").strip()

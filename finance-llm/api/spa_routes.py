@@ -124,6 +124,7 @@ SEGMENTOS_DA_APP = frozenset(
         "elastic",
         "erc",
         "esg",
+        "eu-taxonomy",
         "finder",
         "forecast",
         "gleif",

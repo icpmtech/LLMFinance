@@ -294,6 +294,8 @@ def _doc_do_mapa(
         "pelouros": [],
         "photo_url": None,
         "profile_url": None,
+        "email": None,
+        "curriculo_url": None,
         "source": FONTE_CNE,
         "source_url": None,
         "raw_role": (cargo_original or cargo).strip(),
@@ -376,6 +378,8 @@ def _membro_do_site(
         "pelouros": _pelouros_de(item.get("pelouros") or item.get("atribuicoes")),
         "url": item.get("url") or item.get("profile_url"),
         "photo_url": item.get("photo_url") or item.get("foto_url"),
+        "email": item.get("email"),
+        "curriculo_url": item.get("curriculo_url"),
         "site": site or item.get("source"),
         "site_url": site_url or item.get("source_url"),
     }
@@ -485,6 +489,10 @@ def _aplicar_membro(item: Dict[str, Any], membro: Dict[str, Any]) -> None:
         item["profile_url"] = membro["url"]
     if membro.get("photo_url"):
         item["photo_url"] = membro["photo_url"]
+    if membro.get("email"):
+        item["email"] = membro["email"]
+    if membro.get("curriculo_url"):
+        item["curriculo_url"] = membro["curriculo_url"]
     if membro.get("site"):
         item["source"] = membro["site"]
         item["source_url"] = membro.get("site_url") or item["source_url"]

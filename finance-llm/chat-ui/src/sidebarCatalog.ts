@@ -128,8 +128,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "sustentabilidade",
     label: "Sustentabilidade",
-    hint: "Score ESG por empresa, pilares E/S/G, benchmark e carteira de fornecedores",
-    ids: ["esg"],
+    hint: "Score ESG por empresa, pilares E/S/G, benchmark, carteira de fornecedores e o EU Taxonomy Navigator (Compass oficial)",
+    ids: ["esg", "eu-taxonomy"],
   },
   {
     id: "dora",

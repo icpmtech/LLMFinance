@@ -96,6 +96,7 @@ export type AppView =
   | "simulador"
   | "risco"
   | "esg"
+  | "eu-taxonomy"
   | "dora"
   | "societario"
   | "empresas-recolha"
@@ -226,6 +227,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   world: ["world-rede"],
   esg: [],
+  "eu-taxonomy": [],
   gleif: ["gleif-mapa", "gleif-ingestao"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],
