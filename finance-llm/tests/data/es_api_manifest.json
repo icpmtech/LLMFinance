@@ -1,0 +1,1922 @@
+{
+"AGENT_CONFIGS_INDEX": {
+"kind": "str",
+"len": 19
+},
+"ANALISES_EMPRESA_INDEX": {
+"kind": "str",
+"len": 24
+},
+"ARQUIVO_PT_INDEX": {
+"kind": "str",
+"len": 18
+},
+"AUTH_SESSIONS_INDEX": {
+"kind": "str",
+"len": 16
+},
+"AUTH_USERS_INDEX": {
+"kind": "str",
+"len": 13
+},
+"Any": {
+"kind": "_AnyMeta",
+"len": null
+},
+"BENCHMARKS_INDEX": {
+"kind": "str",
+"len": 18
+},
+"BENCHMARK_INDEX_PREFIX": {
+"kind": "str",
+"len": 14
+},
+"CIRE_INDEX": {
+"kind": "str",
+"len": 12
+},
+"CITACOES_INDEX": {
+"kind": "str",
+"len": 23
+},
+"CONTRACTS_INDEX": {
+"kind": "str",
+"len": 9
+},
+"CONTRATOS_ES_ENTITY_FIELDS": {
+"kind": "dict",
+"len": 2
+},
+"CONTRATOS_ES_ENTITY_SAMPLE_FIELDS": {
+"kind": "list",
+"len": 6
+},
+"CONTRATOS_ES_FACET_FIELDS": {
+"kind": "dict",
+"len": 11
+},
+"CONTRATOS_ES_FONTES": {
+"kind": "tuple",
+"len": 2
+},
+"CONTRATOS_ES_INDEX": {
+"kind": "str",
+"len": 12
+},
+"CONTRATOS_FR_ENTITY_FIELDS": {
+"kind": "dict",
+"len": 2
+},
+"CONTRATOS_FR_ENTITY_SAMPLE_FIELDS": {
+"kind": "list",
+"len": 4
+},
+"CONTRATOS_FR_FACET_FIELDS": {
+"kind": "dict",
+"len": 7
+},
+"CONTRATOS_FR_INDEX": {
+"kind": "str",
+"len": 12
+},
+"CONTRIBUINTES_INDEX": {
+"kind": "str",
+"len": 21
+},
+"CRM_INDEX": {
+"kind": "str",
+"len": 11
+},
+"CRM_RBAC_INDEX": {
+"kind": "str",
+"len": 16
+},
+"DEVEDORES_INDEX": {
+"kind": "str",
+"len": 17
+},
+"DEVEDORES_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 26
+},
+"DIRECTORY_KEYWORD_FIELDS": {
+"kind": "tuple",
+"len": 11
+},
+"DIRECTORY_NUMERIC_FIELDS": {
+"kind": "tuple",
+"len": 1
+},
+"DIRECTORY_TEXT_FIELDS": {
+"kind": "tuple",
+"len": 7
+},
+"DORA_CONTEUDO_INDEX": {
+"kind": "str",
+"len": 21
+},
+"DORA_INCIDENTES_INDEX": {
+"kind": "str",
+"len": 23
+},
+"DORA_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 21
+},
+"DORA_REGISTO_INDEX": {
+"kind": "str",
+"len": 20
+},
+"DORA_RELATORIOS_INDEX": {
+"kind": "str",
+"len": 23
+},
+"DORA_RISCOS_INDEX": {
+"kind": "str",
+"len": 19
+},
+"DORA_WORKFLOWS_INDEX": {
+"kind": "str",
+"len": 22
+},
+"Dict": {
+"kind": "_SpecialGenericAlias",
+"len": null
+},
+"ENTITIES_INDEX": {
+"kind": "str",
+"len": 16
+},
+"ENTITY_ROLE_SUMMARY_CACHE_FILE": {
+"kind": "Path",
+"len": null
+},
+"ENTITY_ROLE_SUMMARY_MAX_AGE": {
+"kind": "float",
+"len": null
+},
+"ENTITY_ROLE_SUMMARY_TIMEOUT": {
+"kind": "int",
+"len": null
+},
+"ENTITY_ROLE_SUMMARY_TTL": {
+"kind": "float",
+"len": null
+},
+"EPT_DECLARACOES_INDEX": {
+"kind": "str",
+"len": 23
+},
+"EPT_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"EPT_TITULARES_INDEX": {
+"kind": "str",
+"len": 21
+},
+"EPT_TITULARIDADES_INDEX": {
+"kind": "str",
+"len": 25
+},
+"ERC_ENTIDADES_INDEX": {
+"kind": "str",
+"len": 21
+},
+"ERC_OCS_INDEX": {
+"kind": "str",
+"len": 15
+},
+"ERC_ORDENACOES": {
+"kind": "dict",
+"len": 9
+},
+"ERC_PESSOAS_INDEX": {
+"kind": "str",
+"len": 19
+},
+"ERC_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"ESG_EMPRESAS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"ESG_INDICADORES_INDEX": {
+"kind": "str",
+"len": 23
+},
+"ESG_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"EU_TAXONOMY_INDEX": {
+"kind": "str",
+"len": 19
+},
+"EVENTS_INDEX": {
+"kind": "str",
+"len": 14
+},
+"Elasticsearch": {
+"kind": "type",
+"len": null
+},
+"FAVORITE_KINDS": {
+"kind": "set",
+"len": 15
+},
+"FIRMAS_INDEX": {
+"kind": "str",
+"len": 14
+},
+"GLEIF_LEI_INDEX": {
+"kind": "str",
+"len": 17
+},
+"GLOBAL_PADROES_INDEX": {
+"kind": "str",
+"len": 22
+},
+"GRAPH_AGG_BUCKET_BUDGET": {
+"kind": "int",
+"len": null
+},
+"GRAPH_DIMENSIONS": {
+"kind": "dict",
+"len": 12
+},
+"GRAPH_MAX_AGG_BUCKETS": {
+"kind": "int",
+"len": null
+},
+"GRAPH_MAX_EDGES": {
+"kind": "int",
+"len": null
+},
+"GRAPH_MAX_NODES": {
+"kind": "int",
+"len": null
+},
+"GRAPH_MAX_SCAN": {
+"kind": "int",
+"len": null
+},
+"INDEX_SETTINGS": {
+"kind": "dict",
+"len": 49
+},
+"INVESTIGATIONS_INDEX": {
+"kind": "str",
+"len": 28
+},
+"Iterable": {
+"kind": "_SpecialGenericAlias",
+"len": null
+},
+"LORENZ_RUNS_INDEX": {
+"kind": "str",
+"len": 19
+},
+"List": {
+"kind": "_SpecialGenericAlias",
+"len": null
+},
+"MERCADO_RUNS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"MUNICIPIOS_CONTACTOS_INDEX": {
+"kind": "str",
+"len": 28
+},
+"MUNICIPIOS_DESPESAS_INDEX": {
+"kind": "str",
+"len": 27
+},
+"MUNICIPIOS_ORDENACOES": {
+"kind": "dict",
+"len": 7
+},
+"MUNICIPIO_PESSOAS_INDEX": {
+"kind": "str",
+"len": 25
+},
+"NETWORK_STATE_INDEX": {
+"kind": "str",
+"len": 21
+},
+"NEWS_SEARCH_FIELDS": {
+"kind": "list",
+"len": 8
+},
+"NODE_SUMMARIES_INDEX": {
+"kind": "str",
+"len": 22
+},
+"NON_NEWS_SOURCE_IDS": {
+"kind": "tuple",
+"len": 2
+},
+"NON_NEWS_SOURCE_PREFIXES": {
+"kind": "tuple",
+"len": 4
+},
+"NotFoundError": {
+"kind": "type",
+"len": null
+},
+"OSINT_INDEX": {
+"kind": "str",
+"len": 13
+},
+"Optional": {
+"kind": "_SpecialForm",
+"len": null
+},
+"PARTIDOS_INDEX": {
+"kind": "str",
+"len": 16
+},
+"PARTIDOS_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 25
+},
+"PARTIDOS_REGISTO_INDEX": {
+"kind": "str",
+"len": 24
+},
+"PEOPLE_GRAPH_MAX_COMPANIES": {
+"kind": "int",
+"len": null
+},
+"PEOPLE_GRAPH_MAX_PEOPLE": {
+"kind": "int",
+"len": null
+},
+"PEOPLE_INDEX": {
+"kind": "str",
+"len": 14
+},
+"PLATFORM_MAIL_ACCOUNTS_INDEX": {
+"kind": "str",
+"len": 21
+},
+"PLATFORM_MAIL_MESSAGES_INDEX": {
+"kind": "str",
+"len": 21
+},
+"PROVIDER_KEYS_INDEX": {
+"kind": "str",
+"len": 21
+},
+"PT_DISTRICTS": {
+"kind": "tuple",
+"len": 20
+},
+"Path": {
+"kind": "type",
+"len": null
+},
+"REMUNERACOES_AP_INDEX": {
+"kind": "str",
+"len": 23
+},
+"REMUNERACOES_INDEX": {
+"kind": "str",
+"len": 20
+},
+"REMUNERACOES_PESSOAS_INDEX": {
+"kind": "str",
+"len": 28
+},
+"REMUNERACOES_TERRITORIOS_INDEX": {
+"kind": "str",
+"len": 32
+},
+"RIGORBIZ_INDEX": {
+"kind": "str",
+"len": 16
+},
+"ROOT": {
+"kind": "Path",
+"len": null
+},
+"SCRAPED_INDEX": {
+"kind": "str",
+"len": 15
+},
+"SENTIMENT_DAILY_INDEX": {
+"kind": "str",
+"len": 23
+},
+"SETTINGS_INDEX": {
+"kind": "str",
+"len": 16
+},
+"SIMULATIONS_INDEX": {
+"kind": "str",
+"len": 25
+},
+"SOCIAL_INDEX": {
+"kind": "str",
+"len": 14
+},
+"SOCIAL_METRIC_FIELDS": {
+"kind": "tuple",
+"len": 4
+},
+"SOCIETARIO_INDEX": {
+"kind": "str",
+"len": 22
+},
+"SUBVENCOES_INDEX": {
+"kind": "str",
+"len": 18
+},
+"SUBVENCOES_LOTES_INDEX": {
+"kind": "str",
+"len": 24
+},
+"Sequence": {
+"kind": "_SpecialGenericAlias",
+"len": null
+},
+"TICKER_TRANSLATIONS_INDEX": {
+"kind": "str",
+"len": 27
+},
+"TRADEMARKS_INDEX": {
+"kind": "str",
+"len": 18
+},
+"TRANSPARENCIA_GRAFO_ARESTAS_INDEX": {
+"kind": "str",
+"len": 25
+},
+"TRANSPARENCIA_GRAFO_NOS_INDEX": {
+"kind": "str",
+"len": 21
+},
+"TRANSPARENCIA_GRAFO_RECOLHAS_INDEX": {
+"kind": "str",
+"len": 26
+},
+"Tuple": {
+"kind": "_TupleType",
+"len": null
+},
+"UNSPECIFIED_LABEL": {
+"kind": "str",
+"len": 16
+},
+"USER_STATE_INDEX": {
+"kind": "str",
+"len": 18
+},
+"Union": {
+"kind": "_SpecialForm",
+"len": null
+},
+"VEREADORES_INDEX": {
+"kind": "str",
+"len": 18
+},
+"VORTAL_PECAS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"WORLD_EVENTS_INDEX": {
+"kind": "str",
+"len": 20
+},
+"WORLD_HISTORY_INDEX": {
+"kind": "str",
+"len": 21
+},
+"WORLD_RELATIONS_INDEX": {
+"kind": "str",
+"len": 23
+},
+"WORLD_STATE_INDEX": {
+"kind": "str",
+"len": 19
+},
+"_ACCENT_VARIANTS": {
+"kind": "dict",
+"len": 7
+},
+"_AGG_FIELD_CACHE": {
+"kind": "dict",
+"len": 0
+},
+"_BENCHMARK_ITEM_FIELDS": {
+"kind": "tuple",
+"len": 14
+},
+"_CIRE_PEOPLE_FIELDS": {
+"kind": "tuple",
+"len": 10
+},
+"_COMPETITOR_RE": {
+"kind": "Pattern",
+"len": null
+},
+"_COMPETITOR_SPLIT_RE": {
+"kind": "Pattern",
+"len": null
+},
+"_CONTRACT_PARTY_PATHS": {
+"kind": "tuple",
+"len": 2
+},
+"_ENTITY_ROLE_SUMMARY_BUILDING": {
+"kind": "dict",
+"len": 0
+},
+"_ENTITY_ROLE_SUMMARY_BUILD_LOCK": {
+"kind": "lock",
+"len": null
+},
+"_ENTITY_ROLE_SUMMARY_CACHE": {
+"kind": "dict",
+"len": 0
+},
+"_ENTITY_ROLE_SUMMARY_LOCK": {
+"kind": "lock",
+"len": null
+},
+"_ENTITY_ROLE_SUMMARY_MAX": {
+"kind": "int",
+"len": null
+},
+"_GRAPH_AGG_FIELDS": {
+"kind": "dict",
+"len": 10
+},
+"_GRAPH_MAX_VALUES_PER_DOC": {
+"kind": "int",
+"len": null
+},
+"_GRAPH_SOURCE_FIELDS": {
+"kind": "list",
+"len": 13
+},
+"_IBERIA_TEXT_FIELDS_ES": {
+"kind": "list",
+"len": 5
+},
+"_IBERIA_TEXT_FIELDS_FR": {
+"kind": "list",
+"len": 4
+},
+"_IBERIA_TEXT_FIELDS_PT": {
+"kind": "list",
+"len": 6
+},
+"_PARTE_NOME_CACHE": {
+"kind": "dict",
+"len": 0
+},
+"_PEOPLE_ROLE_KEYS": {
+"kind": "tuple",
+"len": 5
+},
+"_PT_DISTRICT_BY_KEY": {
+"kind": "dict",
+"len": 20
+},
+"_UNIFIED_GRAPH_MAX_CONTRACTS": {
+"kind": "int",
+"len": null
+},
+"_UNIFIED_GRAPH_MAX_PEOPLE": {
+"kind": "int",
+"len": null
+},
+"_UNSPECIFIED_KEYS": {
+"kind": "set",
+"len": 5
+},
+"_accent_fold_terms": {
+"kind": "function",
+"sig": "(q: str) -> Optional[str]"
+},
+"_aggregate_dimension_buckets": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, query: Dict[str, Any], target: str, metric: str, size: int, with_description: bool) -> Optional[Dict[str, Any]]"
+},
+"_analise_doc_id": {
+"kind": "function",
+"sig": "(pais: str, nif: str) -> str"
+},
+"_and_filters": {
+"kind": "function",
+"sig": "(query: Dict[str, Any], extra: List[Dict[str, Any]]) -> Dict[str, Any]"
+},
+"_apply_text_operator": {
+"kind": "function",
+"sig": "(node: Any, operator: str) -> Any"
+},
+"_as_float": {
+"kind": "function",
+"sig": "(value: Any) -> Optional[float]"
+},
+"_as_int": {
+"kind": "function",
+"sig": "(value: Any) -> Optional[int]"
+},
+"_as_list": {
+"kind": "function",
+"sig": "(value: Any) -> List[Any]"
+},
+"_bucket_value": {
+"kind": "function",
+"sig": "(bucket: Dict[str, Any]) -> float"
+},
+"_build_contract_query": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, counterparty_nif: Optional[str] = None, region: Optional[str] = None, cpv_code: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, role: Optional[str] = None, ecological: Optional[bool] = None) -> Dict[str, Any]"
+},
+"_build_contract_sort": {
+"kind": "function",
+"sig": "(sort_by: Optional[str] = None, sort_order: Optional[str] = None, client: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"_build_contratos_es_query": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, fonte: Optional[str] = None, tipo: Optional[str] = None, estado: Optional[str] = None, procedimiento: Optional[str] = None, organo: Optional[str] = None, organismo_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_nif: Optional[str] = None, localidad: Optional[str] = None, nuts: Optional[str] = None, cpv_code: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None, solo_menores: Optional[bool] = None) -> Dict[str, Any]"
+},
+"_build_contratos_fr_query": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, nature: Optional[str] = None, procedure: Optional[str] = None, acheteur: Optional[str] = None, acheteur_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_id: Optional[str] = None, cpv_code: Optional[str] = None, lieu_execution_code: Optional[str] = None, lieu_execution_type: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None) -> Dict[str, Any]"
+},
+"_bulk_index_docs": {
+"kind": "function",
+"sig": "(index: str, docs: List[Dict[str, Any]], id_field: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"_cae_code_clause": {
+"kind": "function",
+"sig": "(field: str, code: str) -> Dict[str, Any]"
+},
+"_campo_nome_parte": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, papel: str) -> str"
+},
+"_cire_query": {
+"kind": "function",
+"sig": "(*, q: Optional[str] = None, referencia: Optional[str] = None, processo: Optional[str] = None, nif: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, tipo: Optional[str] = None, ato: Optional[str] = None, especie: Optional[str] = None, insolvente: Optional[str] = None, papel: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_documento: Optional[bool] = None) -> Dict[str, Any]"
+},
+"_citacoes_query": {
+"kind": "function",
+"sig": "(*, q: Optional[str] = None, referencia: Optional[str] = None, processo: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, comarca_judicial: Optional[str] = None, tipo: Optional[str] = None, ato: Optional[str] = None, especie: Optional[str] = None, citado: Optional[str] = None, nome: Optional[str] = None, nomes: Optional[List[str]] = None, papel: Optional[str] = None, nif: Optional[str] = None, modelo: Optional[str] = None, titulo: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_documento: Optional[bool] = None, has_texto: Optional[bool] = None) -> Dict[str, Any]"
+},
+"_clean_flattened": {
+"kind": "function",
+"sig": "(value: Any) -> Any"
+},
+"_company_name_query": {
+"kind": "function",
+"sig": "(q: Optional[str]) -> Optional[Dict[str, Any]]"
+},
+"_company_names_from_roles": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, nifs: List[str]) -> Dict[str, str]"
+},
+"_company_role_filter": {
+"kind": "function",
+"sig": "(role: Optional[str]) -> Optional[List[Dict[str, Any]]]"
+},
+"_company_window_truncated": {
+"kind": "function",
+"sig": "(resp: Dict[str, Any], role: Optional[str] = None) -> bool"
+},
+"_compute_entity_role_summary": {
+"kind": "function",
+"sig": "(role: Optional[str] = 'all', q: Optional[str] = None, year: Optional[int] = None, region: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, min_contracts: int = 1, top_n: int = 25, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"_contract_to_flat_dict": {
+"kind": "function",
+"sig": "(source: Dict[str, Any]) -> Dict[str, Any]"
+},
+"_contract_type_filters": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, procedure_type: Optional[str], contract_type: Optional[str]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]"
+},
+"_contratos_es_aggs": {
+"kind": "function",
+"sig": "(cpv_size: int = 15, terms_size: int = 15) -> Dict[str, Any]"
+},
+"_contratos_es_entity_filter": {
+"kind": "function",
+"sig": "(field: str, text: str) -> Dict[str, Any]"
+},
+"_contratos_es_sort": {
+"kind": "function",
+"sig": "(sort_by: Optional[str], sort_order: Optional[str]) -> List[Any]"
+},
+"_contratos_es_value_range": {
+"kind": "function",
+"sig": "(min_value: Optional[float], max_value: Optional[float]) -> Optional[Dict[str, Any]]"
+},
+"_contratos_es_value_source": {
+"kind": "function",
+"sig": "(field: str = 'valor_adjudicado') -> Dict[str, Any]"
+},
+"_contratos_fr_aggs": {
+"kind": "function",
+"sig": "(cpv_size: int = 15, terms_size: int = 15) -> Dict[str, Any]"
+},
+"_contratos_fr_entity_filter": {
+"kind": "function",
+"sig": "(field: str, text: str) -> Dict[str, Any]"
+},
+"_contratos_fr_sort": {
+"kind": "function",
+"sig": "(sort_by: Optional[str], sort_order: Optional[str]) -> List[Any]"
+},
+"_contratos_fr_value_source": {
+"kind": "function",
+"sig": "(field: str = 'montant') -> Dict[str, Any]"
+},
+"_cpv_description_from_hits": {
+"kind": "function",
+"sig": "(agg: Optional[Dict[str, Any]], code: Any) -> str"
+},
+"_cpv_label_from_bucket": {
+"kind": "function",
+"sig": "(bucket: Dict[str, Any], code: str) -> str"
+},
+"_delete_stale_company_docs": {
+"kind": "function",
+"sig": "(index: str, company_nif: str, keep_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> int"
+},
+"_delete_stale_docs": {
+"kind": "function",
+"sig": "(index: str, field: str, value: str, keep_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> int"
+},
+"_descriptions_from_bucket": {
+"kind": "function",
+"sig": "(bucket: Dict[str, Any], key: str) -> str"
+},
+"_dimension_values": {
+"kind": "function",
+"sig": "(source: Dict[str, Any], dimension: str) -> List[Dict[str, Any]]"
+},
+"_directory_field": {
+"kind": "function",
+"sig": "(name: str, *, exact: bool) -> str"
+},
+"_district_filter": {
+"kind": "function",
+"sig": "(distrito: str, unspecified: bool = False) -> Dict[str, Any]"
+},
+"_enrich_docs_with_company": {
+"kind": "function",
+"sig": "(docs: List[Dict[str, Any]], company_nif: Optional[str] = None, company_name: Optional[str] = None) -> List[Dict[str, Any]]"
+},
+"_entidade_key": {
+"kind": "function",
+"sig": "(value: Optional[str]) -> str"
+},
+"_entity_lookup_by_nif_query": {
+"kind": "function",
+"sig": "(nif: str) -> Dict[str, Any]"
+},
+"_entity_matches_query": {
+"kind": "function",
+"sig": "(name: Optional[str], nif: Optional[str], q: str) -> bool"
+},
+"_entity_role_summary_build": {
+"kind": "function",
+"sig": "(key: Tuple[Any, ...], params: Dict[str, Any]) -> Dict[str, Any]"
+},
+"_entity_role_summary_cache_get": {
+"kind": "function",
+"sig": "(key: Tuple[Any, ...]) -> Tuple[Optional[Dict[str, Any]], bool]"
+},
+"_entity_role_summary_cache_load": {
+"kind": "function",
+"sig": "() -> None"
+},
+"_entity_role_summary_cache_put": {
+"kind": "function",
+"sig": "(key: Tuple[Any, ...], payload: Dict[str, Any]) -> None"
+},
+"_entity_role_summary_cache_save": {
+"kind": "function",
+"sig": "() -> None"
+},
+"_entity_role_summary_key": {
+"kind": "function",
+"sig": "(role: Optional[str], q: Optional[str], year: Optional[int], region: Optional[str], min_value: Optional[float], max_value: Optional[float], min_contracts: int, top_n: int) -> Tuple[Any, ...]"
+},
+"_entity_role_summary_refresh": {
+"kind": "function",
+"sig": "(key: Tuple[Any, ...], params: Dict[str, Any]) -> None"
+},
+"_erc_search": {
+"kind": "function",
+"sig": "(index: str, *, q: Optional[str] = None, text_fields: Sequence[str] = (), keyword_fields: Sequence[str] = (), filters: Optional[Sequence[Dict[str, Any]]] = None, nested_should: Optional[Sequence[Dict[str, Any]]] = None, sort: Optional[List[Dict[str, Any]]] = None, size: int = 25, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"_erc_valores": {
+"kind": "function",
+"sig": "(valor: Any) -> List[str]"
+},
+"_erc_wildcard": {
+"kind": "function",
+"sig": "(field: str, value: str) -> Dict[str, Any]"
+},
+"_es_code_level": {
+"kind": "function",
+"sig": "(code: str) -> str"
+},
+"_es_region_detail": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, code: str, ano: Optional[int], q: Optional[str], cpv: Optional[str], top_n: int, contracts_size: int) -> Dict[str, Any]"
+},
+"_extract_buckets": {
+"kind": "function",
+"sig": "(node: Any) -> List[Dict[str, Any]]"
+},
+"_fetch_people_docs": {
+"kind": "function",
+"sig": "(nifs: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Dict[str, Any]]"
+},
+"_fold_text": {
+"kind": "function",
+"sig": "(value: Optional[str]) -> str"
+},
+"_fr_region_detail": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, code: str, level: str, ano: Optional[int], q: Optional[str], cpv: Optional[str], top_n: int, contracts_size: int) -> Dict[str, Any]"
+},
+"_get_es_url": {
+"kind": "function",
+"sig": "() -> str"
+},
+"_graph_add_edge": {
+"kind": "function",
+"sig": "(edges: Dict[str, Dict[str, Any]], source: str, target: str, value: float, directed: bool) -> None"
+},
+"_graph_add_node": {
+"kind": "function",
+"sig": "(nodes: Dict[str, Dict[str, Any]], descriptions: Dict[str, Dict[str, int]], dimension: str, item: Dict[str, Any], value: float) -> str"
+},
+"_graph_competitors": {
+"kind": "function",
+"sig": "(source: Dict[str, Any]) -> List[Dict[str, str]]"
+},
+"_graph_key_for": {
+"kind": "function",
+"sig": "(dimension: str, raw_key: str) -> Optional[str]"
+},
+"_graph_parties": {
+"kind": "function",
+"sig": "(source: Dict[str, Any], key: str) -> List[Dict[str, str]]"
+},
+"_iberia_map_espanha": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, ano: Optional[int], q: Optional[str] = None, entidade: Optional[str] = None, cpv: Optional[str] = None) -> Dict[str, Any]"
+},
+"_iberia_map_france": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, ano: Optional[int], q: Optional[str] = None, entidade: Optional[str] = None, cpv: Optional[str] = None) -> Dict[str, Any]"
+},
+"_iberia_map_portugal": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, ano: Optional[int], q: Optional[str] = None, entidade: Optional[str] = None, cpv: Optional[str] = None) -> Dict[str, Any]"
+},
+"_iberia_text_query": {
+"kind": "function",
+"sig": "(text: str, fields: List[str]) -> Dict[str, Any]"
+},
+"_is_multi_term": {
+"kind": "function",
+"sig": "(q: Optional[str]) -> bool"
+},
+"_iter_cire_publications": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, *, limit: Optional[int] = None, page_size: int = 2000, progress: Optional[Dict[str, Any]] = None) -> Any"
+},
+"_match_pair_query": {
+"kind": "function",
+"sig": "(nif: Optional[str] = None, counterparty_nif: Optional[str] = None) -> Optional[Dict[str, Any]]"
+},
+"_merge_person_docs": {
+"kind": "function",
+"sig": "(existing: Optional[Dict[str, Any]], incoming: Dict[str, Any], drop_company_nif: Optional[str] = None, drop_role_org: Optional[str] = None) -> Dict[str, Any]"
+},
+"_missing_mapping_fields": {
+"kind": "function",
+"sig": "(existing: Dict[str, Any], spec: Dict[str, Any]) -> Dict[str, Any]"
+},
+"_news_doc_id": {
+"kind": "function",
+"sig": "(ticker: str, topic: Optional[str], item: Dict[str, Any], index: int) -> str"
+},
+"_news_id": {
+"kind": "function",
+"sig": "(item: Dict[str, Any], index: int) -> str"
+},
+"_news_source_exclusions": {
+"kind": "function",
+"sig": "(exclude_prefixes: Optional[Iterable[str]] = None, exclude_ids: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]"
+},
+"_news_terms": {
+"kind": "function",
+"sig": "(aggregations: Dict[str, Any], name: str) -> List[Dict[str, Any]]"
+},
+"_news_theme_clause": {
+"kind": "function",
+"sig": "(terms: List[str]) -> Optional[Dict[str, Any]]"
+},
+"_node_summary_id": {
+"kind": "function",
+"sig": "(node_id: str) -> str"
+},
+"_nodes_from_buckets": {
+"kind": "function",
+"sig": "(block: Dict[str, Any], dimension: str, spec: Dict[str, Any], total: Dict[str, Dict[str, Any]]) -> None"
+},
+"_normalize_cae_codes": {
+"kind": "function",
+"sig": "(cae: Union[str, list[str], NoneType]) -> List[str]"
+},
+"_owner_clause": {
+"kind": "function",
+"sig": "(owner: Optional[str]) -> Optional[Dict[str, Any]]"
+},
+"_party_names": {
+"kind": "function",
+"sig": "(parties: Any) -> str"
+},
+"_people_facet_agg": {
+"kind": "function",
+"sig": "(field: str, size: int = 12) -> Dict[str, Any]"
+},
+"_people_facet_values": {
+"kind": "function",
+"sig": "(agg: Dict[str, Any], field: str) -> List[Dict[str, Any]]"
+},
+"_people_filter_clause": {
+"kind": "function",
+"sig": "(field: str, value: str) -> Dict[str, Any]"
+},
+"_person_from_publications": {
+"kind": "function",
+"sig": "(nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Optional[Dict[str, Any]]"
+},
+"_person_role_key": {
+"kind": "function",
+"sig": "(role: Dict[str, Any]) -> tuple"
+},
+"_person_sources": {
+"kind": "function",
+"sig": "(existing: Optional[Dict[str, Any]], incoming: Optional[Dict[str, Any]]) -> List[str]"
+},
+"_prune_people_company_roles": {
+"kind": "function",
+"sig": "(company_nif: str, keep_nifs: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> int"
+},
+"_pt_district_from_local": {
+"kind": "function",
+"sig": "(local: Any) -> Optional[str]"
+},
+"_pt_region_detail": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, code: str, ano: Optional[int], q: Optional[str], cpv: Optional[str], top_n: int, contracts_size: int) -> Dict[str, Any]"
+},
+"_publicacoes_for_people": {
+"kind": "function",
+"sig": "(nif: Optional[str], es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"_region_filter": {
+"kind": "function",
+"sig": "(region: Optional[str] = None) -> Dict[str, Any]"
+},
+"_resolve_agg_target": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, field: str) -> Dict[str, Any]"
+},
+"_resolve_dimension_spec": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, dimension: str) -> Optional[Dict[str, Any]]"
+},
+"_safe_slug": {
+"kind": "function",
+"sig": "(slug: str) -> str"
+},
+"_scraped_query": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, source_id: Optional[str] = None, tags: Optional[List[str]] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, sentiments: Optional[List[str]] = None, exclude_prefixes: Optional[Iterable[str]] = None, exclude_ids: Optional[Iterable[str]] = None) -> Dict[str, Any]"
+},
+"_search_slug": {
+"kind": "function",
+"sig": "(name: str, query: str, scope: str, filters: Optional[Dict[str, Any]]) -> str"
+},
+"_search_terms": {
+"kind": "function",
+"sig": "(q: Optional[str]) -> List[str]"
+},
+"_searchable_name": {
+"kind": "function",
+"sig": "(value: str) -> str"
+},
+"_sentiment_summary": {
+"kind": "function",
+"sig": "(aggs: Dict[str, Any], total: int) -> Dict[str, Any]"
+},
+"_single_nif": {
+"kind": "function",
+"sig": "(docs: List[Dict[str, Any]]) -> bool"
+},
+"_slug": {
+"kind": "function",
+"sig": "(value: Any) -> str"
+},
+"_social_query": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, platform: Optional[str] = None, channel_id: Optional[str] = None, tags: Optional[List[str]] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, sentiments: Optional[List[str]] = None, person_nif: Optional[str] = None, kinds: Optional[List[str]] = None) -> Dict[str, Any]"
+},
+"_strip_accents": {
+"kind": "function",
+"sig": "(value: str) -> str"
+},
+"_sum_agg_value": {
+"kind": "function",
+"sig": "(agg: Optional[Dict[str, Any]]) -> float"
+},
+"_terms_block": {
+"kind": "function",
+"sig": "(spec: Dict[str, Any], metric: str, size: int, with_label: bool) -> Dict[str, Any]"
+},
+"_text_search": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, *, index: str, body: Dict[str, Any], q: Optional[str]) -> Dict[str, Any]"
+},
+"_today": {
+"kind": "function",
+"sig": "() -> str"
+},
+"_top_hit_cpv_es_name": {
+"kind": "function",
+"sig": "(agg: Optional[Dict[str, Any]], code: Any) -> str"
+},
+"_top_hit_cpv_fr_name": {
+"kind": "function",
+"sig": "(top_hits: Dict[str, Any], code: str) -> str"
+},
+"_top_hit_name": {
+"kind": "function",
+"sig": "(agg: Optional[Dict[str, Any]]) -> str"
+},
+"_topic_key": {
+"kind": "function",
+"sig": "(topic: Optional[str]) -> Optional[str]"
+},
+"_unescape_label": {
+"kind": "function",
+"sig": "(value: Any) -> str"
+},
+"_user_state_index": {
+"kind": "function",
+"sig": "() -> str"
+},
+"_with_owner": {
+"kind": "function",
+"sig": "(query: Dict[str, Any], owner: Optional[str]) -> Dict[str, Any]"
+},
+"_with_required": {
+"kind": "function",
+"sig": "(query: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]"
+},
+"aggregate_graph_edges": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, query: Dict[str, Any], dimension_a: str, dimension_b: str, metric: str, limit: int, edge_limit: int) -> Optional[Dict[str, Any]]"
+},
+"aggregate_graph_nodes": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, query: Dict[str, Any], dimension: str, metric: str, limit: int, max_buckets: int = 10000) -> Optional[Dict[str, Any]]"
+},
+"autocomplete_suggestions": {
+"kind": "function",
+"sig": "(q: str, size: int = 12, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"benchmark_garment_stats": {
+"kind": "function",
+"sig": "(slug: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"benchmark_items_index": {
+"kind": "function",
+"sig": "(slug: str) -> str"
+},
+"benchmark_items_mappings": {
+"kind": "function",
+"sig": "() -> Dict[str, Any]"
+},
+"benchmark_offers": {
+"kind": "function",
+"sig": "(slug: str, *, q: Optional[str] = None, store_id: Optional[str] = None, order: str = 'preco', size: int = 50, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"benchmark_product_comparison": {
+"kind": "function",
+"sig": "(slug: str, *, q: Optional[str] = None, store_id: Optional[str] = None, order: str = 'dispersao', size: int = 50, from_: int = 0, min_stores: int = 2, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"benchmark_store_stats": {
+"kind": "function",
+"sig": "(slug: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"benchmarks_mappings": {
+"kind": "function",
+"sig": "() -> Dict[str, Any]"
+},
+"build_contract_graph": {
+"kind": "function",
+"sig": "(dimension_a: str, dimension_b: Optional[str] = None, metric: str = 'valor', mode: str = 'auto', q: Optional[str] = None, year: Optional[int] = None, region: Optional[str] = None, cpv_code: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, limit: int = 60, edge_limit: int = 400, sample: int = 3000, sample_order: str = 'valor', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"bulk": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, actions: Iterable[Union[bytes, str, Dict[str, Any]]], stats_only: bool = False, ignore_status: Union[int, Collection[int]] = (), *args: Any, **kwargs: Any) -> Tuple[int, Union[int, List[Dict[str, Any]]]]"
+},
+"bulk_index_contracts_from_jsonl": {
+"kind": "function",
+"sig": "(jsonl_path: pathlib.Path, chunk_size: int = 1000, max_records: Optional[int] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"bulk_index_contratos_es_from_jsonl": {
+"kind": "function",
+"sig": "(jsonl_path: pathlib.Path, chunk_size: int = 2000, max_records: Optional[int] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"bulk_index_contratos_fr_from_jsonl": {
+"kind": "function",
+"sig": "(jsonl_path: pathlib.Path, chunk_size: int = 2000, max_records: Optional[int] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"cire_analytics": {
+"kind": "function",
+"sig": "(*, q: Optional[str] = None, nif: Optional[str] = None, tipo: Optional[str] = None, papel: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, especie: Optional[str] = None, ato: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, top: int = 12, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"cire_existing_ids": {
+"kind": "function",
+"sig": "(pub_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"cire_interveniente": {
+"kind": "function",
+"sig": "(nif: str, size: int = 100, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"cire_person_processes": {
+"kind": "function",
+"sig": "(nif: str, *, size: int = 200, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"cire_runs_summary": {
+"kind": "function",
+"sig": "(run_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, int]"
+},
+"cire_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"citacoes_existing_ids": {
+"kind": "function",
+"sig": "(pub_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"citacoes_runs_summary": {
+"kind": "function",
+"sig": "(run_ids: List[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, int]"
+},
+"citacoes_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"clear_favorites": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"combined_graph_for_company": {
+"kind": "function",
+"sig": "(company_nif: str, include_people: bool = True, include_contracts: bool = True, contract_limit: int = 60, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"companies_with_contracts_in_years": {
+"kind": "function",
+"sig": "(ano_ini: Optional[int] = None, ano_fim: Optional[int] = None, *, papel: str = 'ambos', size: int = 1000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"companies_with_people": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, *, size: int = 20, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"company_people_from_index": {
+"kind": "function",
+"sig": "(company_nif: str, *, size: int = 200, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"company_publicacoes": {
+"kind": "function",
+"sig": "(nif: str, size: int = 100, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contract_years": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contract_years_available": {
+"kind": "function",
+"sig": "() -> List[int]"
+},
+"contracts_autocomplete": {
+"kind": "function",
+"sig": "(q: str, size: int = 12, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contracts_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_do_municipio": {
+"kind": "function",
+"sig": "(nomes_adjudicante: Iterable[str], *, ano: Optional[int] = None, fornecedores: int = 12, anos: int = 12, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_es_autocomplete": {
+"kind": "function",
+"sig": "(q: str, size: int = 10, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_es_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_es_years_available": {
+"kind": "function",
+"sig": "() -> List[int]"
+},
+"contratos_fr_autocomplete": {
+"kind": "function",
+"sig": "(q: str, size: int = 10, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_fr_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"contratos_fr_years_available": {
+"kind": "function",
+"sig": "() -> List[int]"
+},
+"datetime": {
+"kind": "type",
+"len": null
+},
+"delete_analise_empresa": {
+"kind": "function",
+"sig": "(doc_id: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_benchmark_definition": {
+"kind": "function",
+"sig": "(slug: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"delete_benchmark_items": {
+"kind": "function",
+"sig": "(slug: str, *, store_id: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_citacoes_run": {
+"kind": "function",
+"sig": "(run_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_contracts_by_ids": {
+"kind": "function",
+"sig": "(doc_ids: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_favorite": {
+"kind": "function",
+"sig": "(kind: str, item_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_folder": {
+"kind": "function",
+"sig": "(folder_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_scraped_source": {
+"kind": "function",
+"sig": "(source_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_search": {
+"kind": "function",
+"sig": "(search_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_sentiment_daily": {
+"kind": "function",
+"sig": "(ticker: Optional[str] = None, dates: Optional[List[str]] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_social_channel": {
+"kind": "function",
+"sig": "(channel_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"delete_ticker_data": {
+"kind": "function",
+"sig": "(ticker: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"directory_index_mapping": {
+"kind": "function",
+"sig": "(flattened_fields: Iterable[str] = ()) -> Dict[str, Any]"
+},
+"drop_benchmark_index": {
+"kind": "function",
+"sig": "(slug: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"ensure_benchmark_items_index": {
+"kind": "function",
+"sig": "(slug: str, *, client: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"ensure_benchmarks_index": {
+"kind": "function",
+"sig": "(client: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"ensure_directory_index": {
+"kind": "function",
+"sig": "(client: elasticsearch.Elasticsearch, index: str, flattened_fields: Iterable[str] = ()) -> None"
+},
+"ensure_indices": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"entity_nifs_for_cae": {
+"kind": "function",
+"sig": "(cae: Union[str, list[str], NoneType] = None, limit: int = 2000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"entity_nifs_for_cpv": {
+"kind": "function",
+"sig": "(cpv_code: str, limit: int = 3000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"erc_financeiro_painel": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"erc_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"export_contracts_to_excel": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, cpv_code: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, max_records: int = 10000, es: Optional[elasticsearch.Elasticsearch] = None) -> bytes"
+},
+"export_contracts_to_pdf": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, cpv_code: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, max_records: int = 500, es: Optional[elasticsearch.Elasticsearch] = None) -> bytes"
+},
+"fetch_news_for_analysis": {
+"kind": "function",
+"sig": "(ticker: str, q: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, size: int = 100, es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"find_contract_ids_by_idcontrato": {
+"kind": "function",
+"sig": "(idcontratos: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> List[str]"
+},
+"fornecedores_do_municipio": {
+"kind": "function",
+"sig": "(nomes_adjudicante: Iterable[str], *, ano: Optional[int] = None, maximo: int = 20000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_analise_empresa": {
+"kind": "function",
+"sig": "(doc_id: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_benchmark_definition": {
+"kind": "function",
+"sig": "(slug: str, *, es: Optional[elasticsearch.Elasticsearch] = None) -> Optional[Dict[str, Any]]"
+},
+"get_citacao": {
+"kind": "function",
+"sig": "(pub_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_company_analytics": {
+"kind": "function",
+"sig": "(nif: Optional[str] = None, name: Optional[str] = None, role: Optional[str] = 'all', year: Optional[int] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_company_by_nif": {
+"kind": "function",
+"sig": "(nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_company_contracts": {
+"kind": "function",
+"sig": "(nif: Optional[str] = None, name: Optional[str] = None, role: Optional[str] = 'all', size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_company_firmas": {
+"kind": "function",
+"sig": "(company_nif: Optional[str] = None, company_name: Optional[str] = None, q: Optional[str] = None, size: int = 100, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_company_trademarks": {
+"kind": "function",
+"sig": "(company_nif: Optional[str] = None, company_name: Optional[str] = None, holder_name: Optional[str] = None, q: Optional[str] = None, size: int = 100, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_analytics": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, cpv_code: Optional[str] = None, procedure_type: Optional[str] = None, contract_type: Optional[str] = None, role: Optional[str] = None, region: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, top_entities: int = 8, top_cpv: int = 8, value_buckets: int = 7, ecological: Optional[bool] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_by_id": {
+"kind": "function",
+"sig": "(idcontrato: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_network": {
+"kind": "function",
+"sig": "(limit: int = 500, region: Optional[str] = None, nif: Optional[str] = None, role: Optional[str] = 'all', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_region_detail": {
+"kind": "function",
+"sig": "(pais: str, code: str, ano: Optional[int] = None, q: Optional[str] = None, cpv: Optional[str] = None, top_n: int = 12, contracts_size: int = 20, level: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_regional_analytics": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, cpv_code: Optional[str] = None, procedure_type: Optional[str] = None, contract_type: Optional[str] = None, role: Optional[str] = None, region: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, ecological: Optional[bool] = None, size: int = 30, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contract_relationships": {
+"kind": "function",
+"sig": "(limit: int = 1000, region: Optional[str] = None, nif: Optional[str] = None, counterparty_nif: Optional[str] = None, role: Optional[str] = 'all', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contracts_iberia_map": {
+"kind": "function",
+"sig": "(ano: Optional[int] = None, pais: str = 'all', q: Optional[str] = None, entidade: Optional[str] = None, cpv: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contrato_es": {
+"kind": "function",
+"sig": "(doc_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contrato_fr": {
+"kind": "function",
+"sig": "(doc_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contratos_es_analytics": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, fonte: Optional[str] = None, tipo: Optional[str] = None, estado: Optional[str] = None, procedimiento: Optional[str] = None, organo: Optional[str] = None, organismo_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_nif: Optional[str] = None, localidad: Optional[str] = None, nuts: Optional[str] = None, cpv_code: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None, solo_menores: Optional[bool] = None, top_organs: int = 8, top_adjudicatarios: int = 8, top_cpv: int = 8, value_buckets: int = 7, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_contratos_fr_analytics": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, nature: Optional[str] = None, procedure: Optional[str] = None, acheteur: Optional[str] = None, acheteur_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_id: Optional[str] = None, cpv_code: Optional[str] = None, lieu_execution_code: Optional[str] = None, lieu_execution_type: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None, top_acheteurs: int = 10, top_adjudicatarios: int = 10, top_cpv: int = 10, value_buckets: int = 10, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_entity_by_nif": {
+"kind": "function",
+"sig": "(nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_entity_relations": {
+"kind": "function",
+"sig": "(nif: str, size: int = 50, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_entity_role_summary": {
+"kind": "function",
+"sig": "(role: Optional[str] = 'all', q: Optional[str] = None, year: Optional[int] = None, region: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, min_contracts: int = 1, top_n: int = 25, es: Optional[elasticsearch.Elasticsearch] = None, use_cache: bool = True, force: bool = False) -> Dict[str, Any]"
+},
+"get_entity_stats": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_es_client": {
+"kind": "function",
+"sig": "(request_timeout: int = 30) -> Optional[elasticsearch.Elasticsearch]"
+},
+"get_municipio_despesas": {
+"kind": "function",
+"sig": "(nome_ou_codigo: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_news_item": {
+"kind": "function",
+"sig": "(doc_id: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Optional[Dict[str, Any]]"
+},
+"get_node_summary": {
+"kind": "function",
+"sig": "(node_id: Optional[str] = None, *, nif: Optional[str] = None, name: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_person_by_nif": {
+"kind": "function",
+"sig": "(nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"get_workspace": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_analyzed_news_items": {
+"kind": "function",
+"sig": "(ticker: str, items: List[Dict[str, Any]], analyses: List[Any], es: Optional[elasticsearch.Elasticsearch] = None, topic: Optional[str] = None) -> Dict[str, Any]"
+},
+"index_benchmark_items": {
+"kind": "function",
+"sig": "(slug: str, items: Iterable[Dict[str, Any]], *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_cire_items": {
+"kind": "function",
+"sig": "(items: List[Dict[str, Any]], run_id: Optional[str] = None, replace_for_referencias: Optional[List[str]] = None, skip_existing: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_citacoes_items": {
+"kind": "function",
+"sig": "(items: List[Dict[str, Any]], run_id: Optional[str] = None, skip_existing: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_company_firmas": {
+"kind": "function",
+"sig": "(company_nif: Optional[str], company_name: str, firmas: List[Dict[str, Any]], replace_existing: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_company_trademarks": {
+"kind": "function",
+"sig": "(company_nif: Optional[str], company_name: str, trademarks: List[Dict[str, Any]], replace_existing: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_contracts": {
+"kind": "function",
+"sig": "(docs: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_contratos_es": {
+"kind": "function",
+"sig": "(docs: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_contratos_fr": {
+"kind": "function",
+"sig": "(docs: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_directory_items": {
+"kind": "function",
+"sig": "(index: str, *, source_id: str, source_name: str, run_id: str, items: List[Dict[str, Any]], trigger: str = 'manual', flattened_fields: Iterable[str] = (), es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_entities": {
+"kind": "function",
+"sig": "(docs: Iterable[Dict[str, Any]], chunk_size: int = 2000, max_records: Optional[int] = None, refresh: bool = False, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_erc_bulk": {
+"kind": "function",
+"sig": "(index: str, items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None, *, recriar: bool = False) -> Dict[str, Any]"
+},
+"index_eu_taxonomy": {
+"kind": "function",
+"sig": "(items: List[Dict[str, Any]], *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_municipios_despesas_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_news_items": {
+"kind": "function",
+"sig": "(ticker: str, items: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None, topic: Optional[str] = None) -> Dict[str, Any]"
+},
+"index_node_summary": {
+"kind": "function",
+"sig": "(doc: Dict[str, Any], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_people": {
+"kind": "function",
+"sig": "(people: Iterable[Dict[str, Any]], merge: bool = True, drop_company_nif: Optional[str] = None, drop_role_org: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_people_from_cire": {
+"kind": "function",
+"sig": "(*, limit: Optional[int] = None, include_companies: bool = False, papeis: Optional[Iterable[str]] = None, write_chunk: int = 1000, progress: Optional[Dict[str, Any]] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_people_from_societario": {
+"kind": "function",
+"sig": "(nif: Optional[str] = None, replace_for_nif: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_price_points": {
+"kind": "function",
+"sig": "(ticker: str, points: List[Dict[str, Any]], period: str = '1y', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_remuneracoes_ap_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_remuneracoes_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_remuneracoes_pessoas_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_remuneracoes_territorios_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_scraped_items": {
+"kind": "function",
+"sig": "(source_id: str, source_name: str, run_id: str, items: List[Dict[str, Any]], trigger: str = 'manual', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_sentiment_daily": {
+"kind": "function",
+"sig": "(rows: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_social_items": {
+"kind": "function",
+"sig": "(channel: Dict[str, Any], items: List[Dict[str, Any]], trigger: str = 'manual', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_societario_items": {
+"kind": "function",
+"sig": "(items: List[Dict[str, Any]], replace_for_nif: Optional[str] = None, drop_stale: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"index_vereadores_bulk": {
+"kind": "function",
+"sig": "(items: Iterable[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"is_unspecified": {
+"kind": "function",
+"sig": "(value: Optional[str]) -> bool"
+},
+"list_analises_empresa": {
+"kind": "function",
+"sig": "(*, nif: Optional[str] = None, nome: Optional[str] = None, pais: Optional[str] = None, limit: int = 50, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"list_benchmark_definitions": {
+"kind": "function",
+"sig": "(*, es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"list_contract_years": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"list_elastic_indices": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"list_entity_countries": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"list_favorites": {
+"kind": "function",
+"sig": "(owner: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"list_indexed_tickers": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> List[str]"
+},
+"list_news_tickers": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"list_saved_searches": {
+"kind": "function",
+"sig": "(owner: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"list_sentiment_daily_tickers": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"load_news_graph": {
+"kind": "function",
+"sig": "(ticker: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Optional[Dict[str, Any]]"
+},
+"load_ticker_translation": {
+"kind": "function",
+"sig": "(ticker: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Optional[Dict[str, Any]]"
+},
+"logger": {
+"kind": "Logger",
+"len": null
+},
+"municipios_despesas_mapa": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> List[Dict[str, Any]]"
+},
+"municipios_despesas_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"news_stats": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"node_summaries_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_autocomplete": {
+"kind": "function",
+"sig": "(q: str, *, limit: int = 8, is_company: Optional[bool] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_filters": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_graph_for_company": {
+"kind": "function",
+"sig": "(company_nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_graph_for_person": {
+"kind": "function",
+"sig": "(nif: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_index_presence": {
+"kind": "function",
+"sig": "(nifs: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"people_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"remuneracoes_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_analise_empresa": {
+"kind": "function",
+"sig": "(payload: Dict[str, Any], *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_benchmark_definition": {
+"kind": "function",
+"sig": "(doc: Dict[str, Any], *, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_entity_societario_timeline": {
+"kind": "function",
+"sig": "(nif: str, markdown: str, total: int, backend_used: str, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_favorite": {
+"kind": "function",
+"sig": "(doc: Dict[str, Any], owner: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_folder": {
+"kind": "function",
+"sig": "(folder: Dict[str, Any], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_history": {
+"kind": "function",
+"sig": "(items: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_news_graph": {
+"kind": "function",
+"sig": "(ticker: str, graph: Dict[str, Any], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_news_translation": {
+"kind": "function",
+"sig": "(doc_id: str, *, title: Optional[str] = None, summary: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> bool"
+},
+"save_search": {
+"kind": "function",
+"sig": "(doc: Dict[str, Any], owner: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"save_ticker_translation": {
+"kind": "function",
+"sig": "(ticker: str, original_text: str, translated_text: str, target_language: str = 'pt-PT', backend: str = '', model: str = '', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"scan_citacoes": {
+"kind": "function",
+"sig": "(*, max_docs: int = 20000, page_size: int = 500, fields: Optional[List[str]] = None, **filters: Any) -> Dict[str, Any]"
+},
+"scraped_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_all_news": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, tickers: Optional[List[str]] = None, publisher: Optional[str] = None, topic: Optional[str] = None, sentiment: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, analyzed: Optional[bool] = None, theme_terms: Optional[List[str]] = None, theme_buckets: Optional[List[Dict[str, Any]]] = None, sort: str = 'recent', page: int = 1, size: int = 20, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_all_tickers": {
+"kind": "function",
+"sig": "(q: str, from_: int = 0, size: int = 50, source: Optional[str] = None, sentiment: Optional[str] = None, topic: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_cire": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, referencia: Optional[str] = None, processo: Optional[str] = None, nif: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, tipo: Optional[str] = None, ato: Optional[str] = None, especie: Optional[str] = None, insolvente: Optional[str] = None, papel: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_documento: Optional[bool] = None, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_citacoes": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, referencia: Optional[str] = None, processo: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, comarca_judicial: Optional[str] = None, tipo: Optional[str] = None, ato: Optional[str] = None, especie: Optional[str] = None, citado: Optional[str] = None, nome: Optional[str] = None, nomes: Optional[List[str]] = None, papel: Optional[str] = None, nif: Optional[str] = None, modelo: Optional[str] = None, titulo: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_documento: Optional[bool] = None, has_texto: Optional[bool] = None, with_texto: bool = True, size: int = 20, from_: int = 0, search_after: Optional[List[Any]] = None, scan: bool = False, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_citacoes_entidades": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, papel: Optional[str] = None, tipo: Optional[str] = None, tribunal: Optional[str] = None, tribunal_comarca: Optional[str] = None, comarca_judicial: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_texto: Optional[bool] = None, size: int = 25, min_editais: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_companies": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, role: Optional[str] = 'all', region: Optional[str] = None, min_contracts: int = 1, min_value: Optional[float] = None, max_value: Optional[float] = None, year: Optional[int] = None, cpv: Optional[str] = None, cae: Union[str, list[str], NoneType] = None, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None, include_cae: bool = True) -> Dict[str, Any]"
+},
+"search_contracts": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, year: Optional[int] = None, entity: Optional[str] = None, nif: Optional[str] = None, counterparty_nif: Optional[str] = None, region: Optional[str] = None, cpv_code: Optional[str] = None, min_price: Optional[float] = None, max_price: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, ecological: Optional[bool] = None, size: int = 20, from_: int = 0, sort_by: Optional[str] = None, sort_order: Optional[str] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_contratos_es": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, fonte: Optional[str] = None, tipo: Optional[str] = None, estado: Optional[str] = None, procedimiento: Optional[str] = None, organo: Optional[str] = None, organismo_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_nif: Optional[str] = None, localidad: Optional[str] = None, nuts: Optional[str] = None, cpv_code: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None, solo_menores: Optional[bool] = None, size: int = 20, from_: int = 0, sort_by: Optional[str] = None, sort_order: Optional[str] = None, with_facets: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_contratos_es_entities": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, *, kind: Optional[str] = None, ano: Optional[int] = None, min_count: int = 1, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_contratos_fr": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, ano: Optional[int] = None, nature: Optional[str] = None, procedure: Optional[str] = None, acheteur: Optional[str] = None, acheteur_id: Optional[str] = None, adjudicatario: Optional[str] = None, adjudicatario_id: Optional[str] = None, cpv_code: Optional[str] = None, lieu_execution_code: Optional[str] = None, lieu_execution_type: Optional[str] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, date_field: Optional[str] = None, size: int = 20, from_: int = 0, sort_by: Optional[str] = None, sort_order: Optional[str] = None, with_facets: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_contratos_fr_entities": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, *, kind: Optional[str] = None, ano: Optional[int] = None, min_count: int = 1, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_directory": {
+"kind": "function",
+"sig": "(index: str, *, q: Optional[str] = None, filters: Optional[Dict[str, Any]] = None, min_capital: Optional[float] = None, max_capital: Optional[float] = None, sort: str = 'relevance', size: int = 20, offset: int = 0, facet_fields: Iterable[str] = (), facet_size: int = 25, search_fields: Optional[Iterable[str]] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_entities": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, country: Optional[str] = None, only_with_nif: Optional[bool] = None, min_contracts: Optional[int] = None, max_contracts: Optional[int] = None, min_value: Optional[float] = None, max_value: Optional[float] = None, role: Optional[str] = 'all', cae: Union[str, list[str], NoneType] = None, cpv: Optional[str] = None, sort_by: Optional[str] = 'total_value', sort_order: Optional[str] = 'desc', size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_erc_analise": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, banda: Optional[str] = None, nivel_transparencia: Optional[str] = None, nivel_credito: Optional[str] = None, distrito: Optional[str] = None, risco_min: Optional[float] = None, risco_max: Optional[float] = None, transparencia_min: Optional[float] = None, credito_min: Optional[float] = None, com_financeiro: Optional[bool] = None, ordenar: str = 'risco', size: int = 25, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_erc_entidades": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, distrito: Optional[str] = None, tipo_sociedade: Optional[str] = None, actividade: Optional[str] = None, detem_ocs: Optional[bool] = None, pessoa: Optional[str] = None, size: int = 25, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_erc_ocs": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, tipo: Optional[str] = None, distrito: Optional[str] = None, proprietaria: Optional[str] = None, size: int = 25, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_erc_pessoas": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, distrito: Optional[str] = None, detem_ocs: Optional[bool] = None, empresa: Optional[str] = None, funcao: Optional[str] = None, size: int = 25, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_eu_taxonomy": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, kind: Optional[str] = None, sector: Optional[str] = None, objective_id: Optional[int] = None, nace: Optional[str] = None, size: int = 20, from_: int = 0, sort: str = 'relevance', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_firmas": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, concelho: Optional[str] = None, cae: Optional[str] = None, situacao: Optional[str] = None, min_score: Optional[float] = None, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_iberinform": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, size: int = 20, from_: int = 0, sort: str = 'recent', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_municipios_despesas": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, distrito: Optional[str] = None, nuts: Optional[str] = None, ano: Optional[int] = None, ordenar: str = 'despesas', ordem: str = 'desc', min_despesas: Optional[float] = None, size: int = 30, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_news": {
+"kind": "function",
+"sig": "(ticker: str, q: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, size: int = 50, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_people": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, nif: Optional[str] = None, company_nif: Optional[str] = None, role: Optional[str] = None, is_company: Optional[bool] = None, origin: Optional[str] = None, source: Optional[str] = None, party: Optional[str] = None, tag: Optional[str] = None, min_roles: Optional[int] = None, min_companies: Optional[int] = None, sort: str = 'relevance', size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_people_faceted": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, *, base_query: Optional[Dict[str, Any]] = None, match_fields: Optional[List[str]] = None, filters: Optional[Dict[str, str]] = None, facet_fields: Optional[Dict[str, str]] = None, size: int = 20, from_: int = 0, sort: str = 'relevance', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_prices": {
+"kind": "function",
+"sig": "(ticker: str, start_date: Optional[str] = None, end_date: Optional[str] = None, size: int = 1000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_remuneracoes": {
+"kind": "function",
+"sig": "(ano: Optional[int] = None, nivel: Optional[str] = None, regime: Optional[str] = None, q: Optional[str] = None, size: int = 200, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_remuneracoes_ap": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, *, ano: Optional[int] = None, tipo: Optional[str] = None, nivel: Optional[int] = None, remuneracao_minima: Optional[float] = None, remuneracao_maxima: Optional[float] = None, size: int = 40, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_remuneracoes_pessoas": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, distrito: Optional[str] = None, concelho: Optional[str] = None, cargo: Optional[str] = None, sigla: Optional[str] = None, min_remuneracao: Optional[float] = None, size: int = 100, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_remuneracoes_territorios": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, nivel: Optional[str] = None, distrito: Optional[str] = None, concelho: Optional[str] = None, escalao_id: Optional[str] = None, min_eleitores: Optional[int] = None, max_eleitores: Optional[int] = None, size: int = 500, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_scraped": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, source_id: Optional[str] = None, tags: Optional[List[str]] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, sentiments: Optional[List[str]] = None, size: int = 20, from_: int = 0, sort: str = 'recent', exclude_prefixes: Optional[Iterable[str]] = None, exclude_ids: Optional[Iterable[str]] = None, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_sentiment_daily": {
+"kind": "function",
+"sig": "(ticker: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, size: int = 3000, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_social": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, platform: Optional[str] = None, channel_id: Optional[str] = None, tags: Optional[List[str]] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, sentiments: Optional[List[str]] = None, person_nif: Optional[str] = None, kinds: Optional[List[str]] = None, size: int = 20, from_: int = 0, sort: str = 'recent', es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_societario": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, nif: Optional[str] = None, entidade: Optional[str] = None, acto: Optional[str] = None, tipo: Optional[str] = None, distrito: Optional[str] = None, concelho: Optional[str] = None, natureza_juridica: Optional[str] = None, data_from: Optional[str] = None, data_to: Optional[str] = None, has_documento: Optional[bool] = None, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_trademarks": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, holder_name: Optional[str] = None, nice_class: Optional[str] = None, mark_type: Optional[str] = None, current_phase: Optional[str] = None, size: int = 20, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"search_vereadores": {
+"kind": "function",
+"sig": "(q: Optional[str] = None, district: Optional[str] = None, concelho: Optional[str] = None, party: Optional[str] = None, role: Optional[str] = None, size: int = 50, page: int = 1, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"social_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"societario_counts_by_nif": {
+"kind": "function",
+"sig": "(nifs: Iterable[str], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, int]"
+},
+"societario_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"societario_targets": {
+"kind": "function",
+"sig": "(limit: int = 50, from_: int = 0, min_contracts: int = 1, exclude_collected: bool = True, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"societario_targets_filtered": {
+"kind": "function",
+"sig": "(*, ano_ini: Optional[int] = None, ano_fim: Optional[int] = None, q: Optional[str] = None, nifs: Optional[Iterable[str]] = None, min_contracts: int = 1, min_value: Optional[float] = None, papel: str = 'ambos', period_size: int = 3000, exclude_collected: bool = True, limit: int = 50, from_: int = 0, es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"update_scraped_sentiment": {
+"kind": "function",
+"sig": "(rows: List[Dict[str, Any]], es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"vereadores_status": {
+"kind": "function",
+"sig": "(es: Optional[elasticsearch.Elasticsearch] = None) -> Dict[str, Any]"
+},
+"warm_entity_role_summaries": {
+"kind": "function",
+"sig": "(roles: Tuple[str, ...] = ('all', 'adjudicante', 'adjudicatario')) -> None"
+}
+}

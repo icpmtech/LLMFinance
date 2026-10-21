@@ -307,7 +307,7 @@ def export_contracts_to_excel(
             try:
                 val_len = len(str(cell.value))
                 if val_len > max_length:
-                    max_length = val_length
+                    max_length = val_len
             except Exception:
                 pass
         ws.column_dimensions[column_letter].width = min(max_length + 2, 60)

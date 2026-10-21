@@ -87,10 +87,11 @@ services:
       - ./model:/app/model
       - ./rag:/app/rag
       - ./logs:/app/logs
-      # Biblioteca de skills do Hermes Agent, só de leitura: o Jarvis lista-as no
-      # gateway `agent` sem precisar do `docker` (que um backend dentro de um
-      # container não tem). O volume é criado pelo perfil `agents`.
-      - hermes-data:/hermes-data:ro
+      # Volume do Hermes Agent: o Jarvis lê a biblioteca de skills daqui (sem
+      # `docker`) e o backend **escreve** o `config.yaml`/`.env` do agente
+      # (Definições → Hermes Agent) quando não tem o CLI do `docker`. Por isso é
+      # montado com escrita: é o equivalente a `docker exec -u hermes`.
+      - hermes-data:/hermes-data
       # Modelos do `faster-whisper` (transcrição e palavra de ativação). Sem isto,
       # cada recriação do container volta a descarregar o modelo do Hugging Face.
       - whisper-cache:/root/.cache/huggingface

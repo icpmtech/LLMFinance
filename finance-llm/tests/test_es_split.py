@@ -42,6 +42,10 @@ def _nome_do_modulo(funcao: object) -> str:
 
 def test_api_publica_e_igual_a_do_ficheiro_original() -> None:
     """Nenhum nome desapareceu e nenhuma assinatura mudou na divisão."""
+    assert MANIFEST.exists(), (
+        f"falta {MANIFEST.relative_to(ROOT)} — é o contrato da API (versão de "
+        "`api/elasticsearch_client.py` antes da divisão); não deve ser apagado"
+    )
     esperado = json.loads(MANIFEST.read_text(encoding="utf-8"))
     em_falta: list[str] = []
     diferentes: list[str] = []

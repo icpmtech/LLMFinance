@@ -105,11 +105,12 @@ def providers(session: Session) -> Dict[str, Any]:
 
 @router.get("/container")
 def container() -> Dict[str, Any]:
-    """Estado bruto do container: corre, e o que tem no `config.yaml` e no `.env`."""
+    """Estado bruto do agente: corre, e o que tem no `config.yaml` e no `.env`."""
     return {
         "container": service.CONTAINER,
+        "mode": service.container_mode(),
         "docker_available": bool(service.docker_path()),
-        "running": service.container_running() if service.docker_path() else False,
+        "running": service.container_running(),
         "config": service.read_config_values(service.CONFIG_KEYS),
         "env_keys": sorted(
             name for name in service._env_names(service.read_container_env()) if name in service.MANAGED_ENV_KEYS

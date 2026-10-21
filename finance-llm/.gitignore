@@ -103,3 +103,9 @@ data/erc/raw/
 # `POST /remuneracoes-ap/refresh` e ficam só em disco; o modelo que deles se lê
 # (`data/remuneracoes-ap/<ano>.json`) também é regenerável e não vai versionado.
 data/remuneracoes-ap/pdf/
+
+# Contrato da divisão de `api/elasticsearch_client.py` em pi/es/*: a lista
+# de nomes, assinaturas e constantes que a fachada tem de continuar a expor
+# (	ests/test_es_split.py). É a fotografia do ficheiro **antes** da divisão,
+# pequena e só muda quando a API muda de propósito.
+!tests/data/es_api_manifest.json

@@ -25,6 +25,21 @@ escreve-a onde o Hermes a lê.
    próprio container (`/opt/hermes/plugins/model-providers/*/__init__.py`), para
    não envelhecer com o upstream.
 
+**Como se chega lá** (`container_mode`) — dois modos, escolhidos em execução:
+
+- `docker`: há CLI do `docker` neste processo (backend no host, ou socket
+  montado) → `docker exec` e `docker compose up --force-recreate`, como sempre.
+- `volume`: o backend corre em container e o volume **`hermes-data` está
+  montado** (`HERMES_DATA_DIR`, por omissão `/hermes-data`) → o `config.yaml` e o
+  `.env` são lidos/escritos por ficheiro (é o mesmo conteúdo que o agente vê em
+  `/opt/data`). A edição do YAML é cirúrgica (só a linha da chave, comentários
+  intactos), validada antes de gravar e com cópia em `backups/`. Como não há
+  `docker compose`, a configuração fica escrita mas o container tem de ser
+  reiniciado — `apply_settings` devolve `restart_required` + `warning` em vez de
+  falhar.
+
+Sem `docker` e sem o volume instalado, `diagnose` explica o que falta.
+
 Quando o fornecedor do IQ OS não tem perfil equivalente no Hermes (OpenAI, Groq
 e Mistral, por exemplo — o Hermes trata esses por `custom`), a configuração vai
 toda para o `config.yaml`, com `provider: custom` + `base_url` + `api_key`.
@@ -66,6 +81,12 @@ ENV_PATH = f"{HERMES_HOME}/.env"
 PROVIDERS_DIR = "/opt/hermes/plugins/model-providers"
 CONTAINER_USER = "hermes"
 
+#: Volume `hermes-data` montado **neste** processo. O backend, quando corre em
+#: container, não tem o CLI do `docker` (nem o socket); mas o mesmo volume que o
+#: agente vê em `/opt/data` está montado aqui, pelo que se lê e escreve o
+#: `config.yaml` / `.env` por ficheiro (ver `container_mode`).
+HERMES_DATA_DIR = os.getenv("HERMES_DATA_DIR") or "/hermes-data"
+
 EXEC_TIMEOUT = 60.0
 RECREATE_TIMEOUT = 600.0
 REGISTRY_TTL = 300.0
@@ -77,6 +98,56 @@ PROVIDER_ALIASES: Dict[str, str] = {
     "google": "gemini",
     "mistral-ai": "mistral",
     "ollama-cloud": "ollama-cloud",
+}
+
+#: Perfis de modelo → variáveis de ambiente, lidos do container
+#: (`/opt/hermes/plugins/model-providers/<perfil>/__init__.py`) na versão em uso.
+#: Só serve de **recurso** quando não há como ler o container (backend dentro de
+#: um container, sem `docker`): evita que o agente fique sem perfil nativo e caia
+#: sempre em `custom`. O container continua a mandar quando está acessível.
+PROVIDER_ENV_SNAPSHOT: Dict[str, List[str]] = {
+    "actual": ["ACTUAL_API_KEY"],
+    "ai-gateway": ["AI_GATEWAY_API_KEY"],
+    "alibaba": ["DASHSCOPE_API_KEY"],
+    "alibaba-coding-plan": [
+        "ALIBABA_CODING_PLAN_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "ALIBABA_CODING_PLAN_BASE_URL",
+    ],
+    "anthropic": ["ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+    "arcee": ["ARCEEAI_API_KEY"],
+    "azure-foundry": ["AZURE_FOUNDRY_API_KEY", "AZURE_FOUNDRY_BASE_URL"],
+    "bedrock": [],
+    "commandcode": ["COMMANDCODE_API_KEY", "COMMANDCODE_BASE_URL"],
+    "copilot": ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
+    "copilot-acp": [],
+    "custom": [],
+    "deepinfra": ["DEEPINFRA_API_KEY", "DEEPINFRA_BASE_URL"],
+    "deepseek": ["DEEPSEEK_API_KEY"],
+    "fireworks": ["FIREWORKS_API_KEY"],
+    "gemini": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+    "gmi": ["GMI_API_KEY", "GMI_BASE_URL"],
+    "huggingface": ["HF_TOKEN"],
+    "kilocode": ["KILOCODE_API_KEY"],
+    "kimi-coding": [],
+    "meta-ai": ["MODEL_API_KEY", "META_API_KEY", "META_MODEL_API_KEY", "META_BASE_URL"],
+    "minimax": ["MINIMAX_API_KEY"],
+    "nebius-token-factory": ["NEBIUS_API_KEY", "NEBIUS_TOKEN_FACTORY_API_KEY", "NEBIUS_BASE_URL"],
+    "nous": ["NOUS_API_KEY"],
+    "novita": ["NOVITA_API_KEY", "NOVITA_BASE_URL"],
+    "nvidia": ["NVIDIA_API_KEY"],
+    "ollama-cloud": ["OLLAMA_API_KEY"],
+    "openai-codex": [],
+    "opencode-zen": ["OPENCODE_ZEN_API_KEY"],
+    "openrouter": ["OPENROUTER_API_KEY"],
+    "qwen-oauth": ["QWEN_API_KEY"],
+    "router": ["RAMP_ROUTER_API_KEY", "ROUTER_API_KEY", "RAMP_ROUTER_BASE_URL"],
+    "stepfun": ["STEPFUN_API_KEY"],
+    "upstage": ["UPSTAGE_API_KEY", "UPSTAGE_BASE_URL"],
+    "vertex": [],
+    "xai": ["XAI_API_KEY"],
+    "xiaomi": ["XIAOMI_API_KEY"],
+    "zai": ["GLM_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY"],
 }
 
 #: Variáveis que a plataforma gere no `.env` do container. Ao trocar de
@@ -193,6 +264,10 @@ def provider_registry(force: bool = False) -> Dict[str, List[str]]:
 
     Lido de `/opt/hermes/plugins/model-providers/*/__init__.py` dentro do
     container, para acompanhar a versão instalada em vez de a fixar no código.
+    Quando o container não é alcançável (backend em container, sem `docker`),
+    usa-se uma pasta local (`HERMES_PROVIDERS_DIR`, se existir) e, em último
+    recurso, `PROVIDER_ENV_SNAPSHOT` — o agente continua a receber a chave na
+    variável certa em vez de cair sempre em `custom`.
     """
     with _REGISTRY_LOCK:
         cached = _REGISTRY_CACHE["data"]
@@ -200,33 +275,81 @@ def provider_registry(force: bool = False) -> Dict[str, List[str]]:
         if fresh and not force:
             return dict(cached)
 
-    script = (
-        "import json, os, re\n"
-        f"root = {PROVIDERS_DIR!r}\n"
-        "out = {}\n"
-        "if os.path.isdir(root):\n"
-        "    for name in sorted(os.listdir(root)):\n"
-        "        path = os.path.join(root, name, '__init__.py')\n"
-        "        if not os.path.isfile(path):\n"
-        "            continue\n"
-        "        text = open(path, encoding='utf-8', errors='ignore').read()\n"
-        "        match = re.search(r'env_vars\\s*=\\s*\\(([^)]*)\\)', text)\n"
-        "        envs = re.findall(r'[\"\\']([A-Z0-9_]+)[\"\\']', match.group(1)) if match else []\n"
-        "        out[name] = envs\n"
-        "print(json.dumps(out))\n"
-    )
-    code, stdout, _ = _exec(["sh", "-c", f"python3 -c {shlex.quote(script)}"], as_user=True)
-    registry: Dict[str, List[str]] = {}
-    if code == 0 and stdout.strip():
-        try:
-            registry = json.loads(stdout.strip().splitlines()[-1])
-        except Exception as exc:
-            logger.info("Hermes Agent: registo de perfis ilegível (%s).", exc)
+    registry = _registry_from_dir(PROVIDERS_DIR) if docker_path() else {}
+    if not registry:
+        local = os.getenv("HERMES_PROVIDERS_DIR")
+        if local:
+            registry = _registry_from_dir(local)
+    if not registry:
+        registry = dict(PROVIDER_ENV_SNAPSHOT)
+        logger.info(
+            "Hermes Agent: perfis de modelo da versão instalada inacessíveis (%s); "
+            "uso o instantâneo local com %d perfis.",
+            "sem `docker`" if not docker_path() else "pasta ilegível",
+            len(registry),
+        )
 
-    if registry:
-        with _REGISTRY_LOCK:
-            _REGISTRY_CACHE.update({"at": time.time(), "data": registry})
+    with _REGISTRY_LOCK:
+        _REGISTRY_CACHE.update({"at": time.time(), "data": registry})
+    return dict(registry)
+
+
+#: Script (Python 3) que lê os perfis do Hermes. Corre **dentro** do container.
+_REGISTRY_SCRIPT = (
+    "import json, os, re\n"
+    f"root = {PROVIDERS_DIR!r}\n"
+    "out = {}\n"
+    "if os.path.isdir(root):\n"
+    "    for name in sorted(os.listdir(root)):\n"
+    "        path = os.path.join(root, name, '__init__.py')\n"
+    "        if not os.path.isfile(path):\n"
+    "            continue\n"
+    "        text = open(path, encoding='utf-8', errors='ignore').read()\n"
+    "        match = re.search(r'env_vars\\s*=\\s*\\(([^)]*)\\)', text)\n"
+    "        envs = re.findall(r'[\"\\']([A-Z0-9_]+)[\"\\']', match.group(1)) if match else []\n"
+    "        out[name] = envs\n"
+    "print(json.dumps(out))\n"
+)
+
+
+def _registry_from_dir(root: str) -> Dict[str, List[str]]:
+    """Lê os perfis de `root` (no container, via `docker exec`; ou numa pasta local)."""
+    if docker_path():
+        code, stdout, _ = _exec(
+            ["sh", "-c", f"python3 -c {shlex.quote(_REGISTRY_SCRIPT)}"], as_user=True
+        )
+        if code == 0 and stdout.strip():
+            return _parse_registry(stdout)
+        return {}
+
+    import re as _re
+
+    registry: Dict[str, List[str]] = {}
+    base = Path(root)
+    if not base.is_dir():
+        return registry
+    for pasta in sorted(base.iterdir()):
+        ficheiro = pasta / "__init__.py"
+        if not ficheiro.is_file():
+            continue
+        try:
+            texto = ficheiro.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        encontrado = _re.search(r"env_vars\s*=\s*\(([^)]*)\)", texto)
+        registry[pasta.name] = (
+            _re.findall(r"[\"']([A-Z0-9_]+)[\"']", encontrado.group(1)) if encontrado else []
+        )
     return registry
+
+
+def _parse_registry(stdout: str) -> Dict[str, List[str]]:
+    try:
+        dados = json.loads(stdout.strip().splitlines()[-1])
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Hermes Agent: registo de perfis ilegível (%s).", exc)
+        return {}
+    return {str(k): [str(v) for v in (val or [])] for k, val in (dados or {}).items()}
 
 
 def hermes_provider_for(
@@ -475,14 +598,111 @@ def _mask(value: str, keep: int = 4) -> str:
 
 # ---------------------------------------------------------------------------
 # Acesso ao container
+#
+# Dois modos, escolhidos em tempo de execução:
+#
+# * **docker** — há CLI do `docker` neste processo (backend no host, ou socket
+#   montado): tudo passa por `docker exec`, como sempre passou.
+# * **volume** — o backend corre em container e o volume `hermes-data` está
+#   montado (`HERMES_DATA_DIR`, por omissão `/hermes-data`): escreve-se o
+#   `config.yaml` e o `.env` por ficheiro. É o mesmo conteúdo que o agente vê em
+#   `/opt/data`, pelo que o resultado é idêntico — só não há `docker compose`
+#   para recriar o container (a UI avisa que é preciso reiniciá-lo).
 # ---------------------------------------------------------------------------
 def docker_path() -> Optional[str]:
     return shutil.which("docker")
 
 
+def data_dir() -> Optional[Path]:
+    """Volume `hermes-data` montado neste processo (ou `None`)."""
+    caminho = Path(HERMES_DATA_DIR)
+    try:
+        if (caminho / "config.yaml").is_file():
+            return caminho
+    except OSError:
+        return None
+    return caminho if caminho.is_dir() else None
+
+
+def container_mode() -> str:
+    """Como este processo alcança o agente: `docker`, `volume` ou `none`."""
+    if docker_path():
+        return "docker"
+    return "volume" if data_dir() is not None else "none"
+
+
+def data_dir_writable() -> bool:
+    """Diz se o volume está montado com escrita (no modo `volume`)."""
+    pasta = data_dir()
+    if pasta is None:
+        return False
+    if os.access(pasta, os.W_OK):
+        return True
+    # `os.access` mente com `root` em alguns sistemas de ficheiros: confirmar
+    # com um ficheiro temporário.
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(dir=str(pasta), prefix=".iqos-", suffix=".tmp"):
+            return True
+    except OSError:
+        return False
+
+
+def restart_pending() -> bool:
+    """O agente ainda não leu a configuração atual? (só no modo `volume`).
+
+    Sem `docker` não há como reiniciar o container; mas o `gateway.pid` é
+    reescrito a cada arranque, pelo que comparar as datas diz se o agente já
+    arrancou depois da última escrita no `config.yaml`/`.env`.
+    """
+    if container_mode() != "volume":
+        return False
+    pasta = data_dir()
+    if pasta is None:
+        return False
+    pid = pasta / "gateway.pid"
+    if not pid.is_file():
+        return True
+    try:
+        inicio = pid.stat().st_mtime
+        for nome in ("config.yaml", ".env"):
+            caminho = pasta / nome
+            if caminho.is_file() and caminho.stat().st_mtime > inicio:
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _volume_read_only_error() -> RuntimeError:
+    return RuntimeError(
+        f"O volume do Hermes está montado em `{HERMES_DATA_DIR}` **só de leitura**: não é possível "
+        "escrever o `config.yaml`/`.env`. Monte-o com escrita no `docker-compose.yml` "
+        "(`- hermes-data:/hermes-data`, sem `:ro`) e recrie o backend, ou configure o agente a "
+        "partir do host (com o CLI do `docker`)."
+    )
+
+
+def _local_path(name: str) -> Optional[Path]:
+    pasta = data_dir()
+    return (pasta / name) if pasta else None
+
+
 def container_running() -> bool:
-    code, stdout, _ = _exec_raw(["ps", "--filter", f"name={CONTAINER}", "--format", "{{.Names}}"])
-    return code == 0 and CONTAINER in stdout
+    if docker_path():
+        code, stdout, _ = _exec_raw(["ps", "--filter", f"name={CONTAINER}", "--format", "{{.Names}}"])
+        return code == 0 and CONTAINER in stdout
+    # Sem `docker`: o volume montado é o sinal de que o agente existe (e o
+    # `gateway.pid` diz se está vivo).
+    pasta = data_dir()
+    if pasta is None:
+        return False
+    pid = pasta / "gateway.pid"
+    try:
+        return pid.is_file()
+    except OSError:
+        return True
 
 
 def _exec_raw(args: Sequence[str], *, input_text: Optional[str] = None, timeout: float = EXEC_TIMEOUT):
@@ -526,6 +746,15 @@ def hermes_cli(args: Sequence[str], *, input_text: Optional[str] = None, timeout
 
 
 def read_container_env() -> str:
+    """Conteúdo do `.env` do agente (do container ou do volume montado)."""
+    caminho = _local_path(".env")
+    if caminho is not None and not docker_path():
+        try:
+            return caminho.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            return ""
+        except OSError as exc:
+            raise RuntimeError(f"Falha ao ler {caminho}: {exc}") from exc
     code, stdout, _ = _exec(["cat", ENV_PATH], as_user=True)
     if code != 0:
         return ""
@@ -533,13 +762,75 @@ def read_container_env() -> str:
 
 
 def write_container_env(text: str) -> None:
-    """Escreve o `.env` do container preservando o dono do ficheiro."""
+    """Escreve o `.env` do agente preservando o dono e as permissões do ficheiro."""
+    caminho = _local_path(".env")
+    if caminho is not None and not docker_path():
+        _write_local(caminho, text, mode=0o600)
+        return
     _exec(["sh", "-c", f"cat > {ENV_PATH} && chmod 600 {ENV_PATH}"], input_text=text)
 
 
+def _write_local(path: Path, text: str, *, mode: Optional[int] = None) -> None:
+    """Escreve um ficheiro do volume de forma atómica, mantendo dono e modo.
+
+    O backend corre como `root` e o volume pertence ao utilizador do agente
+    (`10000`); sem repor o dono, o Hermes deixaria de conseguir escrever no seu
+    próprio `.env`.
+    """
+    import tempfile
+
+    try:
+        estado = path.stat()
+        dono = (estado.st_uid, estado.st_gid)
+        modo = estado.st_mode & 0o777
+    except FileNotFoundError:
+        dono = None
+        modo = mode if mode is not None else 0o600
+    except OSError as exc:
+        raise RuntimeError(f"Falha ao inspecionar {path}: {exc}") from exc
+    if modo is None:
+        modo = mode if mode is not None else 0o600
+    elif mode is not None:  # modo explícito manda (ex.: `.env` sempre 0600)
+        modo = mode
+
+    try:
+        descritor, temporario = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+        )
+    except OSError as exc:
+        if exc.errno in (30, 13):  # EROFS / EACCES
+            raise _volume_read_only_error() from exc
+        raise RuntimeError(f"Falha ao escrever em {path.parent}: {exc}") from exc
+    try:
+        with os.fdopen(descritor, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.chmod(temporario, modo)
+        if dono is not None:
+            try:
+                os.chown(temporario, *dono)
+            except (AttributeError, PermissionError):  # não-root / sistema sem chown
+                pass
+        os.replace(temporario, path)
+    except Exception:
+        try:
+            os.unlink(temporario)
+        except OSError:
+            pass
+        raise
+
+
 def read_config_values(keys: Sequence[str]) -> Dict[str, Optional[str]]:
-    """Lê valores do `config.yaml` pelo CLI (`model.provider`, `model.default`, …)."""
+    """Lê valores do `config.yaml` (`model.provider`, `model.default`, …).
+
+    No container é o próprio CLI do Hermes que responde; sem `docker`, lê-se o
+    `config.yaml` do volume (é o mesmo ficheiro).
+    """
     values: Dict[str, Optional[str]] = {}
+    if not docker_path() and _local_path("config.yaml") is not None:
+        dados = _load_config_yaml()
+        for key in keys:
+            values[key] = _yaml_get(dados, key)
+        return values
     for key in keys:
         code, stdout, stderr = hermes_cli(["config", "get", key])
         if code == 0 and stdout.strip():
@@ -555,7 +846,16 @@ def apply_config(config: Dict[str, Optional[str]]) -> List[str]:
     `hermes config unset` sai com código 1 quando a chave já não existe — mas o
     estado pedido («não definida») está cumprido, por isso isso conta como
     sucesso e é relatado.
+
+    Sem `docker` (backend em container com o volume montado) o CLI não existe:
+    edita-se o `config.yaml` do volume. A alteração é **cirúrgica** (só a linha
+    da chave) para não perder os comentários do ficheiro, é validada com o
+    `yaml.safe_load` antes de gravar e fica com uma cópia de segurança em
+    `backups/`.
     """
+    if not docker_path() and _local_path("config.yaml") is not None:
+        return _apply_config_local(config)
+
     applied: List[str] = []
     for key, value in config.items():
         if value in (None, ""):
@@ -574,12 +874,185 @@ def apply_config(config: Dict[str, Optional[str]]) -> List[str]:
     return applied
 
 
+# ---------------------------------------------------------------------------
+# Edição do config.yaml no volume (sem `docker`)
+# ---------------------------------------------------------------------------
+def _config_path() -> Path:
+    caminho = _local_path("config.yaml")
+    if caminho is None:
+        raise RuntimeError(
+            f"Volume do Hermes não montado em {HERMES_DATA_DIR}: defina `HERMES_DATA_DIR` "
+            "ou monte o volume `hermes-data` no backend."
+        )
+    return caminho
+
+
+def _load_config_yaml() -> Dict[str, Any]:
+    import yaml
+
+    try:
+        dados = yaml.safe_load(_config_path().read_text(encoding="utf-8")) or {}
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"`config.yaml` do Hermes ilegível: {exc}") from exc
+    return dados if isinstance(dados, dict) else {}
+
+
+def _yaml_get(dados: Dict[str, Any], key: str) -> Optional[str]:
+    atual: Any = dados
+    for parte in key.split("."):
+        if not isinstance(atual, dict) or parte not in atual:
+            return None
+        atual = atual[parte]
+    if atual is None or isinstance(atual, (dict, list)):
+        return None
+    return str(atual)
+
+
+def _apply_config_local(config: Dict[str, Optional[str]]) -> List[str]:
+    """set/unset sobre o texto do `config.yaml`, preservando o resto do ficheiro."""
+    caminho = _config_path()
+    original = caminho.read_text(encoding="utf-8")
+    texto = original
+    applied: List[str] = []
+    for key, value in config.items():
+        if value in (None, ""):
+            novo, existia = _yaml_unset_text(texto, key)
+            texto = novo
+            applied.append(f"-{key}" if existia else f"-{key} (já não estava)")
+            continue
+        texto = _yaml_set_text(texto, key, str(value))
+        applied.append(f"{key}={_mask(str(value)) if key.endswith('api_key') else value}")
+
+    # Validar antes de tocar no ficheiro: um erro aqui não pode deixar o agente
+    # com um YAML partido (ele não arrancava).
+    import yaml
+
+    try:
+        validado = yaml.safe_load(texto) or {}
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"A alteração ao `config.yaml` do Hermes produziria um YAML inválido ({exc}); "
+            "nada foi gravado."
+        ) from exc
+    for key, value in config.items():
+        esperado = str(value) if value not in (None, "") else None
+        obtido = _yaml_get(validado, key) if isinstance(validado, dict) else None
+        if esperado is not None and obtido != esperado:
+            raise RuntimeError(
+                f"Não foi possível definir `{key}` no `config.yaml` do Hermes "
+                f"(ficaria {obtido!r}); nada foi gravado."
+            )
+
+    if texto != original:
+        _backup_copia(caminho, original)
+        _write_local(caminho, texto)
+    return applied
+
+
+def _backup_copia(caminho: Path, texto: str) -> None:
+    """Guarda uma cópia do `config.yaml` antes de o alterar (`backups/`)."""
+    pasta = caminho.parent / "backups"
+    try:
+        pasta.mkdir(parents=True, exist_ok=True)
+        destino = pasta / f"iqos-config-{time.strftime('%Y%m%d-%H%M%S')}.yaml"
+        _write_local(destino, texto, mode=0o600)
+    except OSError as exc:
+        logger.info("Hermes Agent: não guardei cópia do config.yaml (%s).", exc)
+
+
+_SECTION_RE = r"^(?P<chave>{chave}):[ \t]*(?:#.*)?$"
+_OPTION_TMPL = r"^(?P<indent>[ \t]+){opcao}:(?P<resto>.*)$"
+
+
+def _yaml_set_text(texto: str, key: str, value: str) -> str:
+    """Define `secao.opcao` no texto do YAML sem reformatar o ficheiro."""
+    linhas = texto.splitlines(keepends=True)
+    secao, _, opcao = key.partition(".")
+    if not opcao:
+        raise RuntimeError(f"Chave `{key}` inválida: use `secção.chave`.")
+
+    valor = _yaml_scalar(value)
+    inicio = _find_section(linhas, secao)
+    if inicio is None:
+        # Secção inexistente: acrescenta-a no fim (o YAML mantém-se válido).
+        if linhas and not linhas[-1].endswith("\n"):
+            linhas[-1] += "\n"
+        linhas.extend([f"{secao}:\n", f"  {opcao}: {valor}\n"])
+        return "".join(linhas)
+
+    fim = _section_end(linhas, inicio)
+    padrao = re.compile(_OPTION_TMPL.format(opcao=re.escape(opcao)))
+    for indice in range(inicio + 1, fim):
+        encontrado = padrao.match(linhas[indice])
+        if encontrado:
+            linhas[indice] = f"{encontrado.group('indent')}{opcao}: {valor}\n"
+            return "".join(linhas)
+
+    # Chave nova: entra no fim da secção (as entradas antes ficam intactas).
+    indentacao = "  "
+    for indice in range(inicio + 1, fim):
+        encontrado = re.match(r"^(?P<indent>[ \t]+)\S", linhas[indice])
+        if encontrado:
+            indentacao = encontrado.group("indent")
+            break
+    if fim > 0 and not linhas[fim - 1].endswith("\n"):
+        linhas[fim - 1] += "\n"
+    linhas.insert(fim, f"{indentacao}{opcao}: {valor}\n")
+    return "".join(linhas)
+
+
+def _yaml_unset_text(texto: str, key: str) -> Tuple[str, bool]:
+    """Remove `secao.opcao` do texto. Devolve `(texto, existia)`."""
+    linhas = texto.splitlines(keepends=True)
+    secao, _, opcao = key.partition(".")
+    if not opcao:
+        return texto, False
+    inicio = _find_section(linhas, secao)
+    if inicio is None:
+        return texto, False
+    fim = _section_end(linhas, inicio)
+    padrao = re.compile(_OPTION_TMPL.format(opcao=re.escape(opcao)))
+    for indice in range(inicio + 1, fim):
+        if padrao.match(linhas[indice]):
+            del linhas[indice]
+            return "".join(linhas), True
+    return texto, False
+
+
+def _find_section(linhas: Sequence[str], secao: str) -> Optional[int]:
+    padrao = re.compile(_SECTION_RE.format(chave=re.escape(secao)))
+    for indice, linha in enumerate(linhas):
+        if padrao.match(linha.rstrip("\n")):
+            return indice
+    return None
+
+
+def _section_end(linhas: Sequence[str], inicio: int) -> int:
+    """Índice da primeira linha (chave de topo) depois da secção."""
+    for indice in range(inicio + 1, len(linhas)):
+        linha = linhas[indice]
+        if not linha.strip() or linha.lstrip().startswith("#"):
+            continue
+        if not linha[:1].isspace():  # chave de topo
+            return indice
+    return len(linhas)
+
+
+def _yaml_scalar(value: str) -> str:
+    """Representa um valor como escalar YAML, citando-o só quando é preciso."""
+    texto = str(value)
+    if re.fullmatch(r"[A-Za-z0-9_./:@+-]*", texto) and texto:
+        return texto
+    return json.dumps(texto, ensure_ascii=False)
+
+
 def compose_recreate(timeout: float = RECREATE_TIMEOUT) -> str:
     """Recria o container do Hermes Agent para aplicar a configuração."""
     docker = docker_path()
     if not docker:
         raise RuntimeError(
-            "O comando `docker` não está disponível neste processo: recrie o container à mão "
+            "O comando `docker` não está disponível neste processo: a configuração foi escrita no "
+            "volume, mas o container tem de ser reiniciado para a ler "
             f"(`docker compose --profile {COMPOSE_PROFILE} up -d --force-recreate {COMPOSE_SERVICE}`)."
         )
     if not COMPOSE_FILE.exists():
@@ -652,8 +1125,18 @@ def apply_settings(
         write_container_env(new_env)
 
     recreated = ""
+    warning = ""
     if recreate:
-        recreated = compose_recreate()
+        if docker_path():
+            recreated = compose_recreate()
+        else:
+            # Sem `docker` (backend em container): o volume já tem a configuração
+            # nova, mas o agente só a lê ao arrancar. Não se falha a operação —
+            # devolve-se o aviso para a UI o mostrar.
+            warning = (
+                f"Configuração escrita no volume do Hermes. Reinicie o agente para a aplicar: "
+                f"`docker restart {CONTAINER}`."
+            )
 
     saved = save_settings({"applied_at": _now()}, user)
     # A chave nunca sai daqui em claro: a resposta passa por uma API e por
@@ -666,7 +1149,9 @@ def apply_settings(
         "config": applied_config,
         "env_written": written,
         "env_removed": removed,
-        "recreated": bool(recreate),
+        "recreated": bool(recreate and docker_path()),
+        "restart_required": bool(recreate and not docker_path()),
+        "warning": warning,
         "compose_output": recreated,
         "notes": plan["notes"],
     }
@@ -685,6 +1170,7 @@ def diagnose(user_id: Optional[str] = None) -> Dict[str, Any]:
 
     report: Dict[str, Any] = {
         "container": CONTAINER,
+        "mode": container_mode(),
         "docker_available": bool(docker_path()),
         "running": False,
         "config": {},
@@ -701,10 +1187,10 @@ def diagnose(user_id: Optional[str] = None) -> Dict[str, Any]:
         "problems": [],
     }
 
-    if not report["docker_available"]:
+    if report["mode"] == "none":
         report["problems"].append(
-            "Sem acesso ao `docker`: o backend está dentro de um container e não pode ler nem escrever no "
-            "Hermes Agent. Corra o backend no host ou monte o socket do Docker."
+            "Sem acesso ao Hermes Agent: não há `docker` neste processo nem o volume "
+            f"`hermes-data` montado em `{HERMES_DATA_DIR}`. Monte o volume ou o socket do Docker."
         )
         return report
 
@@ -713,6 +1199,18 @@ def diagnose(user_id: Optional[str] = None) -> Dict[str, Any]:
         report["problems"].append(
             f"O container `{CONTAINER}` não está a correr (`docker compose --profile {COMPOSE_PROFILE} up -d "
             f"{COMPOSE_SERVICE}`)."
+        )
+        return report
+
+    # Sem `docker` as alterações ficam no volume; o agente só as lê ao arrancar.
+    # `restart_pending()` compara as datas (é um aviso, não um problema).
+    report["restart_required"] = restart_pending()
+    report["writable"] = True if report["mode"] == "docker" else data_dir_writable()
+    if report["mode"] == "volume" and not report["writable"]:
+        report["problems"].append(
+            f"O volume do Hermes (`{HERMES_DATA_DIR}`) está montado só de leitura: não é possível "
+            "escrever o `config.yaml`/`.env`. Monte-o com escrita (`- hermes-data:/hermes-data`, sem "
+            "`:ro`) e recrie o backend."
         )
         return report
 
@@ -791,12 +1289,21 @@ def settings_view(user_id: Optional[str] = None, user: str = "") -> Dict[str, An
     settings = read_settings()
     plan = build_plan(settings, user_id)
     resolved = plan["resolved"]
+    notes = list(plan["notes"])
+    if container_mode() == "volume" and restart_pending():
+        notes.append(
+            "Configuração escrita no volume do Hermes (sem `docker` neste processo): reinicie o agente "
+            f"para a ler — `docker restart {CONTAINER}` (ou `docker compose --profile {COMPOSE_PROFILE} "
+            f"up -d --force-recreate {COMPOSE_SERVICE}`)."
+        )
     return {
         "about": {
             "container": CONTAINER,
             "profile": COMPOSE_PROFILE,
             "service": COMPOSE_SERVICE,
             "home": HERMES_HOME,
+            "mode": container_mode(),
+            "data_dir": str(data_dir()) if data_dir() else "",
             "note": (
                 "O Hermes Agent é um agente independente: a plataforma liga-o ao fornecedor de IA que já "
                 "tem guardado, escrevendo no volume do container e recriando-o."
@@ -819,7 +1326,7 @@ def settings_view(user_id: Optional[str] = None, user: str = "") -> Dict[str, An
             "config": {key: _mask_value(key, value) for key, value in plan["config"].items()},
             "env": sorted(plan["env"]),
             "clear_env": plan["clear_env"],
-            "notes": plan["notes"],
+            "notes": notes,
         },
         "providers": llm_candidates(user_id),
         "search_providers": SEARCH_PROVIDERS,
@@ -841,13 +1348,18 @@ __all__ = [
     "CONFIG_KEYS",
     "CONTAINER",
     "DEFAULTS",
+    "HERMES_DATA_DIR",
     "MANAGED_ENV_KEYS",
+    "PROVIDER_ENV_SNAPSHOT",
     "SEARCH_PROVIDERS",
     "apply_config",
     "apply_settings",
     "build_plan",
     "compose_recreate",
+    "container_mode",
     "container_running",
+    "data_dir",
+    "data_dir_writable",
     "diagnose",
     "docker_path",
     "hermes_cli",
@@ -858,6 +1370,7 @@ __all__ = [
     "read_container_env",
     "read_settings",
     "resolve_llm",
+    "restart_pending",
     "save_settings",
     "settings_view",
     "upsert_env",
