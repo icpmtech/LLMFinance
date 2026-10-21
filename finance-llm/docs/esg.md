@@ -22,6 +22,20 @@ fornecedores.
 | Índices | `finance_esg_empresas`, `finance_esg_indicadores`, `finance_esg_recolhas` |
 | Documentação do modelo | `GET /esg/meta` e o separador **Modelo e fontes** |
 
+## Mapa de empresas e regiões
+
+O separador **Painel** abre com um mapa (OpenStreetMap) sobre o mesmo conjunto
+filtrado do painel (`GET /esg/mapa`):
+
+- **Regiões** — um círculo por distrito (PT) ou província (ES), dimensionado pelo
+  número de empresas e colorido pelo nível do score médio;
+- **Empresas** — um ponto por empresa, na cor do seu nível; clicar abre o dossiê.
+
+A posição vem de `location.distrito`/`location.concelho` do cadastro e é sempre o
+centro da região, nunca um endereço. Uma empresa sem distrito não é colocada num
+sítio inventado: conta para «sem localização» e é listada à parte. As ilhas ficam
+fora do enquadramento inicial; focar a região (ou «Enquadrar tudo») leva até elas.
+
 ## Score
 
 O score global (0–100) é a média dos pilares **com dados**, renormalizada pelos
@@ -89,6 +103,7 @@ e os dados oficiais do
 | GET | `/esg/ranking` | Ranking por score, pilar, setor, dimensão e ano |
 | GET | `/esg/ranking.csv` | Exportação do ranking |
 | GET | `/esg/analitica` | Médias, distribuições e destaques |
+| GET | `/esg/mapa` | Pontos por empresa (score e nível) e agregado por distrito/província |
 | GET | `/esg/empresa/{pais}/{nif}` | Dossiê: score, pilares, componentes, histórico, benchmark, indicadores, contratos e fornecedores |
 | GET | `/esg/empresa/{pais}/{nif}/historico` | Série de três anos + mediana dos pares |
 | GET | `/esg/empresa/{pais}/{nif}/fornecedores` | Carteira de fornecedores do comprador |

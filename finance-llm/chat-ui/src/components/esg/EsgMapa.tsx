@@ -99,6 +99,35 @@ function vistaPara(pontos: Ponto[], largura: number, altura: number, incluirIlha
   return { ...centro, zoom };
 }
 
+/** Nome curto para as etiquetas do mapa (as regiões autónomas não cabem). */
+function rotuloCurto(nome: string) {
+  return nome.replace(/^Região Autónoma d[oa]s?\s+/i, "");
+}
+
+function dicaDaRegiao(regiao: RegiaoNoMapa, cor: string): Omit<Dica, "x" | "y"> {
+  return {
+    titulo: regiao.distrito,
+    linhas: [
+      `${regiao.n} empresa(s) · score médio ${regiao.score_medio?.toFixed(1) ?? "—"}`,
+      regiao.nivel_label ? `Nível dominante: ${regiao.nivel_label}` : "Sem nível dominante",
+      `Cobertura média ${pct(regiao.cobertura_media, 0)}`,
+    ],
+    cor,
+  };
+}
+
+function dicaDaEmpresa(empresa: EsgMapaEmpresa, cor: string): Omit<Dica, "x" | "y"> {
+  return {
+    titulo: empresa.nome,
+    linhas: [
+      `Score ${empresa.score?.toFixed(1) ?? "—"} · ${empresa.nivel_label || "sem nível"}`,
+      [empresa.concelho, empresa.distrito].filter(Boolean).join(" · ") || "Sem localização",
+      empresa.setor_label || "Setor n/d",
+    ],
+    cor,
+  };
+}
+
 function BarraNiveis({ niveis, total }: { niveis: EsgMapaRegiao["niveis"]; total: number }) {
   if (!niveis.length) return null;
   return (
@@ -434,6 +463,7 @@ export function EsgMapa({
             </div>
             <p className="ml-auto text-[11px] text-muted-foreground">
               {num(dados.total)} empresa(s) · {num(empresasNoMapa.length)} no mapa · {num(dados.sem_localizacao)} sem localização
+              {dados.truncado ? " · amostra limitada" : ""}
             </p>
           </div>
 
@@ -468,7 +498,7 @@ export function EsgMapa({
               {modo === "regioes" &&
                 regioesNoMapa.map((regiao) => {
                   const posicao = projecao.project(regiao.lat, regiao.lon);
-                  const raio = 12 + 26 * Math.sqrt(regiao.n / maxEmpresasRegiao);
+                  const raio = 11 + 20 * Math.sqrt(regiao.n / maxEmpresasRegiao);
                   const faixa = nivelDoScore(meta, regiao.score_medio);
                   const cor = faixa?.cor || regiao.cor || esgCor(regiao.nivel);
                   const ativa = selecionada === `${regiao.pais}|${regiao.distrito}`;
@@ -483,28 +513,8 @@ export function EsgMapa({
                           setSelecionada(ativa ? null : chave);
                           if (!ativa) focarRegiao(regiao);
                         }}
-                        onMouseEnter={(evento) =>
-                          mostrarDica(evento, {
-                            titulo: regiao.distrito,
-                            linhas: [
-                              `${regiao.n} empresa(s) · score médio ${regiao.score_medio?.toFixed(1) ?? "—"}`,
-                              regiao.nivel_label ? `Nível dominante: ${regiao.nivel_label}` : "Sem nível dominante",
-                              `Cobertura média ${pct(regiao.cobertura_media, 0)}`,
-                            ],
-                            cor,
-                          })
-                        }
-                        onMouseMove={(evento) =>
-                          mostrarDica(evento, {
-                            titulo: regiao.distrito,
-                            linhas: [
-                              `${regiao.n} empresa(s) · score médio ${regiao.score_medio?.toFixed(1) ?? "—"}`,
-                              regiao.nivel_label ? `Nível dominante: ${regiao.nivel_label}` : "Sem nível dominante",
-                              `Cobertura média ${pct(regiao.cobertura_media, 0)}`,
-                            ],
-                            cor,
-                          })
-                        }
+                        onMouseEnter={(evento) => mostrarDica(evento, dicaDaRegiao(regiao, cor))}
+                        onMouseMove={(evento) => mostrarDica(evento, dicaDaRegiao(regiao, cor))}
                         onMouseLeave={() => setDica(null)}
                         className="absolute flex items-center justify-center rounded-full border-2 font-mono text-[11px] font-semibold transition"
                         style={{
@@ -525,7 +535,7 @@ export function EsgMapa({
                         className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-white/85"
                         style={{ left: posicao.left, top: posicao.top + raio + 3, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}
                       >
-                        {regiao.distrito}
+                        {rotuloCurto(regiao.distrito)}
                       </span>
                     </div>
                   );
@@ -543,28 +553,8 @@ export function EsgMapa({
                       aria-label={`${empresa.nome}: score ${empresa.score?.toFixed(1) ?? "sem dados"} (${empresa.nivel_label || "sem nível"})`}
                       onPointerDown={(evento) => evento.stopPropagation()}
                       onClick={() => onAbrir(comoResumo(empresa))}
-                      onMouseEnter={(evento) =>
-                        mostrarDica(evento, {
-                          titulo: empresa.nome,
-                          linhas: [
-                            `Score ${empresa.score?.toFixed(1) ?? "—"} · ${empresa.nivel_label || "sem nível"}`,
-                            [empresa.concelho, empresa.distrito].filter(Boolean).join(" · ") || "Sem localização",
-                            empresa.setor_label || "Setor n/d",
-                          ],
-                          cor,
-                        })
-                      }
-                      onMouseMove={(evento) =>
-                        mostrarDica(evento, {
-                          titulo: empresa.nome,
-                          linhas: [
-                            `Score ${empresa.score?.toFixed(1) ?? "—"} · ${empresa.nivel_label || "sem nível"}`,
-                            [empresa.concelho, empresa.distrito].filter(Boolean).join(" · ") || "Sem localização",
-                            empresa.setor_label || "Setor n/d",
-                          ],
-                          cor,
-                        })
-                      }
+                      onMouseEnter={(evento) => mostrarDica(evento, dicaDaEmpresa(empresa, cor))}
+                      onMouseMove={(evento) => mostrarDica(evento, dicaDaEmpresa(empresa, cor))}
                       onMouseLeave={() => setDica(null)}
                       className="absolute rounded-full border-2 transition hover:scale-125"
                       style={{

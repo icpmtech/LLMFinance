@@ -335,8 +335,9 @@ def _normalizar(texto: str) -> str:
 #: Não depende de chaves nem de créditos: traduz na própria máquina.
 TRADUCAO_MODELO = "Helsinki-NLP/opus-mt-tc-big-en-pt"
 
-#: Quantos textos vão em cada passagem pelo modelo (o lote amortiza o custo).
-BATCH_SIZE = 8
+#: Quantos textos vão em cada passagem pelo modelo (o lote amortiza o custo: um
+#: lote de 16 textos do mesmo tamanho gera em paralelo, sem somar passagens).
+BATCH_SIZE = 16
 
 #: Limite de caracteres por pedaço de descrição. O modelo trunca a 512 tokens
 #: (~1 500–2 000 caracteres); dividir em pedaços garante que nada se perde.
@@ -383,7 +384,12 @@ def _modelo_pronto() -> Any:
 
 
 def _traduzir_lote(textos: List[str]) -> List[str]:
-    """Traduz um lote de textos numa só passagem pelo modelo local."""
+    """Traduz um lote de textos numa só passagem pelo modelo local.
+
+    O `max_new_tokens` acompanha o tamanho do lote: gerar até 512 tokens quando
+    a entrada tem 60 desperdiça tempo (a geração é autoregressiva e só termina
+    quando todas as sequências do lote chegam ao fim).
+    """
     if not textos:
         return []
     modelo = _modelo_pronto()
@@ -391,7 +397,14 @@ def _traduzir_lote(textos: List[str]) -> List[str]:
         tokens = modelo._tokenizer(
             textos, return_tensors="pt", padding=True, truncation=True, max_length=512
         )
-        saida = modelo._instance.generate(**tokens, max_length=512, num_beams=1, early_stopping=True)
+        entrada = int(tokens["input_ids"].shape[1])
+        maximo = min(512, max(48, int(entrada * 1.6) + 16))
+        saida = modelo._instance.generate(
+            **tokens,
+            max_length=maximo,
+            num_beams=1,
+            no_repeat_ngram_size=0,
+        )
         return modelo._tokenizer.batch_decode(saida, skip_special_tokens=True)
 
 
@@ -441,6 +454,11 @@ def translate_docs(
         except Exception as exc:  # modelo indisponível (sem rede/disco)
             logger.warning("EU Taxonomy: tradutor local indisponível: %s", exc)
             return docs
+
+        # Agrupar por comprimento antes de lotear: um texto curto num lote de
+        # textos longos fica à espera do mais longo (o lote só termina quando
+        # todas as sequências acabam) e o trabalho cresce sem necessidade.
+        pendentes.sort(key=len)
 
         for inicio in range(0, total, BATCH_SIZE):
             lote = pendentes[inicio : inicio + BATCH_SIZE]

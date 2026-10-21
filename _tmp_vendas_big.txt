@@ -1,0 +1,824 @@
+1|#||4|19520|updatePanel|ctl00_ContentPlaceHolder1_upDdlTribunais|
+                    
+                    <br />
+                    <strong>
+                        <label for="ctl00_ContentPlaceHolder1_ddlTribunais" id="ctl00_ContentPlaceHolder1_lblTribunal">Tribunal:</label>
+                    </strong>
+                    <select name="ctl00$ContentPlaceHolder1$ddlTribunais" id="ctl00_ContentPlaceHolder1_ddlTribunais" class="pulldown">
+	<option value="0">-Seleccione o Tribunal-</option>
+	<option value="2871735">Abrantes - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870335">Águeda - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870351">Albergaria-a-Velha - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870867">Albufeira - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870964">Alcobaça - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871266">Alenquer - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2871897">Alijó - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="52798">Almada - Tribunal Administrativo e Fiscal de Almada</option>
+	<option value="2871142">Almada - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870903">Almeida - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871740">Almeirim - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870383">Almodôvar - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871319">Amadora - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2871648">Amarante - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870601">Amares - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870352">Anadia - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870333">Angra do Heroísmo - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="3996970">Ansião - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871842">Arcos de Valdevez - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870741">Arganil - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870353">Arouca - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2330183">Aveiro - Tribunal Administrativo e Fiscal de Aveiro</option>
+	<option value="2870334">Aveiro - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871680">Baião - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870556">Barcelos - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871165">Barreiro - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="52800">Beja - Tribunal Administrativo e Fiscal de Beja</option>
+	<option value="2870360">Beja - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871744">Benavente - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="52801">Braga - Tribunal Administrativo e Fiscal de Braga</option>
+	<option value="2870505">Braga - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870625">Bragança - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2870607">Cabeceiras de Basto - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870973">Caldas da Rainha - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871850">Caminha - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870745">Cantanhede - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871749">Cartaxo - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871328">Cascais - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="52814">Castelo Branco - Tribunal Administrativo e Fiscal de Castelo Branco</option>
+	<option value="2870660">Castelo Branco - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870354">Castelo de Paiva - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3447689">Castro Daire - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870907">Celorico da Beira - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870604">Celorico de Basto - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871890">Chaves - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2871950">Cinfães - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="52803">Coimbra - Tribunal Administrativo e Fiscal de Coimbra</option>
+	<option value="2870702">Coimbra - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870750">Condeixa-a-Nova - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871753">Coruche - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870675">Covilhã - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870384">Cuba - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871420">Elvas - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2871719">Entroncamento - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870355">Espinho - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870610">Esposende - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870336">Estarreja - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870796">Estremoz - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870778">Évora - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870613">Fafe - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870813">Faro - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871684">Felgueiras - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870385">Ferreira do Alentejo - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870732">Figueira da Foz - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870911">Figueira de Castelo Rodrigo - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870993">Figueiró dos Vinhos - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871426">Fronteira - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="52815">Funchal - Tribunal Administrativo e Fiscal do Funchal</option>
+	<option value="2871373">Funchal - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870683">Fundão - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2871507">Gondomar - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870915">Gouveia - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871810">Grândola - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2870894">Guarda - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870559">Guimarães - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870342">Horta - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870689">Idanha-a-Nova - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870356">Ílhavo - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3994023">Lagoa - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870873">Lagos - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871943">Lamego - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="52805">Leiria - Tribunal Administrativo e Fiscal de Leiria</option>
+	<option value="2870937">Leiria - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="209">Lisboa - Tribunal Administrativo de Círculo de Lisboa</option>
+	<option value="2244351">Lisboa - Tribunal da Propriedade Intelectual</option>
+	<option value="2871017">Lisboa - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="215">Lisboa - Tribunal Marítimo de Lisboa</option>
+	<option value="3000203">Lisboa - Tribunal Tributário de Lisboa</option>
+	<option value="52807">Loulé - Tribunal Administrativo e Fiscal de Loulé</option>
+	<option value="2870831">Loulé - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871203">Loures - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2871271">Lourinhã - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870754">Lousã - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871656">Lousada - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870634">Macedo de Cavaleiros - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871367">Mafra - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2871518">Maia - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871954">Mangualde - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871663">Marco de Canaveses - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870997">Marinha Grande - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871534">Matosinhos - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870357">Mealhada - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871854">Melgaço - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="3447669">Miranda do Douro - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="52808">Mirandela - Tribunal Administrativo e Fiscal de Mirandela</option>
+	<option value="2870638">Mirandela - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2870643">Mogadouro - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871958">Moimenta da Beira - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871195">Moita - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2871858">Monção - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871901">Montalegre - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870790">Montemor-o-Novo - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870759">Montemor-o-Velho - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871190">Montijo - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870386">Moura - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871002">Nazaré - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871962">Nelas - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="3447677">Nisa - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2870387">Odemira - Tribunal Judicial da Comarca de Beja</option>
+	<option selected="selected" value="2871355">Oeiras - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2870693">Oleiros - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870840">Olhão - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870337">Oliveira de Azeméis - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3447693">Oliveira de Frades - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870338">Oliveira do Bairro - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870763">Oliveira do Hospital - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871757">Ourém - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870388">Ourique - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870339">Ovar - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871690">Paços de Ferreira - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2871670">Paredes - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="3994085">Paredes de Coura - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870767">Penacova - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="52809">Penafiel - Tribunal Administrativo e Fiscal de Penafiel</option>
+	<option value="2871632">Penafiel - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2871006">Peniche - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871905">Peso da Régua - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870919">Pinhel - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870982">Pombal - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="52810">Ponta Delgada - Tribunal Administrativo e Fiscal de Ponta Delgada</option>
+	<option value="2870332">Ponta Delgada - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871397">Ponta do Sol - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2871846">Ponte da Barca - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871862">Ponte de Lima - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871430">Ponte de Sor - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2871411">Portalegre - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2870847">Portimão - Tribunal Judicial da Comarca de Faro</option>
+	<option value="52811">Porto - Tribunal Administrativo e Fiscal do Porto</option>
+	<option value="2871437">Porto - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871010">Porto de Mós - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871401">Porto Santo - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870616">Póvoa de Lanhoso - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871556">Póvoa de Varzim - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870343">Praia da Vitória - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870800">Redondo - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870804">Reguengos de Monsaraz - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870344">Ribeira Grande - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871762">Rio Maior - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871966">Santa Comba Dão - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871405">Santa Cruz - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870345">Santa Cruz da Graciosa - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870346">Santa Cruz das Flores - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870340">Santa Maria da Feira - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2244369">Santarém - Tribunal da Concorrência, Regulação e Supervisão</option>
+	<option value="2871695">Santarém - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871803">Santiago do Cacém - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2871577">Santo Tirso - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870341">São João da Madeira - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871970">São Pedro do Sul - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870347">São Roque do Pico - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871974">Sátão - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870923">Seia - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871179">Seixal - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870389">Serpa - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870697">Sertã - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2871815">Sesimbra - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2871773">Setúbal - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2870861">Silves - Tribunal Judicial da Comarca de Faro</option>
+	<option value="4001107">Sines - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="52812">Sintra - Tribunal Administrativo e Fiscal de Sintra</option>
+	<option value="2871275">Sintra - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="3993044">Soure - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870771">Tábua - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870878">Tavira - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871726">Tomar - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871978">Tondela - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870647">Torre de Moncorvo - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871766">Torres Novas - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871240">Torres Vedras - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870928">Trancoso - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870358">Vagos - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870359">Vale de Cambra - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871867">Valença - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871595">Valongo - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871910">Valpaços - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870348">Velas - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871821">Viana do Castelo - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870619">Vieira do Minho - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871565">Vila do Conde - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870349">Vila do Porto - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870651">Vila Flor - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871249">Vila Franca de Xira - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870350">Vila Franca do Campo - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871872">Vila Nova de Cerveira - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870562">Vila Nova de Famalicão - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870932">Vila Nova de Foz Côa - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871604">Vila Nova de Gaia - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871914">Vila Pouca de Aguiar - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2871876">Vila Real - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870882">Vila Real de Santo António - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870622">Vila Verde - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870808">Vila Viçosa - Tribunal Judicial da Comarca de Évora</option>
+	<option value="52813">Viseu - Tribunal Administrativo e Fiscal de Viseu</option>
+	<option value="2871919">Viseu - Tribunal Judicial da Comarca de Viseu</option>
+
+</select>
+                    <span id="ctl00_ContentPlaceHolder1_rfvTribunais" style="color:Red;display:none;">Indique o tribunal.</span>
+                |28657|updatePanel|ctl00_ContentPlaceHolder1_pnlUpdResults|
+            <div id="ctl00_ContentPlaceHolder1_pnlResults">
+	
+                <div class="divisaopaginas">
+                    <div id="ctl00_ContentPlaceHolder1_Pager1_panel">
+		
+    &nbsp;<input type="image" name="ctl00$ContentPlaceHolder1$Pager1$btnFirstPage" id="ctl00_ContentPlaceHolder1_Pager1_btnFirstPage" disabled="disabled" src="../Images/seta_primeira_gray.jpg" alt="primeira&#32;página" style="border-width:0px;" />
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager1$btnPreviousPage" id="ctl00_ContentPlaceHolder1_Pager1_btnPreviousPage" disabled="disabled" src="../Images/seta_anterior_gray.jpg" alt="página&#32;anterior" style="border-width:0px;" />
+    <span style="position:relative;top:-2px;">
+        &#160;
+        |
+        <span id="ctl00_ContentPlaceHolder1_Pager1_lblPageNumber" title="Página&#32;actual:&#32;1" class="select">1</span>
+        |
+        <a id="ctl00_ContentPlaceHolder1_Pager1_lnkNext" title="Página&#32;seguinte:&#32;2" href="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager1$lnkNext&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;true))">2</a> | <span id="ctl00_ContentPlaceHolder1_Pager1_LastDots">...</span>&#160;
+    </span>
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager1$btnNextPage" id="ctl00_ContentPlaceHolder1_Pager1_btnNextPage" src="../Images/seta_seguinte.jpg" alt="página&#32;seguinte" onclick="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager1$btnNextPage&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;false))" style="border-width:0px;" />
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager1$btnLastPage" id="ctl00_ContentPlaceHolder1_Pager1_btnLastPage" src="../Images/seta_ultima.jpg" alt="última&#32;página" onclick="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager1$btnLastPage&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;false))" style="border-width:0px;" />
+	</div>
+
+                </div>
+                <h1>
+                    Oeiras - Tribunal Judicial da Comarca de Lisboa Oeste
+                </h1>
+                <div id="divresultadopubvenda">
+                    <div align="center">
+                        <span id="ctl00_ContentPlaceHolder1_lblRecordCount">Numero de Registos: 13</span>
+                        <br />
+                        &nbsp;
+                    </div>
+                    <span id="ctl00_ContentPlaceHolder1_dlVenda"><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                2 000,00 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda em leilão eletrónico
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                960/7540 do prédio rústico correspondente a lote de terreno, confrontante a norte com Roberto Luís e Joaquim Aguiar, a sul e poente co...
+                                <br />
+                                <strong>Processo: </strong>
+                                5383/13.0TBCSC, Juízo de Execução de Oeiras - Juiz 2
+                                <br />
+                                <strong>Espécie: </strong>
+                                Execução Comum (Ag.Execução)
+                                <br />
+                                <strong>Data da Venda: </strong>30/09/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 8774038, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 5383/13.0TBCSC, Juízo de Execução de Oeiras - Juiz 2" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                12 226,58 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra AJ do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579206, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                12 271,25 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra BS do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579207, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                8 043,74 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CC do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579208, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                7 966,19 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CJ do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579210, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                7 966,19 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CL do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579211, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                8 043,74 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CQ do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579212, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                14 780,09 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CU do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579213, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                17 616,45 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra CV do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579218, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span><br /><span>
+                            <div class="resultadopubvenda">
+                                <strong>Tipo de Bem:</strong>
+                                Imóvel
+                                <br />
+                                <strong>Estado:</strong>
+                                Em venda
+                                <br />
+                                <strong>Valor Base: </strong>
+                                17 084,63 €
+                                <br />
+                                <strong>Modalidade: </strong>
+                                Venda mediante proposta em carta fechada
+                                <br />
+                                <strong>Descrição do Bem: </strong>
+                                Fração autónoma designada pela letra DA do prédio urbano em regime de propriedade horizontal denominado Jardim Sabóia sito no Monte Es...
+                                <br />
+                                <strong>Processo: </strong>
+                                3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1
+                                <br />
+                                <strong>Espécie: </strong>
+                                Carta Precatória (Distribuída)
+                                <br />
+                                <strong>Data da Venda: </strong>30/10/2026 11:00:00
+                                
+                                <div > 
+                                    <div id="DocumentViewer">
+                                        <div class="DocumentContainerHTML" id="viewer" ></div>
+                                        <a onclick="javascript:Viewer.Abrir(this, 9579219, 'ConsultasVenda.aspx/GetHtmlDetails', 'btnFechar','viewer')" style="cursor:pointer"
+                                            title="Ver detalhes do bem do processo 3690/26.0T8OER, Juízo de Execução de Oeiras - Juiz 1" id="btnAbrir" class="vermais">ver mais</a>
+                                        <a onclick="javascript:Viewer.Fechar(this, 'btnAbrir', 'viewer')" id="btnFechar"
+                                            style="cursor:pointer;display:none" class="vermaisup">Fechar</a>
+                                   </div>
+                                </div>
+                            </div>
+                        </span></span>
+                    &nbsp;
+                </div>
+                <div class="divisaopaginas">
+                    <div id="ctl00_ContentPlaceHolder1_Pager2_panel">
+		
+    &nbsp;<input type="image" name="ctl00$ContentPlaceHolder1$Pager2$btnFirstPage" id="ctl00_ContentPlaceHolder1_Pager2_btnFirstPage" disabled="disabled" src="../Images/seta_primeira_gray.jpg" alt="primeira&#32;página" style="border-width:0px;" />
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager2$btnPreviousPage" id="ctl00_ContentPlaceHolder1_Pager2_btnPreviousPage" disabled="disabled" src="../Images/seta_anterior_gray.jpg" alt="página&#32;anterior" style="border-width:0px;" />
+    <span style="position:relative;top:-2px;">
+        &#160;
+        |
+        <span id="ctl00_ContentPlaceHolder1_Pager2_lblPageNumber" title="Página&#32;actual:&#32;1" class="select">1</span>
+        |
+        <a id="ctl00_ContentPlaceHolder1_Pager2_lnkNext" title="Página&#32;seguinte:&#32;2" href="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager2$lnkNext&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;true))">2</a> | <span id="ctl00_ContentPlaceHolder1_Pager2_LastDots">...</span>&#160;
+    </span>
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager2$btnNextPage" id="ctl00_ContentPlaceHolder1_Pager2_btnNextPage" src="../Images/seta_seguinte.jpg" alt="página&#32;seguinte" onclick="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager2$btnNextPage&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;false))" style="border-width:0px;" />
+    <input type="image" name="ctl00$ContentPlaceHolder1$Pager2$btnLastPage" id="ctl00_ContentPlaceHolder1_Pager2_btnLastPage" src="../Images/seta_ultima.jpg" alt="última&#32;página" onclick="javascript:WebForm_DoPostBackWithOptions(new&#32;WebForm_PostBackOptions(&quot;ctl00$ContentPlaceHolder1$Pager2$btnLastPage&quot;,&#32;&quot;&quot;,&#32;true,&#32;&quot;&quot;,&#32;&quot;&quot;,&#32;false,&#32;false))" style="border-width:0px;" />
+	</div>
+
+                    &nbsp;
+                </div>
+            
+</div>
+        |0|hiddenField|__EVENTTARGET||0|hiddenField|__EVENTARGUMENT||21228|hiddenField|__VIEWSTATE|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|8|hiddenField|__VIEWSTATEGENERATOR|4167BF13|0|hiddenField|__VIEWSTATEENCRYPTED||5548|hiddenField|__EVENTVALIDATION|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|36|asyncPostBackControlIDs||ctl00$ContentPlaceHolder1$btnSearch,|0|postBackControlIDs|||84|updatePanelIDs||tctl00$ContentPlaceHolder1$upDdlTribunais,,tctl00$ContentPlaceHolder1$pnlUpdResults,|0|childUpdatePanelIDs|||82|panelsToRefreshIDs||ctl00$ContentPlaceHolder1$upDdlTribunais,,ctl00$ContentPlaceHolder1$pnlUpdResults,|2|asyncPostBackTimeout||90|21|formAction||./ConsultasVenda.aspx|48|pageTitle||Venda de Bens Penhorados em Processos Executivos|65|arrayDeclaration|Page_Validators|document.getElementById("ctl00_ContentPlaceHolder1_rfvTribunais")|220|scriptBlock|ScriptPath|/portal/ScriptResource.axd?d=Vf1qWTy_cLlp9JUgB_YSIFf6L51SL_TzmiQPFzHqEJUNo1B9xQ2a-A4bETTwke0HRbUgSje1EowakAm5Cpd-Xc0YOLZf0dqO2cVXpfdpcIUjcSDfOCGcACHYQ5jJGb0iYdaHKsWOtVL7s8zJkDRjlEDY3Fbxvu3kNiNUPCqlDqs1&t=ffffffffc85a378c|1160|scriptBlock|ScriptContentNoTags|function customvalidatectl00_ContentPlaceHolder1_txtCalendarDesde( s, args ) 
+{
+ var dateValue = args.Value; 
+    if(dateValue = ' ' && 'False' == 'True')
+    {
+        args.IsValid = true;
+        return;
+    }
+    if( ! isDate(args.Value) ) { 
+        args.IsValid = false;
+        return;
+    }
+
+        var date_array = args.Value.split('/');
+        if(args.Value.substr(2,1) == '-') {
+             date_array = args.Value.split('-');
+        }
+        
+        var day = date_array[0];
+        
+        // Attention! Javascript consider months in the range 0 - 11
+        var month = date_array[1] - 1;
+        var year = date_array[2];
+        
+        // This instruction will create a date object
+        source_date = new Date(year,month,day);
+
+        //get min and max Date
+var minDate=$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option','minDate');
+var maxDate=$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option','maxDate');
+if ((minDate== null || source_date>=minDate) && (maxDate==null || source_date<=maxDate)) args.Value.IsValid=true; else args.Value.IsValid=false;
+return;
+}
+|1130|scriptBlock|ScriptContentNoTags|function isDate( sValue )
+{
+   // Regular expression used to check if date is in correct format
+   var pattern = new RegExp("[0-3][0-9](/|-)(0|1)[0-9](/|-)(19|20)[0-9]{2}");
+   if(sValue.match(pattern))
+   {
+      var date_array = sValue.split('/');
+      if(sValue.substr(2,1) == '-') { 
+            date_array = sValue.split('-');
+      }
+
+      // Attention! Javascript consider months in the range 0 - 11
+      var day = date_array[0] ;
+      var month = date_array[1] - 1;
+      var year = date_array[2];
+
+      // This instruction will create a date object
+      source_date = new Date(year,month,day);
+
+      if(year != source_date.getFullYear())
+      {
+         //alert('Year is not valid!');
+         return false;
+      }
+
+      if(month != source_date.getMonth())
+      {
+         //alert('Month is not valid!');
+         return false;
+      }
+
+      if(day != source_date.getDate())
+      {
+         //alert('Day is not valid!');
+         return false;
+      }
+   }
+        else
+   {
+      //alert('Date format is not valid!');
+      return false;
+   }
+
+   return true;
+}
+|1154|scriptBlock|ScriptContentNoTags|function customvalidatectl00_ContentPlaceHolder1_txtCalendarAte( s, args ) 
+{
+ var dateValue = args.Value; 
+    if(dateValue = ' ' && 'False' == 'True')
+    {
+        args.IsValid = true;
+        return;
+    }
+    if( ! isDate(args.Value) ) { 
+        args.IsValid = false;
+        return;
+    }
+
+        var date_array = args.Value.split('/');
+        if(args.Value.substr(2,1) == '-') {
+             date_array = args.Value.split('-');
+        }
+        
+        var day = date_array[0];
+        
+        // Attention! Javascript consider months in the range 0 - 11
+        var month = date_array[1] - 1;
+        var year = date_array[2];
+        
+        // This instruction will create a date object
+        source_date = new Date(year,month,day);
+
+        //get min and max Date
+var minDate=$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option','minDate');
+var maxDate=$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option','maxDate');
+if ((minDate== null || source_date>=minDate) && (maxDate==null || source_date<=maxDate)) args.Value.IsValid=true; else args.Value.IsValid=false;
+return;
+}
+|1130|scriptBlock|ScriptContentNoTags|function isDate( sValue )
+{
+   // Regular expression used to check if date is in correct format
+   var pattern = new RegExp("[0-3][0-9](/|-)(0|1)[0-9](/|-)(19|20)[0-9]{2}");
+   if(sValue.match(pattern))
+   {
+      var date_array = sValue.split('/');
+      if(sValue.substr(2,1) == '-') { 
+            date_array = sValue.split('-');
+      }
+
+      // Attention! Javascript consider months in the range 0 - 11
+      var day = date_array[0] ;
+      var month = date_array[1] - 1;
+      var year = date_array[2];
+
+      // This instruction will create a date object
+      source_date = new Date(year,month,day);
+
+      if(year != source_date.getFullYear())
+      {
+         //alert('Year is not valid!');
+         return false;
+      }
+
+      if(month != source_date.getMonth())
+      {
+         //alert('Month is not valid!');
+         return false;
+      }
+
+      if(day != source_date.getDate())
+      {
+         //alert('Day is not valid!');
+         return false;
+      }
+   }
+        else
+   {
+      //alert('Date format is not valid!');
+      return false;
+   }
+
+   return true;
+}
+|281|scriptStartupBlock|ScriptContentNoTags|
+var Page_ValidationActive = false;
+if (typeof(ValidatorOnLoad) == "function") {
+    ValidatorOnLoad();
+}
+
+function ValidatorOnSubmit() {
+    if (Page_ValidationActive) {
+        return ValidatorCommonOnSubmit();
+    }
+    else {
+        return true;
+    }
+}
+        |1062|scriptStartupBlock|ScriptContentNoTags|$(document).ready(function() {
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker({showOn: 'button', buttonImage: '/portal/images/icon_dowload.jpg', buttonImageOnly: true, numberOfMonths: 1, buttonText: 'Clique para seleccionar a data inicial', onSelect: function() {}});
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeYear', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'firstDay', 1);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'dateFormat', 'dd-mm-yy');
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'minDate', new Date( 2026, 8, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'maxDate', new Date( 2026, 11, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('setDate',new Date( 2026, 8, 21));
+});
+|1043|scriptStartupBlock|ScriptContentNoTags|$(document).ready(function() {
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker({showOn: 'button', buttonImage: '/portal/images/icon_dowload.jpg', buttonImageOnly: true, numberOfMonths: 1, buttonText: 'Clique para seleccionar a data final', onSelect: function() {}});
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeYear', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'firstDay', 1);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'dateFormat', 'dd-mm-yy');
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'minDate', new Date( 2026, 8, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'maxDate', new Date( 2026, 11, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('setDate',new Date( 2026, 11, 21));
+});
+|198|scriptStartupBlock|ScriptContentNoTags|
+document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais').dispose = function() {
+    Array.remove(Page_Validators, document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais'));
+}
+|90|onSubmit||if (typeof(ValidatorOnSubmit) == "function" && ValidatorOnSubmit() == false) return false;|40|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['controltovalidate']|"ctl00_ContentPlaceHolder1_ddlTribunais"|21|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['errormessage']|"Indique o tribunal."|9|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['display']|"Dynamic"|39|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['evaluationfunction']|"RequiredFieldValidatorEvaluateIsValid"|3|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['initialvalue']|"0"|

@@ -241,6 +241,52 @@ def test_carteira_reparte_valor_e_nao_inventa_score() -> None:
     assert payload["alertas"]
 
 
+def test_mapa_agrega_por_regiao_e_nao_inventa_localizacao() -> None:
+    """O mapa só marca distritos conhecidos; «Portugal Continental» não é região."""
+    docs = [
+        {
+            "nif": "1",
+            "name": "A",
+            "pais": "PT",
+            "score": 60.0,
+            "nivel": "intermedio",
+            "nivel_label": "Intermédio",
+            "cor": "#fbbf24",
+            "cobertura": 0.5,
+            "valor": 100.0,
+            "location": {"distrito": "Lisboa", "concelho": "Oeiras"},
+        },
+        {
+            "nif": "2",
+            "name": "B",
+            "pais": "PT",
+            "score": 80.0,
+            "nivel": "avancado",
+            "nivel_label": "Avançado",
+            "cor": "#2dd4bf",
+            "cobertura": 1.0,
+            "valor": 50.0,
+            "location": {"distrito": "Lisboa"},
+        },
+        {"nif": "3", "name": "C", "pais": "PT", "score": 40.0, "location": {}},
+        {"nif": "4", "name": "D", "pais": "PT", "score": 30.0, "location": {"distrito": "Portugal Continental"}},
+    ]
+
+    payload = esg._agregar_mapa(docs)
+
+    assert payload["com_localizacao"] == 2
+    assert payload["sem_localizacao"] == 2
+    assert len(payload["regioes"]) == 1
+    regiao = payload["regioes"][0]
+    assert regiao["distrito"] == "Lisboa"
+    assert regiao["n"] == 2
+    assert regiao["score_medio"] == 70.0
+    assert regiao["valor"] == 150.0
+    assert regiao["empresas"] == ["1", "2"]
+    assert [item["id"] for item in regiao["niveis"]] == ["avancado", "intermedio"]
+    assert payload["empresas"][0]["concelho"] == "Oeiras"
+
+
 # ---------------------------------------------------------------------------
 # Taxonomia Europeia
 # ---------------------------------------------------------------------------

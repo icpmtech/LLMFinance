@@ -83,6 +83,7 @@ export type AppView =
   | "transparencia-grafo"
   | "governo"
   | "municipios-despesas"
+  | "municipios-contactos"
   | "partidos"
   | "erc"
   | "benchmark"

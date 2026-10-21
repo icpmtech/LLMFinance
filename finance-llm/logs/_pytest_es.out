@@ -1,0 +1,140 @@
+.........................................F..F........................... [  3%]
+........................................................................ [  6%]
+........................FFFF.F..FFFF.FF..FF............................. [ 10%]
+........................................................................ [ 13%]
+.FFFF............................................................F....sF [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+................FF...................................................... [ 38%]
+......................................................................FF [ 41%]
+FFFFFF.................................................................. [ 45%]
+........................................................................ [ 48%]
+.....................FFFFF........F..................................... [ 52%]
+........................................................................ [ 55%]
+.............................F.....ss............FFF..............F..... [ 59%]
+.................s.....s................................................ [ 62%]
+.....................s.................................................. [ 66%]
+.....................................FFFFF.............................. [ 69%]
+....................s..............................................F..F. [ 73%]
+F.........................F.........F................................... [ 76%]
+........................................................................ [ 80%]
+.......................................................................F [ 83%]
+FF..FF.....FF.F.....FEEEE...........FF....E.......s.s..................F [ 86%]
+FFFFF........FFF.FF......................................F.....FF....... [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+......................................................                   [100%]
+============================== warnings summary ===============================
+tests/test_mirofish.py::test_build_seed_fonte_desconhecida
+  C:\LLMFinance\finance-llm\tests\test_mirofish.py:172: RuntimeWarning: coroutine 'build_seed' was never awaited
+    miro.build_seed("inexistente", {})
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_mirofish.py::test_build_seed_empresa_sem_nif
+  C:\LLMFinance\finance-llm\tests\test_mirofish.py:178: RuntimeWarning: coroutine 'build_seed' was never awaited
+    miro.build_seed("empresa", {})
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_mirofish.py::test_build_seed_sistema_sem_elasticsearch
+  C:\Users\pedro.mourao.martins\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\_pytest\_code\code.py:371: RuntimeWarning: coroutine 'build_seed' was never awaited
+    yield TracebackEntry(cur_)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_mirofish.py::test_build_seed_noticias_sem_artigos
+  C:\LLMFinance\finance-llm\tests\test_mirofish.py:207: RuntimeWarning: coroutine 'build_seed' was never awaited
+    miro.build_seed("noticias", {})
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_municipio_pessoas.py::test_mapa_oficial_real_tem_os_308_concelhos
+  C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\json\decoder.py:353: RuntimeWarning: coroutine 'build_seed' was never awaited
+    obj, end = self.scan_once(s, idx)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_artigo_contratos_2026.py::test_relatorio_pdf_e_opcional_e_decide_se_no_artigo
+FAILED tests/test_artigo_contratos_2026.py::test_rota_do_pdf_do_artigo - Modu...
+FAILED tests/test_biblioteca_publica.py::test_biblioteca_junta_gratuitos_e_documentos_gerados
+FAILED tests/test_biblioteca_publica.py::test_biblioteca_filtra_areas_e_gratuitos
+FAILED tests/test_biblioteca_publica.py::test_so_se_descarregam_documentos_gratuitos_publicados
+FAILED tests/test_biblioteca_publica.py::test_bloco_do_cms_desenha_areas_e_descarregamento
+FAILED tests/test_biblioteca_publica.py::test_bloco_do_cms_aceita_areas_como_texto_e_so_gratuitos
+FAILED tests/test_biblioteca_publica.py::test_rota_publica_de_documento - Mod...
+FAILED tests/test_biblioteca_publica.py::test_pagina_publica_responde_com_a_biblioteca
+FAILED tests/test_biblioteca_publica.py::test_menu_do_cabecalho_ganha_submenus_por_area
+FAILED tests/test_biblioteca_publica.py::test_submenus_do_menu_sao_derivados_e_so_no_cabecalho
+FAILED tests/test_biblioteca_publica.py::test_submenus_escritos_a_mao_ficam_a_frente
+FAILED tests/test_biblioteca_publica.py::test_pagina_publica_traz_as_areas_no_menu
+FAILED tests/test_biblioteca_publica.py::test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas
+FAILED tests/test_biblioteca_publica.py::test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato
+FAILED tests/test_contactos_site.py::test_pedido_incompleto_volta_com_os_erros
+FAILED tests/test_contactos_site.py::test_pedido_sem_desafio_nao_entra_nem_avisa
+FAILED tests/test_contactos_site.py::test_campo_armadilha_recebe_agradecimento_e_nao_guarda_nada
+FAILED tests/test_contactos_site.py::test_pedido_valido_guarda_e_avisa_a_caixa_de_apoio
+FAILED tests/test_contribuintes_report.py::test_relatorio_da_ficha[pdf-%PDF]
+FAILED tests/test_contribuintes_report.py::test_relatorio_de_lista - RuntimeE...
+FAILED tests/test_jarvis.py::test_ask_em_modo_factual_sem_gateways - Assertio...
+FAILED tests/test_jarvis.py::test_ask_sem_ferramentas_explica_o_modo_factual
+FAILED tests/test_loja_captcha.py::test_desafio_da_vitrine_explica_se_e_nao_se_guarda
+FAILED tests/test_loja_captcha.py::test_novidades_sem_desafio_nao_registam_nada
+FAILED tests/test_loja_captcha.py::test_novidades_com_desafio_entram - Module...
+FAILED tests/test_loja_captcha.py::test_avaliacao_sem_desafio_nao_entra - Mod...
+FAILED tests/test_loja_captcha.py::test_avaliacao_com_desafio_entra_pendente
+FAILED tests/test_loja_captcha.py::test_encomenda_sem_desafio_nao_e_criada - ...
+FAILED tests/test_loja_captcha.py::test_encomenda_com_desafio_e_criada - Modu...
+FAILED tests/test_loja_captcha.py::test_formularios_da_vitrine_trazem_o_lugar_do_desafio
+FAILED tests/test_mirofish.py::test_build_seed_fonte_desconhecida - Failed: D...
+FAILED tests/test_mirofish.py::test_build_seed_empresa_sem_nif - Failed: DID ...
+FAILED tests/test_mirofish.py::test_build_seed_empresa_composta - TypeError: ...
+FAILED tests/test_mirofish.py::test_build_seed_sistema_sem_elasticsearch - Ty...
+FAILED tests/test_mirofish.py::test_build_seed_noticias_sem_artigos - Failed:...
+FAILED tests/test_mirofish.py::test_catalogo_de_fontes_bem_formado - Assertio...
+FAILED tests/test_news_nlp.py::test_translate_simple_basic - assert False
+FAILED tests/test_news_themes.py::test_rota_de_pesquisa_recusa_tema_desconhecido
+FAILED tests/test_news_themes.py::test_rota_de_temas_publica_o_catalogo - Mod...
+FAILED tests/test_news_themes.py::test_publicacao_exige_sessao - ModuleNotFou...
+FAILED tests/test_news_themes.py::test_rota_de_publicacao_responde_com_o_artigo_e_o_caminho_do_editor
+FAILED tests/test_paginas_de_sistema.py::test_rota_de_endereco_inexistente_responde_404_com_a_pagina
+FAILED tests/test_paginas_de_sistema.py::test_rota_offline_responde_com_a_pagina
+FAILED tests/test_paginas_de_sistema.py::test_falha_no_site_responde_com_a_pagina_de_erro
+FAILED tests/test_paginas_de_sistema.py::test_falha_na_api_responde_json - Mo...
+FAILED tests/test_paginas_de_sistema.py::test_falha_no_site_com_pedido_de_json_mantem_json
+FAILED tests/test_pesquisa_do_site.py::test_agrupa_estudos_paginas_artigos_e_relatorios
+FAILED tests/test_pesquisa_do_site.py::test_rascunhos_e_relatorios_por_publicar_ficam_fora
+FAILED tests/test_pesquisa_do_site.py::test_rota_publica_de_pesquisa - Module...
+FAILED tests/test_pesquisas_publicas.py::test_qualquer_bloco_aceita_a_aparencia_comum
+FAILED tests/test_relatorio_processos.py::test_pdf_do_relatorio_de_processos_sai_com_as_notas_legais
+FAILED tests/test_reports_studio.py::test_pdf_gerado_e_guardado - RuntimeErro...
+FAILED tests/test_reports_studio.py::test_pdf_tem_email_de_apoio - RuntimeErr...
+FAILED tests/test_reports_studio.py::test_rotulos_dos_graficos_sao_compactos
+FAILED tests/test_reports_studio.py::test_pdf_de_relatorio_sem_dados_nao_rebenta
+FAILED tests/test_reports_studio.py::test_remover_ficheiro_do_relatorio - Run...
+FAILED tests/test_reports_studio.py::test_pedido_pago_no_site_recebe_o_pdf_do_estudio
+FAILED tests/test_reports_studio.py::test_gerar_pendentes_repetem_a_entrega
+FAILED tests/test_reports_studio.py::test_loja_entrega_o_pdf_do_estudio - Run...
+FAILED tests/test_reports_studio.py::test_estado_do_estudio - assert False is...
+FAILED tests/test_reports_studio.py::test_pdf_inclui_a_ficha_e_a_pesquisa_web
+FAILED tests/test_reports_studio.py::test_execucao_da_ficha_nao_parte_o_relatorio
+FAILED tests/test_scraper_contratacao_publica.py::test_find_a_tender_le_os_campos_pelo_rotulo
+FAILED tests/test_scraper_contratacao_publica.py::test_find_a_tender_resumo_e_a_descricao_e_nao_o_comprador
+FAILED tests/test_scraper_contratacao_publica.py::test_find_a_tender_valor_fica_em_texto_para_nao_ler_8_9
+FAILED tests/test_scraper_contratacao_publica.py::test_find_a_tender_aviso_de_adjudicacao_nao_inventa_o_prazo
+FAILED tests/test_scraper_contratacao_publica.py::test_contracts_finder_le_os_campos_do_contentor
+FAILED tests/test_scraper_contratacao_publica.py::test_contracts_finder_identidade_do_item_e_a_ligacao
+FAILED tests/test_scraper_racius.py::test_extracao_de_pares_da_ficha - Module...
+FAILED tests/test_scraper_racius.py::test_pares_desligados_devolvem_vazio - M...
+FAILED tests/test_scraper_racius.py::test_template_racius_define_lista_campos_e_ficha
+FAILED tests/test_scraper_racius.py::test_extracao_da_lista_com_os_campos_do_template
+FAILED tests/test_scraper_racius.py::test_pares_normalizados_entram_no_item_como_campos_proprios
+FAILED tests/test_site_acoes.py::test_a_pagina_de_favoritos_desenha_a_moldura_da_lista
+FAILED tests/test_site_css.py::test_rota_serve_a_folha_com_tipo_cache_e_etag
+FAILED tests/test_site_css.py::test_servico_sem_folha_compilada_responde_404
+77 failed, 1979 passed, 9 skipped, 5 warnings, 5 errors in 1251.50s (0:20:51)

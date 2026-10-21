@@ -20,6 +20,12 @@ e responde com base no conhecimento indexado.
 finance-llm/
 ├── api/                 # Backend FastAPI + agente financeiro + RAG
 │   ├── main.py          # Entrypoint FastAPI
+│   ├── elasticsearch_client.py  # fachada: reexporta a API de `api/es/*`
+│   ├── es/              # Cliente Elasticsearch, por domínio
+│   │   ├── core.py      #   cliente, utilidades de pesquisa e constantes
+│   │   ├── indices.py   #   nomes dos índices + INDEX_SETTINGS
+│   │   ├── mappings.py  #   ensure_indices (mapping de todos os índices)
+│   │   └── contratos*.py, entidades.py, pessoas.py, cire.py, ...  # um módulo por domínio
 │   ├── rag_routes.py    # Endpoints RAG
 │   ├── rag_service.py   # Serviço RAG singleton + cache de modelos
 │   ├── ontology_registry.py  # Ontologia (tipos de objeto, ligações, ações)

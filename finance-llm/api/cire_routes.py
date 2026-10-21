@@ -277,6 +277,39 @@ def cire_search(
     return res
 
 
+@router.get("/analytics")
+def cire_analytics_endpoint(
+    q: Optional[str] = Query(None, description="Texto livre (interveniente, tribunal, processo, ato)"),
+    nif: Optional[str] = Query(None, description="NIF/NIPC de qualquer interveniente"),
+    tipo: Optional[str] = Query(None, description="Insolvência | PER | PEAP | PEVE"),
+    papel: Optional[str] = Query(None, description="Papel do interveniente (Insolvente, Administrador Insolvência, Credor, …)"),
+    tribunal: Optional[str] = Query(None, description="Tribunal (texto parcial)"),
+    tribunal_comarca: Optional[str] = Query(None, description="Comarca (exato)"),
+    especie: Optional[str] = Query(None, description="Espécie do processo (texto parcial)"),
+    ato: Optional[str] = Query(None, description="Ato publicado (texto parcial)"),
+    data_from: Optional[str] = Query(None, description="Data de publicação mínima (AAAA-MM-DD)"),
+    data_to: Optional[str] = Query(None, description="Data de publicação máxima (AAAA-MM-DD)"),
+    top: int = Query(12, ge=1, le=50, description="Tamanho das listas/topos"),
+) -> Dict[str, Any]:
+    """Dashboards do CIRE: KPIs e distribuições com os filtros da pesquisa."""
+    res = cire_service.analytics(
+        q=q,
+        nif=nif,
+        tipo=tipo,
+        papel=papel,
+        tribunal=tribunal,
+        tribunal_comarca=tribunal_comarca,
+        especie=especie,
+        ato=ato,
+        data_from=data_from,
+        data_to=data_to,
+        top=top,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return res
+
+
 @router.get("/intervenientes/{nif}")
 def cire_interveniente(
     nif: str,

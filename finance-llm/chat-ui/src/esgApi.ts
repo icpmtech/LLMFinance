@@ -606,6 +606,7 @@ export type EsgMapaResposta = {
   total: number;
   motivo?: string | null;
   como_popular?: string;
+  truncado?: boolean;
   com_localizacao?: number;
   sem_localizacao?: number;
   empresas: EsgMapaEmpresa[];

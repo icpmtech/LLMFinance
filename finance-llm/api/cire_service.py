@@ -651,6 +651,13 @@ def status() -> Dict[str, Any]:
     return cire_status()
 
 
+def analytics(**kwargs: Any) -> Dict[str, Any]:
+    """Dashboards do CIRE (agregações com os filtros da pesquisa)."""
+    from api.elasticsearch_client import cire_analytics
+
+    return cire_analytics(**kwargs)
+
+
 def interveniente(nif: str, size: int = 100, from_: int = 0) -> Dict[str, Any]:
     """Publicações em que um NIF/NIPC é interveniente (qualquer papel)."""
     from api.elasticsearch_client import cire_interveniente as _cire_interveniente

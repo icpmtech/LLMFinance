@@ -1,0 +1,446 @@
+1|#||4|19520|updatePanel|ctl00_ContentPlaceHolder1_upDdlTribunais|
+                    
+                    <br />
+                    <strong>
+                        <label for="ctl00_ContentPlaceHolder1_ddlTribunais" id="ctl00_ContentPlaceHolder1_lblTribunal">Tribunal:</label>
+                    </strong>
+                    <select name="ctl00$ContentPlaceHolder1$ddlTribunais" id="ctl00_ContentPlaceHolder1_ddlTribunais" class="pulldown">
+	<option value="0">-Seleccione o Tribunal-</option>
+	<option value="2871735">Abrantes - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870335">Águeda - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870351">Albergaria-a-Velha - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870867">Albufeira - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870964">Alcobaça - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871266">Alenquer - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2871897">Alijó - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="52798">Almada - Tribunal Administrativo e Fiscal de Almada</option>
+	<option value="2871142">Almada - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870903">Almeida - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871740">Almeirim - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870383">Almodôvar - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871319">Amadora - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2871648">Amarante - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870601">Amares - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870352">Anadia - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870333">Angra do Heroísmo - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="3996970">Ansião - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871842">Arcos de Valdevez - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870741">Arganil - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870353">Arouca - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2330183">Aveiro - Tribunal Administrativo e Fiscal de Aveiro</option>
+	<option value="2870334">Aveiro - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871680">Baião - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870556">Barcelos - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871165">Barreiro - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="52800">Beja - Tribunal Administrativo e Fiscal de Beja</option>
+	<option value="2870360">Beja - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871744">Benavente - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="52801">Braga - Tribunal Administrativo e Fiscal de Braga</option>
+	<option value="2870505">Braga - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870625">Bragança - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2870607">Cabeceiras de Basto - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870973">Caldas da Rainha - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871850">Caminha - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870745">Cantanhede - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871749">Cartaxo - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871328">Cascais - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="52814">Castelo Branco - Tribunal Administrativo e Fiscal de Castelo Branco</option>
+	<option value="2870660">Castelo Branco - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870354">Castelo de Paiva - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3447689">Castro Daire - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870907">Celorico da Beira - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870604">Celorico de Basto - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871890">Chaves - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2871950">Cinfães - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="52803">Coimbra - Tribunal Administrativo e Fiscal de Coimbra</option>
+	<option value="2870702">Coimbra - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870750">Condeixa-a-Nova - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871753">Coruche - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870675">Covilhã - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870384">Cuba - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871420">Elvas - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2871719">Entroncamento - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870355">Espinho - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870610">Esposende - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870336">Estarreja - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870796">Estremoz - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870778">Évora - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870613">Fafe - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870813">Faro - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871684">Felgueiras - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870385">Ferreira do Alentejo - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870732">Figueira da Foz - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870911">Figueira de Castelo Rodrigo - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870993">Figueiró dos Vinhos - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871426">Fronteira - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="52815">Funchal - Tribunal Administrativo e Fiscal do Funchal</option>
+	<option value="2871373">Funchal - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870683">Fundão - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2871507">Gondomar - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870915">Gouveia - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871810">Grândola - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2870894">Guarda - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870559">Guimarães - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870342">Horta - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870689">Idanha-a-Nova - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870356">Ílhavo - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3994023">Lagoa - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870873">Lagos - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871943">Lamego - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="52805">Leiria - Tribunal Administrativo e Fiscal de Leiria</option>
+	<option value="2870937">Leiria - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="209">Lisboa - Tribunal Administrativo de Círculo de Lisboa</option>
+	<option value="2244351">Lisboa - Tribunal da Propriedade Intelectual</option>
+	<option selected="selected" value="2871017">Lisboa - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="215">Lisboa - Tribunal Marítimo de Lisboa</option>
+	<option value="3000203">Lisboa - Tribunal Tributário de Lisboa</option>
+	<option value="52807">Loulé - Tribunal Administrativo e Fiscal de Loulé</option>
+	<option value="2870831">Loulé - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871203">Loures - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2871271">Lourinhã - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870754">Lousã - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871656">Lousada - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870634">Macedo de Cavaleiros - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871367">Mafra - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2871518">Maia - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871954">Mangualde - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871663">Marco de Canaveses - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2870997">Marinha Grande - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871534">Matosinhos - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870357">Mealhada - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871854">Melgaço - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="3447669">Miranda do Douro - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="52808">Mirandela - Tribunal Administrativo e Fiscal de Mirandela</option>
+	<option value="2870638">Mirandela - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2870643">Mogadouro - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871958">Moimenta da Beira - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871195">Moita - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2871858">Monção - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871901">Montalegre - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870790">Montemor-o-Novo - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870759">Montemor-o-Velho - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871190">Montijo - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870386">Moura - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871002">Nazaré - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871962">Nelas - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="3447677">Nisa - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2870387">Odemira - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2871355">Oeiras - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="2870693">Oleiros - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2870840">Olhão - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870337">Oliveira de Azeméis - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="3447693">Oliveira de Frades - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870338">Oliveira do Bairro - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870763">Oliveira do Hospital - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2871757">Ourém - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2870388">Ourique - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870339">Ovar - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871690">Paços de Ferreira - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2871670">Paredes - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="3994085">Paredes de Coura - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870767">Penacova - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="52809">Penafiel - Tribunal Administrativo e Fiscal de Penafiel</option>
+	<option value="2871632">Penafiel - Tribunal Judicial da Comarca do Porto Este</option>
+	<option value="2871006">Peniche - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871905">Peso da Régua - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870919">Pinhel - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870982">Pombal - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="52810">Ponta Delgada - Tribunal Administrativo e Fiscal de Ponta Delgada</option>
+	<option value="2870332">Ponta Delgada - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871397">Ponta do Sol - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2871846">Ponte da Barca - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871862">Ponte de Lima - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871430">Ponte de Sor - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2871411">Portalegre - Tribunal Judicial da Comarca de Portalegre</option>
+	<option value="2870847">Portimão - Tribunal Judicial da Comarca de Faro</option>
+	<option value="52811">Porto - Tribunal Administrativo e Fiscal do Porto</option>
+	<option value="2871437">Porto - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871010">Porto de Mós - Tribunal Judicial da Comarca de Leiria</option>
+	<option value="2871401">Porto Santo - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870616">Póvoa de Lanhoso - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871556">Póvoa de Varzim - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870343">Praia da Vitória - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870800">Redondo - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870804">Reguengos de Monsaraz - Tribunal Judicial da Comarca de Évora</option>
+	<option value="2870344">Ribeira Grande - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871762">Rio Maior - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871966">Santa Comba Dão - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2871405">Santa Cruz - Tribunal Judicial da Comarca da Madeira</option>
+	<option value="2870345">Santa Cruz da Graciosa - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870346">Santa Cruz das Flores - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870340">Santa Maria da Feira - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2244369">Santarém - Tribunal da Concorrência, Regulação e Supervisão</option>
+	<option value="2871695">Santarém - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871803">Santiago do Cacém - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2871577">Santo Tirso - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870341">São João da Madeira - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871970">São Pedro do Sul - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870347">São Roque do Pico - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871974">Sátão - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870923">Seia - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871179">Seixal - Tribunal Judicial da Comarca de Lisboa</option>
+	<option value="2870389">Serpa - Tribunal Judicial da Comarca de Beja</option>
+	<option value="2870697">Sertã - Tribunal Judicial da Comarca de Castelo Branco</option>
+	<option value="2871815">Sesimbra - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2871773">Setúbal - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="2870861">Silves - Tribunal Judicial da Comarca de Faro</option>
+	<option value="4001107">Sines - Tribunal Judicial da Comarca de Setúbal</option>
+	<option value="52812">Sintra - Tribunal Administrativo e Fiscal de Sintra</option>
+	<option value="2871275">Sintra - Tribunal Judicial da Comarca de Lisboa Oeste</option>
+	<option value="3993044">Soure - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870771">Tábua - Tribunal Judicial da Comarca de Coimbra</option>
+	<option value="2870878">Tavira - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2871726">Tomar - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871978">Tondela - Tribunal Judicial da Comarca de Viseu</option>
+	<option value="2870647">Torre de Moncorvo - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871766">Torres Novas - Tribunal Judicial da Comarca de Santarém</option>
+	<option value="2871240">Torres Vedras - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870928">Trancoso - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2870358">Vagos - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2870359">Vale de Cambra - Tribunal Judicial da Comarca de Aveiro</option>
+	<option value="2871867">Valença - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2871595">Valongo - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871910">Valpaços - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870348">Velas - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871821">Viana do Castelo - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870619">Vieira do Minho - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2871565">Vila do Conde - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2870349">Vila do Porto - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2870651">Vila Flor - Tribunal Judicial da Comarca de Bragança</option>
+	<option value="2871249">Vila Franca de Xira - Tribunal Judicial da Comarca de Lisboa Norte</option>
+	<option value="2870350">Vila Franca do Campo - Tribunal Judicial da Comarca dos Açores</option>
+	<option value="2871872">Vila Nova de Cerveira - Tribunal Judicial da Comarca de Viana do Castelo</option>
+	<option value="2870562">Vila Nova de Famalicão - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870932">Vila Nova de Foz Côa - Tribunal Judicial da Comarca da Guarda</option>
+	<option value="2871604">Vila Nova de Gaia - Tribunal Judicial da Comarca do Porto</option>
+	<option value="2871914">Vila Pouca de Aguiar - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2871876">Vila Real - Tribunal Judicial da Comarca de Vila Real</option>
+	<option value="2870882">Vila Real de Santo António - Tribunal Judicial da Comarca de Faro</option>
+	<option value="2870622">Vila Verde - Tribunal Judicial da Comarca de Braga</option>
+	<option value="2870808">Vila Viçosa - Tribunal Judicial da Comarca de Évora</option>
+	<option value="52813">Viseu - Tribunal Administrativo e Fiscal de Viseu</option>
+	<option value="2871919">Viseu - Tribunal Judicial da Comarca de Viseu</option>
+
+</select>
+                    <span id="ctl00_ContentPlaceHolder1_rfvTribunais" style="color:Red;display:none;">Indique o tribunal.</span>
+                |785|updatePanel|ctl00_ContentPlaceHolder1_pnlUpdResults|
+            <div id="ctl00_ContentPlaceHolder1_pnlResults">
+	
+                <div class="divisaopaginas">
+                    
+                </div>
+                <h1>
+                    Lisboa - Tribunal Judicial da Comarca de Lisboa
+                </h1>
+                <div id="divresultadopubvenda">
+                    <div align="center">
+                        <span id="ctl00_ContentPlaceHolder1_lblRecordCount">Numero de Registos: 0</span>
+                        <br />
+                        &nbsp;
+                    </div>
+                    
+                    &nbsp;
+                </div>
+                <div class="divisaopaginas">
+                    
+                    &nbsp;
+                </div>
+            
+</div>
+        |0|hiddenField|__EVENTTARGET||0|hiddenField|__EVENTARGUMENT||20716|hiddenField|__VIEWSTATE|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|8|hiddenField|__VIEWSTATEGENERATOR|4167BF13|0|hiddenField|__VIEWSTATEENCRYPTED||5336|hiddenField|__EVENTVALIDATION|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|36|asyncPostBackControlIDs||ctl00$ContentPlaceHolder1$btnSearch,|0|postBackControlIDs|||84|updatePanelIDs||tctl00$ContentPlaceHolder1$upDdlTribunais,,tctl00$ContentPlaceHolder1$pnlUpdResults,|0|childUpdatePanelIDs|||82|panelsToRefreshIDs||ctl00$ContentPlaceHolder1$upDdlTribunais,,ctl00$ContentPlaceHolder1$pnlUpdResults,|2|asyncPostBackTimeout||90|21|formAction||./ConsultasVenda.aspx|48|pageTitle||Venda de Bens Penhorados em Processos Executivos|65|arrayDeclaration|Page_Validators|document.getElementById("ctl00_ContentPlaceHolder1_rfvTribunais")|220|scriptBlock|ScriptPath|/portal/ScriptResource.axd?d=Vf1qWTy_cLlp9JUgB_YSIFf6L51SL_TzmiQPFzHqEJUNo1B9xQ2a-A4bETTwke0HRbUgSje1EowakAm5Cpd-Xc0YOLZf0dqO2cVXpfdpcIUjcSDfOCGcACHYQ5jJGb0iYdaHKsWOtVL7s8zJkDRjlEDY3Fbxvu3kNiNUPCqlDqs1&t=ffffffffc85a378c|1160|scriptBlock|ScriptContentNoTags|function customvalidatectl00_ContentPlaceHolder1_txtCalendarDesde( s, args ) 
+{
+ var dateValue = args.Value; 
+    if(dateValue = ' ' && 'False' == 'True')
+    {
+        args.IsValid = true;
+        return;
+    }
+    if( ! isDate(args.Value) ) { 
+        args.IsValid = false;
+        return;
+    }
+
+        var date_array = args.Value.split('/');
+        if(args.Value.substr(2,1) == '-') {
+             date_array = args.Value.split('-');
+        }
+        
+        var day = date_array[0];
+        
+        // Attention! Javascript consider months in the range 0 - 11
+        var month = date_array[1] - 1;
+        var year = date_array[2];
+        
+        // This instruction will create a date object
+        source_date = new Date(year,month,day);
+
+        //get min and max Date
+var minDate=$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option','minDate');
+var maxDate=$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option','maxDate');
+if ((minDate== null || source_date>=minDate) && (maxDate==null || source_date<=maxDate)) args.Value.IsValid=true; else args.Value.IsValid=false;
+return;
+}
+|1130|scriptBlock|ScriptContentNoTags|function isDate( sValue )
+{
+   // Regular expression used to check if date is in correct format
+   var pattern = new RegExp("[0-3][0-9](/|-)(0|1)[0-9](/|-)(19|20)[0-9]{2}");
+   if(sValue.match(pattern))
+   {
+      var date_array = sValue.split('/');
+      if(sValue.substr(2,1) == '-') { 
+            date_array = sValue.split('-');
+      }
+
+      // Attention! Javascript consider months in the range 0 - 11
+      var day = date_array[0] ;
+      var month = date_array[1] - 1;
+      var year = date_array[2];
+
+      // This instruction will create a date object
+      source_date = new Date(year,month,day);
+
+      if(year != source_date.getFullYear())
+      {
+         //alert('Year is not valid!');
+         return false;
+      }
+
+      if(month != source_date.getMonth())
+      {
+         //alert('Month is not valid!');
+         return false;
+      }
+
+      if(day != source_date.getDate())
+      {
+         //alert('Day is not valid!');
+         return false;
+      }
+   }
+        else
+   {
+      //alert('Date format is not valid!');
+      return false;
+   }
+
+   return true;
+}
+|1154|scriptBlock|ScriptContentNoTags|function customvalidatectl00_ContentPlaceHolder1_txtCalendarAte( s, args ) 
+{
+ var dateValue = args.Value; 
+    if(dateValue = ' ' && 'False' == 'True')
+    {
+        args.IsValid = true;
+        return;
+    }
+    if( ! isDate(args.Value) ) { 
+        args.IsValid = false;
+        return;
+    }
+
+        var date_array = args.Value.split('/');
+        if(args.Value.substr(2,1) == '-') {
+             date_array = args.Value.split('-');
+        }
+        
+        var day = date_array[0];
+        
+        // Attention! Javascript consider months in the range 0 - 11
+        var month = date_array[1] - 1;
+        var year = date_array[2];
+        
+        // This instruction will create a date object
+        source_date = new Date(year,month,day);
+
+        //get min and max Date
+var minDate=$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option','minDate');
+var maxDate=$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option','maxDate');
+if ((minDate== null || source_date>=minDate) && (maxDate==null || source_date<=maxDate)) args.Value.IsValid=true; else args.Value.IsValid=false;
+return;
+}
+|1130|scriptBlock|ScriptContentNoTags|function isDate( sValue )
+{
+   // Regular expression used to check if date is in correct format
+   var pattern = new RegExp("[0-3][0-9](/|-)(0|1)[0-9](/|-)(19|20)[0-9]{2}");
+   if(sValue.match(pattern))
+   {
+      var date_array = sValue.split('/');
+      if(sValue.substr(2,1) == '-') { 
+            date_array = sValue.split('-');
+      }
+
+      // Attention! Javascript consider months in the range 0 - 11
+      var day = date_array[0] ;
+      var month = date_array[1] - 1;
+      var year = date_array[2];
+
+      // This instruction will create a date object
+      source_date = new Date(year,month,day);
+
+      if(year != source_date.getFullYear())
+      {
+         //alert('Year is not valid!');
+         return false;
+      }
+
+      if(month != source_date.getMonth())
+      {
+         //alert('Month is not valid!');
+         return false;
+      }
+
+      if(day != source_date.getDate())
+      {
+         //alert('Day is not valid!');
+         return false;
+      }
+   }
+        else
+   {
+      //alert('Date format is not valid!');
+      return false;
+   }
+
+   return true;
+}
+|281|scriptStartupBlock|ScriptContentNoTags|
+var Page_ValidationActive = false;
+if (typeof(ValidatorOnLoad) == "function") {
+    ValidatorOnLoad();
+}
+
+function ValidatorOnSubmit() {
+    if (Page_ValidationActive) {
+        return ValidatorCommonOnSubmit();
+    }
+    else {
+        return true;
+    }
+}
+        |1062|scriptStartupBlock|ScriptContentNoTags|$(document).ready(function() {
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker({showOn: 'button', buttonImage: '/portal/images/icon_dowload.jpg', buttonImageOnly: true, numberOfMonths: 1, buttonText: 'Clique para seleccionar a data inicial', onSelect: function() {}});
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeYear', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'firstDay', 1);
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'dateFormat', 'dd-mm-yy');
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'minDate', new Date( 2026, 8, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('option', 'maxDate', new Date( 2026, 11, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarDesde').datepicker('setDate',new Date( 2026, 8, 21));
+});
+|1043|scriptStartupBlock|ScriptContentNoTags|$(document).ready(function() {
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker({showOn: 'button', buttonImage: '/portal/images/icon_dowload.jpg', buttonImageOnly: true, numberOfMonths: 1, buttonText: 'Clique para seleccionar a data final', onSelect: function() {}});
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeYear', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'changeMonth', true);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'firstDay', 1);
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'dateFormat', 'dd-mm-yy');
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'minDate', new Date( 2026, 8, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('option', 'maxDate', new Date( 2026, 11, 21));
+$('#ctl00_ContentPlaceHolder1_txtCalendarAte').datepicker('setDate',new Date( 2026, 11, 21));
+});
+|198|scriptStartupBlock|ScriptContentNoTags|
+document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais').dispose = function() {
+    Array.remove(Page_Validators, document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais'));
+}
+|90|onSubmit||if (typeof(ValidatorOnSubmit) == "function" && ValidatorOnSubmit() == false) return false;|40|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['controltovalidate']|"ctl00_ContentPlaceHolder1_ddlTribunais"|21|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['errormessage']|"Indique o tribunal."|9|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['display']|"Dynamic"|39|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['evaluationfunction']|"RequiredFieldValidatorEvaluateIsValid"|3|expando|document.getElementById('ctl00_ContentPlaceHolder1_rfvTribunais')['initialvalue']|"0"|

@@ -438,6 +438,21 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "eu-taxonomy",
+        "description": (
+            "EU Taxonomy Navigator: as 151 atividades, os 6 objetivos ambientais "
+            "e os 16 setores oficiais do EU Taxonomy Compass (Comissão Europeia, "
+            "DG FISMA), recolhidos da API pública. Cada documento guarda o texto "
+            "original em inglês e a tradução em português (modelo local "
+            "Helsinki-NLP, sem chaves de terceiros), os códigos NACE e o tipo de "
+            "contributo (significativo, facilitador ou transicional). Indexa em "
+            "`finance_eu_taxonomy` e exporta o snapshot para "
+            "`data/eu_taxonomy.json`; serve panorama, pesquisa por nome/setor/"
+            "objetivo/NACE e ficha de atividade. A lista serve para elegibilidade "
+            "indicativa: o módulo não declara alinhamento."
+        ),
+    },
+    {
         "name": "erc",
         "description": (
             "Portal da Transparência da ERC: entidades proprietárias de órgãos "
@@ -554,6 +569,7 @@ SPA_PATHS: Tuple[str, ...] = (
     "/contratos-es",
     "/contribuintes",
     "/esg",
+    "/eu-taxonomy",
     "/world",
     "/world/rede",
     "/gleif",
@@ -570,6 +586,7 @@ SPA_PATHS: Tuple[str, ...] = (
 PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     # Deep links de `/esg/...` são a mesma matéria; `/esg` em si é a página SPA.
     ("/esg", "esg"),
+    ("/eu-taxonomy", "eu-taxonomy"),
     ("/adjudicat", "spa"),
     ("/empresas", "spa"),
     ("/pesquisa", "spa"),

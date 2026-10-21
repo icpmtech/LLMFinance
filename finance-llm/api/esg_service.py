@@ -2106,7 +2106,7 @@ def _agregar_mapa(docs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     lista_regioes: List[Dict[str, Any]] = []
     for regiao in regioes.values():
         n = regiao["n"]
-        niveis = sorted(regiao["niveis"].values(), key=lambda item: -item["n"])
+        niveis = sorted(regiao["niveis"].values(), key=lambda item: (-item["n"], item["id"]))
         dominante = niveis[0] if niveis else None
         lista_regioes.append(
             {
@@ -2198,6 +2198,7 @@ def mapa(
         "disponivel": total > 0,
         "total": total,
         "motivo": None if total else "Ainda não há empresas no índice ESG.",
+        "truncado": total > len(agregado["empresas"]),
         **agregado,
         "filtros": {"pais": pais, "setor": setor, "dimensao": dimensao, "nivel": nivel, "ano": ano, "q": q},
     }
