@@ -67,6 +67,10 @@ export type EuTaxonomyActivity = {
   objectives: EuTaxonomyObjective[];
   url: string;
   synced_at: string;
+  /** `false` quando a tradução não preservou algarismos do original. */
+  revisto?: boolean;
+  /** Números do original que faltam na tradução (referências legais). */
+  numeros_a_confirmar?: string[];
 };
 
 export type EuTaxonomySectorCount = {

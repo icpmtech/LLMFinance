@@ -20,7 +20,7 @@ import importlib
 import inspect
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -60,8 +60,10 @@ def test_api_publica_e_igual_a_do_ficheiro_original() -> None:
                     f"\n  agora: {inspect.signature(objeto)}"
                 )
         else:
-            if type(objeto).__name__ != info["kind"]:
-                diferentes.append(f"{nome}: {info['kind']} → {type(objeto).__name__}")
+            # `Path` é `WindowsPath`/`PosixPath` conforme o sistema — o tipo lógico é o mesmo.
+            tipo = "Path" if isinstance(objeto, PurePath) else type(objeto).__name__
+            if tipo != info["kind"]:
+                diferentes.append(f"{nome}: {info['kind']} → {tipo}")
             elif info["len"] is not None and len(objeto) != info["len"]:
                 diferentes.append(f"{nome}: tamanho {info['len']} → {len(objeto)}")
 

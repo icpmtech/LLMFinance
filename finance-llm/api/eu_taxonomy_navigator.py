@@ -331,6 +331,56 @@ def _normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", (texto or "")).strip()
 
 
+#: O modelo EN→PT mistura grafias do Brasil e de Portugal. Estas substituições
+#: deixam o texto na norma portuguesa sem lhe mexer no sentido.
+_PT_PT: Tuple[Tuple[str, str], ...] = (
+    (r"\beconômic", "económic"),
+    (r"\bEconômic", "Económic"),
+    (r"\bcoleta\b", "recolha"),
+    (r"\bcoletar\b", "recolher"),
+    (r"\bcoletas\b", "recolhas"),
+    (r"\bplantio\b", "plantação"),
+    (r"\bsemeadura\b", "sementeira"),
+    (r"\bgerenciamento\b", "gestão"),
+    (r"\bcaminhão\b", "camião"),
+    (r"\bcaminhões\b", "camiões"),
+    (r"\bônibus\b", "autocarros"),
+    (r"\bestoque\b", "inventário"),
+    (r"\bregistro\b", "registo"),
+    (r"\bregistros\b", "registos"),
+    (r"\bcontrole\b", "controlo"),
+    (r"\bcontroles\b", "controlos"),
+    (r"\bfrota\b", "frota"),
+    (r"\bumidade\b", "humidade"),
+    (r"\businas\b", "centrais"),
+    (r"\busina\b", "central"),
+)
+
+#: Números «isolados» (não a parte numérica de códigos como `A2` ou `C25.99`,
+#: que são códigos NACE e não referências a confirmar).
+_NUMERO = re.compile(r"(?<![A-Za-z0-9])(\d+(?:[.,]\d+)*)(?![A-Za-z0-9])")
+
+
+def _normalizar_pt(texto: str) -> str:
+    """Aproxima a tradução da norma portuguesa (evita grafias do Brasil)."""
+    resultado = texto or ""
+    for padrao, substituto in _PT_PT:
+        resultado = re.sub(padrao, substituto, resultado)
+    return _normalizar(resultado)
+
+
+def _numeros_em_falta(origem: str, traducao: str) -> List[str]:
+    """Números do original que desapareceram da tradução (fidelidade legal).
+
+    O modelo pode trocar algarismos em referências («Regulamento (CE) n.º
+    1893/2006»); não se corrige o texto à força, mas o desvio fica registado
+    e é visível no aviso do módulo.
+    """
+    origem_nums = [n.strip(".,") for n in _NUMERO.findall(origem or "")]
+    traducao_nums = {n.strip(".,") for n in _NUMERO.findall(traducao or "")}
+    return [n for n in origem_nums if n and n not in traducao_nums]
+
+
 #: Modelo local de tradução EN→PT (o mesmo usado pelo módulo de notícias).
 #: Não depende de chaves nem de créditos: traduz na própria máquina.
 TRADUCAO_MODELO = "Helsinki-NLP/opus-mt-tc-big-en-pt"
@@ -398,7 +448,7 @@ def _traduzir_lote(textos: List[str]) -> List[str]:
             textos, return_tensors="pt", padding=True, truncation=True, max_length=512
         )
         entrada = int(tokens["input_ids"].shape[1])
-        maximo = min(512, max(48, int(entrada * 1.6) + 16))
+        maximo = min(512, max(64, int(entrada * 2.2) + 24))
         saida = modelo._instance.generate(
             **tokens,
             max_length=maximo,
@@ -406,6 +456,78 @@ def _traduzir_lote(textos: List[str]) -> List[str]:
             no_repeat_ngram_size=0,
         )
         return modelo._tokenizer.batch_decode(saida, skip_special_tokens=True)
+
+
+#: Abaixo desta razão entre o texto traduzido e o original considera-se que a
+#: tradução ficou cortada (o modelo tem um teto de tokens por pedaço).
+LIMIAR_TRUNCADO = 0.55
+
+#: Pedaços mais pequenos usados na segunda passagem, para o texto completo caber
+#: dentro do teto do modelo sem cortes.
+CHUNK_CHARS_FINO = 900
+
+
+def _completar_truncados(
+    docs: List[Dict[str, Any]],
+    cache: Dict[str, str],
+    *,
+    progress: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
+    """Traduz de novo, em pedaços mais pequenos, as descrições que ficaram cortadas."""
+    alvo = [
+        (indice, doc)
+        for indice, doc in enumerate(docs)
+        if doc.get("description_en")
+        and doc.get("description_pt")
+        and len(doc["description_pt"]) < LIMIAR_TRUNCADO * len(doc["description_en"])
+    ]
+    if not alvo:
+        return docs
+
+    pendentes: List[str] = []
+    vistos = set()
+    for _, doc in alvo:
+        for pedaco in _chunk_text(doc["description_en"], CHUNK_CHARS_FINO):
+            if pedaco not in cache and pedaco not in vistos:
+                vistos.add(pedaco)
+                pendentes.append(pedaco)
+
+    if pendentes:
+        try:
+            _modelo_pronto()
+        except Exception as exc:
+            logger.warning("EU Taxonomy: tradutor local indisponível: %s", exc)
+            return docs
+
+    pendentes.sort(key=len)
+    total = len(pendentes)
+    for inicio in range(0, total, BATCH_SIZE):
+        lote = pendentes[inicio : inicio + BATCH_SIZE]
+        try:
+            traduzidos = _traduzir_lote(lote)
+        except Exception as exc:
+            logger.warning("EU Taxonomy: lote de recuperação falhou: %s", exc)
+            traduzidos = []
+        with _translate_lock:
+            for original, traduzido in zip(lote, traduzidos):
+                limpo = _normalizar(traduzido)
+                if limpo:
+                    cache[original] = limpo
+            _save_translate_cache()
+        if progress:
+            try:
+                progress(min(total, inicio + len(lote)), total)
+            except Exception:
+                pass
+
+    for indice, doc in alvo:
+        partes = [
+            cache.get(pedaco) for pedaco in _chunk_text(doc["description_en"], CHUNK_CHARS_FINO)
+        ]
+        if all(partes):
+            doc["description_pt"] = _normalizar_pt(" ".join(partes))
+    logger.info("EU Taxonomy: %d descrições cortadas foram traduzidas de novo.", len(alvo))
+    return docs
 
 
 def translate_docs(
@@ -448,6 +570,7 @@ def translate_docs(
 
     total = len(pendentes)
     feitos = 0
+    numeros_falhados: List[str] = []
     if pendentes:
         try:
             _modelo_pronto()
@@ -472,6 +595,10 @@ def translate_docs(
                 if limpo:
                     with _translate_lock:
                         cache[original] = limpo
+                em_falta = _numeros_em_falta(original, limpo)
+                if em_falta:
+                    with _translate_lock:
+                        numeros_falhados.extend(em_falta)
             feitos = min(total, inicio + len(lote))
             with _translate_lock:
                 _save_translate_cache()
@@ -484,7 +611,7 @@ def translate_docs(
     for idx, nome in nomes:
         traduzido = cache.get(nome)
         if traduzido:
-            docs[idx]["name_pt"] = traduzido
+            docs[idx]["name_pt"] = _normalizar_pt(traduzido)
 
     for idx, posicao, total_pedacos, texto in descricoes:
         traduzido = cache.get(texto)
@@ -492,9 +619,27 @@ def translate_docs(
             continue
         atual = docs[idx].get("description_pt")
         if posicao == 0 or not atual:
-            docs[idx]["description_pt"] = traduzido
+            docs[idx]["description_pt"] = _normalizar_pt(traduzido)
         else:
-            docs[idx]["description_pt"] = f"{atual} {traduzido}".strip()
+            docs[idx]["description_pt"] = _normalizar_pt(f"{atual} {traduzido}")
+
+    docs = _completar_truncados(docs, cache, progress=progress)
+
+    # Referências legais com algarismos que a tradução não preservou: ficam
+    # assinaladas (o original inglês é sempre apresentado ao lado).
+    for doc in docs:
+        em_falta = _numeros_em_falta(doc.get("description_en") or "", doc.get("description_pt") or "")
+        if em_falta:
+            doc["revisto"] = False
+            doc["numeros_a_confirmar"] = em_falta[:10]
+        else:
+            doc["revisto"] = True
+
+    if numeros_falhados:
+        logger.info(
+            "EU Taxonomy: %d referências numéricas não preservadas na tradução (o original fica sempre visível).",
+            len(set(numeros_falhados)),
+        )
 
     return docs
 
