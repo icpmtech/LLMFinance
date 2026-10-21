@@ -53,6 +53,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
+from collectors import tls_chain
+
 logger = logging.getLogger(__name__)
 
 BASE = "https://www.citius.mj.pt/portal/consultas/"
@@ -773,6 +775,9 @@ class CitacoesEditalClient:
         self.session.headers.update(HEADERS)
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
+        #: Caminho do bundle de CAs (só é trocado quando o portal serve uma cadeia
+        #: incompleta — ver `collectors/tls_chain.py`).
+        self.verify: Any = True
         self._state: Dict[str, str] = {}
         self._options: Dict[str, List[Dict[str, str]]] = {}
         self._last_request = 0.0
@@ -797,6 +802,19 @@ class CitacoesEditalClient:
         if wait > 0:
             time.sleep(wait)
 
+    def _tls_retry(self, url: str, exc: Exception) -> bool:
+        """Repara a cadeia TLS do portal (AIA) e pede para repetir o pedido."""
+        if not tls_chain.is_chain_failure(exc):
+            return False
+        bundle = tls_chain.verify_for(
+            url, timeout=min(self.connect_timeout, tls_chain.DEFAULT_TIMEOUT), proxy=self.proxy
+        )
+        if not bundle or bundle == self.verify:
+            return False
+        logger.warning("Cadeia TLS de %s incompleta; a validar com %s", url, bundle)
+        self.verify = bundle
+        return True
+
     def _get(self, url: str = PAGE, *, retries: int = 3) -> str:
         last: Optional[Exception] = None
         for attempt in range(retries):
@@ -808,6 +826,11 @@ class CitacoesEditalClient:
                 if _blocked(text):
                     raise CitacoesError("Pedido bloqueado pelo portal (WAF).")
                 return text
+            except requests.exceptions.SSLError as exc:
+                last = exc
+                if self._tls_retry(url, exc):
+                    continue
+                time.sleep(1.5 * (attempt + 1))
             except Exception as exc:  # noqa: BLE001
                 last = exc
                 if self.stalled:
@@ -830,7 +853,10 @@ class CitacoesEditalClient:
             try:
                 if metodo == "GET":
                     caixa["resp"] = self.session.get(
-                        url, timeout=(self.connect_timeout, self.timeout), headers={"Referer": PAGE}
+                        url,
+                        timeout=(self.connect_timeout, self.timeout),
+                        headers={"Referer": PAGE},
+                        verify=self.verify,
                     )
                 else:
                     caixa["resp"] = self.session.post(
@@ -838,6 +864,7 @@ class CitacoesEditalClient:
                         data=data,
                         timeout=(self.connect_timeout, self.timeout),
                         headers={"Referer": PAGE},
+                        verify=self.verify,
                     )
             except Exception as exc:  # noqa: BLE001
                 caixa["erro"] = exc
@@ -870,6 +897,13 @@ class CitacoesEditalClient:
                     raise CitacoesError("Pedido bloqueado pelo portal (WAF).")
                 self.pages_fetched += 1
                 return text
+            except requests.exceptions.SSLError as exc:
+                last = exc
+                if self._tls_retry(PAGE, exc):
+                    continue
+                if self.stalled:
+                    break
+                time.sleep(2.0 * (attempt + 1))
             except Exception as exc:  # noqa: BLE001
                 last = exc
                 if self.stalled:
@@ -1066,7 +1100,16 @@ class CitacoesEditalClient:
         """Descarrega o PDF de um édito (usa a sessão onde a pesquisa foi feita)."""
         url = f"{DOCUMENTO_PAGE}?q={token}"
         self._throttle()
-        resp = self.session.get(url, timeout=self.timeout, headers={"Referer": PAGE})
+        try:
+            resp = self.session.get(
+                url, timeout=self.timeout, headers={"Referer": PAGE}, verify=self.verify
+            )
+        except requests.exceptions.SSLError as exc:
+            if not self._tls_retry(url, exc):
+                raise
+            resp = self.session.get(
+                url, timeout=self.timeout, headers={"Referer": PAGE}, verify=self.verify
+            )
         self._last_request = time.monotonic()
         resp.raise_for_status()
         return resp.content

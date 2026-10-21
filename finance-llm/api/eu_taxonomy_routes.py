@@ -9,8 +9,9 @@ Endpoints de leitura pública (como nos restantes módulos de dados abertos):
 
 Endpoints de escrita (sessão + permissão `eu-taxonomy`):
 
-- `POST /eu-taxonomy/coletar`            — recolha, tradução, indexação e snapshot
-- `POST /eu-taxonomy/traduzir`           — tradução incremental PT dos nomes e descrições
+- `POST /eu-taxonomy/coletar`            — recolha, indexação e snapshot
+- `POST /eu-taxonomy/traduzir`           — arranca a tradução PT em segundo plano
+- `GET  /eu-taxonomy/traducao/estado`    — progresso da tradução PT
 """
 from __future__ import annotations
 
@@ -21,7 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from api import eu_taxonomy_navigator as navigator
 from api import eu_taxonomy_service as service
 from api.auth_routes import CurrentSession, require_session
 from api.permissions_service import require_write
@@ -35,12 +35,10 @@ Session = Annotated[CurrentSession, Depends(require_session)]
 
 class ColetarPayload(BaseModel):
     force: bool = Field(False, description="Força o re-download da API oficial")
-    translate: bool = Field(True, description="Traduz nomes e descrições para português")
-
-
-class TraduzirPayload(BaseModel):
-    provider: Optional[str] = Field(None, description="Fornecedor de IA (não obrigatório: usa Helsinki local)")
-    model: Optional[str] = Field(None, description="Modelo de IA")
+    translate: bool = Field(
+        False,
+        description="Traduz também para português durante a recolha (demora vários minutos; o normal é traduzir depois)",
+    )
 
 
 @router.get("/status", summary="Estado do módulo EU Taxonomy Navigator")
@@ -98,37 +96,19 @@ async def eu_taxonomy_coletar(
     return await run_in_threadpool(service.coletar, force=payload.force, translate=payload.translate)
 
 
+@router.get("/traducao/estado", summary="Progresso da tradução PT do Compass")
+def eu_taxonomy_traducao_estado() -> Dict[str, Any]:
+    """Andamento (0–100%), contagens e eventuais erros da tradução em curso."""
+    return service.estado_traducao()
+
+
 @router.post("/traduzir", summary="Traduzir nomes e descrições das atividades para PT")
-async def eu_taxonomy_traduzir(
-    payload: TraduzirPayload,
-    session: Session,
-) -> Dict[str, Any]:
-    """Traduz incrementalmente os textos ainda sem tradução no snapshot."""
+async def eu_taxonomy_traduzir(session: Session) -> Dict[str, Any]:
+    """Arranca a tradução incremental em segundo plano (modelo local, sem chaves).
+
+    A resposta volta logo com o estado inicial; o progresso segue em
+    `GET /eu-taxonomy/traducao/estado`. Repetir o pedido devolve o trabalho que
+    já está a correr em vez de lançar outro.
+    """
     require_write("eu-taxonomy", session)
-
-    def _traduzir() -> Dict[str, Any]:
-        if not navigator.SNAPSHOT_PATH.exists():
-            return {"error": "Snapshot ainda não existe. Execute a recolha primeiro."}
-        import json
-
-        snapshot = json.loads(navigator.SNAPSHOT_PATH.read_text(encoding="utf-8"))
-        activities = snapshot.get("activities", [])
-        translated = navigator.translate_docs(
-            activities,
-            provider=payload.provider,
-            model=payload.model,
-            user_id=str(session.user_id) if session else None,
-        )
-        snapshot["activities"] = translated
-        navigator.save_snapshot(snapshot)
-        # Reindexa as atividades (os objetivos/setores já estão em PT)
-        from api.elasticsearch_client import index_eu_taxonomy
-
-        index_result = index_eu_taxonomy(translated + snapshot.get("objectives", []) + snapshot.get("sectors", []))
-        return {
-            "translated_names": sum(1 for a in translated if a.get("name_pt")),
-            "translated_descriptions": sum(1 for a in translated if a.get("description_pt")),
-            "index": index_result,
-        }
-
-    return await run_in_threadpool(_traduzir)
+    return service.traduzir_em_fundo()

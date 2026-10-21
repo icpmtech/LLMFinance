@@ -331,77 +331,172 @@ def _normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", (texto or "")).strip()
 
 
+#: Modelo local de tradução EN→PT (o mesmo usado pelo módulo de notícias).
+#: Não depende de chaves nem de créditos: traduz na própria máquina.
+TRADUCAO_MODELO = "Helsinki-NLP/opus-mt-tc-big-en-pt"
+
+#: Quantos textos vão em cada passagem pelo modelo (o lote amortiza o custo).
+BATCH_SIZE = 8
+
+#: Limite de caracteres por pedaço de descrição. O modelo trunca a 512 tokens
+#: (~1 500–2 000 caracteres); dividir em pedaços garante que nada se perde.
+CHUNK_CHARS = 1500
+
+
+def _chunk_text(texto: str, limite: int = CHUNK_CHARS) -> List[str]:
+    """Divide um texto em pedaços por frase, sem cortar palavras."""
+    texto = _normalizar(texto)
+    if not texto:
+        return []
+    if len(texto) <= limite:
+        return [texto]
+    frases = re.split(r"(?<=[.!?;:])\s+", texto)
+    pedacos: List[str] = []
+    atual = ""
+    for frase in frases:
+        if not frase:
+            continue
+        if atual and len(atual) + 1 + len(frase) > limite:
+            pedacos.append(atual)
+            atual = frase
+        else:
+            atual = f"{atual} {frase}".strip() if atual else frase
+        # Uma «frase» maior do que o limite é cortada em blocos de palavras.
+        while len(atual) > limite:
+            corte = atual.rfind(" ", 0, limite)
+            if corte <= 0:
+                corte = limite
+            pedacos.append(atual[:corte].strip())
+            atual = atual[corte:].strip()
+    if atual:
+        pedacos.append(atual)
+    return [p for p in pedacos if p]
+
+
+def _modelo_pronto() -> Any:
+    """Garante o modelo carregado (a primeira chamada descarrega os pesos)."""
+    from api.news_nlp import _TranslationModel as modelo
+
+    if modelo._instance is None or modelo._tokenizer is None:
+        modelo.translate("inicialização")
+    return modelo
+
+
+def _traduzir_lote(textos: List[str]) -> List[str]:
+    """Traduz um lote de textos numa só passagem pelo modelo local."""
+    if not textos:
+        return []
+    modelo = _modelo_pronto()
+    with modelo._lock:
+        tokens = modelo._tokenizer(
+            textos, return_tensors="pt", padding=True, truncation=True, max_length=512
+        )
+        saida = modelo._instance.generate(**tokens, max_length=512, num_beams=1, early_stopping=True)
+        return modelo._tokenizer.batch_decode(saida, skip_special_tokens=True)
+
+
 def translate_docs(
     docs: List[Dict[str, Any]],
     *,
-    provider: Optional[str] = None,
-    model: Optional[str] = None,
-    user_id: Optional[str] = None,
+    progress: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
-    """Traduz nome e descrição das atividades para PT, mantendo originais.
+    """Traduz nome e descrição das atividades para PT, mantendo os originais.
 
-    Usa o modelo local Helsinki-NLP/opus-mt-tc-big-en-pt (o mesmo do módulo
-    de notícias), garantindo que a tradução não depende de fornecedores de IA
-    externos nem de créditos. Textos longos são truncados a 512 tokens.
+    As descrições longas são divididas em pedaços (`_chunk_text`) e traduzidas
+    em lote; os pedaços já traduzidos ficam em cache, pelo que repetir a
+    operação só processa o que falta. `progress(done, total)` é chamado após
+    cada lote para a interface poder mostrar o andamento.
     """
     with _translate_lock:
         cache = _load_translate_cache()
 
-    # Coletar textos únicos por traduzir
-    textos: List[str] = []
-    indices: List[Tuple[int, str]] = []  # (índice do doc, campo: 'name' ou 'desc')
+    # Cada documento tem: um nome e N pedaços de descrição.
+    nomes: List[Tuple[int, str]] = []
+    descricoes: List[Tuple[int, int, int, str]] = []  # (doc, pedaço, total, texto)
     for idx, doc in enumerate(docs):
         nome = _normalizar(doc.get("name_en") or "")
-        desc = _normalizar(doc.get("description_en") or "")
-        if nome and nome not in cache and nome not in textos:
-            textos.append(nome)
-            indices.append((idx, "name"))
-        if desc and desc not in cache and desc not in textos:
-            textos.append(desc)
-            indices.append((idx, "desc"))
+        if nome:
+            nomes.append((idx, nome))
+        pedacos = _chunk_text(doc.get("description_en") or "")
+        for posicao, pedaco in enumerate(pedacos):
+            descricoes.append((idx, posicao, len(pedacos), pedaco))
 
-    if not textos:
-        return [
-            {
-                **doc,
-                "name_pt": doc.get("name_pt") or cache.get(_normalizar(doc.get("name_en") or "")),
-                "description_pt": doc.get("description_pt") or cache.get(_normalizar(doc.get("description_en") or "")),
-            }
-            for doc in docs
-        ]
+    # Textos únicos que ainda não estão em cache.
+    pendentes: List[str] = []
+    vistos = set()
+    for _, texto in nomes:
+        if texto not in cache and texto not in vistos:
+            vistos.add(texto)
+            pendentes.append(texto)
+    for _, _, _, texto in descricoes:
+        if texto not in cache and texto not in vistos:
+            vistos.add(texto)
+            pendentes.append(texto)
 
-    try:
-        from api.news_nlp import _translate_en_to_pt
-    except Exception as exc:
-        logger.warning("EU Taxonomy: tradutor local não disponível: %s", exc)
-        return docs
-
-    novas_traducoes: Dict[str, str] = {}
-    for original in textos:
+    total = len(pendentes)
+    feitos = 0
+    if pendentes:
         try:
-            traduzido = _translate_en_to_pt(original)
-            limpo = _normalizar(traduzido)
-            if limpo and limpo != original:
-                novas_traducoes[original] = limpo
-        except Exception as exc:
-            logger.debug("EU Taxonomy: falha a traduzir '%s...': %s", original[:40], exc)
+            _modelo_pronto()
+        except Exception as exc:  # modelo indisponível (sem rede/disco)
+            logger.warning("EU Taxonomy: tradutor local indisponível: %s", exc)
+            return docs
 
-    with _translate_lock:
-        cache.update(novas_traducoes)
-        if len(cache) > 50000:
-            for chave in list(cache)[: len(cache) - 50000]:
-                cache.pop(chave, None)
-        _save_translate_cache()
+        for inicio in range(0, total, BATCH_SIZE):
+            lote = pendentes[inicio : inicio + BATCH_SIZE]
+            try:
+                traduzidos = _traduzir_lote(lote)
+            except Exception as exc:
+                logger.warning("EU Taxonomy: lote de tradução falhou: %s", exc)
+                traduzidos = []
+            for original, traduzido in zip(lote, traduzidos):
+                limpo = _normalizar(traduzido)
+                if limpo:
+                    with _translate_lock:
+                        cache[original] = limpo
+            feitos = min(total, inicio + len(lote))
+            with _translate_lock:
+                _save_translate_cache()
+            if progress:
+                try:
+                    progress(feitos, total)
+                except Exception:  # o progresso nunca deve quebrar a tradução
+                    pass
 
-    for idx, campo in indices:
-        original = _normalizar(docs[idx].get("name_en" if campo == "name" else "description_en") or "")
-        if original in novas_traducoes:
-            if campo == "name":
-                docs[idx]["name_pt"] = novas_traducoes[original]
-            else:
-                docs[idx]["description_pt"] = novas_traducoes[original]
+    for idx, nome in nomes:
+        traduzido = cache.get(nome)
+        if traduzido:
+            docs[idx]["name_pt"] = traduzido
+
+    for idx, posicao, total_pedacos, texto in descricoes:
+        traduzido = cache.get(texto)
+        if not traduzido:
+            continue
+        atual = docs[idx].get("description_pt")
+        if posicao == 0 or not atual:
+            docs[idx]["description_pt"] = traduzido
+        else:
+            docs[idx]["description_pt"] = f"{atual} {traduzido}".strip()
 
     return docs
+
+
+def traduzir_snapshot(*, progress: Optional[Any] = None) -> Dict[str, Any]:
+    """Traduz (incrementalmente) o snapshot existente e regrava-o em disco."""
+    if not SNAPSHOT_PATH.exists():
+        return {"error": "Snapshot ainda não existe. Execute a recolha primeiro."}
+    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    atividades = translate_docs(snapshot.get("activities", []), progress=progress)
+    snapshot["activities"] = atividades
+    snapshot["traduzido_em"] = _now()
+    save_snapshot(snapshot)
+    return {
+        "activities": atividades,
+        "objectives": snapshot.get("objectives", []),
+        "sectors": snapshot.get("sectors", []),
+        "translated_names": sum(1 for item in atividades if item.get("name_pt")),
+        "translated_descriptions": sum(1 for item in atividades if item.get("description_pt")),
+    }
 
 
 def save_snapshot(snapshot: Dict[str, Any]) -> Path:
@@ -414,8 +509,12 @@ def save_snapshot(snapshot: Dict[str, Any]) -> Path:
     return SNAPSHOT_PATH
 
 
-def run(force: bool = False, translate: bool = True) -> Dict[str, Any]:
-    """Executa a recolha completa: download, normalização, tradução e snapshot."""
+def run(force: bool = False, translate: bool = False) -> Dict[str, Any]:
+    """Executa a recolha completa: download, normalização e snapshot.
+
+    `translate=True` traduz tudo de imediato (demora vários minutos no modelo
+    local); o normal é recolher primeiro e traduzir depois, em segundo plano.
+    """
     raw = fetch_raw(force=force)
     snapshot = build_snapshot(raw, translate=translate)
     save_snapshot(snapshot)

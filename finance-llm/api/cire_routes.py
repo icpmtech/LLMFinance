@@ -389,8 +389,18 @@ def cire_run_detail(run_id: str, with_items: bool = Query(False)) -> Dict[str, A
             payload = cire_service.load_run(run_id)
             meta_info = {"run_id": run_id, "collected": payload.get("count", 0)}
         if with_items:
-            payload = cire_service.load_run(run_id)
-            meta_info = {**meta_info, "criteria_source": payload.get("criteria"), "items": payload.get("items", [])}
+            try:
+                payload = cire_service.load_run(run_id)
+            except FileNotFoundError:
+                # Recolha só com resumo (p.ex. todas as janelas falharam): sem itens,
+                # mas com o estado e os erros da recolha.
+                meta_info = {
+                    **meta_info,
+                    "items": [],
+                    "warnings": [*(meta_info.get("warnings") or []), "Recolha sem itens gravados."],
+                }
+            else:
+                meta_info = {**meta_info, "criteria_source": payload.get("criteria"), "items": payload.get("items", [])}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return meta_info

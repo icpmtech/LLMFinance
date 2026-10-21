@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _recolha_em_curso: Optional[Dict[str, Any]] = None
+_traducao: Optional[Dict[str, Any]] = None
+_traducao_thread: Optional[threading.Thread] = None
 
 
 def _now() -> str:
@@ -177,3 +179,74 @@ def atividade(activity_id: int) -> Optional[Dict[str, Any]]:
 def recolha_em_curso() -> Optional[Dict[str, Any]]:
     with _lock:
         return dict(_recolha_em_curso) if _recolha_em_curso else None
+
+
+# --------------------------------------------------------------------- tradução
+def estado_traducao() -> Dict[str, Any]:
+    """Progresso da tradução PT (estado do último trabalho iniciado)."""
+    with _lock:
+        if not _traducao:
+            return {"estado": "nunca_correu", "done": 0, "total": 0, "percent": 0}
+        return dict(_traducao)
+
+
+def _traduzir(estado: Dict[str, Any]) -> None:
+    """Trabalho de tradução (corre numa thread própria)."""
+
+    def progresso(feitos: int, total: int) -> None:
+        with _lock:
+            estado.update(
+                {
+                    "done": feitos,
+                    "total": total,
+                    "percent": round(100 * feitos / total) if total else 100,
+                }
+            )
+
+    try:
+        resultado = navigator.traduzir_snapshot(progress=progresso)
+        if resultado.get("error"):
+            raise RuntimeError(str(resultado["error"]))
+        index_result = index_eu_taxonomy(
+            resultado["activities"] + resultado["objectives"] + resultado["sectors"]
+        )
+        with _lock:
+            estado.update(
+                {
+                    "estado": "concluido",
+                    "finished_at": _now(),
+                    "translated_names": resultado.get("translated_names", 0),
+                    "translated_descriptions": resultado.get("translated_descriptions", 0),
+                    "indexed_count": index_result.get("indexed_count", 0),
+                    "index_error": index_result.get("error"),
+                    "percent": 100,
+                }
+            )
+    except Exception as exc:
+        logger.exception("EU Taxonomy: tradução falhou")
+        with _lock:
+            estado.update({"estado": "erro", "finished_at": _now(), "erro": str(exc)})
+
+
+def traduzir_em_fundo() -> Dict[str, Any]:
+    """Inicia (ou devolve) a tradução PT em segundo plano."""
+    global _traducao, _traducao_thread
+    with _lock:
+        if _traducao_thread and _traducao_thread.is_alive():
+            return {"ja_em_curso": True, **dict(_traducao or {})}
+        if not navigator.SNAPSHOT_PATH.exists():
+            return {"error": "Snapshot ainda não existe. Execute a recolha primeiro."}
+        _traducao = {
+            "estado": "a_correr",
+            "started_at": _now(),
+            "finished_at": None,
+            "done": 0,
+            "total": 0,
+            "percent": 0,
+        }
+        estado_ref = _traducao
+        _traducao_thread = threading.Thread(
+            target=_traduzir, args=(estado_ref,), name="eu-taxonomy-traducao", daemon=True
+        )
+        _traducao_thread.start()
+        return {"ja_em_curso": False, **dict(estado_ref)}

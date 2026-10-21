@@ -47,6 +47,9 @@ Detalhes que custaram a descobrir:
   antiga **volta a pesquisar** o portal pelos critérios gravados.
 - Todos os documentos desta consulta são **PDF com texto** (não é preciso OCR).
 - O portal limita os pedidos (daí o `min_interval`, 1,2 s por omissão).
+- O certificado TLS do `citius.mj.pt` chega **sem o intermédio correto**; o
+  cliente repara a cadeia pelo AIA (`collectors/tls_chain.py`) em vez de desligar
+  a verificação — ver [insolvencias-cire.md](./insolvencias-cire.md#certificado-tls-incompleto-cadeia).
 
 ## Análise do documento (PDF)
 

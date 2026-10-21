@@ -139,11 +139,25 @@ export async function coletarEuTaxonomy(payload: { force?: boolean; translate?: 
   }>("/eu-taxonomy/coletar", { force: false, translate: true, ...payload });
 }
 
-export async function traduzirEuTaxonomy(payload: { provider?: string; model?: string } = {}) {
-  return postJson<{
-    translated_names?: number;
-    translated_descriptions?: number;
-    index?: { indexed_count: number; error_count: number; error?: string };
-    error?: string;
-  }>("/eu-taxonomy/traduzir", payload);
+export type EuTaxonomyTraducaoEstado = {
+  estado: "nunca_correu" | "a_correr" | "concluido" | "erro" | string;
+  done: number;
+  total: number;
+  percent: number;
+  started_at?: string;
+  finished_at?: string | null;
+  translated_names?: number;
+  translated_descriptions?: number;
+  indexed_count?: number;
+  erro?: string;
+  ja_em_curso?: boolean;
+  error?: string;
+};
+
+export async function traduzirEuTaxonomy() {
+  return postJson<EuTaxonomyTraducaoEstado>("/eu-taxonomy/traduzir", {});
+}
+
+export async function getEuTaxonomyTraducaoEstado() {
+  return getJson<EuTaxonomyTraducaoEstado>("/eu-taxonomy/traducao/estado");
 }

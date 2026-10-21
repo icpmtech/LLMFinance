@@ -16,6 +16,7 @@ Endpoints:
 - `GET  /esg/ranking`                       — ranking por score, pilar, setor, dimensão e ano
 - `GET  /esg/ranking.csv`                   — exportação do ranking em CSV
 - `GET  /esg/analitica`                     — painel agregado (médias, distribuições e destaques)
+- `GET  /esg/mapa`                          — pontos por empresa e agregado por região (mapa)
 - `GET  /esg/empresa/{pais}/{nif}`          — dossiê ESG da empresa
 - `GET  /esg/empresa/{pais}/{nif}/historico`— série de 3 anos + benchmark
 - `GET  /esg/empresa/{pais}/{nif}/fornecedores` — carteira de fornecedores do comprador
@@ -237,6 +238,36 @@ async def esg_analitica(
     return _ou_erro(
         await run_in_threadpool(
             service.analitica, pais=pais, setor=setor, dimensao=dimensao, nivel=nivel, ano=ano, q=q
+        )
+    )
+
+
+@router.get("/mapa", summary="Mapa ESG: empresas (score e nível) e agregado por região")
+async def esg_mapa(
+    pais: Optional[str] = Query(None, pattern=PAIS_PATTERN),
+    setor: Optional[str] = Query(None, pattern=SETOR_PATTERN),
+    dimensao: Optional[str] = Query(None, pattern=DIMENSAO_PATTERN),
+    nivel: Optional[str] = Query(None, pattern=NIVEL_PATTERN),
+    ano: Optional[int] = Query(None, ge=2000, le=2100),
+    q: Optional[str] = Query(None, min_length=2, max_length=200),
+    limite: int = Query(1_000, ge=1, le=3_000, description="Máximo de empresas lidas do índice"),
+) -> Dict[str, Any]:
+    """Pontos por empresa (com distrito/concelho, score e nível) e agregados por região.
+
+    A geografia vem do cadastro (`location.distrito`/`location.concelho`). Só se
+    marca o que se sabe: empresas sem distrito ficam em `sem_localizacao`.
+    """
+    _validar_pais(pais)
+    return _ou_erro(
+        await run_in_threadpool(
+            service.mapa,
+            pais=pais,
+            setor=setor,
+            dimensao=dimensao,
+            nivel=nivel,
+            ano=ano,
+            q=q,
+            limite=limite,
         )
     )
 

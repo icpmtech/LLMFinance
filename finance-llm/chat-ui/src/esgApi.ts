@@ -570,6 +570,55 @@ export async function getEsgAnalitica(params: {
   return getJson<EsgAnalitica>(`/esg/analitica${query(params)}`);
 }
 
+export type EsgMapaEmpresa = {
+  nif: string;
+  nome: string;
+  pais: string;
+  distrito: string | null;
+  concelho: string | null;
+  score: number | null;
+  nivel: EsgNivel | null;
+  nivel_label: string | null;
+  cor: string | null;
+  cobertura: number | null;
+  setor_label: string | null;
+  dimensao_label: string | null;
+  valor: number | null;
+  contratos: number | null;
+};
+
+export type EsgMapaRegiao = {
+  pais: string;
+  distrito: string;
+  n: number;
+  score_medio: number | null;
+  cobertura_media: number | null;
+  valor: number;
+  nivel: EsgNivel | null;
+  nivel_label: string | null;
+  cor: string;
+  niveis: { id: EsgNivel; label: string; cor: string; n: number }[];
+  empresas: string[];
+};
+
+export type EsgMapaResposta = {
+  disponivel: boolean;
+  total: number;
+  motivo?: string | null;
+  como_popular?: string;
+  com_localizacao?: number;
+  sem_localizacao?: number;
+  empresas: EsgMapaEmpresa[];
+  regioes: EsgMapaRegiao[];
+  filtros?: Record<string, unknown>;
+};
+
+export async function getEsgMapa(
+  params: { pais?: string; setor?: string; dimensao?: string; nivel?: string; ano?: number; q?: string; limite?: number } = {},
+) {
+  return getJson<EsgMapaResposta>(`/esg/mapa${query(params)}`);
+}
+
 export async function getEsgEmpresa(
   pais: string,
   nif: string,

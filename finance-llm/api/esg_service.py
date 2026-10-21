@@ -74,6 +74,12 @@ _INDICES_LOCK = threading.Lock()
 #: Serviços que contam como ambientais/economia circular na taxonomia CPV.
 SERVICOS_AMBIENTAIS = frozenset({1, 2, 3, 41, 65, 71, 73, 77, 90, 91})
 
+#: Valores que o cadastro guarda em `location.distrito` quando não sabe o
+#: distrito. Não são regiões: o mapa não os pode posicionar.
+DISTRITOS_NAO_GEOGRAFICOS = frozenset(
+    padroes.fold(valor) for valor in ("Portugal", "Portugal Continental", "Portugal Insular")
+)
+
 
 # ---------------------------------------------------------------------------
 # Utilidades
@@ -2015,6 +2021,184 @@ def analitica(
         "destaques_positivos": destaques_positivos,
         "destaques_negativos": destaques_negativos,
         "taxonomia": taxonomia,
+        "filtros": {"pais": pais, "setor": setor, "dimensao": dimensao, "nivel": nivel, "ano": ano, "q": q},
+    }
+
+
+def _agregar_mapa(docs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Converte fotografias ESG em pontos por empresa e agregados por região.
+
+    Função pura (sem Elasticsearch), para poder ser testada. A região é o
+    `location.distrito` do cadastro — o mesmo campo que o painel agrega. Uma
+    empresa sem distrito conta para `sem_localizacao`: nunca é colocada num sítio
+    inventado (tal como os mapas de contratos, que só marcam posições conhecidas).
+    """
+    empresas: List[Dict[str, Any]] = []
+    regioes: Dict[tuple, Dict[str, Any]] = {}
+    sem_localizacao = 0
+
+    for doc in docs:
+        local = doc.get("location") or {}
+        if not isinstance(local, Mapping):
+            local = {}
+        nif = str(doc.get("nif") or "").strip()
+        if not nif:
+            continue
+        distrito = str(local.get("distrito") or "").strip()
+        concelho = str(local.get("concelho") or "").strip()
+        if padroes.fold(distrito) in DISTRITOS_NAO_GEOGRAFICOS:
+            distrito = ""
+        pais = pais_codigo(doc.get("pais") or local.get("pais") or "PT")
+        score = _to_float(doc.get("score"))
+        cobertura = _to_float(doc.get("cobertura"))
+        empresa = {
+            "nif": nif,
+            "nome": doc.get("name") or nif,
+            "pais": pais,
+            "distrito": distrito or None,
+            "concelho": concelho or None,
+            "score": _round(score),
+            "nivel": doc.get("nivel"),
+            "nivel_label": doc.get("nivel_label"),
+            "cor": doc.get("cor"),
+            "cobertura": _round(cobertura),
+            "setor_label": doc.get("setor_label"),
+            "dimensao_label": doc.get("dimensao_label"),
+            "valor": _to_float(doc.get("valor")),
+            "contratos": _to_int(doc.get("contratos")),
+        }
+        empresas.append(empresa)
+        if not distrito:
+            sem_localizacao += 1
+            continue
+
+        chave = (pais, distrito)
+        regiao = regioes.get(chave)
+        if regiao is None:
+            regiao = {
+                "pais": pais,
+                "distrito": distrito,
+                "n": 0,
+                "soma_score": 0.0,
+                "com_score": 0,
+                "soma_cobertura": 0.0,
+                "com_cobertura": 0,
+                "valor": 0.0,
+                "niveis": {},
+                "empresas": [],
+            }
+            regioes[chave] = regiao
+        regiao["n"] += 1
+        regiao["empresas"].append(nif)
+        regiao["valor"] += empresa["valor"] or 0.0
+        if score is not None:
+            regiao["soma_score"] += score
+            regiao["com_score"] += 1
+        if cobertura is not None:
+            regiao["soma_cobertura"] += cobertura
+            regiao["com_cobertura"] += 1
+        if empresa["nivel"]:
+            atual = regiao["niveis"].setdefault(
+                empresa["nivel"], {"id": empresa["nivel"], "label": empresa["nivel_label"] or empresa["nivel"], "cor": empresa["cor"], "n": 0}
+            )
+            atual["n"] += 1
+
+    lista_regioes: List[Dict[str, Any]] = []
+    for regiao in regioes.values():
+        n = regiao["n"]
+        niveis = sorted(regiao["niveis"].values(), key=lambda item: -item["n"])
+        dominante = niveis[0] if niveis else None
+        lista_regioes.append(
+            {
+                "pais": regiao["pais"],
+                "distrito": regiao["distrito"],
+                "n": n,
+                "score_medio": _round(regiao["soma_score"] / regiao["com_score"]) if regiao["com_score"] else None,
+                "cobertura_media": _round(regiao["soma_cobertura"] / regiao["com_cobertura"], 4) if regiao["com_cobertura"] else None,
+                "valor": _round(regiao["valor"], 2),
+                "nivel": dominante["id"] if dominante else None,
+                "nivel_label": dominante["label"] if dominante else None,
+                "cor": dominante["cor"] if dominante else "#94a3b8",
+                "niveis": niveis,
+                "empresas": regiao["empresas"],
+            }
+        )
+    lista_regioes.sort(key=lambda item: (-item["n"], -(item["score_medio"] or 0)))
+
+    return {
+        "empresas": empresas,
+        "regioes": lista_regioes,
+        "com_localizacao": len(empresas) - sem_localizacao,
+        "sem_localizacao": sem_localizacao,
+    }
+
+
+def mapa(
+    *,
+    pais: Optional[str] = None,
+    setor: Optional[str] = None,
+    dimensao: Optional[str] = None,
+    nivel: Optional[str] = None,
+    ano: Optional[int] = None,
+    q: Optional[str] = None,
+    limite: int = 1_000,
+) -> Dict[str, Any]:
+    """Pontos por empresa (score e nível) e agregado por região, para o mapa."""
+    client = _client()
+    if client is None:
+        return {"error": "Elasticsearch indisponível", "disponivel": False}
+    if not _index_existe(client, ESG_EMPRESAS_INDEX):
+        return {
+            "disponivel": False,
+            "total": 0,
+            "motivo": "Ainda não há empresas no índice ESG.",
+            "como_popular": "Pesquise uma empresa em «Empresas» ou execute o cálculo em lote (POST /esg/calcular).",
+        }
+    filtros = _filtros_esg(q=q, pais=pais, setor=setor, dimensao=dimensao, nivel=nivel, ano=ano)
+    corpo = {
+        "size": max(1, min(int(limite), 3_000)),
+        "track_total_hits": True,
+        "query": {"bool": {"filter": filtros}},
+        "sort": [{"score": {"order": "desc", "missing": "_last"}}],
+        "_source": {
+            "includes": [
+                "nif",
+                "name",
+                "pais",
+                "score",
+                "nivel",
+                "nivel_label",
+                "cor",
+                "cobertura",
+                "location",
+                "setor_label",
+                "dimensao_label",
+                "valor",
+                "contratos",
+            ],
+            "excludes": [
+                "historico",
+                "componentes",
+                "evidencias",
+                "fornecedores",
+                "score_detalhe",
+                "pilares_detalhe",
+                "indicadores",
+                "empresa",
+                "search_text",
+            ],
+        },
+    }
+    resposta = _search(client, ESG_EMPRESAS_INDEX, corpo, timeout=60)
+    if resposta.get("error"):
+        return {"disponivel": False, "motivo": resposta.get("error"), "total": 0}
+    total = _total(resposta)
+    agregado = _agregar_mapa([hit.get("_source") or {} for hit in _hits(resposta)])
+    return {
+        "disponivel": total > 0,
+        "total": total,
+        "motivo": None if total else "Ainda não há empresas no índice ESG.",
+        **agregado,
         "filtros": {"pais": pais, "setor": setor, "dimensao": dimensao, "nivel": nivel, "ano": ano, "q": q},
     }
 

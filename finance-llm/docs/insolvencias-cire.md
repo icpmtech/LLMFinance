@@ -36,6 +36,23 @@ Detalhes que custaram a descobrir:
 - A **paginação mostra 10 documentos por página** — um mês pode valer centenas de
   páginas, daí os limites (`max_pages`, `max_items`, `window_days`).
 
+### Certificado TLS incompleto (cadeia)
+
+O portal serve o certificado **sem o intermédio correto**: o certificado é
+emitido por `YR2` (Let's Encrypt) mas a cadeia enviada traz o `YR1`, o par de
+chaves anterior. O resultado é
+`SSLError: CERTIFICATE_VERIFY_FAILED ... unable to get local issuer certificate`.
+Os browsers não se queixam porque vão buscar o emitente que falta pela extensão
+**AIA** do certificado.
+
+O cliente não desliga a verificação: quando o pedido falha assim, o
+`collectors/tls_chain.py` descarrega o emitente indicado no **AIA (`caIssuers`)**,
+junta-o ao `certifi` num *bundle* (`$TMPDIR/iqos-tls/`) e **repete o pedido** com
+`verify=<bundle>`. O nome do servidor continua a ser validado e a cadeia tem de
+terminar numa raiz de confiança do `certifi` — os certificados descarregados são
+apenas elos intermédios (os autoassinados fora do `certifi` são descartados).
+Vale para o CIRE e para as Citações Edital, que partilham o mesmo host.
+
 ## Recolher → JSON → Elasticsearch
 
 O módulo é deliberadamente **em duas fases**, como os restantes da solução:
@@ -55,6 +72,10 @@ O módulo é deliberadamente **em duas fases**, como os restantes da solução:
 
 A separação permite inspecionar/repetir a recolha sem tocar no índice e
 reimportar depois de alterar o parser.
+
+Quando nenhuma janela produz documentos (por exemplo, todas falharam), fica
+apenas o **resumo** (`<run_id>.meta.json`): `GET /cire/runs/{id}` devolve-o com
+`items: []`, o motivo em `errors` e um aviso em `warnings`.
 
 ### Não repetir trabalho
 
@@ -97,6 +118,7 @@ salta o que já está feito (avisa no log). O estado corrente fica em
 | Ficheiro | Papel |
 |---|---|
 | `collectors/citius_cire.py` | `CireClient` (sessão ASP.NET, postback assíncrono, paginação) + `parse_items` + `PublicacaoCire` |
+| `collectors/tls_chain.py` | reparação de cadeias TLS incompletas (emitente do AIA → *bundle* temporário) |
 | `api/cire_service.py` | meta/opções, janelas de datas, recolha, gravação em JSON, importação, listagem de recolhas |
 | `api/cire_graph.py` | grafo das insolvências: dimensões, valores por papel, agregação exata e varredura |
 | `api/cire_routes.py` | rotas `/cire/*` (recolha em segundo plano com progresso, importação, pesquisa, grafo, estado) |

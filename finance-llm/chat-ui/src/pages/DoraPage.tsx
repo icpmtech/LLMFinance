@@ -22,7 +22,7 @@ import {
   Workflow,
 } from "lucide-react";
 
-import {
+import type {
   DoraConteudoIdioma,
   DoraIncidente,
   DoraMeta,
@@ -30,6 +30,8 @@ import {
   DoraRelatorio,
   DoraRisco,
   DoraWorkflow,
+} from "../doraApi";
+import {
   generateDoraRelatorio,
   getDoraMeta,
   ingestDoraConteudo,

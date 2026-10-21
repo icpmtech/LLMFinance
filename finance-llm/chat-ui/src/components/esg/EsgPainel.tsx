@@ -22,6 +22,7 @@ import { getEsgAnalitica } from "../../esgApi";
 import type { EsgAnalitica, EsgEmpresaResumo, EsgMeta } from "../../esgApi";
 import { EmptyState, Kpi, Loading, SectionCard } from "../padroes/padroesKit";
 import { ESG_PILAR_CORES, EsgBadge, compactEuro, data, esgCor, num, pct } from "./esgKit";
+import { EsgMapa } from "./EsgMapa";
 
 function Destaques({ itens, onAbrir }: { itens?: EsgEmpresaResumo[]; onAbrir: (item: EsgEmpresaResumo) => void }) {
   if (!itens?.length) return <EmptyState>Sem empresas para destacar.</EmptyState>;
@@ -98,6 +99,11 @@ export function EsgPainel({ meta, onAbrir }: { meta: EsgMeta | null; onAbrir: (i
         label: item.label || item.id,
         cor: item.cor || esgCor(item.id),
       })),
+    [dados],
+  );
+
+  const contagensNivel = useMemo(
+    () => Object.fromEntries((dados?.niveis || []).map((item) => [item.id, item.n])) as Record<string, number>,
     [dados],
   );
 
@@ -178,6 +184,8 @@ export function EsgPainel({ meta, onAbrir }: { meta: EsgMeta | null; onAbrir: (i
         <Kpi icon={Leaf} label="Pilar Ambiente (média)" value={dados.media_pilares?.e?.toFixed(1) ?? "—"} sub={`Social ${dados.media_pilares?.s?.toFixed(1) ?? "—"} · Governação ${dados.media_pilares?.g?.toFixed(1) ?? "—"}`} color="text-teal-300" />
         <Kpi icon={Target} label="Última atualização" value={data(dados.ultima_atualizacao)} sub="fotografias no índice" color="text-sky-300" glow="glow-blue" />
       </div>
+
+      <EsgMapa meta={meta} onAbrir={onAbrir} pais={pais} setor={setor} dimensao={dimensao} ano={ano} contagens={contagensNivel} />
 
       {dados.taxonomia && (
         <SectionCard

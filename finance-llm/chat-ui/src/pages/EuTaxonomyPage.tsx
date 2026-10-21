@@ -30,10 +30,12 @@ import {
   getEuTaxonomyActivity,
   getEuTaxonomyPanorama,
   getEuTaxonomyStatus,
+  getEuTaxonomyTraducaoEstado,
   searchEuTaxonomy,
   traduzirEuTaxonomy,
   type EuTaxonomyActivity,
   type EuTaxonomyPanorama,
+  type EuTaxonomyTraducaoEstado,
 } from "../euTaxonomyApi";
 import { EmptyState, Loading } from "../components/padroes/padroesKit";
 
@@ -170,7 +172,7 @@ export default function EuTaxonomyPage() {
   const [objectiveId, setObjectiveId] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
-  const [translating, setTranslating] = useState(false);
+  const [traducao, setTraducao] = useState<EuTaxonomyTraducaoEstado | null>(null);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
 
@@ -249,24 +251,55 @@ export default function EuTaxonomyPage() {
   };
 
   const handleTraduzir = async () => {
-    setTranslating(true);
     setError("");
     setAviso("");
     try {
-      const resposta = await traduzirEuTaxonomy({});
+      const resposta = await traduzirEuTaxonomy();
       if (resposta.error) throw new Error(resposta.error);
+      setTraducao(resposta);
       setAviso(
-        `Tradução concluída: ${num(resposta.translated_names)} nomes e ` +
-          `${num(resposta.translated_descriptions)} descrições em português.`,
+        resposta.ja_em_curso
+          ? "Já existe uma tradução em curso — a acompanhar o progresso."
+          : "Tradução iniciada em segundo plano (modelo local). Pode continuar a usar a página.",
       );
-      await loadPanorama();
-      await pesquisar(q, sector, objectiveId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "A tradução falhou.");
-    } finally {
-      setTranslating(false);
     }
   };
+
+  /* Acompanha a tradução em segundo plano enquanto decorre. */
+  const traducaoEmCurso = traducao?.estado === "a_correr";
+  useEffect(() => {
+    if (!traducaoEmCurso) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const estado = await getEuTaxonomyTraducaoEstado();
+        setTraducao(estado);
+        if (estado.estado === "concluido") {
+          setAviso(
+            `Tradução concluída: ${num(estado.translated_names)} nomes e ` +
+              `${num(estado.translated_descriptions)} descrições em português.`,
+          );
+          await loadPanorama();
+          await pesquisar(q, sector, objectiveId);
+        } else if (estado.estado === "erro") {
+          setError(estado.erro || "A tradução falhou.");
+        }
+      } catch {
+        /* falha transitória de rede: tenta no próximo ciclo */
+      }
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [traducaoEmCurso, loadPanorama, pesquisar, q, sector, objectiveId]);
+
+  /* Retoma o acompanhamento quando a página abre com uma tradução a correr. */
+  useEffect(() => {
+    getEuTaxonomyTraducaoEstado()
+      .then((estado) => {
+        if (estado.estado === "a_correr") setTraducao(estado);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const handleSelecionar = async (activityId: number) => {
     try {
@@ -304,11 +337,11 @@ export default function EuTaxonomyPage() {
               <button
                 type="button"
                 onClick={handleTraduzir}
-                disabled={translating || !status?.snapshot_exists}
+                disabled={traducaoEmCurso || !status?.snapshot_exists}
                 className="neumorphic-btn flex items-center gap-1.5 text-xs disabled:opacity-50"
               >
-                {translating ? <Loader2 size={14} className="animate-spin" /> : <Globe2 size={14} />}
-                Traduzir PT
+                {traducaoEmCurso ? <Loader2 size={14} className="animate-spin" /> : <Globe2 size={14} />}
+                {traducaoEmCurso ? `A traduzir ${traducao?.percent ?? 0}%` : "Traduzir PT"}
               </button>
             </>
           ) : null}
