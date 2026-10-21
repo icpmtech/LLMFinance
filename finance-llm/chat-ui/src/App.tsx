@@ -107,6 +107,7 @@ import GovernoFichaPage from "./pages/GovernoFichaPage";
 import RemuneracoesPage from "./pages/RemuneracoesPage";
 import RemuneracoesApPage from "./pages/RemuneracoesApPage";
 import MunicipiosDespesasPage from "./pages/MunicipiosDespesasPage";
+import MunicipiosContactosPage from "./pages/MunicipiosContactosPage";
 import PartidosPage from "./pages/PartidosPage";
 import ErcPage from "./pages/ErcPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
@@ -122,6 +123,7 @@ import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
 import EsgPage from "./pages/EsgPage";
+import DoraPage from "./pages/DoraPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
 import RigorbizPage from "./pages/RigorbizPage";
@@ -262,6 +264,7 @@ type AppView =
   | "jarvis"
   | "risco"
   | "esg"
+  | "dora"
   | "societario"
   | "empresas-recolha"
   | "arquivo"
@@ -457,6 +460,7 @@ function pathForView(
     return slug ? `/governo/pasta/${encodeURIComponent(slug)}` : "/governo";
   }
   if (view === "municipios-despesas") return "/municipios/despesas";
+  if (view === "municipios-contactos") return "/municipios/contactos";
   if (view === "partidos") return "/partidos";
   if (view === "erc") return "/erc";
   if (view === "benchmark") return "/benchmark";
@@ -724,6 +728,7 @@ export default function App() {
     }
     if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) return "remuneracoes";
     if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) return "municipios-despesas";
+    if (path === "/municipios/contactos" || path.startsWith("/municipios/contactos/")) return "municipios-contactos";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
     if (path === "/erc" || path.startsWith("/erc/")) return "erc";
     if (path === "/benchmark/portugal") return "benchmark-pt";
@@ -913,6 +918,7 @@ export default function App() {
         next = `governo-pessoa:${decodeURIComponent(path.slice("/governo/pessoa/".length))}` as AppView;
       else if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) next = "remuneracoes";
       else if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) next = "municipios-despesas";
+      else if (path === "/municipios/contactos" || path.startsWith("/municipios/contactos/")) next = "municipios-contactos";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
       else if (path === "/erc" || path.startsWith("/erc/")) next = "erc";
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
@@ -1852,6 +1858,8 @@ export default function App() {
     // Despesas das câmaras municipais: despesa por classificador económico
     // (INE/DGAL) e contratação pública por município (Portal BASE).
     if (target === "municipios-despesas") return <MunicipiosDespesasPage />;
+    // Contactos das câmaras municipais: presidente, morada, e-mail, telefone e site.
+    if (target === "municipios-contactos") return <MunicipiosContactosPage />;
     if (target === "partidos") return <PartidosPage />;
     // Portal da Transparência da ERC: entidades, pessoas dos órgãos sociais e OCS.
     if (target === "erc") return <ErcPage />;
@@ -1903,6 +1911,7 @@ export default function App() {
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
     if (target === "esg") return <EsgPage />;
+    if (target === "dora") return <DoraPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;
     if (target === "arquivo") return <ArquivoPage />;

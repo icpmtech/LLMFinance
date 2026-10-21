@@ -375,7 +375,7 @@ def _membro_do_site(
         "partido": item.get("partido") or item.get("party") or "",
         "pelouros": _pelouros_de(item.get("pelouros") or item.get("atribuicoes")),
         "url": item.get("url") or item.get("profile_url"),
-        "photo_url": item.get("photo_url"),
+        "photo_url": item.get("photo_url") or item.get("foto_url"),
         "site": site or item.get("source"),
         "site_url": site_url or item.get("source_url"),
     }

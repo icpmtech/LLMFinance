@@ -671,6 +671,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "52,211,153",
   },
   {
+    id: "dora",
+    label: "DORA · Resiliência Digital",
+    hint: "Register of Information, incidentes ICT, riscos, workflows de conformidade, relatórios ITS/RTS e conteúdo da EIOPA",
+    icon: ShieldCheck,
+    gradient: "from-sky-200 via-blue-500 to-indigo-700",
+    accent: "59,130,246",
+  },
+  {
     id: "societario",
     label: "Recolha Societária",
     hint: "Recolha massiva de atos societários (MJ) para JSON e indexação: alvos pelos anos dos contratos e por empresa",

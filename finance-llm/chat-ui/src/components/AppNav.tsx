@@ -96,6 +96,7 @@ export type AppView =
   | "simulador"
   | "risco"
   | "esg"
+  | "dora"
   | "societario"
   | "empresas-recolha"
   | "gleif"

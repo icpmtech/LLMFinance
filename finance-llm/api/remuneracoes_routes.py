@@ -89,6 +89,7 @@ class ExecutivoMembro(BaseModel):
     partido: Optional[str] = Field(None, description="Filiação declarada pelo município")
     atribuicoes: Optional[str] = Field(None, description="Pelouros, tal como o município os escreve")
     url: Optional[str] = Field(None, description="Página do eleito no site do município")
+    foto_url: Optional[str] = Field(None, description="URL da fotografia do eleito no site do município")
 
 
 class ExecutivoImportRequest(BaseModel):

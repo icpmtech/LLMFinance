@@ -158,6 +158,10 @@ CRM_RBAC_INDEX = "finance_crm_rbac"
 # sem precisar de um mapping diferente por site.
 SCRAPED_INDEX = "finance_scraped"
 
+# Módulo EU Taxonomy Navigator: atividades, objetivos e setores oficiais do
+# Compass da Comissão Europeia, com texto original (EN) e tradução (PT).
+EU_TAXONOMY_INDEX = "finance_eu_taxonomy"
+
 # Módulo de pesquisa social: publicações recolhidas de redes sociais (LinkedIn,
 # TikTok, Reddit e Facebook) pelos "canais" (definições) do `social_service`.
 # Cada documento é uma publicação normalizada, com as métricas de interação em
@@ -272,6 +276,11 @@ MUNICIPIOS_DESPESAS_INDEX = "finance_municipios_despesas"
 # cargo — os nomes e os partidos vêm do Mapa Oficial da CNE e os pelouros, a
 # fotografia e a página de cada eleito dos sites das câmaras.
 MUNICIPIO_PESSOAS_INDEX = "finance_municipio_pessoas"
+
+# Contactos das 308 câmaras municipais (presidente, morada, e-mail, telefone,
+# site). Alimentado por `api/municipios_contactos_service.py` a partir do Excel
+# `data/municipios-contatos/contactos presidente CM 04092026.xlsx`.
+MUNICIPIOS_CONTACTOS_INDEX = "finance_municipios_contactos"
 
 # Abonos dos eleitos locais. Um documento por **linha da tabela oficial**
 # (ano × nível × regime × verba × cargo × modalidade), com os valores por escalão
@@ -447,6 +456,16 @@ ESG_INDICADORES_INDEX = "finance_esg_indicadores"
 # contagens e erros), como nos restantes modulos de recolha.
 ESG_RECOLHAS_INDEX = "finance_esg_recolhas"
 
+# Módulo DORA: Register of Information, incidentes, riscos, workflows,
+# relatórios ITS/RTS, conteúdo recolhido da EIOPA e registo das recolhas.
+DORA_REGISTO_INDEX = "finance_dora_registo"
+DORA_INCIDENTES_INDEX = "finance_dora_incidentes"
+DORA_RISCOS_INDEX = "finance_dora_riscos"
+DORA_WORKFLOWS_INDEX = "finance_dora_workflows"
+DORA_RELATORIOS_INDEX = "finance_dora_relatorios"
+DORA_CONTEUDO_INDEX = "finance_dora_conteudo"
+DORA_RECOLHAS_INDEX = "finance_dora_recolhas"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -475,6 +494,18 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     LORENZ_RUNS_INDEX: {
         # O título de cada execução é escrito com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    MUNICIPIOS_CONTACTOS_INDEX: {
+        # Nomes de municípios e de presidentes escritos com acentos.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -992,6 +1023,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
             }
         }
     },
+    EU_TAXONOMY_INDEX: {
+        # EU Taxonomy Navigator: nomes de atividades, setores e descrições em
+        # inglês e português — `world_folding` normaliza acentos e maiúsculas.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
     ESG_EMPRESAS_INDEX: {
         # Nomes de empresas e de setores vêm com acentos («Águas de Portugal»).
         "analysis": {
@@ -1016,6 +1060,72 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     ESG_RECOLHAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_REGISTO_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_INCIDENTES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_RISCOS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_CONTEUDO_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_WORKFLOWS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DORA_RELATORIOS_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2099,6 +2209,39 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # EU Taxonomy Navigator: atividades, objetivos e setores oficiais do Compass
+    # da Comissão Europeia. Texto original em inglês e tradução em português,
+    # com pesquisa em ambos os idiomas por `world_folding`.
+    eu_taxonomy_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "activity_id": {"type": "integer"},
+            "objective_id": {"type": "integer"},
+            "sector_id": {"type": "integer"},
+            "name_en": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "name_pt": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "sector_en": {"type": "keyword"},
+            "sector_pt": {"type": "keyword"},
+            "description_en": {"type": "text", "analyzer": "world_folding"},
+            "description_pt": {"type": "text", "analyzer": "world_folding"},
+            "nace_codes": {"type": "keyword"},
+            "objectives": {
+                "type": "nested",
+                "properties": {
+                    "objective_id": {"type": "integer"},
+                    "objective_name_en": {"type": "keyword"},
+                    "objective_name_pt": {"type": "keyword"},
+                    "objective_short_en": {"type": "keyword"},
+                    "objective_short_pt": {"type": "keyword"},
+                    "contribution_type_en": {"type": "keyword"},
+                    "contribution_type_pt": {"type": "keyword"},
+                },
+            },
+            "url": {"type": "keyword", "ignore_above": 1024},
+            "synced_at": {"type": "date"},
+        }
+    }
+
     # Recolha (scraping): cada documento é um item extraído por uma "fonte".
     # Os campos variam de site para site e ficam em `data` (`flattened`), o que
     # permite pesquisar e agregar por qualquer campo declarado na definição da
@@ -3171,6 +3314,51 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    municipios_contactos_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "distrito": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito_keyword": {"type": "keyword", "ignore_above": 128},
+            "municipio": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "municipio_keyword": {"type": "keyword", "ignore_above": 128},
+            "codigo_ine": {"type": "keyword", "ignore_above": 16},
+            "nif": {"type": "keyword", "ignore_above": 32},
+            "nome_presidente": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "nome_presidente_keyword": {"type": "keyword", "ignore_above": 256},
+            "morada": {"type": "text", "analyzer": "world_folding"},
+            "codigo_postal": {"type": "keyword", "ignore_above": 16},
+            "localidade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "email": {"type": "keyword", "ignore_above": 256},
+            "telefone": {"type": "keyword", "ignore_above": 32},
+            "site": {"type": "keyword", "ignore_above": 512, "index": False},
+            "site_domain": {"type": "keyword", "ignore_above": 128},
+            "slug": {"type": "keyword", "ignore_above": 128},
+            "fonte": {"type": "keyword", "ignore_above": 256},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     # Abonos dos eleitos locais: uma linha da tabela oficial por documento.
     remuneracoes_mappings = {
         "properties": {
@@ -3931,6 +4119,124 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # DORA: Register of Information, incidentes, riscos, workflows, relatórios,
+    # conteúdo recolhido da EIOPA e registo das recolhas.
+    dora_registo_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "nome": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "descricao": {"type": "text", "analyzer": "world_folding"},
+            "entidade_id": {"type": "keyword"},
+            "entidade_nome": {"type": "text", "analyzer": "world_folding"},
+            "fornecedor_ids": {"type": "keyword"},
+            "sistema_ids": {"type": "keyword"},
+            "funcao_ids": {"type": "keyword"},
+            "contrato_ids": {"type": "keyword"},
+            "tags": {"type": "keyword"},
+            "dados": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_incidentes_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "titulo": {"type": "text", "analyzer": "world_folding"},
+            "descricao": {"type": "text", "analyzer": "world_folding"},
+            "referencia": {"type": "keyword"},
+            "severidade": {"type": "keyword"},
+            "estado": {"type": "keyword"},
+            "entidade_id": {"type": "keyword"},
+            "entidade_nome": {"type": "text", "analyzer": "world_folding"},
+            "sistema": {"type": "keyword"},
+            "data_inicio": {"type": "date"},
+            "data_fim": {"type": "date"},
+            "impacto_financeiro": {"type": "float"},
+            "dados": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_riscos_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "nome": {"type": "text", "analyzer": "world_folding"},
+            "descricao": {"type": "text", "analyzer": "world_folding"},
+            "categoria": {"type": "keyword"},
+            "impacto": {"type": "keyword"},
+            "probabilidade": {"type": "keyword"},
+            "ativo": {"type": "keyword"},
+            "entidade_id": {"type": "keyword"},
+            "entidade_nome": {"type": "text", "analyzer": "world_folding"},
+            "mitigacao": {"type": "text", "analyzer": "world_folding"},
+            "dados": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_workflows_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "nome": {"type": "text", "analyzer": "world_folding"},
+            "descricao": {"type": "text", "analyzer": "world_folding"},
+            "ativo": {"type": "boolean"},
+            "trigger": {"type": "keyword"},
+            "acao": {"type": "keyword"},
+            "passos": {"type": "object", "enabled": False},
+            "entidade_id": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_relatorios_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "nome": {"type": "text", "analyzer": "world_folding"},
+            "entidade_id": {"type": "keyword"},
+            "resumo": {"type": "object", "enabled": False},
+            "dados": {"type": "object", "enabled": False},
+            "formato": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_conteudo_mappings = {
+        "properties": {
+            "fonte": {"type": "keyword"},
+            "url": {"type": "keyword"},
+            "data_extracao": {"type": "date"},
+            "idioma": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "pilar_id": {"type": "keyword"},
+            "nivel": {"type": "keyword"},
+            "titulo": {"type": "text", "analyzer": "world_folding"},
+            "texto": {"type": "text", "analyzer": "world_folding"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    dora_recolhas_mappings = {
+        "properties": {
+            "fonte": {"type": "keyword"},
+            "url": {"type": "keyword"},
+            "data": {"type": "date"},
+            "total_docs": {"type": "integer"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -3988,6 +4294,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (VEREADORES_INDEX, vereadores_mappings),
         (MUNICIPIOS_DESPESAS_INDEX, municipios_despesas_mappings),
         (MUNICIPIO_PESSOAS_INDEX, municipio_pessoas_mappings),
+        (MUNICIPIOS_CONTACTOS_INDEX, municipios_contactos_mappings),
         # Abonos dos eleitos locais: a tabela oficial e o mesmo direito aplicado
         # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
         (REMUNERACOES_INDEX, remuneracoes_mappings),
@@ -4018,6 +4325,16 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (ESG_EMPRESAS_INDEX, esg_empresas_mappings),
         (ESG_INDICADORES_INDEX, esg_indicadores_mappings),
         (ESG_RECOLHAS_INDEX, esg_recolhas_mappings),
+        # DORA: Register of Information, incidentes, riscos, workflows,
+        # relatórios ITS/RTS, conteúdo da EIOPA e recolhas.
+        (DORA_REGISTO_INDEX, dora_registo_mappings),
+        (DORA_INCIDENTES_INDEX, dora_incidentes_mappings),
+        (DORA_RISCOS_INDEX, dora_riscos_mappings),
+        (DORA_WORKFLOWS_INDEX, dora_workflows_mappings),
+        (DORA_RELATORIOS_INDEX, dora_relatorios_mappings),
+        (DORA_CONTEUDO_INDEX, dora_conteudo_mappings),
+        (DORA_RECOLHAS_INDEX, dora_recolhas_mappings),
+        (EU_TAXONOMY_INDEX, eu_taxonomy_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -20778,5 +21095,174 @@ def benchmark_offers(
             "preco_min": (aggs.get("preco") or {}).get("min"),
             "preco_max": (aggs.get("preco") or {}).get("max"),
             "preco_medio": (aggs.get("preco") or {}).get("avg"),
+        },
+    }
+
+def index_eu_taxonomy(
+    items: List[Dict[str, Any]],
+    *,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa documentos do EU Taxonomy Navigator em `finance_eu_taxonomy`.
+
+    Cada documento e identificado por `kind` + identificador (`activity_id`,
+    `objective_id` ou `sector_id`). A indexacao atualiza documentos ja
+    existentes (refresh imediato para leitura consistente).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponivel", "indexed_count": 0, "error_count": 0}
+
+    ensure_indices(client)
+
+    actions: List[Dict[str, Any]] = []
+    for item in items or []:
+        kind = str(item.get("kind") or "").strip()
+        doc_id = None
+        if kind == "activity":
+            doc_id = f"activity-{item.get('activity_id')}"
+        elif kind == "objective":
+            doc_id = f"objective-{item.get('objective_id')}"
+        elif kind == "sector":
+            doc_id = f"sector-{item.get('sector_id')}"
+        if not doc_id or not kind:
+            continue
+        doc = {k: v for k, v in item.items() if k != "_id"}
+        actions.append({"_index": EU_TAXONOMY_INDEX, "_id": doc_id, "_source": doc})
+
+    if not actions:
+        return {"indexed_count": 0, "error_count": 0}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, stats_only=False, refresh=True)
+        error_list = errors if isinstance(errors, list) else []
+        if error_list:
+            logger.warning("EU Taxonomy: %s de %s itens falharam na indexacao", len(error_list), len(actions))
+        return {
+            "indexed_count": int(success),
+            "error_count": len(error_list),
+            "errors": [str(e.get("index", {}).get("error", e))[:300] for e in error_list[:5]],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
+
+
+def search_eu_taxonomy(
+    q: Optional[str] = None,
+    kind: Optional[str] = None,
+    sector: Optional[str] = None,
+    objective_id: Optional[int] = None,
+    nace: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort: str = "relevance",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa documentos do EU Taxonomy Navigator.
+
+    A pesquisa cobre nome e descricao em ingles e portugues. Devolve facetas
+    por tipo (`kind`), setor (`sector_pt`/`sector_en`) e objetivo ambiental.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponivel", "total": 0, "items": [], "facets": {}}
+
+    ensure_indices(client)
+
+    filters: List[Dict[str, Any]] = []
+    if kind:
+        filters.append({"term": {"kind": str(kind).lower()}})
+    if sector:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"term": {"sector_en": str(sector)}},
+                    {"term": {"sector_pt": str(sector)}},
+                    {"wildcard": {"sector_en": {"value": f"*{sector}*", "case_insensitive": True}}},
+                    {"wildcard": {"sector_pt": {"value": f"*{sector}*", "case_insensitive": True}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    if objective_id is not None:
+        filters.append({"nested": {"path": "objectives", "query": {"term": {"objectives.objective_id": int(objective_id)}}}})
+    if nace:
+        prefix = str(nace).upper().replace(".", "").replace("-", "")
+        filters.append({"prefix": {"nace_codes": prefix}})
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        folded = _accent_fold_terms(q)
+        terms = [q, folded] if folded and folded != q else [q]
+        should: List[Dict[str, Any]] = []
+        for term in terms:
+            should.extend([
+                {"match_phrase": {"name_en": {"query": term, "boost": 6}}},
+                {"match_phrase": {"name_pt": {"query": term, "boost": 6}}},
+                {"match": {"name_en": {"query": term, "operator": "and", "boost": 3}}},
+                {"match": {"name_pt": {"query": term, "operator": "and", "boost": 3}}},
+                {"match": {"description_en": {"query": term, "boost": 1}}},
+                {"match": {"description_pt": {"query": term, "boost": 1}}},
+            ])
+        must.append({"bool": {"should": should, "minimum_should_match": 1}})
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    sort_spec: List[Dict[str, Any]]
+    if sort == "name":
+        sort_spec = [{"name_en.keyword": {"order": "asc"}}]
+    elif sort == "sector":
+        sort_spec = [{"sector_en.keyword": {"order": "asc"}}, {"name_en.keyword": {"order": "asc"}}]
+    else:
+        sort_spec = ["_score", {"name_en.keyword": {"order": "asc"}}]
+
+    body: Dict[str, Any] = {
+        "size": max(0, min(int(size), 200)),
+        "from": max(0, int(from_)),
+        "query": query,
+        "sort": sort_spec,
+        "track_total_hits": True,
+        "aggs": {
+            "kinds": {"terms": {"field": "kind", "size": 10}},
+            "sectors": {"terms": {"field": "sector_pt", "size": 50}},
+            "objectives": {
+                "nested": {"path": "objectives"},
+                "aggs": {
+                    "ids": {"terms": {"field": "objectives.objective_id", "size": 10}},
+                    "names": {"terms": {"field": "objectives.objective_name_pt", "size": 10}},
+                },
+            },
+        },
+    }
+
+    try:
+        resp = client.search(index=EU_TAXONOMY_INDEX, body=body)
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": [], "facets": {}}
+
+    aggs = resp.get("aggregations", {}) or {}
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+
+    obj_aggs = aggs.get("objectives", {}) or {}
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])],
+        "facets": {
+            "kinds": [{"key": b.get("key"), "count": b.get("doc_count")} for b in (aggs.get("kinds") or {}).get("buckets", []) if b.get("key")],
+            "sectors": [{"key": b.get("key"), "count": b.get("doc_count")} for b in (aggs.get("sectors") or {}).get("buckets", []) if b.get("key")],
+            "objectives": [
+                {
+                    "id": b.get("key"),
+                    "count": b.get("doc_count"),
+                }
+                for b in (obj_aggs.get("ids") or {}).get("buckets", [])
+                if b.get("key") is not None
+            ],
         },
     }

@@ -132,6 +132,12 @@ export const APP_MODULES: AppModule[] = [
     ids: ["esg"],
   },
   {
+    id: "dora",
+    label: "DORA",
+    hint: "Resiliência operacional digital: Register of Information, incidentes ICT, riscos, workflows e relatórios ITS/RTS",
+    ids: ["dora"],
+  },
+  {
     id: "pessoas",
     label: "Pessoas",
     hint: "Pessoas, cargos, políticos e as contas dos partidos",
@@ -141,7 +147,7 @@ export const APP_MODULES: AppModule[] = [
     id: "dados-publicos",
     label: "Dados públicos",
     hint: "Insolvências, citações editais, contribuintes, societário, registos LEI, subvenções, remunerações dos eleitos locais, despesas das câmaras municipais, comunicação social (ERC) e o Governo",
-    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "administracao-central", "governo", "remuneracoes", "municipios-despesas", "erc", "vortal"],
+    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "administracao-central", "governo", "remuneracoes", "municipios-despesas", "municipios-contactos", "erc", "vortal"],
   },
   {
     id: "mercados",

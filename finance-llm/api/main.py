@@ -323,6 +323,7 @@ from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
 from api.municipios_routes import router as municipios_router
 from api.municipio_pessoas_routes import router as municipio_pessoas_router
+from api.municipios_contactos_routes import router as municipios_contactos_router
 # Abonos dos eleitos locais (Lei n.º 11/96): a tabela oficial por escalão de
 # eleitores cruzada com o recenseamento do MAI, para se saber quanto cabe a cada
 # concelho e a cada freguesia; `finance_remuneracoes` + `finance_remuneracoes_territorios`.
@@ -344,6 +345,9 @@ from api.risco_routes import router as risco_router
 # ESG: score por empresa (pilares E/S/G), benchmark de setor e dimensão,
 # indicadores dos relatórios de sustentabilidade e carteira de fornecedores.
 from api.esg_routes import router as esg_router
+# EU Taxonomy Navigator: atividades, objetivos e setores oficiais do Compass da
+# Comissão Europeia — recolha, tradução PT, índice próprio e pesquisa.
+from api.eu_taxonomy_routes import router as eu_taxonomy_router
 # MiroFish: simulações de previsão por enxame de agentes alimentadas com dados
 # do sistema (ficha de empresa, tema do Pesquisa 360, notícias, documentos).
 from api.mirofish_routes import router as mirofish_router
@@ -408,6 +412,9 @@ from api.benchmarks_routes import router as benchmarks_router, site_router as be
 # Importação dos Contratos Públicos do Portal Base (IMPIC) publicados em dados.gov.pt:
 # catálogo dos ficheiros por ano, formato do ZIP e importação para o Elasticsearch.
 from api.base_impic_routes import router as base_impic_router
+# DORA: Digital Operational Resilience Act — Register of Information, incidentes,
+# riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
+from api.dora_routes import router as dora_router
 from api import auth_service as auth
 from api import events_service as events
 from api import permissions_service as permissions
@@ -924,6 +931,7 @@ app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
 app.include_router(municipios_router)
 app.include_router(municipio_pessoas_router)
+app.include_router(municipios_contactos_router)
 # Remunerações dos eleitos locais: tabela de abonos + eleitores/polígonos por
 # concelho e freguesia (recenseamento do MAI).
 app.include_router(remuneracoes_router)
@@ -949,6 +957,9 @@ app.include_router(risco_router)
 # ESG: leitura aberta em `/esg/*`; ingestão de indicadores e cálculo em lote
 # exigem sessão (escrita no módulo `esg`).
 app.include_router(esg_router)
+# EU Taxonomy Navigator: leitura aberta em `/eu-taxonomy/*`; recolha e tradução
+# exigem sessão (escrita no módulo `eu-taxonomy`).
+app.include_router(eu_taxonomy_router)
 # MiroFish: semente a partir dos dados do sistema + condução da simulação
 # (projeto → grafo no Zep → personas → execução → relatório).
 app.include_router(mirofish_router)
@@ -986,6 +997,9 @@ app.include_router(benchmark_router)
 app.include_router(administracao_central_router)
 # Governo (`/governo/*`): visão geral, membros, fichas e grafo de relações.
 app.include_router(governo_router)
+# DORA: Digital Operational Resilience Act — Register of Information, incidentes,
+# riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
+app.include_router(dora_router)
 
 
 @app.get("/governo")
@@ -1014,6 +1028,13 @@ def serve_benchmark_spa_page(path: str = ""):
 @app.get("/esg/{path:path}")
 def serve_esg_spa_page(request: Request, path: str = ""):
     """Página do módulo **ESG** — score, dossiê, carteira de fornecedores e fontes."""
+    return spa_page_response(str(request.url.path))
+
+
+@app.get("/dora")
+@app.get("/dora/{path:path}")
+def serve_dora_spa_page(request: Request, path: str = ""):
+    """Página do módulo **DORA** — Register of Information, incidentes, riscos, workflows e relatórios."""
     return spa_page_response(str(request.url.path))
 
 
