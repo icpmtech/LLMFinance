@@ -15,11 +15,13 @@ resposta varia entre dezenas de segundos e alguns minutos, conforme a fila.
 """
 from __future__ import annotations
 
-import inspect
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import requests
 
 from collectors.publicacoes_mj import (
     PAGE,
@@ -30,6 +32,12 @@ from collectors.publicacoes_mj import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: API JSON da 2captcha, **por HTTPS e com timeout**. O pacote opcional
+#: `2captcha-python` falava `http://` sem timeout nem tratamento de erros, pelo
+#: que uma ligação cortada aparecia como «2captcha não conseguiu resolver o
+#: reCAPTCHA: RemoteDisconnected» — sem sequer tentar de novo.
+API_2CAPTCHA = "https://api.2captcha.com"
 
 #: Ficheiros onde a solução guarda as chaves (o `.env` de `finance-llm/` e o da
 #: raiz do projeto estão no `.gitignore`). Servem de fallback quando a variável
@@ -106,6 +114,128 @@ def proxy_2captcha(proxy: Optional[str] = None) -> Optional[str]:
     return None
 
 
+def _post_2captcha(
+    caminho: str,
+    payload: Dict[str, Any],
+    *,
+    timeout: float = 30.0,
+    tentativas: int = 3,
+) -> Dict[str, Any]:
+    """POST à API JSON da 2captcha, com timeout e novas tentativas.
+
+    Erros de rede (`RemoteDisconnected`, timeouts, DNS) são transitórios e não
+    devem deitar fora uma recolha: tentam-se `tentativas` vezes com espera
+    crescente antes de desistir.
+    """
+    ultimo: Optional[Exception] = None
+    for tentativa in range(max(1, tentativas)):
+        try:
+            resposta = requests.post(f"{API_2CAPTCHA}{caminho}", json=payload, timeout=timeout)
+            resposta.raise_for_status()
+            return resposta.json()
+        except (requests.RequestException, ValueError) as exc:
+            ultimo = exc
+            if tentativa + 1 < tentativas:
+                pausa = 2.0 * (tentativa + 1)
+                logger.warning(
+                    "2captcha %s falhou (%s); nova tentativa em %.0fs (%s/%s)",
+                    caminho, exc, pausa, tentativa + 1, tentativas,
+                )
+                time.sleep(pausa)
+    raise CaptchaRequiredError(f"2captcha indisponível em {caminho}: {ultimo}") from ultimo
+
+
+class TwoCaptchaDireto:
+    """Cliente mínimo da API JSON da 2captcha (sem pacotes opcionais)."""
+
+    #: Códigos em que vale a pena submeter a tarefa outra vez (rede/servidor).
+    _RECUPERAVEIS = {
+        "ERROR_NO_SLOT_AVAILABLE",
+        "ERROR_SERVER_ERROR",
+        "ERROR_INTERNAL_SERVER_ERROR",
+        "ERROR_BAD_PROXY",
+    }
+
+    def __init__(self, api_key: str, *, timeout: float = 30.0, poll_interval: float = 5.0):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+
+    def saldo(self) -> Optional[float]:
+        """Saldo da conta (útil nos diagnósticos)."""
+        dados = _post_2captcha("/getBalance", {"clientKey": self.api_key}, timeout=self.timeout)
+        if dados.get("errorId"):
+            raise CaptchaRequiredError(
+                f"2captcha recusou o pedido de saldo: {dados.get('errorCode')} — {dados.get('errorDescription')}"
+            )
+        valor = dados.get("balance")
+        return float(valor) if valor is not None else None
+
+    def resolver_recaptcha(
+        self,
+        *,
+        sitekey: str,
+        page_url: str,
+        invisivel: bool = False,
+        limite: float = 180.0,
+    ) -> str:
+        """Cria a tarefa de reCAPTCHA v2 e espera pelo token (até `limite` segundos)."""
+        limite = max(30.0, float(limite))
+        criada: Dict[str, Any] = {}
+        for tentativa in range(3):
+            criada = _post_2captcha(
+                "/createTask",
+                {
+                    "clientKey": self.api_key,
+                    "task": {
+                        "type": "RecaptchaV2TaskProxyless",
+                        "websiteURL": page_url,
+                        "websiteKey": sitekey,
+                        "isInvisible": invisivel,
+                    },
+                },
+                timeout=self.timeout,
+            )
+            codigo = str(criada.get("errorCode") or "")
+            if not criada.get("errorId"):
+                break
+            if codigo in self._RECUPERAVEIS and tentativa < 2:
+                pausa = 10.0 * (tentativa + 1)
+                logger.warning("2captcha sem vaga (%s); nova tentativa em %.0fs", codigo, pausa)
+                time.sleep(pausa)
+                continue
+            raise CaptchaRequiredError(
+                f"2captcha recusou a tarefa: {codigo} — {criada.get('errorDescription')}"
+            )
+
+        task_id = criada.get("taskId")
+        if task_id is None:
+            raise CaptchaRequiredError(f"2captcha não devolveu `taskId`: {criada}")
+
+        fim = time.monotonic() + limite
+        while time.monotonic() < fim:
+            time.sleep(self.poll_interval)
+            estado = _post_2captcha(
+                "/getTaskResult",
+                {"clientKey": self.api_key, "taskId": task_id},
+                timeout=self.timeout,
+            )
+            if estado.get("errorId"):
+                raise CaptchaRequiredError(
+                    f"2captcha falhou a tarefa {task_id}: {estado.get('errorCode')} — "
+                    f"{estado.get('errorDescription')}"
+                )
+            if estado.get("status") == "ready":
+                solucao = estado.get("solution") or {}
+                token = solucao.get("gRecaptchaResponse") or solucao.get("token")
+                if not token:
+                    raise CaptchaRequiredError(f"2captcha devolveu uma solução vazia: {estado}")
+                return str(token)
+        raise CaptchaRequiredError(
+            f"2captcha não resolveu o reCAPTCHA em {int(limite)}s (tarefa {task_id} continua pendente)"
+        )
+
+
 class PublicacoesMjCaptchaClient(PublicacoesMjClient):
     """Cliente do MJ com resolução automática de reCAPTCHA via 2captcha."""
 
@@ -128,81 +258,30 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
                 "TWOCAPTCHA_API_KEY / TWOCAPTCHA_KEY ou escreva-a no `.env` de finance-llm."
             )
         self.recaptcha_timeout = recaptcha_timeout
-        self._solver: Optional[Any] = None
+        self._solver: Optional[TwoCaptchaDireto] = None
         if debug:
             os.environ["MJ_DEBUG"] = "1"
             self._set_debug_enabled(True)
 
-    def _get_solver(self) -> Any:
-        """Importa a biblioteca twocaptcha só quando necessário (lazy).
-
-        O pacote distribui-se como **`2captcha-python`** mas importa-se como
-        `twocaptcha`; sem ele instalado o erro nativo («No module named
-        'twocaptcha'») não dizia o que fazer — aqui dá-se a instrução.
-        """
+    def _get_solver(self) -> TwoCaptchaDireto:
+        """Cliente da 2captcha (criado uma vez por recolha)."""
         if self._solver is None:
-            try:
-                from twocaptcha import TwoCaptcha
-            except ModuleNotFoundError as exc:  # dependência opcional
-                raise CaptchaRequiredError(
-                    "Pacote `2captcha-python` em falta (módulo `twocaptcha`). "
-                    "Instale com `pip install 2captcha-python` e reinicie o backend."
-                ) from exc
-
-            # O nome do intervalo de polling mudou entre versões do pacote
-            # (`sleep_time` em 1.x, `pollingInterval` em 2.x): passa-se o que a
-            # assinatura aceitar em vez de partir com `TypeError`.
-            params: Dict[str, Any] = {}
-            try:
-                assinatura = inspect.signature(TwoCaptcha.__init__)
-                if "pollingInterval" in assinatura.parameters:
-                    params["pollingInterval"] = 5
-                elif "sleep_time" in assinatura.parameters:
-                    params["sleep_time"] = 5
-            except (TypeError, ValueError):  # pragma: no cover - assinatura opaca
-                pass
-
-            self._solver = TwoCaptcha(self.api_key, **params)
+            self._solver = TwoCaptchaDireto(self.api_key, timeout=30.0, poll_interval=5.0)
         return self._solver
-
-    @staticmethod
-    def _extrair_token(resposta: Any) -> Optional[str]:
-        """Normaliza a resposta do solver (`str` ou dicionário com `code`)."""
-        if resposta is None:
-            return None
-        if isinstance(resposta, str):
-            return resposta.strip() or None
-        if isinstance(resposta, dict):
-            for chave in ("code", "token", "gRecaptchaResponse"):
-                valor = resposta.get(chave)
-                if valor:
-                    return str(valor).strip()
-        return None
-
-    def _resolver_com_solver(self, solver: Any, page_url: str) -> Optional[str]:
-        """Chama o solver tolerando as duas APIs conhecidas do pacote."""
-        if hasattr(solver, "solve_captcha"):
-            return self._extrair_token(
-                solver.solve_captcha(site_key=RECAPTCHA_SITEKEY, page_url=page_url)
-            )
-        if hasattr(solver, "recaptcha"):
-            return self._extrair_token(
-                solver.recaptcha(sitekey=RECAPTCHA_SITEKEY, url=page_url, version="v2")
-            )
-        raise CaptchaRequiredError(
-            "O solver da 2captcha instalado não expõe `solve_captcha` nem `recaptcha`; "
-            "atualize o pacote `2captcha-python`."
-        )
 
     def solve_recaptcha(self, page_url: str = PAGE) -> str:
         """Resolve o reCAPTCHA v2 do portal e devolve o token."""
         solver = self._get_solver()
         logger.info("A resolver reCAPTCHA via 2captcha para %s (sitekey=%s)", page_url, RECAPTCHA_SITEKEY)
         try:
-            token = self._resolver_com_solver(solver, page_url)
+            token = solver.resolver_recaptcha(
+                sitekey=RECAPTCHA_SITEKEY,
+                page_url=page_url,
+                limite=float(self.recaptcha_timeout or 180),
+            )
         except CaptchaRequiredError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - a falha do solver nunca pode passar crua
             logger.exception("Falha ao resolver reCAPTCHA via 2captcha")
             raise CaptchaRequiredError(f"2captcha não conseguiu resolver o reCAPTCHA: {exc}") from exc
 

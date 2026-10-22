@@ -900,6 +900,14 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
             "details": detalhes,
             "errors": erros,
         }
+        if erros and not detalhes and not publicacoes:
+            # Nada foi recolhido e há uma causa: o trabalho não é um sucesso
+            # silencioso. Uma recolha de várias entidades com algumas falhas
+            # continua «done» (com os erros no resultado); uma recolha em que
+            # **tudo** falhou é um erro, com a causa à cabeça.
+            job["status"] = "error"
+            job["error"] = str(erros[0].get("error") or "A recolha não devolveu publicações")
+            progress["phase"] = "erro"
     except Exception as exc:  # noqa: BLE001 - o trabalho nunca pode morrer em silêncio
         logger.exception("Recolha massiva falhou")
         job["status"] = "error"
