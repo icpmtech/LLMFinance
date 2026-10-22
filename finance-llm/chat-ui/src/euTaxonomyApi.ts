@@ -80,9 +80,9 @@ export type EuTaxonomySectorCount = {
 };
 
 export type EuTaxonomyPanorama = {
-  source: EuTaxonomySource;
-  totals: { activities: number; objectives: number; sectors: number };
-  objectives: {
+  source?: EuTaxonomySource;
+  totals: { activities?: number; objectives?: number; sectors?: number };
+  objectives?: {
     id: number;
     name_en: string;
     name_pt: string;
@@ -90,7 +90,9 @@ export type EuTaxonomyPanorama = {
     short_pt: string;
     color: string;
   }[];
-  sectors: EuTaxonomySectorCount[];
+  sectors?: EuTaxonomySectorCount[];
+  /** Preenchido quando ainda não existe snapshot ou a leitura falhou. */
+  error?: string;
 };
 
 export type EuTaxonomySearchResponse = {

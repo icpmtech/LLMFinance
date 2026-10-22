@@ -123,11 +123,16 @@ def pesquisar(
 def panorama() -> Dict[str, Any]:
     """Devolve a visão geral do Compass: objetivos, setores e contagens."""
     if not navigator.SNAPSHOT_PATH.exists():
-        return {"error": "Snapshot ainda não existe. Execute a recolha primeiro.", "totals": {}}
+        return {
+            "error": "Snapshot ainda não existe. Execute a recolha primeiro.",
+            "totals": {},
+            "objectives": [],
+            "sectors": [],
+        }
     try:
         snapshot = json.loads(navigator.SNAPSHOT_PATH.read_text(encoding="utf-8"))
     except Exception as exc:
-        return {"error": str(exc), "totals": {}}
+        return {"error": str(exc), "totals": {}, "objectives": [], "sectors": []}
 
     setores: Dict[str, Dict[str, Any]] = {}
     for atividade in snapshot.get("activities", []):

@@ -178,7 +178,13 @@ export default function EuTaxonomyPage() {
 
   const loadPanorama = useCallback(async () => {
     try {
-      setPanorama(await getEuTaxonomyPanorama());
+      const dados = await getEuTaxonomyPanorama();
+      if (dados.error) {
+        setPanorama(null);
+        setError(dados.error);
+        return;
+      }
+      setPanorama(dados);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível carregar o panorama da Taxonomia.");
     }
@@ -370,9 +376,9 @@ export default function EuTaxonomyPage() {
 
       {panorama ? (
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi label="Atividades" value={num(panorama.totals.activities)} sub="oficiais do Compass" />
-          <Kpi label="Objetivos" value={num(panorama.totals.objectives)} sub="ambientais" />
-          <Kpi label="Setores" value={num(panorama.totals.sectors)} sub="económicos" />
+          <Kpi label="Atividades" value={num(panorama.totals?.activities)} sub="oficiais do Compass" />
+          <Kpi label="Objetivos" value={num(panorama.totals?.objectives)} sub="ambientais" />
+          <Kpi label="Setores" value={num(panorama.totals?.sectors)} sub="económicos" />
           <Kpi
             label="Indexados"
             value={num(status?.count)}
@@ -388,7 +394,7 @@ export default function EuTaxonomyPage() {
             Objetivos ambientais
           </h2>
           <div className="flex flex-wrap gap-2">
-            {panorama.objectives.map((objetivo) => {
+            {(panorama.objectives ?? []).map((objetivo) => {
               const ativo = objectiveId === objetivo.id;
               return (
                 <button
