@@ -456,7 +456,8 @@ def societario_targets_filtered(
     - ``ano_ini``/``ano_fim``: só entidades com contratos nesses anos (agregação no
       índice de contratos, ver `companies_with_contracts_in_years`);
     - ``q``: firma/denominação (ou NIF, se forem 9 dígitos);
-    - ``nifs``: lista explícita de empresas (interseção com os restantes filtros).
+    - ``nifs``: lista explícita de empresas; substitui os filtros de
+      elegibilidade (país, NIF e contratos), porque é o próprio pedido.
 
     Cada item diz quantos contratos **do período** a empresa tem
     (``period_contracts``/``period_value``), além do total no cadastro e das
@@ -476,11 +477,21 @@ def societario_targets_filtered(
         if not period:
             return {"items": [], "total": 0, "from": from_, "size": limit, "period_entities": 0}
 
-    filters: List[Dict[str, Any]] = [
-        {"term": {"country_code": "PT"}},
-        {"term": {"has_nif": True}},
-        {"range": {"contracts_count": {"gte": max(1, int(min_contracts or 1))}}},
-    ]
+    filters: List[Dict[str, Any]] = []
+    if not executar:
+        # Universo por omissão: cadastro do Portal BASE (portuguesas, com NIF e
+        # com contratos). Com ``nifs`` explícitos a lista é, por si só, o
+        # critério: quem pede a recolha de uma empresa concreta espera que ela
+        # seja recolhida mesmo sem contratos públicos ou sem caracterização no
+        # cadastro (era isto que fazia a ficha responder «Nenhuma entidade
+        # elegível» a empresas sem contratos).
+        filters.extend(
+            [
+                {"term": {"country_code": "PT"}},
+                {"term": {"has_nif": True}},
+                {"range": {"contracts_count": {"gte": max(1, int(min_contracts or 1))}}},
+            ]
+        )
     if min_value:
         filters.append({"range": {"total_value": {"gte": float(min_value)}}})
 

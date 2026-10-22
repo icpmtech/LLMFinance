@@ -694,6 +694,18 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
         if alvos.get("error"):
             raise RuntimeError(alvos["error"])
         entidades = alvos.get("items") or []
+        if not entidades and payload.get("nifs"):
+            # Pedido explícito de uma empresa (ex.: «Obter dados societários» na
+            # ficha): o NIF é o critério, mesmo que a empresa não esteja no
+            # cadastro de contratos. Sem isto o trabalho acabava logo em
+            # «Nenhuma entidade elegível» e o botão prometia uma recolha que
+            # nunca chegava a correr.
+            limite = max(1, int(payload.get("max_entities") or 1))
+            entidades = [
+                {"nif": str(nif).strip(), "name": None}
+                for nif in payload.get("nifs") or []
+                if str(nif).strip()
+            ][:limite]
         progress["entities_total"] = len(entidades)
         progress["phase"] = "a recolher"
 
@@ -855,6 +867,11 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
                 if limitado and payload.get("stop_on_captcha"):
                     progress["phase"] = "interrompido (portal a limitar)"
                     break
+            if items and (not nome or str(nome).strip() == nif):
+                # Sem caracterização no cadastro o «nome» é o próprio NIF; a
+                # primeira publicação traz a firma real — melhor para o JSON
+                # exportado e para o progresso do trabalho.
+                nome = next((item.get("entidade") for item in items if item.get("entidade")), nome)
             if items:
                 try:
                     written = write_export(nif, nome, items, criteria=alvos.get("filters"))

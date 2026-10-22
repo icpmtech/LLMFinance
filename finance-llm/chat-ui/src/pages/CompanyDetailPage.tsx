@@ -38,7 +38,7 @@ import { SeeAllContractsButton } from "./EntityContractsWindow";
 import EmpresaLogo from "../components/benchmark/EmpresaLogo";
 import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
 import { EntityEnrichmentCard, ContractDetailPanel } from "./EmpresasIQPage";
-import { obterDadosEmpresa } from "../societarioRecolhaApi";
+import { esperarRecolha, obterDadosEmpresa, recolhaTerminada } from "../societarioRecolhaApi";
 import { useWindowMode } from "../layout";
 import { openWindow } from "../windows";
 import type { CompanyDetail, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
@@ -291,25 +291,49 @@ export default function CompanyDetailPage({
 
   /**
    * Recolhe os dados societários (publicações do Ministério da Justiça) quando a
-   * ficha ainda não os tem. A recolha corre no servidor; a lista aparece quando
-   * estiver indexada, por isso recarrega-se algumas vezes em vez de esperar.
+   * ficha ainda não os tem. A recolha corre no servidor: segue-se o trabalho em
+   * vez de contar tentativas às cegas — o resultado real (incluindo erros do
+   * portal) é o que fica no aviso, em vez de um «recolha iniciada» otimista.
    */
   const obterSocietario = async () => {
     setAObterSocietario(true);
     setErroAcao(null);
     setAviso("A recolher publicações societárias no portal do Ministério da Justiça…");
     try {
-      await obterDadosEmpresa(nif);
-      for (let tentativa = 0; tentativa < 6; tentativa += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 4000));
-        const resposta = await getCompanySocietarioPublicacoes(nif, 0, 20).catch(() => null);
-        if (resposta && resposta.total > 0) {
-          setSocietario(resposta);
-          setAviso(`${resposta.total} publicações societárias recolhidas.`);
-          return;
-        }
+      const job = await obterDadosEmpresa(nif);
+      const terminado = await esperarRecolha(job, {
+        // A recolha de uma empresa pode arrastar-se enquanto o portal do MJ
+        // limita os pedidos (as pausas são de ~1,5 min): o aviso vai mostrando a
+        // fase, por isso vale a pena esperar até ao limite do trabalho.
+        limiteMs: 360_000,
+        aoProgredir: (atual) => {
+          const fase = atual.progress?.phase;
+          if (fase) setAviso(`A recolher dados societários — ${fase}…`);
+        },
+      });
+
+      if (!recolhaTerminada(terminado)) {
+        setAviso("Recolha a continuar no servidor. As publicações aparecem aqui assim que estiverem indexadas.");
+        return;
       }
-      setAviso("Recolha iniciada. As publicações aparecem aqui assim que ficarem indexadas (pode levar alguns minutos).");
+      if (terminado.status === "error") {
+        throw new Error(terminado.error || "A recolha falhou no servidor");
+      }
+
+      const erroRecolha = terminado.result?.errors?.[0]?.error;
+      if (erroRecolha) {
+        setErroAcao(`Recolha de ${nif}: ${erroRecolha}`);
+        setAviso(null);
+        return;
+      }
+
+      const resposta = await getCompanySocietarioPublicacoes(nif, 0, 20).catch(() => null);
+      if (resposta && resposta.total > 0) {
+        setSocietario(resposta);
+        setAviso(`${resposta.total} publicações societárias recolhidas.`);
+      } else {
+        setAviso("O portal do Ministério da Justiça não devolveu publicações societárias para esta empresa.");
+      }
     } catch (err) {
       setErroAcao(err instanceof Error ? err.message : "Erro ao obter os dados societários");
       setAviso(null);

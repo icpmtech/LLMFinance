@@ -415,3 +415,37 @@ export async function apagarRecolhaFicheiro(nif: string): Promise<{ nif: string;
   });
   return ler<{ nif: string; removed: boolean }>(res, "Erro ao apagar o ficheiro exportado");
 }
+
+/** Estados em que o trabalho já não vai mudar sozinho. */
+const ESTADOS_FINAIS = new Set(["done", "error", "stopped"]);
+
+export function recolhaTerminada(job: RecolhaJob | null | undefined): boolean {
+  return ESTADOS_FINAIS.has(String(job?.status ?? "").toLowerCase());
+}
+
+/**
+ * Segue um trabalho de recolha até terminar (ou até esgotar `limiteMs`).
+ *
+ * A recolha corre no servidor: sem isto a ficha contava tentativas às cegas e
+ * anunciava «Recolha iniciada» mesmo quando o servidor não tinha nada para
+ * recolher ou tinha falhado (rate-limit, captcha em baixo).
+ */
+export async function esperarRecolha(
+  job: RecolhaJob,
+  opcoes: { intervaloMs?: number; limiteMs?: number; aoProgredir?: (job: RecolhaJob) => void } = {},
+): Promise<RecolhaJob> {
+  const intervalo = Math.max(1000, opcoes.intervaloMs ?? 3000);
+  const limite = Math.max(intervalo, opcoes.limiteMs ?? 90_000);
+  const inicio = Date.now();
+  let atual = job;
+  while (!recolhaTerminada(atual) && Date.now() - inicio < limite) {
+    await new Promise((resolve) => setTimeout(resolve, intervalo));
+    try {
+      atual = await getRecolhaJob(job.job_id);
+    } catch {
+      // Um soluço de rede não interrompe a espera: mantém-se o último estado.
+    }
+    opcoes.aoProgredir?.(atual);
+  }
+  return atual;
+}
