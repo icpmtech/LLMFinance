@@ -3,27 +3,22 @@
  * incidentes ICT, riscos ICT, workflows de conformidade, relatórios ITS/RTS e
  * conteúdo original/traduzido da EIOPA.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
-  Bot,
   FileText,
-  Filter,
-  Globe2,
   Layers,
   Loader2,
   Plus,
   RefreshCw,
-  Scale,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Workflow,
 } from "lucide-react";
 
 import type {
-  DoraConteudoIdioma,
+  DoraConteudo,
   DoraIncidente,
   DoraMeta,
   DoraRegistoItem,
@@ -34,7 +29,6 @@ import type {
 import {
   generateDoraRelatorio,
   getDoraMeta,
-  ingestDoraConteudo,
   saveDoraIncidente,
   saveDoraRegisto,
   saveDoraRisco,
@@ -127,7 +121,7 @@ function RegisterTab() {
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<"" | DoraRegistoItem["tipo"]>("");
   const [items, setItems] = useState<DoraRegistoItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [, setTotal] = useState(0);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
   const [modal, setModal] = useState<DoraRegistoItem | null>(null);
@@ -772,7 +766,7 @@ function ConteudoTab({ conteudo }: { conteudo: DoraConteudo | undefined }) {
     pesquisar();
   }, [pesquisar]);
 
-  const c = conteudo?.[idioma];
+  const c = idioma === "pt" ? conteudo?.pt : conteudo?.original;
   return (
     <div className="space-y-4">
       <SectionCard title="Conteúdo EIOPA" subtitle="Original e tradução PT do portal DORA" icon={BookOpen} actions={<IdiomaSwitch idioma={idioma} setIdioma={setIdioma} />}>
