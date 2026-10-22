@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -42,6 +43,14 @@ FACTS_TIMEOUT = 30.0
 # As agregações dos contratos são pesadas a frio (primeira consulta depois de
 # arrancar o Elasticsearch); não podem perder-se por 30 segundos.
 FACTS_TIMEOUT_HEAVY = 50.0
+
+# Ordem de chamada do Hermes Agent autónomo (container Docker).
+# True  → tenta primeiro o agente do container; se falhar continua na plataforma.
+# False → investigação normal da plataforma (comportamento anterior).
+AGENT_FIRST = True
+# Prazo total para o agente autónomo resolver a pergunta. Esgotado, a
+# investigação segue na plataforma (a página não pode ficar à espera do agente).
+AGENT_ASK_TIMEOUT = float(os.getenv("HERMES_AGENT_ASK_TIMEOUT", "120"))
 
 # Itens de factos: pontuação alta para entrarem primeiro nas citações [n].
 FACT_SOURCE = "Plataforma IQ OS · factos"
@@ -1674,6 +1683,105 @@ def _per_source(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(merged.values(), key=lambda entry: -entry["items"])
 
 
+async def _ask_container_agent(
+    question: str,
+    *,
+    depth_label: str,
+    history: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Pergunta ao **Hermes Agent do container** (`hermes-agent:8642`).
+
+    É o agente autónomo da imagem Docker — decide sozinho que skills e toolsets
+    usar (browser, terminal, ficheiros, código…). A resposta vem no mesmo formato
+    que a investigação da plataforma, para a página não mudar.
+
+    Devolve `None` (e a investigação segue pela pipeline da plataforma) quando o
+    agente não está acessível ou não responde dentro do prazo: o container pode
+    estar em baixo e a página tem de continuar a responder.
+    """
+    if not AGENT_FIRST:
+        return None
+    from api import jarvis_agent  # noqa: PLC0415
+
+    started = time.perf_counter()
+    coro = jarvis_agent.ask(
+        question,
+        timeout=AGENT_ASK_TIMEOUT,
+        history=[turn for turn in (history or []) if isinstance(turn, dict)][-6:],
+    )
+    try:
+        # O timeout do `httpx` só corta entre leituras: um agente que vai enviando
+        # dados (ou a explorar ferramentas) nunca o dispara. `wait_for` põe um
+        # prazo **total** e garante que a página não fica à espera para sempre.
+        resultado = await asyncio.wait_for(coro, timeout=AGENT_ASK_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.info(
+            "Hermes: o agente do container não respondeu em %.0fs; investigo na plataforma.",
+            AGENT_ASK_TIMEOUT,
+        )
+        return None
+    except Exception as exc:  # noqa: BLE001 — qualquer falha cai para a plataforma
+        logger.info("Hermes: agente do container indisponível (%s); investigo na plataforma.", exc)
+        return None
+
+    texto = str(resultado.get("answer") or "").strip()
+    if not texto:
+        logger.info("Hermes: o agente do container devolveu resposta vazia; investigo na plataforma.")
+        return None
+
+    ms = int((time.perf_counter() - started) * 1000)
+    modelo = str(resultado.get("model") or "hermes-agent")
+    passos = [{"label": f"Agente Hermes (tool calls: {resultado.get('tool_calls') or 0})"}]
+    return {
+        "id": f"hermes-{uuid4().hex[:12]}",
+        "question": question,
+        "topic": "agente",
+        "depth": "agente",
+        "depth_label": depth_label,
+        # O agente faz a recolha com as ferramentas dele: não há fontes numeradas
+        # da plataforma para citar, e dizê-lo evita uma lista de citações falsa.
+        "sources": [],
+        "plan": {"agente": "hermes-agent", "model": modelo},
+        "backend": {
+            "kind": "agent",
+            "provider": "hermes-agent",
+            "model": modelo,
+            "label": f"Hermes Agent ({modelo})",
+        },
+        "evidence": [],
+        "facts": {},
+        "skill": {
+            "id": "agent-hermes",
+            "name": "Hermes Agent (container)",
+            "mode": "agente autónomo",
+            "steps": [passo["label"] for passo in passos],
+        },
+        "metrics": [],
+        "steps": passos,
+        "per_source": [],
+        "notes": [
+            "Resposta do **Hermes Agent** que corre no container (`hermes-agent:8642`), com as "
+            "ferramentas dele — não pela recolha da plataforma."
+        ],
+        "warnings": [],
+        "followups": [],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "agent",
+        "text": texto,
+        "stats": {
+            "ms": ms,
+            "items": 0,
+            "evidence": 0,
+            "facts": 0,
+            "sources_queried": 0,
+            "sources_with_results": 0,
+            "subquestions": 0,
+            "tool_calls": int(resultado.get("tool_calls") or 0),
+            "tokens": int((resultado.get("usage") or {}).get("total_tokens") or 0),
+        },
+    }
+
+
 async def ask(
     question: str,
     *,
@@ -1685,7 +1793,13 @@ async def ask(
     session: Any = None,
     country: str = "PRT",
 ) -> Dict[str, Any]:
-    """Investiga a pergunta e devolve a resposta citada com as evidências."""
+    """Investiga a pergunta e devolve a resposta citada com as evidências.
+
+    Ordem: **agente «Hermes» da plataforma** (se estiver configurado) → **Hermes
+    Agent do container** (`hermes-agent:8642`) → investigação da plataforma
+    (recolha federada + modelo). As duas primeiras podem falhar sem quebrar a
+    página: cai-se para a seguinte.
+    """
     from api import ontology_ai as ai  # noqa: PLC0415
 
     clean = clean_question(question)
@@ -1710,6 +1824,16 @@ async def ask(
             }
     except Exception as exc:
         logger.warning("Falha ao executar agente Hermes dinâmico: %s", exc)
+
+    # 0) Hermes Agent do **container** (o agente autónomo da imagem Docker): se
+    #    estiver acessível responde ele, com as skills/toolsets dele; se não,
+    #    segue a investigação da plataforma.
+    spec_agente = DEPTH_BY_ID.get(str(depth or DEFAULT_DEPTH)) or DEPTH_BY_ID[DEFAULT_DEPTH]
+    resposta_agente = await _ask_container_agent(
+        clean, depth_label=spec_agente["label"], history=history
+    )
+    if resposta_agente:
+        return resposta_agente
 
     started = time.perf_counter()
     spec = DEPTH_BY_ID.get(str(depth or DEFAULT_DEPTH)) or DEPTH_BY_ID[DEFAULT_DEPTH]

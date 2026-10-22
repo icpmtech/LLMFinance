@@ -90,12 +90,15 @@ const MODE_TONE: Record<string, string> = {
   ai: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
   factual: "border-amber-400/30 bg-amber-400/10 text-amber-200",
   empty: "border-rose-400/30 bg-rose-400/10 text-rose-200",
+  // Resposta dada pelo agente autónomo do container (skills e ferramentas próprias).
+  agent: "border-violet-400/30 bg-violet-400/10 text-violet-200",
 };
 
 const MODE_LABEL: Record<string, string> = {
   ai: "resposta com IA",
   factual: "resposta factual",
   empty: "sem evidências",
+  agent: "Hermes Agent",
 };
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -396,9 +399,12 @@ export default function HermesPage() {
     );
   }, []);
 
-  const backendChip = meta?.backend;
+  // A última resposta pode ter vindo do agente autónomo (e não do modelo da
+  // plataforma): nesse caso o chip mostra o modelo que respondeu de facto.
+  const agentBackend = [...turns].reverse().find((turn) => turn.answer?.mode === "agent")?.answer?.backend;
+  const backendChip = agentBackend ?? meta?.backend;
   const backendText =
-    backendChip?.kind === "cloud"
+    backendChip?.kind === "cloud" || backendChip?.kind === "agent"
       ? `${backendChip.provider}${backendChip.model ? ` · ${backendChip.model}` : ""}`
       : backendChip?.kind === "unavailable"
         ? "sem chave de API"
@@ -419,11 +425,13 @@ export default function HermesPage() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span
             className={`hidden items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium @2xl:inline-flex ${
-              backendChip?.kind === "cloud"
-                ? "border-teal-500/25 bg-teal-500/10 text-teal-200"
-                : "border-amber-500/25 bg-amber-500/10 text-amber-200"
+              agentBackend
+                ? "border-violet-500/25 bg-violet-500/10 text-violet-200"
+                : backendChip?.kind === "cloud"
+                  ? "border-teal-500/25 bg-teal-500/10 text-teal-200"
+                  : "border-amber-500/25 bg-amber-500/10 text-amber-200"
             }`}
-            title={meta?.backend.note ?? "Modelo usado para redigir a resposta"}
+            title={agentBackend ? "Resposta dada pelo Hermes Agent do container" : meta?.backend.note ?? "Modelo usado para redigir a resposta"}
           >
             <Sparkles size={11} />
             {backendText}
@@ -765,7 +773,9 @@ export default function HermesPage() {
                               ? " · criada agora"
                               : turn.answer.skill.merged
                                 ? " · fundida na biblioteca"
-                                : ` · ${turn.answer.skill.uses} usos`}
+                                : typeof turn.answer.skill.uses === "number"
+                                  ? ` · ${turn.answer.skill.uses} usos`
+                                  : ""}
                           </summary>
                           {turn.answer.skill.when ? (
                             <p className="mt-1 text-[11px] text-muted-foreground">{turn.answer.skill.when}</p>
@@ -926,7 +936,7 @@ export default function HermesPage() {
               </div>
               <p className="mt-1.5 text-[10.5px] text-muted-foreground">
                 {activeSources.length} fontes · modo {meta?.depths.find((item) => item.id === depth)?.label.toLowerCase() ?? depth} ·
-                resposta {backendChip?.kind === "cloud" ? "redigida por IA" : "factual"} com citações [n]
+                resposta {meta?.backend?.kind === "cloud" ? "redigida por IA" : "factual"} com citações [n]
               </p>
             </form>
           </div>

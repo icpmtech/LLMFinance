@@ -93,6 +93,7 @@ SEGMENTOS_DA_APP = frozenset(
         "partidos",
         "remuneracoes",
         "subvencoes",
+        "grandes-litigantes",
         # Mercados e previsões
         "chart",
         "grafico",
@@ -114,7 +115,9 @@ SEGMENTOS_DA_APP = frozenset(
         "browser",
         "chat",
         "cire",
+        "massa-insolvente",
         "citacoes",
+        "vendas",
         "compare",
         "dashboard",
         "deep-search",

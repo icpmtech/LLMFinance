@@ -68,8 +68,17 @@ def test_api_publica_e_igual_a_do_ficheiro_original() -> None:
             tipo = "Path" if isinstance(objeto, PurePath) else type(objeto).__name__
             if tipo != info["kind"]:
                 diferentes.append(f"{nome}: {info['kind']} → {tipo}")
-            elif info["len"] is not None and len(objeto) != info["len"]:
-                diferentes.append(f"{nome}: tamanho {info['len']} → {len(objeto)}")
+            elif info["len"] is not None:
+                # Crescer é legítimo (um índice novo, uma tabela nova); **encolher**
+                # é o que a divisão não podia fazer. Texto (SQL, consultas) tem de
+                # ficar igual ao carácter, esse não se altera por acrescento.
+                if tipo == "str":
+                    if len(objeto) != info["len"]:
+                        diferentes.append(f"{nome}: tamanho {info['len']} → {len(objeto)}")
+                elif len(objeto) < info["len"]:
+                    diferentes.append(
+                        f"{nome}: perdeu entradas ({info['len']} → {len(objeto)})"
+                    )
 
     assert not em_falta, f"Nomes que desapareceram da fachada: {em_falta}"
     assert not diferentes, "API alterada pela divisão:\n" + "\n".join(diferentes)

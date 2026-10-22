@@ -157,6 +157,21 @@ CIRE_INDEX = "finance_cire"
 CITACOES_INDEX = "finance_citacoes_edital"
 
 
+# Publicidade da Composição da Massa Insolvente (CITIUS / Ministério da Justiça):
+# anúncios publicados pelo Administrador Judicial nos termos do art.º 152.º do
+# CIRE — processo, espécie, tribunal, insolvente(s), área de negócio, valor da
+# avaliação, data de atualização, descrição da massa e lista de ativos.
+# Recolhido de `PublicidadeMassaInsolvente.aspx`.
+MASSA_INSOLVENTE_INDEX = "finance_massa_insolvente"
+
+
+# Venda de bens penhorados em processos executivos (CITIUS) e leilões / vendas
+# promovidos pelos agentes de execução no e-leiloes.pt. Um documento por bem,
+# com tribunal/comarca, processo, tipo/modalidade/estado, datas, valores,
+# descrição, localização e intervenientes (executados e agentes).
+VENDAS_PENHORADOS_INDEX = "finance_vendas_penhorados"
+
+
 
 # Pessoas e cargos extraídos das publicações societárias (MJ). Um documento por
 # NIF de pessoa (individual ou coletiva), com roles aninhados por empresa/acto.
@@ -222,6 +237,21 @@ DEVEDORES_INDEX = "finance_devedores"
 # guardados + nº de registos), para a área de pesquisa poder mostrar de onde veio
 # cada dado e quando foi recolhido.
 DEVEDORES_RECOLHAS_INDEX = "finance_devedores_recolhas"
+
+
+# Lista de sociedades com **mais de 200 ações** (Portaria n.º 200/2011, de 20 de
+# maio; artigo 13.º do Regulamento das Custas Processuais). Um documento por
+# **sociedade e por ano**: `doc_id = <ano>:<nipc>`, porque a mesma sociedade pode
+# entrar na lista em vários anos e o que conta é a lista de cada ano civil.
+# Alimentado por `api/grandes_litigantes_service.py`, que percorre a consulta do
+# Portal CITIUS (`/portal/consultas/Custas/Portaria200-2011.aspx`), guarda o
+# instantâneo em JSON em `data/grandes-litigantes/` e indexa os registos.
+GRANDES_LITIGANTES_INDEX = "finance_grandes_litigantes"
+
+
+# Histórico das recolhas: um documento por **recolha** (data, anos abrangidos,
+# nº de sociedades, páginas lidas e caminho do JSON).
+GRANDES_LITIGANTES_RECOLHAS_INDEX = "finance_grandes_litigantes_recolhas"
 
 
 
@@ -819,6 +849,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     REMUNERACOES_AP_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    GRANDES_LITIGANTES_INDEX: {
+        # Nomes de sociedades comerciais, especialmente bancos e seguradoras
+        # estrangeiras (BANCO COMERCIAL PORTUGUES, ZURICH INSURANCE PLC...).
         "analysis": {
             "analyzer": {
                 "world_folding": {

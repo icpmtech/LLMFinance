@@ -157,6 +157,7 @@ from api.models import (
 )
 from api.agent import generate_answer, run_chat, stream_chat
 from api import cloud_chat, providers_service as providers
+from api.cloud_chat import CloudError
 from api.elasticsearch_ingest import (
     get_elastic_status,
     ingest_ticker_all,
@@ -317,7 +318,9 @@ from api.pessoas_iq_pesquisa_routes import router as pessoas_iq_pesquisa_router
 # Arquivo.pt — páginas da web preservadas pela FCT (API pública).
 from api.arquivo_routes import router as arquivo_router
 from api.cire_routes import router as cire_router
+from api.massa_insolvente_routes import router as massa_insolvente_router
 from api.citacoes_routes import router as citacoes_router
+from api.vendas_routes import router as vendas_router
 from api.people_routes import router as people_router
 from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
@@ -355,6 +358,11 @@ from api.mirofish_routes import router as mirofish_router
 # Segurança Social — recolha para PDF/JSON (com a data da recolha), indexação
 # em `finance_devedores` e área de pesquisa (também usada no PessoasIQ).
 from api.devedores_routes import router as devedores_router
+# Grandes litigantes: lista anual, publicada no Portal CITIUS, das sociedades que
+# intentaram mais de 200 ações, procedimentos ou execuções (Portaria 200/2011 e
+# artigo 13.º do RCP) — recolha com o scraper, indexação em
+# `finance_grandes_litigantes` e área de pesquisa com ficha por NIPC.
+from api.grandes_litigantes_routes import router as grandes_litigantes_router
 # Jarvis: assistente operacional com voz (STT/TTS), gateways (Hermes, MCP do
 # sistema, browser) e skills partilhadas com o Hermes e o Chat IA.
 from api.jarvis_routes import router as jarvis_router
@@ -688,6 +696,21 @@ async def _erro_nao_tratado(request: Request, exc: Exception) -> Response:
             return HTMLResponse(corpo, status_code=500, headers={"Cache-Control": "no-store"})
     return JSONResponse({"detail": "Erro interno do servidor."}, status_code=500)
 
+
+@app.exception_handler(CloudError)
+async def _erro_do_fornecedor_de_ia(request: Request, exc: CloudError) -> Response:
+    """O fornecedor de IA recusou o pedido (saldo, chave ou limite): é 502, não 500.
+
+    Sem este mapeamento, um `402 Insufficient Balance` do fornecedor saía como
+    «500 Internal Server Error» com o rasto todo no log — e o utilizador não
+    percebia que o problema era da conta do modelo, não dos dados.
+    """
+    logging.getLogger(__name__).warning(
+        "Fornecedor de IA falhou em %s %s: %s", request.method, request.url.path, exc
+    )
+    return JSONResponse({"detail": str(exc)}, status_code=502)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -925,7 +948,10 @@ def serve_empresas_recolha_spa_page(request: Request):
     """Página do módulo **Recolha de Empresas** (diretórios web → JSON)."""
     return spa_page_response(str(request.url.path))
 app.include_router(cire_router)
+# Publicidade da Composição da Massa Insolvente (art.º 152.º do CIRE).
+app.include_router(massa_insolvente_router)
 app.include_router(citacoes_router)
+app.include_router(vendas_router)
 app.include_router(people_router)
 app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
@@ -966,6 +992,9 @@ app.include_router(mirofish_router)
 # Devedores: recolha das listas de devedores (Finanças e Segurança Social) e
 # pesquisa dos devedores indexados.
 app.include_router(devedores_router)
+# Grandes litigantes: recolha da lista do CITIUS (mais de 200 ações) e pesquisa
+# das sociedades indexadas, com ficha por NIPC.
+app.include_router(grandes_litigantes_router)
 # Jarvis: o assistente operacional com voz e browser. Fala com o sistema por
 # gateways (Hermes, MCP do sistema e web) e segue as skills partilhadas.
 app.include_router(jarvis_router)
@@ -2373,7 +2402,9 @@ def serve_transparencia_grafo_spa_page(request: Request, path: str = ""):
 @app.get("/pesquisa")
 @app.get("/sentimento")
 @app.get("/cire")
+@app.get("/massa-insolvente")
 @app.get("/citacoes")
+@app.get("/vendas")
 @app.get("/contribuintes")
 @app.get("/world")
 @app.get("/world/rede")

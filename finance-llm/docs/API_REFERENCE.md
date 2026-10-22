@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1307 operações** em **45 grupos**.
+Versão `0.4.0` · **1308 operações** em **46 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -45,6 +45,7 @@ Versão `0.4.0` · **1307 operações** em **45 grupos**.
 - **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
 - **devedores** — Listas públicas de devedores (Autoridade Tributária e Segurança Social): recolha dos PDF oficiais para PDF + JSON com a data da recolha, indexação em `finance_devedores` e área de pesquisa por nome/NIF, tipo, escalão e data.
 - **subvencoes** — Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou uma subpasta por ano), normalização para JSONL, indexação em `finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, painel, fichas por NIF, amostra lida do disco e exportação CSV.
+- **grandes-litigantes** — Grandes Litigantes (Portaria n.º 200/2011, de 20 de maio, artigo 13.º do Regulamento das Custas Processuais): recolha da lista anual de sociedades comerciais que intentaram mais de 200 ações, procedimentos ou execuções, a partir do Portal CITIUS. Indexa em `finance_grandes_litigantes` (registos) e `finance_grandes_litigantes_recolhas` (histórico), oferece pesquisa por nome/NIPC/ano/faixa, ficha por NIPC, recolha manual, ingestão de recolhas passadas e exportação CSV.
 - **administracao-central** — Administração Central (SEC 2010): o índice das entidades do Setor Institucional das Administrações Públicas que o INE publica em PDF (`data/entidades-sector/`), ligado pelo NIF aos contratos do portal BASE. Serve a lista pesquisável de entidades (Estado, Serviços e Fundos Autónomos e Instituições Sem Fim Lucrativo), a ficha de cada entidade com as suas adjudicatárias, o painel de contratos do setor, a pesquisa de contratos e a exportação CSV.
 - **partidos** — Partidos políticos e as suas contas. Recolhe as páginas anuais do financiamento partidário do Tribunal Constitucional (contas anuais dos partidos, listas de ações e meios de propaganda política, relatórios, acórdãos e decisões da ECFP) e o registo oficial dos partidos na CNE; indexa em `finance_partidos`, `finance_partidos_registo` e `finance_partidos_recolhas`, e serve painel, pesquisa (com o texto dos PDF), fichas por partido, ligação às pessoas do PessoasIQ e exportação CSV.
 - **erc** — Portal da Transparência da ERC: entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos. Recolhe a listagem, as fichas de cada entidade e de cada pessoa (cargos e participações diretas) e a estrutura de propriedade; indexa em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`, e serve painel, pesquisa, fichas e exportação CSV.
@@ -138,6 +139,20 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `DELETE` | `/cire/runs/{run_id}` | Cire Run Delete |
 | `GET` | `/cire/search` | Cire Search |
 | `GET` | `/cire/status` | Cire Status Endpoint |
+| `GET` | `/massa-insolvente` | Serve Spa Page |
+| `POST` | `/massa-insolvente/collect` | Massa Collect |
+| `GET` | `/massa-insolvente/coverage` | Massa Coverage |
+| `POST` | `/massa-insolvente/ingest` | Massa Ingest |
+| `GET` | `/massa-insolvente/jobs` | Massa Jobs |
+| `GET` | `/massa-insolvente/jobs/{job_id}` | Massa Job |
+| `POST` | `/massa-insolvente/jobs/{job_id}/stop` | Massa Job Stop |
+| `GET` | `/massa-insolvente/meta` | Massa Meta |
+| `GET` | `/massa-insolvente/options` | Massa Options |
+| `GET` | `/massa-insolvente/runs` | Massa Runs |
+| `GET` | `/massa-insolvente/runs/{run_id}` | Massa Run Detail |
+| `DELETE` | `/massa-insolvente/runs/{run_id}` | Massa Run Delete |
+| `GET` | `/massa-insolvente/search` | Massa Search |
+| `GET` | `/massa-insolvente/status` | Massa Status |
 | `GET` | `/citacoes` | Serve Spa Page |
 | `POST` | `/citacoes/collect` | Citacoes Collect |
 | `GET` | `/citacoes/documentos/{pub_id}` | Citacoes Documento |

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from elasticsearch import Elasticsearch
 from api.es.core import get_es_client
-from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
+from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -584,6 +584,108 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             },
             "documento_erro": {"type": "text", "index": False},
             "documento_extraido_em": {"type": "date"},
+            "extra": {"type": "flattened"},
+            "run_id": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    massa_insolvente_mappings = {
+        "properties": {
+            "pub_id": {"type": "keyword"},
+            "titulo": {"type": "keyword"},
+            "processo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "processo_numero": {"type": "keyword"},
+            "especie": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tipo": {"type": "keyword"},
+            "tribunal": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tribunal_comarca": {"type": "keyword"},
+            "juizo": {"type": "keyword", "ignore_above": 512},
+            "insolventes": {"type": "keyword", "ignore_above": 512},
+            "insolventes": {"type": "keyword", "ignore_above": 512},
+            "insolvente": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "area_negocio": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "valor_avaliacao": {"type": "double"},
+            "valor_texto": {"type": "keyword", "index": False},
+            "data_atualizacao": {"type": "date"},
+            "descricao": {"type": "text"},
+            # Ativos da composição (tipo, descrição, quantidade, localização).
+            "ativos": {
+                "type": "nested",
+                "properties": {
+                    "tipo": {"type": "keyword"},
+                    "descricao": {"type": "text"},
+                    "quantidade": {"type": "keyword"},
+                    "localizacao": {"type": "keyword", "ignore_above": 256},
+                },
+            },
+            "ativo_tipos": {"type": "keyword"},
+            "localizacoes": {"type": "keyword"},
+            "texto": {"type": "text"},
+            "run_id": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    # Venda de bens penhorados em processos executivos (CITIUS + e-leiloes.pt).
+    vendas_penhorados_mappings = {
+        "properties": {
+            "venda_id": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "referencia": {"type": "keyword"},
+            "tribunal": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tribunal_sede": {"type": "keyword", "ignore_above": 512},
+            "comarca_judicial": {"type": "keyword", "ignore_above": 512},
+            "processo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "processo_numero": {"type": "keyword"},
+            "juizo": {"type": "keyword", "ignore_above": 512},
+            "especie": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tipo_bem": {"type": "keyword"},
+            "subtipo_bem": {"type": "keyword"},
+            "modalidade": {"type": "keyword"},
+            "estado": {"type": "keyword"},
+            "titulo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "descricao": {"type": "text"},
+            "valor_base": {"type": "double"},
+            "valor_minimo": {"type": "double"},
+            "valor_abertura": {"type": "double"},
+            "lance_atual": {"type": "double"},
+            "data_venda": {"type": "date"},
+            "data_inicio": {"type": "date"},
+            "data_fim": {"type": "date"},
+            "distrito": {"type": "keyword", "ignore_above": 256},
+            "concelho": {"type": "keyword", "ignore_above": 256},
+            "freguesia": {"type": "keyword", "ignore_above": 256},
+            "morada": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "codigo_postal": {"type": "keyword"},
+            "lat": {"type": "float"},
+            "lon": {"type": "float"},
+            "intervenientes": {
+                "type": "nested",
+                "properties": {
+                    "papel": {"type": "keyword"},
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "nif": {"type": "keyword"},
+                    "morada": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "telefone": {"type": "keyword"},
+                },
+            },
+            "executados": {
+                "type": "nested",
+                "properties": {
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "nif": {"type": "keyword"},
+                    "requerido": {"type": "keyword"},
+                },
+            },
+            "gestor": {"type": "object"},
+            "fotos": {"type": "keyword", "index": False},
+            "onus": {"type": "flattened"},
+            "detalhe_url": {"type": "keyword", "index": False},
+            "url": {"type": "keyword", "index": False},
+            "data_atualizacao": {"type": "date"},
             "extra": {"type": "flattened"},
             "run_id": {"type": "keyword"},
             "source": {"type": "keyword"},
@@ -1679,6 +1781,53 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "json_path": {"type": "keyword", "ignore_above": 512},
             "source_url": {"type": "keyword", "index": False},
             "last_modified": {"type": "keyword"},
+            "run_id": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    # Lista de sociedades com mais de 200 ações (Portaria 200/2011): uma linha por
+    # sociedade e por ano civil. O portal publica apenas a faixa (entre 201 e 500,
+    # ou 501 e superior) — nunca o número exato de ações de cada sociedade.
+    grandes_litigantes_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nipc": {"type": "keyword"},
+            "nipc_digitos": {"type": "keyword"},
+            "denominacao": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "denominacao_fold": {"type": "keyword", "ignore_above": 512},
+            "ano": {"type": "integer"},
+            "acoes_texto": {"type": "keyword"},
+            "acoes_min": {"type": "integer"},
+            "faixa": {"type": "keyword"},
+            "faixa_label": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "fonte_label": {"type": "keyword"},
+            "source_url": {"type": "keyword", "index": False},
+            "collected_at": {"type": "date"},
+            "recolha_id": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    grandes_litigantes_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "source_url": {"type": "keyword", "index": False},
+            "anos": {"type": "integer"},
+            "ano_principal": {"type": "integer"},
+            "total_portal": {"type": "integer"},
+            "registos": {"type": "long"},
+            "paginas": {"type": "integer"},
+            "duracao_ms": {"type": "long"},
+            "collected_at": {"type": "date"},
+            "json_path": {"type": "keyword", "ignore_above": 512},
             "run_id": {"type": "keyword"},
             "ingested_at": {"type": "date"},
         }
@@ -3123,6 +3272,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (SOCIETARIO_INDEX, societario_mappings),
         (CIRE_INDEX, cire_mappings),
         (CITACOES_INDEX, citacoes_mappings),
+        (MASSA_INSOLVENTE_INDEX, massa_insolvente_mappings),
+        (VENDAS_PENHORADOS_INDEX, vendas_penhorados_mappings),
         (PEOPLE_INDEX, people_mappings),
         (CONTRIBUINTES_INDEX, contribuintes_mappings),
         (NODE_SUMMARIES_INDEX, node_summaries_mappings),
@@ -3155,6 +3306,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),
         (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
+        (GRANDES_LITIGANTES_INDEX, grandes_litigantes_mappings),
+        (GRANDES_LITIGANTES_RECOLHAS_INDEX, grandes_litigantes_recolhas_mappings),
         (SUBVENCOES_INDEX, subvencoes_mappings),
         (SUBVENCOES_LOTES_INDEX, subvencoes_lotes_mappings),
         # Financiamento partidário: documentos das contas por partido e ano, o

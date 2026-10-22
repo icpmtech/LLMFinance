@@ -189,6 +189,23 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "citacoes",
+        "description": (
+            "Citação e Notificação Edital (CITIUS): recolha das publicações em que o "
+            "citando não foi encontrado, indexação em `finance_citacoes_edital` e "
+            "pesquisa por interveniente, processo, tribunal, ato e texto do PDF."
+        ),
+    },
+    {
+        "name": "vendas",
+        "description": (
+            "Venda de Bens Penhorados em Processos Executivos (CITIUS) e e-leiloes.pt "
+            "(agentes de execução): recolha de bens penhorados com venda determinada, "
+            "indexação em `finance_vendas_penhorados` e pesquisa por tribunal, processo, "
+            "tipo de bem, localização, executado e valor base."
+        ),
+    },
+    {
         "name": "search",
         "description": (
             "Pesquisa unificada da plataforma: âmbitos disponíveis, pesquisa em "
@@ -388,6 +405,16 @@ TAGS_METADATA: List[Dict[str, str]] = [
             "Social): recolha dos PDF oficiais para PDF + JSON com a data da "
             "recolha, indexação em `finance_devedores` e área de pesquisa por "
             "nome/NIF, tipo, escalão e data."
+        ),
+    },
+    {
+        "name": "grandes-litigantes",
+        "description": (
+            "Lista de sociedades com mais de 200 ações (Portaria n.º 200/2011, de 20 de maio; "
+            "n.º 3 do artigo 13.º do Regulamento das Custas Processuais): recolha da consulta "
+            "pública do Portal CITIUS, instantâneo em JSON com a data da recolha, indexação em "
+            "`finance_grandes_litigantes` (um documento por sociedade e ano) e pesquisa por "
+            "designação, NIPC, ano e faixa, com ficha por NIPC, KPIs e exportação CSV."
         ),
     },
     {

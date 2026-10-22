@@ -12,6 +12,9 @@ Cada documento traz o **tribunal**, o **processo** (número e juízo), a
 da ação e os **intervenientes com NIF/NIPC** (insolvente/devedor, administrador
 da insolvência, fiduciário, credores…).
 
+> A composição da massa (os bens e a sua avaliação, art.º 152.º do CIRE) é um
+> módulo próprio: [massa-insolvente.md](./massa-insolvente.md).
+
 ## Fluxo do portal (ASP.NET WebForms com `UpdatePanel`)
 
 | Passo | Pedido | Resultado |

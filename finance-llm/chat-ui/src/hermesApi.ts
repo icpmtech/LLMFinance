@@ -118,7 +118,8 @@ export type HermesAnswer = {
     macro_hint: boolean;
   };
   backend: HermesBackend;
-  mode: "ai" | "factual" | "empty";
+  /** `agent` = resposta dada pelo Hermes Agent do container, com as ferramentas dele. */
+  mode: "ai" | "factual" | "empty" | "agent";
   text: string;
   /** Skill (método) que o Hermes seguiu — escolhida na biblioteca ou criada agora. */
   skill?: SkillRef | null;

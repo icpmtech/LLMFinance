@@ -48,11 +48,13 @@ from api.es import (
     remuneracoes,
     resumos,
     scraping,
+    massa_insolvente,
     sentimento,
     social,
     societario,
     taxonomia,
     utilizador,
+    vendas,
 )
 
 # --- benchmarks (19 nomes, em api/es/benchmarks.py)
@@ -103,6 +105,16 @@ from api.es.citacoes import (  # noqa: F401
     scan_citacoes,
     search_citacoes,
     search_citacoes_entidades,
+)
+
+# --- massa insolvente (5 nomes, em api/es/massa_insolvente.py)
+from api.es.massa_insolvente import (  # noqa: F401
+    MASSA_INSOLVENTE_INDEX,
+    index_massa_insolvente_items,
+    massa_insolvente_existing_ids,
+    massa_insolvente_runs_summary,
+    massa_insolvente_status,
+    search_massa_insolvente,
 )
 
 # --- contratos (29 nomes, em api/es/contratos.py)
@@ -380,6 +392,8 @@ from api.es.indices import (  # noqa: F401
     FIRMAS_INDEX,
     GLEIF_LEI_INDEX,
     GLOBAL_PADROES_INDEX,
+    GRANDES_LITIGANTES_INDEX,
+    GRANDES_LITIGANTES_RECOLHAS_INDEX,
     INDEX_SETTINGS,
     INVESTIGATIONS_INDEX,
     LORENZ_RUNS_INDEX,
@@ -621,6 +635,17 @@ from api.es.utilizador import (  # noqa: F401
     save_ticker_translation,
 )
 
+# --- vendas (8 nomes, em api/es/vendas.py)
+from api.es.vendas import (  # noqa: F401
+    delete_vendas_penhorados_run,
+    get_venda_penhorada,
+    index_vendas_penhorados_items,
+    search_vendas_penhorados,
+    vendas_penhorados_existing_ids,
+    vendas_penhorados_runs_summary,
+    vendas_penhorados_status,
+)
+
 _MODULOS = {
     "benchmarks": benchmarks,
     "cire": cire,
@@ -647,6 +672,7 @@ _MODULOS = {
     "societario": societario,
     "taxonomia": taxonomia,
     "utilizador": utilizador,
+    "vendas": vendas,
 }
 
 # Os módulos em si não fazem parte da API pública desta fachada.

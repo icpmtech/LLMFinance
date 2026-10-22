@@ -423,6 +423,9 @@ def resolve_llm(settings: Dict[str, Any], user_id: Optional[str] = None) -> Dict
         "base_url": base_url,
         "model": model,
         "uses_custom_provider": hermes_provider is None,
+        # Fornecedores locais (Ollama) não precisam de chave: exigir uma impedia
+        # configurar o agente com o modelo que já corre na máquina.
+        "key_optional": bool((spec or {}).get("key_optional")),
     }
 
 
@@ -452,11 +455,14 @@ def build_plan(
             "notes": [f"Fornecedor desconhecido: {resolved['provider']}."],
         }
 
-    if not resolved["key"]:
+    keyless = bool(resolved.get("key_optional"))
+    if not resolved["key"] and not keyless:
         notes.append(
             f"O fornecedor {resolved['label']} ainda não tem chave na plataforma "
             "(Definições → Fornecedores de IA) nem chave personalizada."
         )
+    elif keyless:
+        notes.append(f"{resolved['label']} não precisa de chave (endpoint local).")
 
     model = resolved["model"]
     if not model:
@@ -504,7 +510,7 @@ def build_plan(
         else:
             notes.append("Brave escolhida mas sem chave: defina-a aqui ou em BRAVE_API_KEY.")
 
-    if not resolved["key"] and not env:
+    if not resolved["key"] and not keyless and not env:
         notes.append("Sem chave não há como configurar o modelo — o agente fica sem LLM.")
 
     keep = set(env)
@@ -1103,12 +1109,14 @@ def apply_settings(
     settings = read_settings()
     plan = build_plan(settings, user_id)
 
-    if not plan["env"] and not plan["resolved"]["key"]:
+    resolved = plan["resolved"]
+    keyless = bool(resolved.get("key_optional"))
+    if not plan["env"] and not resolved["key"] and not keyless:
         raise RuntimeError(
             "Nada para aplicar: escolha um fornecedor com chave na plataforma "
             "(Definições → Fornecedores de IA) ou indique uma chave personalizada."
         )
-    if not plan["resolved"]["key"]:
+    if not resolved["key"] and not keyless:
         # Sem chave de modelo não vale a pena recriar o container: ficaria sem
         # LLM e a pesquisa configurada não compensa a interrupção do serviço.
         raise RuntimeError(

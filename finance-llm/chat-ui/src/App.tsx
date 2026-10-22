@@ -87,8 +87,11 @@ import SocialPage, {
 import UnifiedSearchPage from "./pages/UnifiedSearchPage";
 import SentimentPage from "./pages/SentimentPage";
 import CirePage from "./pages/CirePage";
+import MassaInsolventePage from "./pages/MassaInsolventePage";
 import CitacoesPage from "./pages/CitacoesPage";
+import VendasPage from "./pages/VendasPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
+import GrandesLitigantesPage from "./pages/GrandesLitigantesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
 import LorenzPage from "./pages/LorenzPage";
@@ -236,6 +239,7 @@ type AppView =
   | "osint"
   | "reports"
   | "subvencoes"
+  | "grandes-litigantes"
   | "administracao-central"
   | "remuneracoes"
   | "remuneracoes-ap"
@@ -427,7 +431,9 @@ function pathForView(
   if (view === "pesquisa") return "/pesquisa";
   if (view === "sentimento") return "/sentimento";
   if (view === "cire") return "/cire";
+  if (view === "massa-insolvente") return "/massa-insolvente";
   if (view === "citacoes") return "/citacoes";
+  if (view === "vendas") return "/vendas";
   if (view === "contribuintes") return "/contribuintes";
   if (view === "world") return "/world";
   if (view === "world-rede") return "/world/rede";
@@ -439,6 +445,7 @@ function pathForView(
   // O Estúdio de relatórios vive em página própria (criação, publicação e PDF).
   if (view === "report-studio") return "/report-studio";
   if (view === "subvencoes") return "/subvencoes";
+  if (view === "grandes-litigantes") return "/grandes-litigantes";
   if (view === "administracao-central") return "/administracao-central";
   if (view === "remuneracoes") return "/remuneracoes";
   // Remunerações da Administração Pública (DGAEP): vive dentro de `/remuneracoes`.
@@ -706,13 +713,16 @@ export default function App() {
     if (path === "/pesquisa") return "pesquisa";
     if (path === "/sentimento") return "sentimento";
     if (path === "/cire" || path.startsWith("/cire/")) return "cire";
+    if (path === "/massa-insolvente" || path.startsWith("/massa-insolvente/")) return "massa-insolvente";
     if (path === "/citacoes" || path.startsWith("/citacoes/")) return "citacoes";
+    if (path === "/vendas" || path.startsWith("/vendas/")) return "vendas";
     if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
     if (path === "/world/rede") return "world-rede";
     if (path === "/world" || path.startsWith("/world/")) return "world";
     if (path === "/osint" || path.startsWith("/osint/")) return "osint";
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
+    if (path === "/grandes-litigantes" || path.startsWith("/grandes-litigantes/")) return "grandes-litigantes";
     if (path === "/administracao-central" || path.startsWith("/administracao-central/")) return "administracao-central";
     if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) return "remuneracoes-ap";
     if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) return "entidade-transparencia";
@@ -895,7 +905,9 @@ export default function App() {
       else if (path === "/pesquisa") next = "pesquisa";
       else if (path === "/sentimento") next = "sentimento";
       else if (path === "/cire" || path.startsWith("/cire/")) next = "cire";
+      else if (path === "/massa-insolvente" || path.startsWith("/massa-insolvente/")) next = "massa-insolvente";
       else if (path === "/citacoes" || path.startsWith("/citacoes/")) next = "citacoes";
+      else if (path === "/vendas" || path.startsWith("/vendas/")) next = "vendas";
       else if (path === "/contribuintes" || path.startsWith("/contribuintes/")) next = "contribuintes";
       else if (path === "/world/rede") next = "world-rede";
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
@@ -909,6 +921,7 @@ export default function App() {
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/report-studio" || path.startsWith("/report-studio/")) next = "report-studio";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
+      else if (path === "/grandes-litigantes" || path.startsWith("/grandes-litigantes/")) next = "grandes-litigantes";
       else if (path === "/administracao-central" || path.startsWith("/administracao-central/")) next = "administracao-central";
       else if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) next = "remuneracoes-ap";
       else if (path === "/entidade-transparencia" || path.startsWith("/entidade-transparencia/")) next = "entidade-transparencia";
@@ -1806,7 +1819,9 @@ export default function App() {
       return <SentimentPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     }
     if (target === "cire") return <CirePage />;
+    if (target === "massa-insolvente") return <MassaInsolventePage />;
     if (target === "citacoes") return <CitacoesPage />;
+    if (target === "vendas") return <VendasPage />;
     if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
@@ -1827,6 +1842,7 @@ export default function App() {
     // com preço (reservada a administradores e gestores de relatórios).
     if (target === "report-studio") return <ReportStudioPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "subvencoes") return <SubvencoesPage />;
+    if (target === "grandes-litigantes") return <GrandesLitigantesPage />;
     // Administração Central: o índice das entidades do setor institucional do INE
     // (SEC 2010) ligado aos contratos e às adjudicatárias de cada entidade.
     if (target === "administracao-central") return <AdministracaoCentralPage onOpenView={handleOpenSearchView} />;

@@ -172,13 +172,21 @@ async def _ask_structured_fields(
     Texto das páginas oficiais:
     {page_excerpt}
     """
-    raw = await ask_model(
-        backend,
-        system="És um analista de empresas. Devolves apenas JSON válido em português de Portugal.",
-        prompt=prompt,
-        max_tokens=2600,
-        temperature=0.1,
-    )
+    provider_note = ""
+    try:
+        raw = await ask_model(
+            backend,
+            system="És um analista de empresas. Devolves apenas JSON válido em português de Portugal.",
+            prompt=prompt,
+            max_tokens=2600,
+            temperature=0.1,
+        )
+    except Exception as exc:  # noqa: BLE001 - o fornecedor pode falhar (saldo, rede, chave)
+        # Uma falha do fornecedor (ex.: 402 sem saldo) não pode rebentar a rota com
+        # 500: a ficha fica sem a extração por IA e explica-o numa nota.
+        logger.warning("Extração por IA indisponível para %s: %s", nif, exc)
+        raw = ""
+        provider_note = f"Extração por IA indisponível ({exc})."
     text = str(raw or "").strip()
     start = text.find("{")
     end = text.rfind("}")
@@ -203,7 +211,7 @@ async def _ask_structured_fields(
         "brands": [],
         "parent_company": None,
         "related_entities": [],
-        "notes": [],
+        "notes": [provider_note] if provider_note else [],
     }
 
 
