@@ -21,16 +21,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Building,
-  Calendar,
   CheckCircle2,
   Database,
-  DollarSign,
   ExternalLink,
   FileJson,
-  Gavel,
   Hammer,
   Loader2,
-  MapPin,
   Play,
   RefreshCw,
   Search,
@@ -92,6 +88,13 @@ function formatDateTime(value?: string | null): string {
   } catch {
     return value;
   }
+}
+
+/** Fontes de uma recolha gravada (o JSON guarda-as em `criteria.fontes`). */
+function fontesLabel(criteria?: Record<string, unknown> | null): string {
+  const fontes = criteria?.fontes;
+  if (Array.isArray(fontes) && fontes.length > 0) return fontes.map(String).join(" + ");
+  return "—";
 }
 
 /* ------------------------------------------------------------------ peças */
@@ -1255,7 +1258,7 @@ function ExecucoesSection({
                 <div>
                   <div className="text-[11.5px] font-semibold text-foreground">{run.run_id}</div>
                   <div className="text-[10.5px] text-muted-foreground">
-                    {formatDateTime(run.created_at)} · {run.criteria?.fontes?.join(" + ") ?? "—"}
+                    {formatDateTime(run.created_at)} · {fontesLabel(run.criteria)}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
