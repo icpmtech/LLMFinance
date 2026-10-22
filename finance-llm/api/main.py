@@ -1586,6 +1586,16 @@ def _is_api_path(path: str) -> bool:
     return any(normalized.startswith(p) for p in api_prefixes)
 
 
+def _juntar_local(*partes: Optional[str]) -> Optional[str]:
+    """Junta as partes da localização sem repetir nem deixar separadores soltos."""
+    vistos: List[str] = []
+    for parte in partes:
+        texto = str(parte or "").strip()
+        if texto and texto.lower() not in {v.lower() for v in vistos}:
+            vistos.append(texto)
+    return " · ".join(vistos) or None
+
+
 @app.get("/companies/{nif}", response_model=CompanyDetail)
 def companies_detail(request: Request, nif: str, year: Optional[int] = Query(None)):
     """Detalhes de uma entidade (por NIF), incluindo resumo de papéis e contratos recentes."""
@@ -1613,13 +1623,38 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
                     "atividade": item.get("atividade"),
                     "forma_juridica": item.get("forma_juridica"),
                     "capital_social_eur": item.get("capital_social_eur"),
-                    "localizacao": item.get("localizacao"),
+                    # A ficha do Racius nem sempre traz a localização pronta, mas
+                    # traz concelho/distrito: a ficha ficava com «Localização —»
+                    # apesar de a informação existir.
+                    "localizacao": item.get("localizacao") or _juntar_local(
+                        item.get("concelho"), item.get("distrito")
+                    ),
                     "racius_url": item.get("url"),
                     "racius_ficha": item.get("ficha"),
                     "racius_source_name": item.get("source_name"),
                 })
         except Exception as exc:
             logging.getLogger(__name__).warning(f"Fallback Racius falhou para {nif}: {exc}")
+
+    # Último recurso para a localização: a sede publicada no Ministério da
+    # Justiça (registo oficial). Sem isto, a ficha de uma empresa recolhida do
+    # Racius mostrava «Localização —» mesmo tendo a sede nas publicações.
+    if not company.get("error") and (not company.get("localizacao") or not company.get("morada")):
+        try:
+            from api import societario_service
+
+            publicacoes = societario_service.company_publicacoes(nif, size=1, from_=0)
+            ultima = next(iter(publicacoes.get("items") or []), None) or {}
+            sede = ultima.get("sede")
+            if not company.get("morada") and sede:
+                company["morada"] = sede
+            if not company.get("localizacao"):
+                company["localizacao"] = _juntar_local(
+                    ultima.get("concelho"),
+                    ultima.get("distrito"),
+                ) or sede
+        except Exception as exc:
+            logging.getLogger(__name__).warning(f"Localização societária indisponível para {nif}: {exc}")
 
     if company.get("error"):
         raise HTTPException(status_code=502, detail=company.get("error"))
