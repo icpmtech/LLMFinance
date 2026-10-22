@@ -22,13 +22,18 @@ import {
   Download,
   AlertCircle,
   Info,
+  Users,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { formatEuros } from "../raciusApi";
 import {
   getCompanyDetail,
   getCompanyContracts,
   getCompanyAnalytics,
   getCompanySocietarioPublicacoes,
+  getCompanySocietarioPeople,
+  generateCompanySocietarioTimeline,
   enrichEntity,
   downloadEntityReport,
   downloadEntityProcessosReport,
@@ -41,7 +46,7 @@ import { EntityEnrichmentCard, ContractDetailPanel } from "./EmpresasIQPage";
 import { esperarRecolha, obterDadosEmpresa, recolhaTerminada } from "../societarioRecolhaApi";
 import { useWindowMode } from "../layout";
 import { openWindow } from "../windows";
-import type { CompanyDetail, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
+import type { CompanyDetail, CompanyAnalyticsResponse, CompanySocietarioResponse, SocietarioPerson, SocietarioPublicacao, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 /** Contratos por página na ficha (o «carregar mais» pede a página seguinte). */
 const PAGINA_CONTRATOS = 20;
@@ -137,9 +142,17 @@ export default function CompanyDetailPage({
   const [erroContratos, setErroContratos] = useState<string | null>(null);
   /** Contrato aberto em modal (só no modo página; no modo janelas abre janela). */
   const [contratoAberto, setContratoAberto] = useState<string | null>(null);
+  /** Publicação societária aberta em modal (conteúdo do ato publicado). */
+  const [publicacaoAberta, setPublicacaoAberta] = useState<SocietarioPublicacao | null>(null);
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   /** Publicações do Ministério da Justiça já indexadas (só se existirem no Elastic). */
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
+  /** Pessoas/cargos extraídos dessas publicações (ficam por indexar se não houver atos de gerência). */
+  const [societarioPessoas, setSocietarioPessoas] = useState<SocietarioPerson[] | null>(null);
+  /** Resumo/timeline da vida societária: o guardado na ficha ou o gerado agora. */
+  const [timeline, setTimeline] = useState<string | null>(null);
+  const [timelineGuardada, setTimelineGuardada] = useState(false);
+  const [aGerarTimeline, setAGerarTimeline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Ações da ficha: enriquecer (web + IA), gerar relatórios, obter societário. */
@@ -225,6 +238,22 @@ export default function CompanyDetailPage({
     },
     [nif],
   );
+
+  /** Gera (ou regenera) o resumo executivo e a timeline da vida societária com IA. */
+  const gerarTimeline = async () => {
+    setAGerarTimeline(true);
+    setErroAcao(null);
+    try {
+      const resposta = await generateCompanySocietarioTimeline(nif);
+      setTimeline(resposta.markdown || null);
+      setTimelineGuardada(true);
+      if (resposta.error) setErroAcao(resposta.error);
+    } catch (err) {
+      setErroAcao(err instanceof Error ? err.message : "Erro ao gerar o resumo societário");
+    } finally {
+      setAGerarTimeline(false);
+    }
+  };
 
   /** Recarrega a ficha (e o societário) depois de uma ação. */
   const recarregar = async () => {
@@ -328,6 +357,8 @@ export default function CompanyDetailPage({
       }
 
       const resposta = await getCompanySocietarioPublicacoes(nif, 0, 20).catch(() => null);
+      const pessoas = await getCompanySocietarioPeople(nif).catch(() => null);
+      if (pessoas) setSocietarioPessoas(pessoas.people ?? []);
       if (resposta && resposta.total > 0) {
         setSocietario(resposta);
         setAviso(`${resposta.total} publicações societárias recolhidas.`);
@@ -359,6 +390,9 @@ export default function CompanyDetailPage({
         if (cancelled) return;
         setCompany(d);
         setAnalytics(a);
+        const guardada = d?.societario_timeline;
+        setTimeline(guardada?.markdown || null);
+        setTimelineGuardada(Boolean(guardada?.markdown));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -395,12 +429,20 @@ export default function CompanyDetailPage({
     if (!nif) return;
     let cancelled = false;
     setSocietario(null);
+    setSocietarioPessoas(null);
     getCompanySocietarioPublicacoes(nif, 0, 20)
       .then((res) => {
         if (!cancelled) setSocietario(res);
       })
       .catch(() => {
         if (!cancelled) setSocietario(null);
+      });
+    getCompanySocietarioPeople(nif)
+      .then((res) => {
+        if (!cancelled) setSocietarioPessoas(res.people ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setSocietarioPessoas(null);
       });
     return () => {
       cancelled = true;
@@ -997,6 +1039,92 @@ export default function CompanyDetailPage({
               </p>
             )}
 
+            {/* Resumo executivo e timeline da vida societária (IA) */}
+            <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-teal-300">
+                  <Sparkles size={14} /> Resumo e timeline da vida societária
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void gerarTimeline()}
+                  disabled={aGerarTimeline}
+                  title="Analisa as publicações do Ministério da Justiça e escreve o resumo executivo e a cronologia da empresa"
+                  className="flex items-center gap-1.5 rounded-lg border border-teal-400/20 bg-teal-400/10 px-2.5 py-1 text-[11px] text-teal-300 transition hover:bg-teal-400/20 disabled:opacity-50"
+                >
+                  {aGerarTimeline ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {aGerarTimeline ? "A gerar…" : timelineGuardada ? "Regenerar" : "Gerar com IA"}
+                </button>
+              </div>
+              {timeline ? (
+                <div className="prose prose-sm prose-invert mt-3 max-w-none text-sm leading-relaxed text-foreground/90">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{timeline}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {aGerarTimeline
+                    ? "A analisar as publicações e a escrever o resumo…"
+                    : "Ainda sem resumo. «Gerar com IA» analisa as publicações societárias e devolve o resumo executivo e a cronologia."}
+                </p>
+              )}
+            </div>
+
+            {/* Pessoas e cargos extraídos das publicações */}
+            <div className="mb-5">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-teal-300">
+                <Users size={14} /> Pessoas e cargos ({societarioPessoas?.length ?? 0})
+              </p>
+              {societarioPessoas === null ? (
+                <p className="text-xs text-muted-foreground">A carregar pessoas e cargos…</p>
+              ) : societarioPessoas.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {societarioPessoas.map((pessoa) => (
+                    <div
+                      key={pessoa.nif || pessoa.name}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                    >
+                      <p className="flex items-center gap-1.5 text-sm font-medium">
+                        <span className="min-w-0 flex-1 truncate">{pessoa.name || pessoa.nif}</span>
+                        {pessoa.is_company && (
+                          <span className="shrink-0 rounded-full border border-violet-400/25 bg-violet-400/10 px-1.5 text-[9.5px] text-violet-200">
+                            Empresa
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        NIF {pessoa.nif} · {pessoa.is_company ? "Pessoa coletiva" : "Pessoa singular"}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {(pessoa.latest_roles?.length ? pessoa.latest_roles : pessoa.roles ?? [])
+                          .slice(0, 3)
+                          .map((cargo, indice) => (
+                            <span
+                              key={`${cargo.role}-${indice}`}
+                              className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] text-foreground"
+                            >
+                              {[cargo.role, cargo.role_org].filter(Boolean).join(" · ") || "cargo não indicado"}
+                            </span>
+                          ))}
+                        {pessoa.roles_count > 3 && (
+                          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-muted-foreground">
+                            +{pessoa.roles_count - 3} evento(s)
+                          </span>
+                        )}
+                      </div>
+                      {pessoa.last_seen && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">Último registo: {pessoa.last_seen}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Sem pessoas/cargos extraídos destas publicações — os atos publicados podem não incluir órgãos
+                  sociais (ex.: prestação de contas).
+                </p>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1010,10 +1138,18 @@ export default function CompanyDetailPage({
                 </thead>
                 <tbody>
                   {publicacoes.slice(0, 10).map((pub) => (
-                    <tr key={pub.pub_id} className="border-b border-white/5 hover:bg-white/[0.04] transition">
+                    <tr
+                      key={pub.pub_id}
+                      onClick={() => setPublicacaoAberta(pub)}
+                      title="Ver o conteúdo publicado"
+                      className="cursor-pointer border-b border-white/5 transition hover:bg-white/[0.06]"
+                    >
                       <td className="py-2.5 pr-4 whitespace-nowrap text-muted-foreground">{formatDate(pub.data_publicacao)}</td>
                       <td className="py-2.5 pr-4 max-w-md" title={pub.acto || ""}>
-                        {pub.acto || "—"}
+                        <span className="flex items-start gap-1.5">
+                          <ChevronDown size={13} className="-rotate-90 mt-0.5 shrink-0 text-teal-300/70" />
+                          <span className="min-w-0">{pub.acto || "—"}</span>
+                        </span>
                       </td>
                       <td className="py-2.5 pr-4 text-muted-foreground">{pub.conservatoria || "—"}</td>
                       <td className="py-2.5 pr-4 text-muted-foreground">{pub.tipo_label || pub.tipo || "—"}</td>
@@ -1038,8 +1174,8 @@ export default function CompanyDetailPage({
             </div>
             {societario.total > 10 && (
               <p className="mt-4 text-xs text-muted-foreground">
-                A mostrar os 10 registos mais recentes de {societario.total}. A lista completa, a timeline por IA e as
-                pessoas extraídas estão na ficha do EmpresasIQ (e no dossiê da empresa).
+                A mostrar os 10 registos mais recentes de {societario.total}. A lista completa está na ficha do
+                EmpresasIQ (e no dossiê da empresa).
               </p>
             )}
           </div>
@@ -1250,6 +1386,89 @@ export default function CompanyDetailPage({
                 window.dispatchEvent(new PopStateEvent("popstate"));
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Modal do conteúdo de uma publicação societária. */}
+      {publicacaoAberta && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Publicação de atos societários"
+          className="fixed inset-0 z-[999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm md:items-center"
+          onClick={() => setPublicacaoAberta(null)}
+        >
+          <div
+            className="relative max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/10 bg-background/95 p-4 shadow-2xl md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPublicacaoAberta(null)}
+              className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+              title="Fechar"
+            >
+              <X size={18} />
+            </button>
+            <p className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider text-violet-300">
+              <Landmark size={12} /> Publicação de atos societários
+            </p>
+            <h2 className="mt-1 pr-8 text-lg font-semibold">{publicacaoAberta.acto || "Publicação societária"}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {[publicacaoAberta.firma || publicacaoAberta.entidade, formatDate(publicacaoAberta.data_publicacao)]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+
+            <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                { label: "Matrícula / NIPC", value: publicacaoAberta.matricula_nipc },
+                { label: "Natureza jurídica", value: publicacaoAberta.natureza_juridica },
+                { label: "Sede", value: publicacaoAberta.sede },
+                { label: "Conservatória", value: publicacaoAberta.conservatoria },
+                { label: "Concelho", value: publicacaoAberta.concelho },
+                { label: "Freguesia", value: publicacaoAberta.freguesia },
+                { label: "Distrito", value: publicacaoAberta.distrito },
+                { label: "Código postal", value: publicacaoAberta.codigo_postal },
+                { label: "Ano de contas", value: publicacaoAberta.ano_contas },
+                { label: "Tipo", value: publicacaoAberta.tipo_label || publicacaoAberta.tipo },
+                { label: "Pedido", value: publicacaoAberta.pedido },
+                { label: "Referência do registo", value: publicacaoAberta.referencia_registo },
+                { label: "Requerente", value: publicacaoAberta.requerente },
+              ]
+                .filter((campo) => campo.value)
+                .map((campo) => (
+                  <div key={campo.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <dt className="text-[10.5px] uppercase tracking-wider text-muted-foreground">{campo.label}</dt>
+                    <dd className="mt-1 break-words text-sm">{campo.value}</dd>
+                  </div>
+                ))}
+            </dl>
+
+            <div className="mt-4">
+              <p className="text-[10.5px] uppercase tracking-wider text-muted-foreground">Texto publicado</p>
+              {publicacaoAberta.texto ? (
+                <p className="mt-1 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[12.5px] leading-relaxed">
+                  {publicacaoAberta.texto}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sem texto guardado para esta publicação. Abra o documento no portal para ver o teor completo.
+                </p>
+              )}
+            </div>
+
+            {publicacaoAberta.documento_url && (
+              <a
+                href={publicacaoAberta.documento_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-1.5 text-xs text-teal-300 transition hover:bg-teal-400/20"
+              >
+                <ExternalLink size={13} /> Abrir documento (PDF)
+              </a>
+            )}
           </div>
         </div>
       )}
