@@ -23,6 +23,23 @@ ARG BASE=iq-os-backend:antes-deep-search
 FROM ${BASE}
 
 # WORKDIR (/app), ENTRYPOINT (/entrypoint.sh) e HEALTHCHECK vêm da base.
+
+# Bibliotecas de sistema do Chromium (Playwright/Scrapling).
+#
+# A base não as tem: foi construída pelo ramo do `scrapling install`, que
+# descarrega os binários mas não instala as dependências do `apt` — era o que o
+# `|| playwright install --with-deps` devia cobrir e não cobria, porque o
+# primeiro comando passava. Os browsers vivem no volume `playwright-cache`
+# (`servicos/backend/compose.yml`), mas sem estas bibliotecas o Chromium morre
+# ao arrancar com
+#   chrome: error while loading shared libraries: libnspr4.so: cannot open
+#   shared object file: No such file or directory
+#
+# É `install-deps` e não uma lista fixa: os nomes dos pacotes mudam com o Debian
+# (`libasound2` → `libasound2t64`) e a lista derivada da versão instalada
+# acompanha. Fica **antes** do `COPY . .` para não voltar a correr a cada deploy
+# de código; numa base que já tenha as bibliotecas o `apt` não faz nada.
+RUN playwright install-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY . .
 
 # A SPA construída, para o backend poder escrever o `<head>` das páginas da

@@ -149,6 +149,19 @@ O incremental só substitui código. Se o que mudou foi:
 | Só código Python ou TypeScript | **este script** |
 | `docker/nginx.conf` | **este script** (o incremental já o copia) |
 
+Exceção: as bibliotecas de sistema do **Chromium** (Playwright/Scrapling) vão
+também no `Dockerfile.backend.incremental`. A imagem base não as tinha — o
+`scrapling install` descarrega os browsers mas não toca no `apt` — e as
+consequências só apareciam ao abrir um browser:
+
+```
+chrome: error while loading shared libraries: libnspr4.so: cannot open shared object file
+```
+
+O incremental corre `playwright install-deps chromium` numa camada própria, antes
+do `COPY . .`, por isso uma alteração de código normal também repara isso sem
+rebuild completo.
+
 E se a própria imagem base tiver de ser reconstruída a frio, ou for para uma
 máquina que não a tem, aí é o `15-imagem-vm.ps1` (imagem inteira, por blocos,
 com repetição).

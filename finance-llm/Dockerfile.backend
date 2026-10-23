@@ -49,7 +49,21 @@ RUN mkdir -p /opt/piper-voices && \
 # exist» a meio de uma recolha. Sem eles, os sites de lojas (Worten, Fnac, Darty)
 # respondem 403 ao pedido simples.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN scrapling install || playwright install --with-deps chromium
+
+# Bibliotecas de sistema do Chromium, **sempre** — e não dentro de um `||`.
+# O `scrapling install` descarrega os binários mas não toca no `apt`: como ele
+# passava, o ramo `playwright install --with-deps` nunca corria e a imagem ficava
+# sem `libnspr4`/`libnss3`. O sintoma só aparece ao abrir um browser:
+#   chrome: error while loading shared libraries: libnspr4.so: cannot open
+#   shared object file: No such file or directory
+# Usa-se o `install-deps` (e não uma lista escrita à mão) porque ele deriva os
+# nomes dos pacotes da versão de Playwright instalada — uma lista fixa fica
+# desatualizada quando o Debian renomeia algo (`libasound2` → `libasound2t64`).
+RUN playwright install-deps chromium && rm -rf /var/lib/apt/lists/*
+
+# Browsers: `scrapling install` continua a ser a primeira escolha (traz também o
+# `camoufox`); o Playwright fica como recurso.
+RUN scrapling install || playwright install chromium
 
 # Copiar código do projeto
 COPY . .

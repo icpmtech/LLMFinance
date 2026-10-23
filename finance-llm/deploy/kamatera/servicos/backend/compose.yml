@@ -152,4 +152,12 @@ volumes:
   # Navegadores do Playwright. Enche-se uma vez com
   #   docker exec iqos-backend python -m playwright install --with-deps chromium
   # e depois sobrevive a recriacoes do contentor.
+  #
+  # ATENCAO: os browsers **nao** trazem as bibliotecas de sistema. Uma vez que a
+  # imagem nao as tenha, o Chromium arranca e morre com
+  #   chrome: error while loading shared libraries: libnspr4.so: cannot open
+  #   shared object file: No such file or directory
+  # O `Dockerfile.backend.incremental` instala-as (`playwright install-deps
+  # chromium`), por isso um deploy de codigo normal repara a imagem; `apt-get`
+  # dentro do contentor a correr perde-se assim que ele for recriado.
   playwright-cache:
