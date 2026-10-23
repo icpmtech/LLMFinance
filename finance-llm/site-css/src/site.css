@@ -643,6 +643,10 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
 .site-partilha > summary { list-style: none; user-select: none; }
 .site-partilha > summary::-webkit-details-marker { display: none; }
 .site-partilha[open] > summary { border-color: var(--accent); color: var(--accent); }
+/* Fechado, o menu não existe para o layout. A regra é explícita porque o
+   `display` que o menu leva (flex ou grelha) sobrepõe-se ao do browser e o
+   painel aparecia sempre aberto. */
+.site-partilha:not([open]) > .site-partilha-menu { display: none; }
 /* Na abertura do estudo a barra está encostada à direita: o menu abre para
    dentro da página, senão saía do ecrã e criava rolagem lateral. Abaixo disso
    a barra passa para a esquerda e o menu abre para a direita, como no blog. */
@@ -654,6 +658,10 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   display: flex; flex-direction: column; min-width: 210px; padding: 6px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   box-shadow: 0 14px 38px rgba(16,24,40,.18);
+  /* Sem script (ou antes de ele medir) o menu não passa da largura do ecrã. */
+  max-width: calc(100vw - 20px);
+  /* O script mede o menu ao abrir e desloca-o o mínimo para caber no ecrã. */
+  transform: translateX(var(--desvio, 0));
 }
 .site-partilha-item {
   display: flex; align-items: center; width: 100%; min-height: 40px; padding: 8px 12px;
@@ -662,6 +670,51 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
 }
 .site-partilha-item:hover, .site-partilha-item:focus-visible { background: var(--code); text-decoration: none; }
 .site-partilha-item[hidden] { display: none; }
+/* Com muitas redes o menu abre em duas colunas (senão ficava mais alto do que o
+   ecrã); no telemóvel volta a uma coluna. */
+.site-partilha-menu--redes { width: max-content; display: grid; grid-template-columns: 1fr; }
+@media (min-width: 560px) {
+  .site-partilha-menu--redes { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 330px; }
+}
+/* As ações de um cartão (estrela e partilha) ficam no rodapé do cartão. */
+.post-card-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-top: auto; }
+.post-card-rodape .meta { margin: 0; }
+.site-cartao-acoes { display: inline-flex; align-items: center; gap: 6px; }
+.site-cartao-acoes .site-fav-icone { width: 34px; height: 34px; }
+.site-cartao-acoes .site-partilha { position: relative; }
+/* O resumo da partilha é um círculo igual à estrela (só o ícone, sem texto). */
+.site-fav-icone--partilha > .site-acao-icone { width: 15px; height: 15px; }
+/* No cartão o menu é uma caixa presa ao ecrã (`position: fixed`): o cartão tem
+   `overflow: hidden` e um menu ancorado nele era cortado; o script põe-no por
+   cima do botão (ou por baixo, se não houver espaço) e desloca-o se preciso.
+   Sem script fica encostado ao canto inferior esquerdo — continua utilizável. */
+.site-cartao-acoes .site-partilha-menu {
+  position: fixed; z-index: 60; top: auto; bottom: 12px; left: 12px; right: auto;
+  max-height: min(70vh, 460px); overflow-y: auto; overscroll-behavior: contain;
+}
+@media (max-width: 559px) {
+  .site-cartao-acoes .site-partilha-menu--redes { min-width: 0; width: min(92vw, 320px); }
+}
+/* Topo do blog: o título e a barra de ações lado a lado. */
+.blog-topo { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; }
+.blog-topo h1 { margin: 0 0 6px; }
+.blog-topo .lead { margin: 0; }
+/* Redes no cabeçalho («Siga-nos»): só quando há endereços configurados. */
+.site-redes {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 8px 0 0; font-size: .74rem;
+}
+.site-redes > span {
+  color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+}
+.site-redes a {
+  padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); text-decoration: none;
+}
+.site-redes a:hover, .site-redes a:focus-visible { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+@media (min-width: 800px) {
+  .site-redes { margin-top: 10px; }
+}
 .site-aviso {
   position: fixed; z-index: 90; left: 50%; bottom: 22px;
   transform: translate(-50%, 12px); max-width: min(92vw, 420px);
@@ -791,6 +844,18 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
 .post-card .body { padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .post-card h2 { margin: 0; font-size: 1.08rem; letter-spacing: -.01em; }
 .post-card p { margin: 0; color: var(--muted); font-size: .93rem; }
+/* Hashtags do artigo: as mesmas etiquetas da lista `/site/etiqueta/<tag>`,
+   discretas para não competir com o título nem com o resumo. */
+.post-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.post-card .post-tag {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .74rem; font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: color-mix(in srgb, var(--accent) 62%, #0b1220); text-decoration: none;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.post-card .post-tag:hover, .post-card .post-tag:focus-visible { border-color: var(--accent); color: var(--accent); }
+.post-card .post-tag--mais { border-style: dashed; color: var(--muted); background: none; }
 .post-card a { color: var(--text); }
 .post-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 2px 4px rgba(16,24,40,.06), 0 12px 30px rgba(16,24,40,.10); }
 .post-card:hover h2 a { color: var(--accent); }

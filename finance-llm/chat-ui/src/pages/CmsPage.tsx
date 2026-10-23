@@ -50,7 +50,7 @@ export const CMS_SECTIONS: { id: CmsSection; label: string; path: string; icon: 
   { id: "media", label: "Media", path: "/cms/media", icon: <BookOpen size={13} />, hint: "Biblioteca de imagens e documentos" },
   { id: "taxonomia", label: "Taxonomia", path: "/cms/taxonomia", icon: <Hash size={13} />, hint: "Categorias e etiquetas do blog" },
   { id: "modelos", label: "Modelos", path: "/cms/modelos", icon: <Palette size={13} />, hint: "Estruturas de blocos prontas a usar" },
-  { id: "aparencia", label: "Aparência", path: "/cms/aparencia", icon: <Globe2 size={13} />, hint: "Definições do site, menus, SEO e rodapé" },
+  { id: "aparencia", label: "Aparência", path: "/cms/aparencia", icon: <Globe2 size={13} />, hint: "Definições do site, menus, partilha, favoritos, SEO e rodapé" },
 ];
 
 /** Secção a partir do caminho (`/cms/...`). */

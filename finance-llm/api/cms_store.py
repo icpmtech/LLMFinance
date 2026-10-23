@@ -41,6 +41,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from api import cms_editorial as editorial
 from api import indexnow
+from api import site_acoes
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +407,219 @@ def menu_themes() -> List[Dict[str, Any]]:
     """Temas e templates disponíveis para o menu público."""
     return copy.deepcopy(MENU_THEMES)
 
+
+# --------------------------------------------------------------------------
+# Partilha e favoritos (menu de partilha, cartões do blog e cabeçalho)
+# --------------------------------------------------------------------------
+#: Chaves do bloco `partilha` das definições. As redes vêm do catálogo único
+#: (`site_acoes.REDES`), pelo que um identificador inválido nunca chega ao HTML.
+PARTILHA_PADRAO: Dict[str, Any] = {
+    "redes": list(site_acoes.REDES_PADRAO),
+    "cartoes": True,
+    "cabecalho": True,
+    "guardar": True,
+    "redes_cabecalho": True,
+    "modelo": "",
+}
+
+#: Modelos de configuração **de origem**: partidas rápidas no painel, que se
+#: aplicam com um clique. `modelo` é o `id` do último aplicado (só informativo).
+PARTILHA_MODELOS: Tuple[Dict[str, Any], ...] = (
+    {
+        "id": "completo",
+        "name": "Completo",
+        "description": "Todas as redes, ações nos cartões e no topo do blog.",
+        "builtin": True,
+        "partilha": {
+            "redes": list(site_acoes.REDES_PADRAO),
+            "cartoes": True,
+            "cabecalho": True,
+            "guardar": True,
+            "redes_cabecalho": True,
+        },
+    },
+    {
+        "id": "redes-sociais",
+        "name": "Redes sociais",
+        "description": "TikTok, Instagram, YouTube e as restantes redes; sem fila no cabeçalho.",
+        "builtin": True,
+        "partilha": {
+            "redes": ["whatsapp", "x", "instagram", "tiktok", "youtube", "reddit", "threads", "bluesky", "email"],
+            "cartoes": True,
+            "cabecalho": True,
+            "guardar": True,
+            "redes_cabecalho": False,
+        },
+    },
+    {
+        "id": "profissional",
+        "name": "Profissional",
+        "description": "LinkedIn, X, email e Telegram a partir das ações do artigo.",
+        "builtin": True,
+        "partilha": {
+            "redes": ["linkedin", "x", "email", "telegram", "whatsapp"],
+            "cartoes": False,
+            "cabecalho": True,
+            "guardar": True,
+            "redes_cabecalho": True,
+        },
+    },
+    {
+        "id": "minimo",
+        "name": "Mínimo",
+        "description": "Só WhatsApp, email e favoritos — sem redes nos cartões nem no cabeçalho.",
+        "builtin": True,
+        "partilha": {
+            "redes": ["whatsapp", "email"],
+            "cartoes": False,
+            "cabecalho": False,
+            "guardar": True,
+            "redes_cabecalho": False,
+        },
+    },
+    {
+        "id": "favoritos",
+        "name": "Só favoritos",
+        "description": "Guarda artigos sem menu de partilha (o «Copiar ligação» fica).",
+        "builtin": True,
+        "partilha": {
+            "redes": [],
+            "cartoes": True,
+            "cabecalho": True,
+            "guardar": True,
+            "redes_cabecalho": False,
+        },
+    },
+)
+
+
+def _partilha_normalizada(valor: Any) -> Dict[str, Any]:
+    """Bloco `partilha` válido: redes do catálogo e interruptores a sério.
+
+    Campo ausente volta à predefinição; campo presente (mesmo `[]`) fica como
+    veio — o editor pode querer mesmo uma lista de redes vazia.
+    """
+    origem = valor if isinstance(valor, dict) else {}
+    resultado: Dict[str, Any] = {}
+    if "redes" in origem:
+        resultado["redes"] = site_acoes.redes_validas(origem.get("redes"))
+    for chave in ("cartoes", "cabecalho", "guardar", "redes_cabecalho"):
+        if chave in origem:
+            resultado[chave] = bool(origem.get(chave))
+    if "modelo" in origem:
+        resultado["modelo"] = str(origem.get("modelo") or "").strip()[:40]
+    return resultado
+
+
+def partilha_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """O bloco `partilha` completo (predefinições por baixo do que está guardado)."""
+    guardado = (settings or get_settings()).get("partilha")
+    config = copy.deepcopy(PARTILHA_PADRAO)
+    config.update(_partilha_normalizada(guardado))
+    return config
+
+
+def partilha_mesclada(valor: Any, settings: Dict[str, Any]) -> Dict[str, Any]:
+    """A partilha em vigor com as alterações do pedido por cima.
+
+    Só as chaves enviadas mudam — é a regra de `save_settings` para todos os
+    campos das definições. Um `partilha` ausente ou parcial não repõe os
+    interruptores que ninguém tocou.
+    """
+    config = partilha_config(settings)
+    config.update(_partilha_normalizada(valor))
+    return config
+
+
+def partilha_modelos(settings: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Modelos de configuração: os de origem e os que os administradores criaram."""
+    personalizados = (settings or get_settings()).get("partilha_modelos")
+    modelos = [copy.deepcopy(modelo) for modelo in PARTILHA_MODELOS]
+    if isinstance(personalizados, list):
+        for modelo in personalizados:
+            if not isinstance(modelo, dict) or not modelo.get("id"):
+                continue
+            if any(existente.get("id") == modelo.get("id") for existente in modelos):
+                continue
+            modelos.append(copy.deepcopy(modelo))
+    return modelos
+
+
+def _modelos_validados(valor: Any) -> List[Dict[str, Any]]:
+    """Modelos personalizados limpos (id, nome, descrição e bloco `partilha`)."""
+    if not isinstance(valor, list):
+        return []
+    modelos: List[Dict[str, Any]] = []
+    vistos = {modelo["id"] for modelo in PARTILHA_MODELOS}
+    for item in valor:
+        if not isinstance(item, dict):
+            continue
+        nome = " ".join(str(item.get("name") or "").split())[:60]
+        if not nome:
+            continue
+        modelo_id = re.sub(r"[^a-z0-9_-]+", "-", str(item.get("id") or "").strip().lower()).strip("-")
+        if not modelo_id:
+            modelo_id = f"modelo-{uuid.uuid4().hex[:8]}"
+        if modelo_id in vistos:
+            continue
+        vistos.add(modelo_id)
+        modelos.append(
+            {
+                "id": modelo_id,
+                "name": nome,
+                "description": " ".join(str(item.get("description") or "").split())[:160],
+                "builtin": False,
+                "partilha": {**PARTILHA_PADRAO, **_partilha_normalizada(item.get("partilha"))},
+            }
+        )
+    return modelos
+
+
+def save_partilha_modelo(payload: Dict[str, Any], author: str = "") -> List[Dict[str, Any]]:
+    """Cria (ou substitui) um modelo de configuração de partilha.
+
+    Só administradores chegam aqui — o modelo muda o aspeto do site todo. Os
+    modelos de origem (`builtin`) não se alteram: um nome igual ao deles cria
+    um modelo novo com o `id` livre.
+    """
+    with _lock:
+        store = _load()
+        settings = store["settings"]
+        existentes = _modelos_validados(settings.get("partilha_modelos"))
+        atual = dict(payload or {})
+        nome = " ".join(str(atual.get("name") or "").split())[:60]
+        if not nome:
+            raise ValueError("O modelo precisa de um nome.")
+        atual["name"] = nome
+        modelo_id = re.sub(r"[^a-z0-9_-]+", "-", str(atual.get("id") or "").strip().lower()).strip("-")
+        if modelo_id and any(item.get("id") == modelo_id for item in existentes):
+            existentes = [item for item in existentes if item.get("id") != modelo_id]
+        atual["id"] = modelo_id or f"modelo-{uuid.uuid4().hex[:8]}"
+        if any(modelo["id"] == atual["id"] for modelo in PARTILHA_MODELOS):
+            atual["id"] = f"{atual['id']}-{uuid.uuid4().hex[:6]}"
+        settings["partilha_modelos"] = _modelos_validados([*existentes, atual])
+        settings["updated_at"] = _now()
+        settings["updated_by"] = author
+        _log(store, "alterar", "settings", {"id": "settings", "title": f"Modelo de partilha · {nome}"}, author)
+        _write_store(store)
+        return partilha_modelos(get_settings())
+
+
+def delete_partilha_modelo(modelo_id: str, author: str = "") -> List[Dict[str, Any]]:
+    """Apaga um modelo de configuração personalizado (os de origem não saem)."""
+    with _lock:
+        store = _load()
+        settings = store["settings"]
+        existentes = _modelos_validados(settings.get("partilha_modelos"))
+        restantes = [item for item in existentes if item.get("id") != modelo_id]
+        if len(restantes) != len(existentes):
+            settings["partilha_modelos"] = restantes
+            settings["updated_at"] = _now()
+            settings["updated_by"] = author
+            _log(store, "apagar", "settings", {"id": "settings", "title": f"Modelo de partilha · {modelo_id}"}, author)
+            _write_store(store)
+        return partilha_modelos(get_settings())
+
 MAX_MEDIA_BYTES = 12 * 1024 * 1024
 MAX_REVISIONS = 30
 MAX_ACTIVITY = 400
@@ -456,7 +670,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "footer_text": "© Sabemos Studio — todos os direitos reservados.",
     "logo_id": None,
     "favicon_id": None,
-    "social": {"email": "", "linkedin": "", "x": "", "github": ""},
+    # Redes com endereço público: alimentam a fila do cabeçalho e o rodapé.
+    "social": {rede["id"]: "" for rede in site_acoes.REDES},
+    "partilha": copy.deepcopy(PARTILHA_PADRAO),
+    "partilha_modelos": [],
     "seo": {"title": "", "description": "", "image_id": None, "keywords": []},
     "robots": "index, follow",
     "analytics_id": "",
@@ -1768,12 +1985,23 @@ def get_settings() -> Dict[str, Any]:
         template_key = f"{location}_menu_template"
         settings.setdefault(theme_key, "pastilhas")
         settings.setdefault(template_key, "padrao")
+    # O bloco de partilha é completado com as predefinições: uma instalação
+    # antiga (sem a chave) passa a ter o menu de partilha completo.
+    settings["partilha"] = partilha_config(settings)
+    settings["partilha_modelos"] = [
+        copy.deepcopy(modelo)
+        for modelo in settings.get("partilha_modelos") or []
+        if isinstance(modelo, dict) and modelo.get("id")
+    ]
     return settings
 
 
 def save_settings(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
     store = _load()
     settings = store["settings"]
+    # A partilha é lida do que já estava guardado: um pedido com só uma chave
+    # dela muda essa chave e deixa as outras como estavam.
+    partilha_anterior = copy.deepcopy(settings.get("partilha"))
     for key in DEFAULT_SETTINGS:
         if key not in payload:
             continue
@@ -1805,6 +2033,16 @@ def save_settings(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
     settings["robots"] = str(settings.get("robots") or "index, follow")
     if not isinstance(settings.get("social"), dict):
         settings["social"] = copy.deepcopy(DEFAULT_SETTINGS["social"])
+    settings["social"] = {
+        rede["id"]: str((settings.get("social") or {}).get(rede["id"]) or "").strip()
+        for rede in site_acoes.REDES
+    }
+    # Partilha: campo ausente mantém o que estava; campo presente é validado.
+    settings["partilha"] = partilha_mesclada(
+        payload.get("partilha"),
+        {**settings, "partilha": partilha_anterior},
+    )
+    settings["partilha_modelos"] = _modelos_validados(settings.get("partilha_modelos"))
     if not isinstance(settings.get("seo"), dict):
         settings["seo"] = copy.deepcopy(DEFAULT_SETTINGS["seo"])
     settings["seo"]["keywords"] = _keywords((settings.get("seo") or {}).get("keywords"))
@@ -2098,6 +2336,11 @@ def catalogue() -> Dict[str, Any]:
             {"id": template.get("id"), "name": template.get("name"), "kind": template.get("kind"), "builtin": template.get("builtin")}
             for template in store["templates"]
         ],
+        # Partilha: o catálogo das redes (menu de partilha, cabeçalho e rodapé) e
+        # os modelos de configuração que o painel sabe aplicar.
+        "redes_partilha": site_acoes.redes_do_catalogo(),
+        "partilha": partilha_config(settings),
+        "partilha_modelos": partilha_modelos(settings),
         "menu_themes": MENU_THEMES,
         "blog_url": "/site/blog",
         "site_url": "/site",

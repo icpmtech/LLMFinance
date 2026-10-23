@@ -4,6 +4,12 @@ O mesmo bloco serve o blog e os estudos de benchmark: «Partilhar» (menu com as
 redes, mais a partilha do sistema quando o browser a tem) e «Guardar», que
 marca a página com uma estrela.
 
+As redes vivem numa só lista (`REDES`): o menu de partilha, a fila do cabeçalho,
+o rodapé e o painel do CMS leem daqui, pelo que acrescentar uma rede é acrescentar
+uma linha. Três delas — TikTok, Instagram e YouTube — não têm endereço de
+partilha (o conteúdo entra pela aplicação): nessas o botão copia a ligação e abre
+a rede, com o aviso de que basta colar.
+
 Os favoritos vivem **no browser** (`localStorage`): não há sessão no site
 público e não faz sentido pedir uma conta para guardar um artigo. O preço disto
 é que a lista não viaja entre dispositivos — a página `/site/favoritos` diz
@@ -17,11 +23,110 @@ partilha continua a abrir (`<details>`).
 from __future__ import annotations
 
 from html import escape
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, quote_plus
 
 #: Chave do `localStorage`. Muda de nome sempre que o formato dos itens mudar.
 CHAVE_FAVORITOS = "sabemos:favoritos:v1"
 CAMINHO_FAVORITOS = "/site/favoritos"
+
+#: Catálogo das redes: a mesma lista em todo o lado (menu de partilha, fila do
+#: cabeçalho, rodapé e painel do CMS). `tipo` diz como se partilha:
+#:
+#: * `partilha` — a rede aceita o endereço no próprio link (`?url=…`);
+#: * `copiar`   — a rede não aceita (TikTok, Instagram, YouTube): copia-se a
+#:   ligação, abre-se a rede e o aviso diz para colar.
+#:
+#: `perfil` é o endereço público usado no cabeçalho e no rodapé quando o editor
+#: o preenche nas definições.
+REDES: Tuple[Dict[str, str], ...] = (
+    {"id": "whatsapp", "label": "WhatsApp", "tipo": "partilha", "perfil": "https://wa.me/"},
+    {"id": "x", "label": "X", "tipo": "partilha", "perfil": "https://x.com/"},
+    {"id": "facebook", "label": "Facebook", "tipo": "partilha", "perfil": "https://www.facebook.com/"},
+    {"id": "linkedin", "label": "LinkedIn", "tipo": "partilha", "perfil": "https://www.linkedin.com/"},
+    {"id": "instagram", "label": "Instagram", "tipo": "copiar", "perfil": "https://www.instagram.com/"},
+    {"id": "tiktok", "label": "TikTok", "tipo": "copiar", "perfil": "https://www.tiktok.com/"},
+    {"id": "youtube", "label": "YouTube", "tipo": "copiar", "perfil": "https://www.youtube.com/"},
+    {"id": "reddit", "label": "Reddit", "tipo": "partilha", "perfil": "https://www.reddit.com/"},
+    {"id": "telegram", "label": "Telegram", "tipo": "partilha", "perfil": "https://t.me/"},
+    {"id": "threads", "label": "Threads", "tipo": "partilha", "perfil": "https://www.threads.net/"},
+    {"id": "bluesky", "label": "Bluesky", "tipo": "partilha", "perfil": "https://bsky.app/"},
+    {"id": "pinterest", "label": "Pinterest", "tipo": "partilha", "perfil": "https://www.pinterest.com/"},
+    {"id": "tumblr", "label": "Tumblr", "tipo": "partilha", "perfil": "https://www.tumblr.com/"},
+    # O GitHub não é destino de partilha de um artigo: entra só nas ligações de
+    # perfil (cabeçalho e rodapé), por isso fica fora do menu de partilha.
+    {"id": "github", "label": "GitHub", "tipo": "perfil", "perfil": "https://github.com/", "menu": "nao"},
+    {"id": "email", "label": "Email", "tipo": "partilha", "perfil": ""},
+)
+
+#: Índice por identificador (e a ordem em que o menu as mostra).
+REDES_POR_ID: Dict[str, Dict[str, str]] = {rede["id"]: rede for rede in REDES}
+
+#: Redes que podem entrar no menu de partilha (todas menos as de perfil).
+REDES_MENU: Tuple[Dict[str, str], ...] = tuple(rede for rede in REDES if rede.get("menu") != "nao")
+
+#: O que o menu mostra enquanto ninguém escolher outra coisa no CMS.
+REDES_PADRAO: Tuple[str, ...] = (
+    "whatsapp",
+    "x",
+    "facebook",
+    "linkedin",
+    "instagram",
+    "tiktok",
+    "youtube",
+    "reddit",
+    "telegram",
+    "threads",
+    "bluesky",
+    "pinterest",
+    "tumblr",
+    "email",
+)
+
+#: Acima disto, o menu abre em duas colunas (senão ficava mais alto do que o ecrã).
+REDES_MENU_LARGO = 8
+
+
+def redes_do_catalogo() -> List[Dict[str, str]]:
+    """Cópia da lista das redes, para o painel do CMS e para o `catalogue()`."""
+    return [dict(rede) for rede in REDES]
+
+
+def redes_validas(valor: Any) -> List[str]:
+    """Identificadores aceites para o menu de partilha, sem repetições.
+
+    A ordem é a do catálogo (o painel mostra-as assim) e as redes que só servem
+    de ligação de perfil (GitHub) ficam de fora.
+    """
+    if isinstance(valor, str):
+        escolhidas = {valor.strip().lower()}
+    elif isinstance(valor, Sequence):
+        escolhidas = {str(item).strip().lower() for item in valor if str(item or "").strip()}
+    else:
+        escolhidas = set()
+    return [rede["id"] for rede in REDES_MENU if rede["id"] in escolhidas]
+
+
+def perfis_configurados(social: Any) -> List[Tuple[str, str, str]]:
+    """Redes com endereço público preenchido: `(id, rótulo, href)`.
+
+    É o que o cabeçalho e o rodapé mostram. O email chega sem esquema e ganha
+    `mailto:`; o resto é um endereço http(s) escrito tal e qual.
+    """
+    if not isinstance(social, dict):
+        return []
+    perfis: List[Tuple[str, str, str]] = []
+    for rede in REDES:
+        valor = str(social.get(rede["id"]) or "").strip()
+        if not valor:
+            continue
+        if rede["id"] == "email":
+            href = valor if valor.lower().startswith("mailto:") else f"mailto:{valor}"
+        else:
+            href = valor
+        perfis.append((rede["id"], rede["label"], href))
+    return perfis
+
 
 _ICONE_PARTILHAR = (
     '<svg class="site-acao-icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
@@ -214,6 +319,47 @@ _SCRIPT = """
     }
   }
 
+  // O menu é mais largo do que um cartão: ao abrir, desloca-se o mínimo para
+  // caber no ecrã (o mesmo menu serve a barra do artigo, encostada à esquerda,
+  // e o cartão, onde o botão pode estar perto da margem direita).
+  function alinharMenu(detalhe) {
+    var menu = detalhe.querySelector(".site-partilha-menu");
+    if (!menu) return;
+    menu.style.removeProperty("--desvio");
+    if (!menu.offsetWidth) return;
+    var margem = 10;
+    // No cartão a caixa é presa ao ecrã (`position: fixed`): fica por cima do
+    // botão quando cabe, senão por baixo, e encostada à esquerda dele.
+    if (detalhe.closest(".site-cartao-acoes")) {
+      var alvo = detalhe.getBoundingClientRect();
+      var altura = menu.offsetHeight;
+      var topo = alvo.top - altura - 8;
+      if (topo < margem) {
+        topo = alvo.bottom + 8;
+        if (topo + altura > window.innerHeight - margem) topo = Math.max(margem, window.innerHeight - altura - margem);
+      }
+      menu.style.top = Math.round(topo) + "px";
+      menu.style.bottom = "auto";
+      menu.style.left = Math.round(alvo.left) + "px";
+    }
+    var caixa = menu.getBoundingClientRect();
+    var desvio = 0;
+    if (caixa.right > window.innerWidth - margem) desvio = window.innerWidth - margem - caixa.right;
+    if (caixa.left + desvio < margem) desvio = margem - caixa.left;
+    if (desvio) menu.style.setProperty("--desvio", Math.round(desvio) + "px");
+  }
+
+  document.addEventListener("toggle", function (evento) {
+    var alvo = evento.target;
+    if (!alvo || alvo.tagName !== "DETAILS" || !alvo.classList || !alvo.classList.contains("site-partilha")) return;
+    if (alvo.open) alinharMenu(alvo);
+  }, true);
+
+  window.addEventListener("resize", function () {
+    var abertos = document.querySelectorAll("details.site-partilha[open]");
+    for (var i = 0; i < abertos.length; i++) alinharMenu(abertos[i]);
+  });
+
   document.addEventListener("click", function (evento) {
     var alvo = evento.target;
     if (!alvo || !alvo.closest) return;
@@ -228,6 +374,20 @@ _SCRIPT = """
       copiar(endereco).then(
         function () { aviso("Ligação copiada"); },
         function () { aviso("Não foi possível copiar"); }
+      );
+      fecharMenus(null);
+      return;
+    }
+
+    // Redes sem endereço de partilha (TikTok, Instagram, YouTube): a ligação vai
+    // para a área de transferência e o browser abre a rede — o aviso diz para
+    // colar. O `href` segue o caminho normal (nova janela), sem `preventDefault`.
+    var copiarEAbrir = alvo.closest("[data-partilha-copiar]");
+    if (copiarEAbrir) {
+      var nome = copiarEAbrir.getAttribute("data-partilha-rede") || "rede social";
+      copiar(copiarEAbrir.getAttribute("data-partilha-copiar") || location.href).then(
+        function () { aviso("Ligação copiada — cole no " + nome); },
+        function () {}
       );
       fecharMenus(null);
       return;
@@ -288,21 +448,96 @@ def script() -> str:
     return _SCRIPT.replace("__CHAVE__", CHAVE_FAVORITOS).strip()
 
 
-def _ligacoes_partilha(url: str, titulo: str) -> str:
+def _destino_da_rede(rede: str, url: str, titulo: str, imagem: str = "") -> str:
+    """Endereço de partilha da rede (o próprio sítio quando não aceita uma)."""
     texto = quote_plus(f"{titulo} {url}")
+    alvo = quote_plus(url)
+    etiqueta = quote_plus(titulo)
     assunto = quote(titulo)
-    redes = (
-        ("WhatsApp", f"https://wa.me/?text={texto}"),
-        ("X", f"https://x.com/intent/post?text={quote_plus(titulo)}&url={quote_plus(url)}"),
-        ("LinkedIn", f"https://www.linkedin.com/sharing/share-offsite/?url={quote_plus(url)}"),
-        ("Facebook", f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(url)}"),
-        ("Email", f"mailto:?subject={assunto}&body={texto}"),
-    )
-    return "".join(
-        f'<a class="site-partilha-item" role="menuitem" href="{escape(destino, quote=True)}"'
-        ' target="_blank" rel="noopener">'
-        f"{escape(nome)}</a>"
-        for nome, destino in redes
+    if rede == "whatsapp":
+        return f"https://wa.me/?text={texto}"
+    if rede == "x":
+        return f"https://x.com/intent/post?text={etiqueta}&url={alvo}"
+    if rede == "facebook":
+        return f"https://www.facebook.com/sharer/sharer.php?u={alvo}"
+    if rede == "linkedin":
+        return f"https://www.linkedin.com/sharing/share-offsite/?url={alvo}"
+    if rede == "reddit":
+        return f"https://www.reddit.com/submit?url={alvo}&title={etiqueta}"
+    if rede == "telegram":
+        return f"https://t.me/share/url?url={alvo}&text={etiqueta}"
+    if rede == "threads":
+        return f"https://www.threads.net/intent/post?text={texto}"
+    if rede == "bluesky":
+        return f"https://bsky.app/intent/compose?text={texto}"
+    if rede == "pinterest":
+        return (
+            "https://www.pinterest.com/pin/create/button/"
+            f"?url={alvo}&description={etiqueta}" + (f"&media={quote_plus(imagem)}" if imagem else "")
+        )
+    if rede == "tumblr":
+        return f"https://www.tumblr.com/widgets/share/tool?canonicalUrl={alvo}&title={etiqueta}"
+    if rede == "email":
+        return f"mailto:?subject={assunto}&body={texto}"
+    # TikTok, Instagram e YouTube e GitHub: sem link de partilha — abre-se a rede
+    # (o script copia a ligação antes) e o endereço do perfil vem do catálogo.
+    return REDES_POR_ID[rede]["perfil"] or url
+
+
+def _ligacoes_partilha(
+    url: str,
+    titulo: str,
+    redes: Optional[Sequence[str]] = None,
+    imagem: str = "",
+) -> str:
+    """Itens do menu de partilha, pelas redes escolhidas (por omissão, todas)."""
+    escolhidas = redes_validas(redes) if redes is not None else list(REDES_PADRAO)
+    partes: List[str] = []
+    for rede in escolhidas:
+        info = REDES_POR_ID.get(rede)
+        if not info:
+            continue
+        destino = _destino_da_rede(rede, url, titulo, imagem)
+        copiar = (
+            f' data-partilha-copiar="{escape(url, quote=True)}"'
+            f' data-partilha-rede="{escape(info["label"], quote=True)}"'
+            if info["tipo"] == "copiar"
+            else ""
+        )
+        partes.append(
+            f'<a class="site-partilha-item" role="menuitem" href="{escape(destino, quote=True)}"'
+            f' target="_blank" rel="noopener"{copiar}>{escape(info["label"])}</a>'
+        )
+    return "".join(partes)
+
+
+def _menu_partilha(
+    url: str,
+    titulo: str,
+    *,
+    redes: Optional[Sequence[str]] = None,
+    imagem: str = "",
+    resumo: str = "",
+    rotulo: str = "Partilhar",
+    atributos_resumo: str = "",
+    aria: str = "Partilhar esta página",
+) -> str:
+    """O `<details>` do menu de partilha (abre sem JavaScript)."""
+    escolhidas = redes_validas(redes) if redes is not None else list(REDES_PADRAO)
+    largura = " site-partilha-menu--redes" if len(escolhidas) > REDES_MENU_LARGO else ""
+    itens = _ligacoes_partilha(url, titulo, escolhidas, imagem)
+    return (
+        '<details class="site-partilha">'
+        f'<summary class="{escape(resumo or "site-acao", quote=True)}"{atributos_resumo}>'
+        f"{_ICONE_PARTILHAR}{escape(rotulo) if rotulo else ''}</summary>"
+        f'<div class="site-partilha-menu{largura}" role="menu" aria-label="{escape(aria, quote=True)}">'
+        + itens
+        + '<button type="button" class="site-partilha-item" role="menuitem" data-partilhar hidden'
+        + f' data-url="{escape(url, quote=True)}" data-titulo="{escape(titulo, quote=True)}">'
+        + "Partilhar…</button>"
+        + '<button type="button" class="site-partilha-item" role="menuitem"'
+        + f' data-copiar="{escape(url, quote=True)}">Copiar ligação</button>'
+        + "</div></details>"
     )
 
 
@@ -313,12 +548,19 @@ def barra_acoes(
     tipo: str = "pagina",
     chave: str = "",
     extra: str = "",
+    redes: Optional[Sequence[str]] = None,
+    guardar: bool = True,
+    imagem: str = "",
+    com_script: bool = True,
 ) -> str:
     """A barra «Partilhar · Guardar · ver favoritos» de uma página.
 
     `url` é o endereço que se partilha (absoluto quando o site tem `base_url`);
     `chave` identifica o favorito e por omissão é o próprio `url`. `extra` entra
     à frente dos botões — o blog mete aí o descarregamento do relatório.
+    `redes` são as redes do menu (por omissão, as de `REDES_PADRAO`) e `guardar`
+    desliga o botão dos favoritos. `com_script=False` serve as listas: o script
+    entra uma vez por página (ver `script()`).
     """
     url = str(url or "")
     titulo = str(titulo or "")
@@ -329,29 +571,73 @@ def barra_acoes(
         f' data-titulo="{escape(titulo, quote=True)}"'
         f' data-tipo="{escape(tipo, quote=True)}"'
     )
+    guardar_html = (
+        f'<button type="button" class="site-acao site-acao--guardar" data-favoritar {atributos}>'
+        + _ICONE_ESTRELA
+        + '<span data-favoritar-rotulo>Guardar</span></button>'
+        if guardar
+        else ""
+    )
     return (
         '<div class="site-acoes">'
         + extra
-        + '<details class="site-partilha">'
-        + f'<summary class="site-acao">{_ICONE_PARTILHAR}Partilhar</summary>'
-        + '<div class="site-partilha-menu" role="menu" aria-label="Partilhar esta página">'
-        + _ligacoes_partilha(url, titulo)
-        + '<button type="button" class="site-partilha-item" role="menuitem" data-partilhar hidden'
-        + f' data-url="{escape(url, quote=True)}" data-titulo="{escape(titulo, quote=True)}">'
-        + "Partilhar…</button>"
-        + '<button type="button" class="site-partilha-item" role="menuitem"'
-        + f' data-copiar="{escape(url, quote=True)}">Copiar ligação</button>'
-        + "</div></details>"
-        + f'<button type="button" class="site-acao site-acao--guardar" data-favoritar {atributos}>'
-        + _ICONE_ESTRELA
-        + '<span data-favoritar-rotulo>Guardar</span></button>'
+        + _menu_partilha(url, titulo, redes=redes, imagem=imagem)
+        + guardar_html
         + '<a class="site-acao site-acao--ligacao" href="'
         + CAMINHO_FAVORITOS
         + '" data-favoritos-ligacao hidden>'
         + '<span data-favoritos-contagem>0</span> favoritos</a>'
         + "</div>"
-        + script()
+        + (script() if com_script else "")
     )
+
+
+def acoes_do_cartao(
+    *,
+    chave: str,
+    url: str,
+    titulo: str,
+    tipo: str = "artigo",
+    imagem: str = "",
+    redes: Optional[Sequence[str]] = None,
+    guardar: bool = True,
+) -> str:
+    """A estrela e a partilha de um cartão numa lista (blog, estudos, produtos).
+
+    Não traz script — a página que o usa chama `script()` uma vez. As duas ações
+    ficam em círculos pequenos, por cima do cartão (ver `.site-cartao-acoes`).
+    """
+    escolhidas = redes_validas(redes) if redes is not None else list(REDES_PADRAO)
+    if not escolhidas and not guardar:
+        return ""
+    url = str(url or "")
+    titulo = str(titulo or "")
+    partes: List[str] = []
+    if escolhidas:
+        partes.append(
+            _menu_partilha(
+                url,
+                titulo,
+                redes=escolhidas,
+                imagem=imagem,
+                resumo="site-fav-icone site-fav-icone--partilha",
+                rotulo="",
+                atributos_resumo=f' aria-label="Partilhar «{escape(titulo, quote=True)}»" title="Partilhar"',
+                aria="Partilhar este artigo",
+            )
+        )
+    if guardar:
+        partes.append(
+            botao_favorito(
+                chave=chave,
+                url=url,
+                titulo=titulo,
+                tipo=tipo,
+                imagem=imagem,
+            )
+        )
+    return f'<div class="site-cartao-acoes">{"".join(partes)}</div>'
+
 
 
 def botao_favorito(

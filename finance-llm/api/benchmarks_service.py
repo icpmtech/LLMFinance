@@ -1820,11 +1820,14 @@ def html_publico(
         )
 
     base_url = str(cms.get_settings().get("base_url") or "").rstrip("/")
+    partilha = cms.partilha_config()
     acoes = site_acoes.barra_acoes(
         url=f"{base_url}{caminho}" if base_url else caminho,
         titulo=titulo,
         tipo="estudo",
         chave=caminho,
+        redes=partilha.get("redes"),
+        guardar=bool(partilha.get("guardar", True)),
     )
 
     nota_filtros = f"{int(comparacao.get('total') or 0)} produtos"

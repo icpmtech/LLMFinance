@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from elasticsearch import Elasticsearch
 from api.es.core import get_es_client
-from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
+from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, EMPRESAS_LOCAIS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, FREGUESIAS_CONTACTOS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -2379,6 +2379,111 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    freguesias_contactos_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "municipio": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "municipio_keyword": {"type": "keyword", "ignore_above": 128},
+            "municipio_fold": {"type": "keyword", "ignore_above": 128},
+            "freguesia": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "freguesia_keyword": {"type": "keyword", "ignore_above": 256},
+            "freguesia_fold": {"type": "keyword", "ignore_above": 256},
+            "codigo_ine": {"type": "keyword", "ignore_above": 16},
+            "nif": {"type": "keyword", "ignore_above": 32},
+            "nome_presidente": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "nome_presidente_keyword": {"type": "keyword", "ignore_above": 256},
+            "nome_presidente_fold": {"type": "keyword", "ignore_above": 256},
+            "morada": {"type": "text", "analyzer": "world_folding"},
+            "morada_fold": {"type": "keyword", "ignore_above": 512},
+            "codigo_postal": {"type": "keyword", "ignore_above": 16},
+            "localidade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "localidade_keyword": {"type": "keyword", "ignore_above": 128},
+            "localidade_fold": {"type": "keyword", "ignore_above": 128},
+            "descricao_postal": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "descricao_postal_keyword": {"type": "keyword", "ignore_above": 128},
+            "descricao_postal_fold": {"type": "keyword", "ignore_above": 128},
+            "email": {"type": "keyword", "ignore_above": 256},
+            "email_fold": {"type": "keyword", "ignore_above": 256},
+            "telefone": {"type": "keyword", "ignore_above": 32},
+            "slug": {"type": "keyword", "ignore_above": 256},
+            "fonte": {"type": "keyword", "ignore_above": 256},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    empresas_locais_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "designacao": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "designacao_keyword": {"type": "keyword", "ignore_above": 512},
+            "designacao_fold": {"type": "keyword", "ignore_above": 512},
+            "entidade_local": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "entidade_local_keyword": {"type": "keyword", "ignore_above": 256},
+            "entidade_local_fold": {"type": "keyword", "ignore_above": 256},
+            "entidade_dominante": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "entidade_dominante_keyword": {"type": "keyword", "ignore_above": 256},
+            "entidade_dominante_fold": {"type": "keyword", "ignore_above": 256},
+            "participacao_pct": {"type": "float"},
+            "setor": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 64}},
+            },
+            "setor_keyword": {"type": "keyword", "ignore_above": 64},
+            "setor_fold": {"type": "keyword", "ignore_above": 64},
+            "data_constituicao": {"type": "date"},
+            "observacoes": {"type": "text", "analyzer": "world_folding"},
+            "observacoes_keyword": {"type": "keyword", "ignore_above": 1024},
+            "observacoes_fold": {"type": "keyword", "ignore_above": 1024},
+            "slug": {"type": "keyword", "ignore_above": 512},
+            "fonte": {"type": "keyword", "ignore_above": 256},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     # Abonos dos eleitos locais: uma linha da tabela oficial por documento.
     remuneracoes_mappings = {
         "properties": {
@@ -3319,6 +3424,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (MUNICIPIOS_DESPESAS_INDEX, municipios_despesas_mappings),
         (MUNICIPIO_PESSOAS_INDEX, municipio_pessoas_mappings),
         (MUNICIPIOS_CONTACTOS_INDEX, municipios_contactos_mappings),
+        (FREGUESIAS_CONTACTOS_INDEX, freguesias_contactos_mappings),
+        (EMPRESAS_LOCAIS_INDEX, empresas_locais_mappings),
         # Abonos dos eleitos locais: a tabela oficial e o mesmo direito aplicado
         # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
         (REMUNERACOES_INDEX, remuneracoes_mappings),

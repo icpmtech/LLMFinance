@@ -75,6 +75,7 @@ from api import notification_email
 from api import pesquisas_publicas as pesquisas
 from api import remuneracoes_publicas as remuneracoes_publicas
 from api import reports_store as relatorios_store
+from api import site_acoes
 from api.auth_routes import CurrentSession, optional_session
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,43 @@ def _privado(entity: str, session: Optional[CurrentSession]) -> None:
     """
     if entity in store.PRIVATE_ENTITIES and not session:
         raise HTTPException(status_code=401, detail="Entrar na plataforma para ler os contactos recebidos.")
+
+
+# A partilha e os favoritos mudam o aspeto do site todo (redes no cabeçalho, no
+# rodapé e nos cartões do blog): só administradores os configuram, e só eles
+# criam modelos de configuração.
+PARTILHA_CHAVES = ("partilha", "partilha_modelos")
+
+
+def _e_admin(session: Optional[CurrentSession]) -> bool:
+    return bool(session and (session.user.role or "member") == "admin")
+
+
+def _exigir_admin(session: Optional[CurrentSession], acao: str = "configurar a partilha e os favoritos") -> None:
+    if not session:
+        raise HTTPException(status_code=401, detail=f"Entrar na plataforma para {acao}.")
+    if not _e_admin(session):
+        raise HTTPException(status_code=403, detail=f"Só administradores podem {acao}.")
+
+
+def _sem_partilha_para_quem_nao_e_admin(payload: Dict[str, Any], session: Optional[CurrentSession]) -> Dict[str, Any]:
+    """Tira a partilha do pedido de quem não é administrador (sem a apagar).
+
+    O painel da aparência envia as definições todas; se um membro gravar o nome
+    do site, o bloco da partilha vem igual ao que está guardado e não há razão
+    para recusar a gravação. Só uma alteração a sério é que dá `403`.
+    """
+    if _e_admin(session) or not any(chave in payload for chave in PARTILHA_CHAVES):
+        return payload
+    atual = store.get_settings()
+    enviada = store.partilha_mesclada(payload.get("partilha"), atual)
+    modelos = payload.get("partilha_modelos")
+    if enviada != atual.get("partilha") or (modelos is not None and modelos != atual.get("partilha_modelos")):
+        raise HTTPException(
+            status_code=403,
+            detail="Só administradores podem configurar a partilha e os modelos de configuração.",
+        )
+    return {chave: valor for chave, valor in payload.items() if chave not in PARTILHA_CHAVES}
 
 
 # Secções da interface do CMS: `/cms/paginas`, `/cms/media`, `/cms/blog`… Estas
@@ -190,9 +228,59 @@ def cms_get_settings() -> Dict[str, Any]:
 
 @router.put("/cms/settings")
 def cms_put_settings(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
-    """Guarda as definições do site (só os campos enviados são alterados)."""
+    """Guarda as definições do site (só os campos enviados são alterados).
+
+    O bloco da partilha e os modelos de configuração (redes do cabeçalho,
+    rodapé, menu de partilha e cartões do blog) são só de administradores.
+    """
     author = _writer(session)
+    payload = _sem_partilha_para_quem_nao_e_admin(payload, session)
     return {"saved": True, "settings": store.save_settings(payload, author)}
+
+
+# ==========================================================================
+# Partilha e favoritos (modelos de configuração — só administradores)
+# ==========================================================================
+@router.get("/cms/partilha")
+def cms_get_partilha() -> Dict[str, Any]:
+    """Redes disponíveis, configuração em vigor e modelos de configuração."""
+    settings = store.get_settings()
+    return {
+        "redes": site_acoes.redes_do_catalogo(),
+        "partilha": store.partilha_config(settings),
+        "modelos": store.partilha_modelos(settings),
+    }
+
+
+@router.post("/cms/partilha/modelos")
+def cms_create_partilha_modelo(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Cria (ou substitui) um modelo de configuração de partilha."""
+    _exigir_admin(session, "criar modelos de configuração da partilha")
+    try:
+        modelos = store.save_partilha_modelo(payload, _author(session))
+    except ValueError as erro:
+        raise HTTPException(status_code=400, detail=str(erro)) from erro
+    return {"saved": True, "modelos": modelos}
+
+
+@router.delete("/cms/partilha/modelos/{modelo_id}")
+def cms_delete_partilha_modelo(modelo_id: str, session: Session = None) -> Dict[str, Any]:
+    """Apaga um modelo de configuração personalizado (os de origem ficam)."""
+    _exigir_admin(session, "apagar modelos de configuração da partilha")
+    return {"saved": True, "modelos": store.delete_partilha_modelo(modelo_id, _author(session))}
+
+
+@router.post("/cms/partilha/modelos/{modelo_id}/aplicar")
+def cms_aplicar_partilha_modelo(modelo_id: str, session: Session = None) -> Dict[str, Any]:
+    """Aplica um modelo de configuração às definições do site."""
+    _exigir_admin(session, "aplicar modelos de configuração da partilha")
+    settings = store.get_settings()
+    modelo = next((item for item in store.partilha_modelos(settings) if item.get("id") == modelo_id), None)
+    if not modelo:
+        raise HTTPException(status_code=404, detail=f"Modelo de partilha «{modelo_id}» não existe.")
+    partilha = {**store.partilha_config(settings), **(modelo.get("partilha") or {}), "modelo": modelo_id}
+    guardadas = store.save_settings({"partilha": partilha}, _author(session))
+    return {"saved": True, "modelo": modelo_id, "settings": guardadas}
 
 
 # ==========================================================================
@@ -812,17 +900,23 @@ def site_home() -> HTMLResponse:
 
 @router.get("/site/blog", response_class=HTMLResponse)
 def site_blog(page: int = Query(1, ge=1)) -> HTMLResponse:
-    """Índice do blog (ou a página «Blog» definida no CMS, na primeira página)."""
+    """Índice do blog, montado sobre a página «Blog» do CMS quando ela existe.
+
+    Os blocos da página (herói, texto, chamada à ação, contactos…) entram no
+    índice pela ordem do editor e o bloco «Últimos artigos» marca o lugar da
+    lista — que continua a ser a gerada, com categorias, etiquetas e paginação.
+    """
     settings = store.get_settings()
     blog_page_id = settings.get("blog_page_id")
-    if blog_page_id and page == 1:
+    doc = None
+    if blog_page_id:
         try:
-            doc = store.get_item("pages", str(blog_page_id))
+            candidato = store.get_item("pages", str(blog_page_id))
         except KeyError:
-            doc = None
-        if doc and doc.get("status") == "publicado" and doc.get("path"):
-            return HTMLResponse(render.render_page(doc, settings=settings), headers=_PUBLIC_HEADERS)
-    return HTMLResponse(render.render_blog(page_no=page, settings=settings), headers=_PUBLIC_HEADERS)
+            candidato = None
+        if candidato and candidato.get("status") == "publicado":
+            doc = candidato
+    return HTMLResponse(render.render_blog(page_no=page, page=doc, settings=settings), headers=_PUBLIC_HEADERS)
 
 
 @router.get("/site/blog/{slug}", response_class=HTMLResponse)

@@ -87,6 +87,8 @@ export type AppView =
   | "governo"
   | "municipios-despesas"
   | "municipios-contactos"
+  | "freguesias-contactos"
+  | "empresas-locais"
   | "partidos"
   | "erc"
   | "benchmark"

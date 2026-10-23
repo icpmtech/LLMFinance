@@ -312,6 +312,16 @@ MUNICIPIO_PESSOAS_INDEX = "finance_municipio_pessoas"
 # `data/municipios-contatos/contactos presidente CM 04092026.xlsx`.
 MUNICIPIOS_CONTACTOS_INDEX = "finance_municipios_contactos"
 
+# Contactos das juntas de freguesia. Alimentado por
+# `api/freguesias_contactos_service.py` a partir do Excel
+# `data/municipios-contatos/Contactos_freguesias.xlsx`.
+FREGUESIAS_CONTACTOS_INDEX = "finance_freguesias_contactos"
+
+# Empresas locais com participação de entidades municipais. Alimentado por
+# `api/empresas_locais_service.py` a partir do Excel
+# `data/municipios-contatos/empresas locais 12_02_2025.xlsx`.
+EMPRESAS_LOCAIS_INDEX = "finance_empresas_locais"
+
 
 
 # Abonos dos eleitos locais. Um documento por **linha da tabela oficial**
@@ -620,6 +630,30 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     MUNICIPIOS_CONTACTOS_INDEX: {
         # Nomes de municípios e de presidentes escritos com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    FREGUESIAS_CONTACTOS_INDEX: {
+        # Nomes de freguesias e de presidentes escritos com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    EMPRESAS_LOCAIS_INDEX: {
+        # Nomes de empresas e entidades locais escritos com acentos.
         "analysis": {
             "analyzer": {
                 "world_folding": {

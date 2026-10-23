@@ -111,6 +111,8 @@ import RemuneracoesPage from "./pages/RemuneracoesPage";
 import RemuneracoesApPage from "./pages/RemuneracoesApPage";
 import MunicipiosDespesasPage from "./pages/MunicipiosDespesasPage";
 import MunicipiosContactosPage from "./pages/MunicipiosContactosPage";
+import FreguesiasContactosPage from "./pages/FreguesiasContactosPage";
+import EmpresasLocaisPage from "./pages/EmpresasLocaisPage";
 import PartidosPage from "./pages/PartidosPage";
 import ErcPage from "./pages/ErcPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
@@ -470,6 +472,8 @@ function pathForView(
   }
   if (view === "municipios-despesas") return "/municipios/despesas";
   if (view === "municipios-contactos") return "/municipios/contactos";
+  if (view === "freguesias-contactos") return "/freguesias/contactos";
+  if (view === "empresas-locais") return "/empresas-locais";
   if (view === "partidos") return "/partidos";
   if (view === "erc") return "/erc";
   if (view === "benchmark") return "/benchmark";
@@ -742,6 +746,8 @@ export default function App() {
     if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) return "remuneracoes";
     if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) return "municipios-despesas";
     if (path === "/municipios/contactos" || path.startsWith("/municipios/contactos/")) return "municipios-contactos";
+    if (path === "/freguesias/contactos" || path.startsWith("/freguesias/contactos/")) return "freguesias-contactos";
+    if (path === "/empresas-locais" || path.startsWith("/empresas-locais/")) return "empresas-locais";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
     if (path === "/erc" || path.startsWith("/erc/")) return "erc";
     if (path === "/benchmark/portugal") return "benchmark-pt";
@@ -936,6 +942,8 @@ export default function App() {
       else if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) next = "remuneracoes";
       else if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) next = "municipios-despesas";
       else if (path === "/municipios/contactos" || path.startsWith("/municipios/contactos/")) next = "municipios-contactos";
+      else if (path === "/freguesias/contactos" || path.startsWith("/freguesias/contactos/")) next = "freguesias-contactos";
+      else if (path === "/empresas-locais" || path.startsWith("/empresas-locais/")) next = "empresas-locais";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
       else if (path === "/erc" || path.startsWith("/erc/")) next = "erc";
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
@@ -1881,6 +1889,10 @@ export default function App() {
     if (target === "municipios-despesas") return <MunicipiosDespesasPage />;
     // Contactos das câmaras municipais: presidente, morada, e-mail, telefone e site.
     if (target === "municipios-contactos") return <MunicipiosContactosPage />;
+    // Contactos das juntas de freguesia: presidente, morada, e-mail, telefone e código INE.
+    if (target === "freguesias-contactos") return <FreguesiasContactosPage />;
+    // Empresas locais com participação de entidades municipais.
+    if (target === "empresas-locais") return <EmpresasLocaisPage />;
     if (target === "partidos") return <PartidosPage />;
     // Portal da Transparência da ERC: entidades, pessoas dos órgãos sociais e OCS.
     if (target === "erc") return <ErcPage />;

@@ -91,10 +91,17 @@ já está publicado.
 
 ## Partilha do artigo
 
-Ao lado do relatório, cada artigo publicado tem um botão «Partilhar» que usa a
-**Web Share API** do sistema (`navigator.share`) com o título e o **endereço
-absoluto** do artigo (o `base_url` das definições do site). Onde a partilha do
-sistema não existe, o botão copia o endereço e diz «Ligação copiada».
+Ao lado do relatório, cada artigo publicado tem um botão «Partilhar» que abre o
+menu das redes e usa a **Web Share API** do sistema (`navigator.share`) com o
+título e o **endereço absoluto** do artigo (o `base_url` das definições do site).
+Onde a partilha do sistema não existe, o botão copia o endereço e diz «Ligação
+copiada».
+
+As redes vêm de um catálogo único (`api/site_acoes.py`, `REDES`): WhatsApp, X,
+Facebook, LinkedIn, Instagram, TikTok, YouTube, Reddit, Telegram, Threads,
+Bluesky, Pinterest, Tumblr, GitHub e email, mais «Copiar ligação» e
+«Partilhar…». TikTok, Instagram e YouTube não aceitam o endereço num link: nesses
+o botão copia a ligação e abre a rede («Ligação copiada — cole no TikTok»).
 
 O botão nasce escondido e é o próprio script do artigo que o mostra, quando há
 partilha ou área de transferência para usar: num contexto sem HTTPS não há
@@ -102,3 +109,60 @@ nenhuma das duas, e um botão que não faz nada é pior do que nenhum. Como o re
 do site, a partilha é o único elemento que precisa de JavaScript — o artigo
 lê-se igual sem ele. Na pré-visualização de um rascunho não entra o botão nem o
 script: um rascunho não tem endereço público para partilhar.
+
+## Partilha e favoritos nos cartões do blog
+
+Os cartões de `/site/blog` (e das listas de artigos dentro de páginas do CMS)
+trazem a estrela «Guardar» e a partilha do artigo, no rodapé do cartão. O script
+das ações entra **uma vez por página** (ver `_layout`), não em cada cartão.
+
+Cada cartão mostra ainda as **hashtags do artigo** (as etiquetas, até quatro;
+as restantes ficam num «+N»), cada uma a ligar à lista por etiqueta
+(`/site/etiqueta/<tag>`). Saem dos próprios `tags` do artigo — não há uma
+segunda lista para manter.
+
+Tudo isto se configura no CMS, em **Aparência → Partilha e favoritos**:
+
+| Campo | Para que serve |
+| --- | --- |
+| `redes` | Redes do menu «Partilhar» (artigos, cartões e estudos) |
+| `cartoes` | Ações nos cartões da lista do blog |
+| `cabecalho` | Barra «Partilhar · Guardar» no topo do blog |
+| `guardar` | Botão «Guardar» (favoritos no navegador) |
+| `redes_cabecalho` | Fila de redes no cabeçalho do site |
+
+A fila do cabeçalho e as ligações do rodapé usam os endereços públicos de
+**Ligações** (as mesmas redes do catálogo; vazio = escondido). A configuração
+guarda-se com as definições do site (`settings.partilha`).
+
+### Modelos de configuração (só administradores)
+
+Em Aparência há modelos prontos a aplicar — «Completo», «Redes sociais»,
+«Profissional», «Mínimo» e «Só favoritos» — e um administrador pode guardar a
+configuração atual como modelo novo (ficam em `settings.partilha_modelos`).
+
+O bloco da partilha e os modelos são **só de administradores**, na API
+(`PUT /cms/settings` recusa a alteração a um membro, com 403) e no painel (a
+secção aparece desativada). Rotas: `GET /cms/partilha`,
+`POST /cms/partilha/modelos`, `DELETE /cms/partilha/modelos/{id}` e
+`POST /cms/partilha/modelos/{id}/aplicar`.
+
+## A página do blog (blocos no índice)
+
+O índice `/site/blog` pode ser **montado com blocos**, sem perder a lista de
+artigos: a página escolhida em **Aparência → Página do blog** (`blog_page_id`)
+entra no índice com os seus blocos (abertura, texto, chamada à ação, contactos,
+formulário…), pela ordem do editor.
+
+- o bloco **«Últimos artigos»** marca o lugar da lista: é aí que entra a lista
+  gerada, com as categorias, as etiquetas, o cartão de cada artigo e a
+  **paginação** (`?page=`);
+- sem esse bloco, a lista fica **no fim**, depois dos blocos da página;
+- só o primeiro bloco «Últimos artigos» recebe a lista — duplicá-lo mostrava os
+  mesmos cartões duas vezes;
+- os agregados `/site/categoria/<slug>` e `/site/etiqueta/<tag>` continuam a
+  ser o índice gerado (os blocos são só do índice principal).
+
+No painel, **Blog → Página do blog** abre o editor de blocos da página em uso
+(ou cria uma com a abertura e o bloco «Últimos artigos», já publicada e ligada
+nas definições). Sem página escolhida, o índice é o gerado de sempre.

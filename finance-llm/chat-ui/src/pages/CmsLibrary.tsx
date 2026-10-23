@@ -39,12 +39,26 @@ import {
   Sheet,
   TextArea,
   TextInput,
+  Toggle,
   formatBytes,
   timeAgo,
 } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
-import type { CmsCategory, CmsContacto, CmsContent, CmsMedia, CmsMenu, CmsMenuItem, CmsMenuTheme, CmsSettings, CmsTemplate } from "../cmsApi";
+import type {
+  CmsCategory,
+  CmsContacto,
+  CmsContent,
+  CmsMedia,
+  CmsMenu,
+  CmsMenuItem,
+  CmsMenuTheme,
+  CmsPartilha,
+  CmsPartilhaModelo,
+  CmsSettings,
+  CmsTemplate,
+} from "../cmsApi";
 import type { CmsCtx } from "./CmsPanels";
+import { useAuth } from "../auth";
 
 function openExternal(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
@@ -1057,10 +1071,15 @@ function moveMenuItem(items: CmsMenuItem[], id: string, delta: number): CmsMenuI
 }
 
 export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
+  const { user } = useAuth();
+  const isAdmin = (user?.role ?? "member") === "admin";
   const [settings, setSettings] = useState<CmsSettings | null>(null);
   const [menus, setMenus] = useState<MenuDraft[]>([]);
   const [menuThemes, setMenuThemes] = useState<CmsMenuTheme[]>([]);
   const [pages, setPages] = useState<{ id: string; title: string; path: string }[]>([]);
+  const [modelos, setModelos] = useState<CmsPartilhaModelo[]>(() => ctx.catalogue.partilha_modelos ?? []);
+  const [novoModelo, setNovoModelo] = useState("");
+  const [modeloBusy, setModeloBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [menuBusy, setMenuBusy] = useState<string | null>(null);
@@ -1141,6 +1160,75 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
     setMenus((current) => current.map((entry) => (entry.id === menu.id ? { ...entry, menu_template: templateId } : entry)));
   };
 
+  /* -------------------------------------------------- partilha e favoritos */
+  const partilha: CmsPartilha = settings?.partilha ?? ctx.catalogue.partilha;
+  const redesEscolhidas = useMemo(() => new Set(partilha.redes ?? []), [partilha.redes]);
+  // As redes de perfil (GitHub) ficam nas ligações, não no menu de partilha.
+  const redesDoMenu = useMemo(
+    () => ctx.catalogue.redes_partilha.filter((rede) => rede.menu !== "nao"),
+    [ctx.catalogue.redes_partilha],
+  );
+
+  const patchPartilha = (patch: Partial<CmsPartilha>) =>
+    setSettings((current) => (current ? { ...current, partilha: { ...current.partilha, ...patch } } : current));
+
+  /** Liga/desliga uma rede e guarda a lista pela ordem do catálogo. */
+  const alternarRede = (redeId: string) => {
+    const proximas = new Set(redesEscolhidas);
+    if (proximas.has(redeId)) proximas.delete(redeId);
+    else proximas.add(redeId);
+    patchPartilha({ redes: redesDoMenu.map((rede) => rede.id).filter((id) => proximas.has(id)), modelo: "" });
+  };
+
+  /** Aplica um modelo de configuração (grava já no servidor — só administradores). */
+  const aplicarModelo = async (modelo: CmsPartilhaModelo) => {
+    setModeloBusy(modelo.id);
+    try {
+      const result = await cms.applyCmsPartilhaModelo(modelo.id);
+      setSettings(result.settings);
+      ctx.notify(`Modelo «${modelo.name}» aplicado.`, "ok");
+      ctx.refreshOverview();
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setModeloBusy(null);
+    }
+  };
+
+  const criarModelo = async () => {
+    const nome = novoModelo.trim();
+    if (!nome) return;
+    setModeloBusy("novo");
+    try {
+      const result = await cms.saveCmsPartilhaModelo({ name: nome, description: "Guardado a partir da configuração atual.", partilha });
+      setModelos(result.modelos);
+      // A lista personalizada das definições acompanha (senão a próxima gravação
+      // da aparência repunha os modelos antigos por cima).
+      setSettings((current) => (current ? { ...current, partilha_modelos: result.modelos.filter((item) => !item.builtin) } : current));
+      setNovoModelo("");
+      ctx.notify("Modelo criado.", "ok");
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setModeloBusy(null);
+    }
+  };
+
+  const apagarModelo = async (modelo: CmsPartilhaModelo) => {
+    if (!window.confirm(`Apagar o modelo «${modelo.name}»?`)) return;
+    setModeloBusy(modelo.id);
+    try {
+      const result = await cms.deleteCmsPartilhaModelo(modelo.id);
+      setModelos(result.modelos);
+      setSettings((current) => (current ? { ...current, partilha_modelos: result.modelos.filter((item) => !item.builtin) } : current));
+      ctx.notify("Modelo apagado.", "ok");
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setModeloBusy(null);
+    }
+  };
+
   /**
    * Editor de um nível do menu. Cada item pode abrir um **submenu**: um segundo
    * (e terceiro) nível, indentado por baixo do item que o abre e com os mesmos
@@ -1215,7 +1303,7 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
 
   return (
     <div className="space-y-3">
-      <PanelHeader title="Aparência" hint="Nome, descrição, tema, cor de realce, SEO, menus e rodapé do site público.">
+      <PanelHeader title="Aparência" hint="Nome, descrição, tema, cor de realce, SEO, partilha, menus e rodapé do site público.">
         <Button size="sm" variant="secondary" icon={<ExternalLink size={13} />} onClick={() => openExternal(cms.cmsPublicUrl("/"))}>
           Abrir o site
         </Button>
@@ -1282,17 +1370,161 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
         </div>
 
         <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-          <PanelHeader title="Ligações" hint="Aparecem no rodapé do site." />
+          <PanelHeader title="Ligações" hint="Endereços que aparecem no cabeçalho e no rodapé do site. Vazio = escondido." />
           <div className="grid gap-2 sm:grid-cols-2">
-            {(["email", "linkedin", "x", "github"] as const).map((key) => (
+            {ctx.catalogue.redes_partilha.map((rede) => (
               <TextInput
-                key={key}
-                label={key === "x" ? "X (Twitter)" : key === "email" ? "Email" : key === "linkedin" ? "LinkedIn" : "GitHub"}
-                value={String(settings.social?.[key] ?? "")}
-                onChange={(next) => set("social", { ...settings.social, [key]: next })}
+                key={rede.id}
+                label={rede.label}
+                value={String(settings.social?.[rede.id] ?? "")}
+                onChange={(next) => set("social", { ...settings.social, [rede.id]: next })}
+                placeholder={rede.id === "email" ? "geral@exemplo.pt" : rede.perfil}
               />
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 lg:col-span-2">
+          <PanelHeader
+            title="Partilha e favoritos"
+            hint="Redes do menu «Partilhar» nos artigos e nos cartões do blog, e fila de redes no cabeçalho do site."
+          >
+            {isAdmin ? (
+              <Button size="sm" variant="primary" icon={<Save size={13} />} loading={busy} onClick={() => void saveSettings()}>
+                Guardar definições
+              </Button>
+            ) : (
+              <span className="rounded-full border border-white/12 bg-white/[0.06] px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                só administradores
+              </span>
+            )}
+          </PanelHeader>
+          {!isAdmin && (
+            <Notice>
+              As redes de partilha, os modelos de configuração e a fila do cabeçalho são definidos por um administrador.
+              O que está aplicado continua a valer no site.
+            </Notice>
+          )}
+          <fieldset disabled={!isAdmin} className="mt-2 space-y-3 disabled:opacity-60">
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Redes no menu de partilha</p>
+              <div className="flex flex-wrap gap-1.5" data-testid="cms-partilha-redes">
+                {redesDoMenu.map((rede) => {
+                  const ativa = redesEscolhidas.has(rede.id);
+                  return (
+                    <button
+                      key={rede.id}
+                      type="button"
+                      aria-pressed={ativa}
+                      onClick={() => alternarRede(rede.id)}
+                      title={rede.tipo === "copiar" ? "Copia a ligação e abre a rede" : `Partilhar no ${rede.label}`}
+                      className={
+                        ativa
+                          ? "rounded-full border border-teal-300/60 bg-teal-400/15 px-2.5 py-1 text-[11.5px] font-medium text-teal-100"
+                          : "rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-muted-foreground hover:border-white/25"
+                      }
+                    >
+                      {rede.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10.5px] text-muted-foreground/70">
+                TikTok, Instagram e YouTube não têm ligação de partilha: o botão copia a ligação do artigo e abre a rede.
+                «Copiar ligação» e «Partilhar…» aparecem sempre.
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Toggle
+                checked={partilha.cartoes}
+                onChange={(next) => patchPartilha({ cartoes: next })}
+                label="Ações nos cartões do blog"
+                hint="Estrela e partilha em cada artigo da lista."
+              />
+              <Toggle
+                checked={partilha.cabecalho}
+                onChange={(next) => patchPartilha({ cabecalho: next })}
+                label="Barra no topo do blog"
+                hint="Partilhar e guardar o índice do blog."
+              />
+              <Toggle
+                checked={partilha.guardar}
+                onChange={(next) => patchPartilha({ guardar: next })}
+                label="Botão «Guardar» (favoritos)"
+                hint="A estrela que guarda no navegador."
+              />
+              <Toggle
+                checked={partilha.redes_cabecalho}
+                onChange={(next) => patchPartilha({ redes_cabecalho: next })}
+                label="Redes no cabeçalho do site"
+                hint="Fila «Redes» com os endereços preenchidos em Ligações."
+              />
+            </div>
+
+            <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Modelos de configuração
+                {partilha.modelo && (
+                  <span className="ml-2 rounded-full border border-teal-300/40 bg-teal-400/10 px-2 py-0.5 text-[10px] normal-case text-teal-100">
+                    em vigor: {modelos.find((item) => item.id === partilha.modelo)?.name ?? partilha.modelo}
+                  </span>
+                )}
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {modelos.map((modelo) => (
+                  <li
+                    key={modelo.id}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2 py-1.5"
+                  >
+                    <span className="text-[12px] font-medium text-foreground">{modelo.name}</span>
+                    {modelo.builtin && (
+                      <span className="rounded-full border border-white/12 bg-white/[0.06] px-2 py-0.5 text-[10px] text-muted-foreground">
+                        de origem
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{modelo.description}</span>
+                    <span className="text-[10.5px] text-muted-foreground/70">
+                      {(modelo.partilha?.redes ?? []).length} rede(s)
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={modeloBusy === modelo.id}
+                      onClick={() => void aplicarModelo(modelo)}
+                    >
+                      Aplicar
+                    </Button>
+                    {isAdmin && !modelo.builtin && (
+                      <IconAction title="Apagar modelo" danger onClick={() => void apagarModelo(modelo)}>
+                        <Trash2 size={12} />
+                      </IconAction>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {isAdmin && (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <TextInput
+                    label="Guardar a configuração atual como modelo"
+                    value={novoModelo}
+                    onChange={setNovoModelo}
+                    placeholder="Ex.: Campanha de outono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Plus size={12} />}
+                    loading={modeloBusy === "novo"}
+                    disabled={!novoModelo.trim()}
+                    onClick={() => void criarModelo()}
+                  >
+                    Criar modelo
+                  </Button>
+                </div>
+              )}
+            </div>
+          </fieldset>
         </div>
       </div>
 

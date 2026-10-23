@@ -398,8 +398,24 @@ def _render_blog_block(data: Dict[str, Any], *, preview: bool) -> str:
     head = f"<h2>{_esc(title)}</h2>" if title else ""
     if not posts:
         return f'<div class="section">{head}<p class="lead">Ainda não há artigos publicados.</p></div>'
-    cards = "".join(_post_card(post) for post in posts)
-    return f'<div class="section">{head}<div class="posts">{cards}</div></div>'
+    settings = store.get_settings()
+    partilha = store.partilha_config(settings)
+    base_url = str(settings.get("base_url") or "")
+    cards = "".join(_post_card(post, partilha=partilha, base_url=base_url) for post in posts)
+    # O bloco é a lista do blog: a barra do topo (se ligada no CMS) partilha e
+    # guarda o índice — é o mesmo endereço do índice gerado em `/site/blog`.
+    acoes = ""
+    if partilha.get("cabecalho", True) and not preview:
+        acoes = site_acoes.barra_acoes(
+            url=_absolute("/site/blog", base_url),
+            titulo=title or "Blog",
+            tipo="pagina",
+            chave="/site/blog",
+            redes=partilha.get("redes"),
+            guardar=bool(partilha.get("guardar", True)),
+            com_script=False,
+        )
+    return f'<div class="section">{head}{acoes}<div class="posts">{cards}</div></div>'
 
 
 # --------------------------------------------------------------------------
@@ -1232,20 +1248,38 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
             + links
             + "</nav>"
         )
+        + _redes_do_cabecalho(settings)
         + "</div></header>"
     )
 
 
 def _social_links(settings: Dict[str, Any]) -> str:
-    labels = {"email": "Email", "linkedin": "LinkedIn", "x": "X", "github": "GitHub"}
-    parts = []
-    for key, label in labels.items():
-        value = str((settings.get("social") or {}).get(key) or "").strip()
-        if not value:
-            continue
-        href = f"mailto:{value}" if key == "email" else value
-        parts.append(f'<a href="{_esc(href)}">{label}</a>')
-    return "".join(parts)
+    """Ligações das redes no rodapé (as mesmas do cabeçalho e da partilha)."""
+    perfis = site_acoes.perfis_configurados(settings.get("social"))
+    return "".join(
+        f'<a href="{_esc(href)}" target="_blank" rel="noopener">{_esc(label)}</a>'
+        for _, label, href in perfis
+    )
+
+
+def _redes_do_cabecalho(settings: Dict[str, Any]) -> str:
+    """Fila de redes no cabeçalho do site (o mesmo catálogo da partilha).
+
+    Só aparece quando o editor configura endereços em Aparência → Ligações e
+    deixa a opção ligada: sem endereços não há fila nenhuma.
+    """
+    partilha = store.partilha_config(settings)
+    if not partilha.get("redes_cabecalho"):
+        return ""
+    # O email fica no rodapé: no cabeçalho a fila é de redes (o email é contacto).
+    perfis = [perfil for perfil in site_acoes.perfis_configurados(settings.get("social")) if perfil[0] != "email"]
+    if not perfis:
+        return ""
+    links = "".join(
+        f'<a href="{_esc(href)}" target="_blank" rel="noopener" title="{_esc(label)}">{_esc(label)}</a>'
+        for _, label, href in perfis
+    )
+    return f'<div class="site-redes"><span>Redes</span>{links}</div>'
 
 
 def _footer_links(items: List[Dict[str, Any]]) -> str:
@@ -1694,6 +1728,14 @@ def _layout(
         + f"<main id=\"conteudo\"><div class=\"{(f'wrap {wrap_class}').strip()}\">"
         + f"{_breadcrumb(breadcrumb)}{body}</div></main>"
         + _footer(settings)
+        # As ações de partilha e favoritos aparecem em qualquer sítio (artigo,
+        # cartão do blog, estudo, produto): o script entra uma só vez por página
+        # e encontra os botões por atributo.
+        + (
+            ""
+            if "window.SabemosFavoritos" in body or ("site-partilha" not in body and "data-favoritar" not in body)
+            else site_acoes.script()
+        )
         # Registo do service worker (dá o funcionamento sem ligação e o cache
         # das imagens). Falha em silêncio: sem HTTPS ou num browser antigo, o
         # site continua a funcionar normalmente.
@@ -3327,11 +3369,35 @@ def render_remuneracao(
     )
 
 
-def _post_card(post: Dict[str, Any]) -> str:
+def _post_card(post: Dict[str, Any], *, partilha: Optional[Dict[str, Any]] = None, base_url: str = "") -> str:
+    """Cartão de um artigo na lista de blog (com favoritos e partilha).
+
+    As ações são as das definições do CMS (`partilha`): pode desligar-se nos
+    cartões, trocar as redes ou esconder o botão de guardar. O cartão não traz o
+    script — a página traz (ver `_layout`).
+    """
+    partilha = partilha if partilha is not None else store.partilha_config()
     href = f"/site/blog/{post.get('slug')}"
     cover = _media_url(post.get("cover_id"))
     image = f'<img src="{_esc(cover)}" alt="" loading="lazy" decoding="async">' if cover else ""
-    category = ""
+    acoes = ""
+    if partilha.get("cartoes", True):
+        acoes = site_acoes.acoes_do_cartao(
+            chave=href,
+            url=_absolute(href, base_url),
+            titulo=str(post.get("title") or ""),
+            tipo="artigo",
+            imagem=_absolute(cover, base_url) if cover else "",
+            redes=partilha.get("redes"),
+            guardar=bool(partilha.get("guardar", True)),
+        )
+    meta = (
+        '<div class="meta">'
+        + (f"<span>{_esc(_date(post.get('published_at')))}</span>" if post.get("published_at") else "")
+        + (f"<span>{int(post.get('reading_minutes') or 1)} min de leitura</span>" if post.get("reading_minutes") else "")
+        + "</div>"
+    )
+    rodape = f'<div class="post-card-rodape">{meta}{acoes}</div>' if acoes else meta
     return (
         f'<article class="card post-card">{image}<div class="body">'
         + (f'<span class="pill">{_esc(post.get("category"))}</span>' if post.get("category") else "")
@@ -3339,11 +3405,30 @@ def _post_card(post: Dict[str, Any]) -> str:
         # (com `h3` havia um salto de nível e a lista não tinha cabeçalho próprio).
         + f'<h2><a href="{_esc(href)}">{_esc(post.get("title"))}</a></h2>'
         + f'<p>{_esc(post.get("excerpt") or _plain_excerpt(post))}</p>'
-        + '<div class="meta">'
-        + (f"<span>{_esc(_date(post.get('published_at')))}</span>" if post.get("published_at") else "")
-        + (f"<span>{int(post.get('reading_minutes') or 1)} min de leitura</span>" if post.get("reading_minutes") else "")
-        + "</div></div></article>"
+        + _hashtags_do_cartao(post)
+        + rodape
+        + "</div></article>"
     )
+
+
+def _hashtags_do_cartao(post: Dict[str, Any], *, limite: int = 4) -> str:
+    """As etiquetas do artigo no cartão, como hashtags para a lista por etiqueta.
+
+    Mostra as primeiras (`limite`) e conta as restantes: um artigo com muitas
+    etiquetas não estica o cartão nem empurra a estrela e a partilha para fora
+    do ecrã. O endereço é o mesmo da etiqueta no artigo (`/site/etiqueta/<tag>`).
+    """
+    tags = [str(tag).strip() for tag in (post.get("tags") or []) if str(tag).strip()]
+    if not tags:
+        return ""
+    mostradas = tags[:limite]
+    restantes = len(tags) - len(mostradas)
+    etiquetas = "".join(
+        f'<a class="post-tag" href="/site/etiqueta/{quote(tag)}">#{_esc(tag)}</a>' for tag in mostradas
+    )
+    if restantes:
+        etiquetas += f'<span class="post-tag post-tag--mais">+{restantes}</span>'
+    return f'<div class="post-card-tags">{etiquetas}</div>'
 
 
 def _posts_with_meta(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -3372,12 +3457,16 @@ def _acoes_do_artigo(post: Dict[str, Any], path: str, settings: Dict[str, Any], 
         if post.get("report_pdf", True)
         else ""
     )
+    partilha = store.partilha_config(settings)
     return site_acoes.barra_acoes(
         url=_absolute(path, str(settings.get("base_url") or "")),
         titulo=str(post.get("title") or ""),
         tipo="artigo",
         chave=path,
         extra=pdf,
+        redes=partilha.get("redes"),
+        guardar=bool(partilha.get("guardar", True)),
+        imagem=_absolute(_media_url(post.get("cover_id")), str(settings.get("base_url") or "")) if post.get("cover_id") else "",
     )
 
 
@@ -3748,14 +3837,37 @@ def render_search(query: str = "", *, settings: Optional[Dict[str, Any]] = None)
     )
 
 
+def _lista_do_blog_no_lugar_do_bloco(block: Dict[str, Any], lista: str) -> str:
+    """O bloco «Últimos artigos» da página do blog, com a lista gerada no lugar.
+
+    O bloco dá o título da secção e a aparência comum; o conteúdo é a lista
+    paginada do índice (com as categorias, as etiquetas e a paginação), para a
+    página do blog continuar a acompanhar a publicação sem ninguém a editar.
+    """
+    data = block.get("data") or {}
+    titulo = str(data.get("title") or "").strip()
+    cabeca = f"<h2>{_esc(titulo)}</h2>" if titulo else ""
+    html_text = f'<div class="section blog-lista">{cabeca}{lista}</div>'
+    html_text = _acrescentar_atributo(html_text, "data-bloco", "blog")
+    return _aplicar_aparencia(block, html_text)
+
+
 def render_blog(
     *,
     page_no: int = 1,
     category: Optional[Dict[str, Any]] = None,
     tag: Optional[str] = None,
+    page: Optional[Dict[str, Any]] = None,
     preview: bool = False,
     settings: Optional[Dict[str, Any]] = None,
 ) -> str:
+    """Índice do blog, opcionalmente montado sobre a página «Blog» do CMS.
+
+    Com `page` (a página publicada escolhida em Aparência → Página do blog), os
+    blocos dessa página entram no índice e o bloco «Últimos artigos» marca o
+    lugar da lista — sem esse bloco a lista fica no fim. Sem `page`, o índice
+    gerado é o de sempre.
+    """
     settings = settings or store.get_settings()
     per_page = int(settings.get("posts_per_page") or 9)
     posts = store.published_posts(
@@ -3782,6 +3894,13 @@ def render_blog(
     elif tag:
         base_path = f"/site/etiqueta/{quote(tag)}"
 
+    seo_da_pagina = (page or {}).get("seo") or {}
+    if page is not None:
+        # Os blocos da página dão o título e a abertura; o agregado (categoria
+        # ou etiqueta) continua a mandar nas listas filtradas.
+        title = str(page.get("title") or title) if not (category or tag) else title
+        intro = str(page.get("excerpt") or intro) if not (category or tag) else intro
+
     taxonomy = store.taxonomy()
     filters = ""
     if taxonomy["categories"] or taxonomy["tags"]:
@@ -3795,8 +3914,28 @@ def render_blog(
         ]
         filters = f'<div class="meta" style="flex-wrap:wrap;gap:8px">{ " ".join(chips) }</div>'
 
+    # Partilha e favoritos: as redes vêm das definições (Aparência → Partilha) e
+    # valem no topo do blog e nos cartões — cada uma pode ser desligada.
+    partilha = store.partilha_config(settings)
+    base_url = str(settings.get("base_url") or "")
+    acoes_topo = ""
+    if partilha.get("cabecalho", True):
+        acoes_topo = site_acoes.barra_acoes(
+            url=_absolute(base_path, base_url),
+            titulo=title,
+            tipo="pagina",
+            chave=base_path,
+            redes=partilha.get("redes"),
+            guardar=bool(partilha.get("guardar", True)),
+            com_script=False,
+        )
+
     if window:
-        cards = f'<div class="posts">{"".join(_post_card(post) for post in window)}</div>'
+        cards = (
+            '<div class="posts">'
+            + "".join(_post_card(post, partilha=partilha, base_url=base_url) for post in window)
+            + "</div>"
+        )
     else:
         cards = '<p class="lead">Ainda não há artigos publicados.</p>'
 
@@ -3811,10 +3950,34 @@ def render_blog(
                 links.append(f'<a href="{_esc(href)}">{number}</a>')
         pager = f'<div class="pager">{"".join(links)}</div>'
 
-    body = (
-        f'<section class="section"><h1>{_esc(title)}</h1><p class="lead">{_esc(intro)}</p>{filters}</section>'
-        f'<section class="section">{cards}</section>{pager}'
-    )
+    lista = f'<section class="section">{filters}{cards}</section>{pager}'
+    lista_no_bloco = f"{filters}{cards}{pager}"
+    blocos_da_pagina = [
+        block for block in ((page or {}).get("blocks") or []) if isinstance(block, dict)
+    ]
+    if page is not None and blocos_da_pagina:
+        partes: List[str] = []
+        posto = False
+        for block in blocos_da_pagina:
+            if str(block.get("type") or "") == "blog":
+                # Só o primeiro bloco «Últimos artigos» recebe a lista: duplicá-la
+                # mostrava os mesmos cartões duas vezes na mesma página.
+                if posto or block.get("hidden"):
+                    continue
+                posto = True
+                partes.append(_lista_do_blog_no_lugar_do_bloco(block, acoes_topo + lista_no_bloco))
+                continue
+            partes.append(blocks_to_html([block], preview=preview))
+        if not posto:
+            partes.append(f'<section class="section">{acoes_topo}{lista_no_bloco}</section>')
+        body = _garantir_h1("".join(partes), _titulo_visivel(page))
+    else:
+        body = (
+            '<section class="section blog-topo"><div class="blog-topo-txt">'
+            f'<h1>{_esc(title)}</h1><p class="lead">{_esc(intro)}</p></div>'
+            f"{acoes_topo}</section>"
+            + lista
+        )
     path = base_path + (f"?page={page_no}" if page_no > 1 else "")
     trilha: List[Dict[str, str]] = [{"label": "Início", "href": "/site"}]
     if category or tag:
@@ -3823,12 +3986,15 @@ def render_blog(
     else:
         trilha.append({"label": "Blog"})
     return _layout(
-        title=title,
-        description=str((category or {}).get("description") or intro),
+        title=str(seo_da_pagina.get("title") or title),
+        description=str(seo_da_pagina.get("description") or (category or {}).get("description") or intro),
         body=body,
         current_path=path,
         settings=settings,
         canonical=base_path if page_no == 1 else base_path,
+        og_image=_media_url(seo_da_pagina.get("image_id")) if seo_da_pagina.get("image_id") else "",
+        keywords=seo_da_pagina.get("keywords") or None,
+        noindex=bool(seo_da_pagina.get("noindex")),
         preview=preview,
         breadcrumb=trilha,
     )

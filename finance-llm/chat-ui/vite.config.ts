@@ -15,7 +15,7 @@ export default defineConfig({
       // caminho desconhecido, pelo que precisamos de reescrita ativa para
       // `/api`, `/people` e `/auth` caírem no backend.
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

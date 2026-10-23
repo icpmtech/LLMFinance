@@ -1062,6 +1062,10 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `POST` | `/cms/municipios/{item_id}/dados` | Cms Municipio Dados |
 | `POST` | `/cms/municipios/{item_id}/texto` | Cms Municipio Texto |
 | `GET` | `/cms/overview` | Cms Overview |
+| `GET` | `/cms/partilha` | Cms Get Partilha |
+| `POST` | `/cms/partilha/modelos` | Cms Create Partilha Modelo (admin) |
+| `DELETE` | `/cms/partilha/modelos/{modelo_id}` | Cms Delete Partilha Modelo (admin) |
+| `POST` | `/cms/partilha/modelos/{modelo_id}/aplicar` | Cms Aplicar Partilha Modelo (admin) |
 | `POST` | `/cms/pesquisas` | Cms Create Pesquisa |
 | `GET` | `/cms/pesquisas/opcoes` | Cms Pesquisas Opcoes |
 | `PATCH` | `/cms/pesquisas/{item_id}` | Cms Patch Pesquisa |

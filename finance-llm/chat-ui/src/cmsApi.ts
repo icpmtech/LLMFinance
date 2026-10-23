@@ -454,6 +454,42 @@ export type CmsMenu = {
   items: CmsMenuItem[];
 };
 
+/** Uma rede social do catálogo (partilha, cabeçalho e rodapé). */
+export type CmsRede = {
+  id: string;
+  label: string;
+  /** `partilha` aceita o endereço no link; `copiar` copia a ligação e abre a rede. */
+  tipo: "partilha" | "copiar" | "perfil" | string;
+  perfil: string;
+  /** `"nao"` nas redes que só servem de ligação de perfil (fora do menu). */
+  menu?: string;
+};
+
+/** Partilha e favoritos: menu das redes, cartões do blog e cabeçalho. */
+export type CmsPartilha = {
+  /** Redes do menu de partilha, pela ordem do catálogo. */
+  redes: string[];
+  /** Ações nos cartões da lista do blog (estrela e partilha). */
+  cartoes: boolean;
+  /** Barra de ações no topo do blog. */
+  cabecalho: boolean;
+  /** Botão «Guardar» (favoritos). */
+  guardar: boolean;
+  /** Fila das redes no cabeçalho do site. */
+  redes_cabecalho: boolean;
+  /** Modelo de configuração aplicado por último (informativo). */
+  modelo?: string;
+};
+
+/** Modelo de configuração da partilha (de origem ou criado por um administrador). */
+export type CmsPartilhaModelo = {
+  id: string;
+  name: string;
+  description: string;
+  builtin?: boolean;
+  partilha: CmsPartilha;
+};
+
 export type CmsSettings = {
   site_name: string;
   tagline: string;
@@ -474,6 +510,9 @@ export type CmsSettings = {
   logo_id?: string | null;
   favicon_id?: string | null;
   social: Record<string, string>;
+  partilha: CmsPartilha;
+  /** Modelos personalizados (os de origem vêm do catálogo). */
+  partilha_modelos: CmsPartilhaModelo[];
   seo: CmsSeo;
   robots: string;
   analytics_id: string;
@@ -489,6 +528,10 @@ export type CmsCatalogue = {
   template_kinds: { id: string; label: string }[];
   menu_locations: { id: string; label: string }[];
   menu_themes: CmsMenuTheme[];
+  /** Redes sociais: a mesma lista no menu de partilha, no cabeçalho e no rodapé. */
+  redes_partilha: CmsRede[];
+  partilha: CmsPartilha;
+  partilha_modelos: CmsPartilhaModelo[];
   statuses: { id: CmsStatus; label: string; style: string }[];
   entities: string[];
   pages_index: { id: string; title: string; path: string; status: CmsStatus; parent_id?: string | null }[];
@@ -616,6 +659,35 @@ export function getCmsSettings(): Promise<{ settings: CmsSettings; menus: CmsMen
 
 export function saveCmsSettings(payload: Partial<CmsSettings>): Promise<{ saved: boolean; settings: CmsSettings }> {
   return request("/cms/settings", withBody("PUT", payload));
+}
+
+/* ------------------------------------------------------ partilha e favoritos */
+
+export function getCmsPartilha(): Promise<{
+  redes: CmsRede[];
+  partilha: CmsPartilha;
+  modelos: CmsPartilhaModelo[];
+}> {
+  return request("/cms/partilha");
+}
+
+export function saveCmsPartilhaModelo(payload: Partial<CmsPartilhaModelo>): Promise<{
+  saved: boolean;
+  modelos: CmsPartilhaModelo[];
+}> {
+  return request("/cms/partilha/modelos", withBody("POST", payload));
+}
+
+export function deleteCmsPartilhaModelo(modeloId: string): Promise<{ saved: boolean; modelos: CmsPartilhaModelo[] }> {
+  return request(`/cms/partilha/modelos/${encodeURIComponent(modeloId)}`, withBody("DELETE"));
+}
+
+export function applyCmsPartilhaModelo(modeloId: string): Promise<{
+  saved: boolean;
+  modelo: string;
+  settings: CmsSettings;
+}> {
+  return request(`/cms/partilha/modelos/${encodeURIComponent(modeloId)}/aplicar`, withBody("POST"));
 }
 
 export function listCmsMenus(): Promise<CmsMenuListing> {

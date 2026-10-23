@@ -327,6 +327,8 @@ from api.vereadores_routes import router as vereadores_router
 from api.municipios_routes import router as municipios_router
 from api.municipio_pessoas_routes import router as municipio_pessoas_router
 from api.municipios_contactos_routes import router as municipios_contactos_router
+from api.freguesias_contactos_routes import router as freguesias_contactos_router
+from api.empresas_locais_routes import router as empresas_locais_router
 # Abonos dos eleitos locais (Lei n.º 11/96): a tabela oficial por escalão de
 # eleitores cruzada com o recenseamento do MAI, para se saber quanto cabe a cada
 # concelho e a cada freguesia; `finance_remuneracoes` + `finance_remuneracoes_territorios`.
@@ -958,6 +960,8 @@ app.include_router(vereadores_router)
 app.include_router(municipios_router)
 app.include_router(municipio_pessoas_router)
 app.include_router(municipios_contactos_router)
+app.include_router(freguesias_contactos_router)
+app.include_router(empresas_locais_router)
 # Remunerações dos eleitos locais: tabela de abonos + eleitores/polígonos por
 # concelho e freguesia (recenseamento do MAI).
 app.include_router(remuneracoes_router)

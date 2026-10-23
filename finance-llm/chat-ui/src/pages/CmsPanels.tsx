@@ -1024,6 +1024,57 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
     setDraft({ ...draft, category_ids: [...current] });
   };
 
+  /** Página do CMS que dá os blocos ao índice do blog (Aparência → Página do blog). */
+  const paginaDoBlog = useMemo(
+    () => (ctx.catalogue.pages_index ?? []).find((entry) => entry.id === ctx.catalogue.blog_page_id) ?? null,
+    [ctx.catalogue],
+  );
+
+  const abrirPaginaDoBlog = (id: string) => {
+    window.location.assign(cms.cmsAppUrl("paginas", id));
+  };
+
+  /**
+   * Cria a página do blog com a abertura e o bloco «Últimos artigos», liga-a nas
+   * definições e abre o editor de blocos — a lista continua a ser a gerada (com
+   * paginação, categorias e etiquetas), os restantes blocos são do editor.
+   */
+  const criarPaginaDoBlog = async () => {
+    setBusy(true);
+    try {
+      const stamp = Date.now().toString(36);
+      const { item } = await cms.createCmsPage({
+        title: "Blog",
+        slug: "blog",
+        status: "publicado",
+        show_in_menu: true,
+        menu_label: "Blog",
+        blocks: [
+          {
+            id: `blk_hero_${stamp}`,
+            type: "hero",
+            data: {
+              title: "Blog",
+              subtitle: "Análises, método e novidades da plataforma.",
+              style: "destaque",
+              tone: "acento",
+            },
+          },
+          { id: `blk_blog_${stamp}`, type: "blog", data: { limit: 9 } },
+        ],
+        seo: { title: "Blog", description: "Análises, método e novidades da plataforma." },
+      });
+      await cms.saveCmsSettings({ blog_page_id: item.id });
+      ctx.notify("Página do blog criada. Acrescente os blocos que quiser.", "ok");
+      ctx.refreshOverview();
+      abrirPaginaDoBlog(item.id);
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <PanelHeader
@@ -1037,6 +1088,30 @@ export function CmsPostsPanel({ ctx, focusId, onFocusHandled }: { ctx: CmsCtx; f
           Novo artigo
         </Button>
       </PanelHeader>
+
+      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+        <PanelHeader
+          title="Página do blog"
+          hint="Os blocos desta página (abertura, texto, chamada à ação, contactos…) entram no índice; o bloco «Últimos artigos» marca o lugar da lista."
+        >
+          {paginaDoBlog ? (
+            <Button size="sm" variant="secondary" icon={<Pencil size={13} />} onClick={() => abrirPaginaDoBlog(paginaDoBlog.id)}>
+              Editar blocos
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" icon={<Plus size={13} />} loading={busy} onClick={() => void criarPaginaDoBlog()}>
+              Criar página do blog
+            </Button>
+          )}
+        </PanelHeader>
+        <p className="text-[12px] text-muted-foreground">
+          {paginaDoBlog
+            ? paginaDoBlog.status === "publicado"
+              ? `A usar a página «${paginaDoBlog.title}» (/${paginaDoBlog.path || "blog"}). A lista de artigos, a paginação e as categorias continuam automáticas.`
+              : `A página «${paginaDoBlog.title}» ainda não está publicada: o índice mostra a lista gerada até a publicar.`
+            : "A usar o índice gerado. Crie a página para acrescentar blocos ao blog, ou escolha outra em Aparência → Página do blog."}
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
