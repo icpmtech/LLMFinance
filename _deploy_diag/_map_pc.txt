@@ -1,0 +1,56 @@
+﻿=== finance_empresas_locais ===
+  campos: 22
+    data_constituicao                  date
+    designacao                         text +keyword
+    designacao_fold                    keyword (ignore_above=512)
+    designacao_keyword                 keyword (ignore_above=512)
+    doc_id                             keyword
+    entidade_dominante                 text +keyword
+    entidade_dominante_fold            keyword (ignore_above=256)
+    entidade_dominante_keyword         keyword (ignore_above=256)
+    entidade_local                     text +keyword
+    entidade_local_fold                keyword (ignore_above=256)
+    entidade_local_keyword             keyword (ignore_above=256)
+    fonte                              keyword (ignore_above=256)
+    ingested_at                        date
+    observacoes                        text
+    observacoes_fold                   keyword (ignore_above=1024)
+    observacoes_keyword                keyword (ignore_above=1024)
+    participacao_pct                   float
+    setor                              text +keyword
+    setor_fold                         keyword (ignore_above=64)
+    setor_keyword                      keyword (ignore_above=64)
+    slug                               keyword (ignore_above=512)
+    updated_at                         date
+
+=== finance_freguesias_contactos ===
+  campos: 28
+    codigo_ine                         keyword (ignore_above=16)
+    codigo_postal                      keyword (ignore_above=16)
+    descricao_postal                   text +keyword
+    descricao_postal_fold              keyword (ignore_above=128)
+    descricao_postal_keyword           keyword (ignore_above=128)
+    doc_id                             keyword
+    email                              keyword (ignore_above=256)
+    email_fold                         keyword (ignore_above=256)
+    fonte                              keyword (ignore_above=256)
+    freguesia                          text +keyword
+    freguesia_fold                     keyword (ignore_above=256)
+    freguesia_keyword                  keyword (ignore_above=256)
+    ingested_at                        date
+    localidade                         text +keyword
+    localidade_fold                    keyword (ignore_above=128)
+    localidade_keyword                 keyword (ignore_above=128)
+    morada                             text
+    morada_fold                        keyword (ignore_above=512)
+    municipio                          text +keyword
+    municipio_fold                     keyword (ignore_above=128)
+    municipio_keyword                  keyword (ignore_above=128)
+    nif                                keyword (ignore_above=32)
+    nome_presidente                    text +keyword
+    nome_presidente_fold               keyword (ignore_above=256)
+    nome_presidente_keyword            keyword (ignore_above=256)
+    slug                               keyword (ignore_above=256)
+    telefone                           keyword (ignore_above=32)
+    updated_at                         date
+
