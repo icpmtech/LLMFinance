@@ -22,6 +22,7 @@ Decisões:
 from __future__ import annotations
 
 import logging
+import re
 import unicodedata
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -167,6 +168,10 @@ def _resultado(
     quando: Any = None,
     etiquetas: Optional[Iterable[Any]] = None,
     externo: bool = False,
+    logo: str = "",
+    letra: str = "",
+    cor: int = 0,
+    icone: str = "",
 ) -> Dict[str, Any]:
     return {
         "titulo": _clip(titulo, 180) or "(sem título)",
@@ -176,7 +181,49 @@ def _resultado(
         "data": data(quando),
         "etiquetas": [_clip(etiqueta, 60) for etiqueta in (etiquetas or []) if _texto(etiqueta)][:4],
         "externo": bool(externo),
+        "logo": logo,
+        "letra": letra,
+        "cor": cor,
+        "icone": icone,
     }
+
+
+def _letra(nome: str) -> str:
+    """Iniciais do monograma de quem não tem logótipo («Galp Açores» → «GA»)."""
+    palavras = [
+        palavra
+        for palavra in re.split(r"[\s,.;()\[\]/\\-]+", _texto(nome))
+        if palavra and palavra[0].isalnum()
+    ]
+    if not palavras:
+        return "?"
+    if len(palavras) == 1:
+        return palavras[0][:2].upper()
+    return (palavras[0][0] + palavras[1][0]).upper()
+
+
+#: Cores do monograma: classes `busca-logo--cor1..6` na folha de estilo do site.
+LOGO_CORES = 6
+
+
+def _cor(nome: str) -> int:
+    """Cor estável do monograma — o mesmo nome cai sempre na mesma cor."""
+    total = sum(ord(letra) for letra in _texto(nome))
+    return total % LOGO_CORES + 1
+
+
+def _perfis(nifs: Iterable[str]) -> Dict[str, Dict[str, Any]]:
+    """Logótipo e site de cada empresa, a partir dos perfis já guardados."""
+    codigos = [str(nif) for nif in nifs if nif]
+    if not codigos:
+        return {}
+    try:
+        from api import empresas_perfil  # noqa: PLC0415 - import tardio: módulo grande
+
+        return empresas_perfil.em_cache(codigos)
+    except Exception as exc:  # noqa: BLE001 - sem perfis os cartões ficam com as iniciais
+        logger.warning("Pesquisa pública: perfis de empresa falharam: %s", exc)
+        return {}
 
 
 def _grupo(grupo_id: str, rotulo: str, total: int, itens: List[Dict[str, Any]], erro: str = "") -> Dict[str, Any]:
@@ -218,15 +265,19 @@ def _empresas(termo: str, limite: int) -> Dict[str, Any]:
         return (3, -float(linha.get("total_value") or 0))
 
     itens = []
-    for linha in sorted(linhas, key=ordem)[:limite]:
+    escolhidas = sorted(linhas, key=ordem)[:limite]
+    perfis = _perfis(str(linha.get("nif") or "") for linha in escolhidas)
+    for linha in escolhidas:
         nif = str(linha.get("nif") or "")
         if not nif:
             continue
+        nome = _texto(linha.get("name"))
+        perfil = perfis.get(nif) or {}
         contratos = int(linha.get("contracts_count") or 0)
         valor = linha.get("total_value")
         itens.append(
             _resultado(
-                linha.get("name"),
+                nome,
                 f"/site/empresa/{nif}",
                 sub=" · ".join(
                     parte
@@ -246,6 +297,9 @@ def _empresas(termo: str, limite: int) -> Dict[str, Any]:
                     "adjudicante" if linha.get("as_adjudicante_count") else "",
                     "adjudicatário" if linha.get("as_adjudicatario_count") else "",
                 ],
+                logo=str(perfil.get("logo_url") or ""),
+                letra=_letra(nome),
+                cor=_cor(nome),
             )
         )
     return _grupo("empresas", "Empresas", achado.get("total") or 0, itens)
@@ -278,6 +332,7 @@ def _contratos(termo: str, limite: int) -> Dict[str, Any]:
                     _texto(linha.get("tipoContrato")),
                     (linha.get("cpv") or [{}])[0].get("code") if isinstance(linha.get("cpv"), list) and linha.get("cpv") else "",
                 ],
+                icone="documento",
             )
         )
     return _grupo("contratos", "Contratos", achado.get("total") or 0, itens)
@@ -308,6 +363,7 @@ def _noticias(termo: str, limite: int) -> Dict[str, Any]:
                 resumo=linha.get("summary") or linha.get("text"),
                 quando=linha.get("published_at") or linha.get("scraped_at"),
                 externo=True,
+                icone="blog",
             )
         )
     return _grupo("noticias", "Notícias", achado.get("total") or 0, itens)
@@ -380,14 +436,18 @@ def _insolvencias(termo: str, limite: int) -> Dict[str, Any]:
         return _grupo("insolvencias", "Insolvências", 0, [], achado["error"])
 
     itens = []
-    for linha in achado.get("items") or []:
-        nif = _nif_do_insolvente(linha)
+    linhas = achado.get("items") or []
+    nifs = [_nif_do_insolvente(linha) for linha in linhas]
+    perfis = _perfis(nif for nif in nifs if nif)
+    for linha, nif in zip(linhas, nifs):
         destino = f"/site/empresa/{nif}" if nif else str(linha.get("documento_url") or "")
         if not destino:
             continue
+        nome = _texto(linha.get("insolvente"))
+        perfil = perfis.get(nif) or {}
         itens.append(
             _resultado(
-                linha.get("insolvente"),
+                nome,
                 destino,
                 sub=" · ".join(
                     filter(None, [_texto(linha.get("tipo")), _texto(linha.get("tribunal_comarca"))])
@@ -398,6 +458,10 @@ def _insolvencias(termo: str, limite: int) -> Dict[str, Any]:
                 quando=linha.get("data_publicacao"),
                 etiquetas=[linha.get("tipo"), linha.get("especie")],
                 externo=not nif,
+                logo=str(perfil.get("logo_url") or ""),
+                letra=_letra(nome),
+                cor=_cor(nome),
+                icone="" if nif else "insolvencia",
             )
         )
     return _grupo("insolvencias", "Insolvências", achado.get("total") or 0, itens)
@@ -686,9 +750,23 @@ def empresa(nif: str) -> Optional[Dict[str, Any]]:
 
     adjudicante = cadastro.get("adjudicante") or {}
     adjudicatario = cadastro.get("adjudicatario") or {}
+    perfil = _perfis([codigo]).get(codigo) or {}
+    if not perfil:
+        # Perfil ainda não materializado em disco: uma leitura ao índice, só aqui.
+        try:
+            from api import empresas_perfil  # noqa: PLC0415 - import tardio
+
+            perfil = empresas_perfil.obter(codigo, nome) or {}
+        except Exception as exc:  # noqa: BLE001 - a ficha abre sem logótipo
+            logger.warning("Ficha pública: perfil de %s falhou: %s", codigo, exc)
+            perfil = {}
     return {
         "nif": codigo,
         "nome": nome,
+        "logo": str(perfil.get("logo_url") or ""),
+        "site": str(perfil.get("site") or ""),
+        "letra": _letra(nome),
+        "cor": _cor(nome),
         "pais": _texto(leve.get("country")) or _texto(cadastro.get("country")),
         "localizacao": _texto(cadastro.get("localizacao")),
         "morada": _texto(cadastro.get("morada")),

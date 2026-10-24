@@ -480,12 +480,13 @@ class _Blocos:
         hint: str = "",
         exemplos: Sequence[str] = (),
         button: str = "",
+        lema: str = "",
     ) -> Dict[str, Any]:
         """Caixa de pesquisa do site (empresas, contratos, notícias e insolvências).
 
         O bloco desenha a caixa, as abas por tipo e os resultados lidos da
         plataforma em cada pedido: a página não guarda resultados, só a
-        apresentação (título, texto de apoio, sugestões e rótulo do botão).
+        apresentação (título, lema, texto de apoio, sugestões e rótulo do botão).
         """
         data: Dict[str, Any] = {"title": title}
         if intro:
@@ -496,6 +497,8 @@ class _Blocos:
             data["exemplos"] = list(exemplos)
         if button:
             data["button"] = button
+        if lema:
+            data["tagline"] = lema
         return self.add("pesquisa-sabemos", data)
 
     def relatorios(
@@ -846,18 +849,19 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
             menu_label="Sabemos",
             menu_order=1,
             excerpt="Uma caixa para procurar empresas, contratos públicos, notícias e insolvências a partir de dados abertos.",
-            seo_title="Sabemos — pesquisar empresas, contratos, notícias e insolvências",
+            seo_title="Pesquisar empresas, contratos e insolvências",
             seo_description=(
-                "Pesquise por empresa, NIF, objeto de contrato ou processo de insolvência: fichas com "
-                "contratos públicos, insolvências do CIRE e notícias, a partir de dados abertos."
+                "Nós Sabemos e tu, Sabes? Pesquise por empresa, NIF ou contrato: contratos públicos, "
+                "insolvências do CIRE e notícias, a partir de dados abertos."
             ),
-            keywords=["pesquisar", "empresas", "NIF", "contratos públicos", "insolvências", "CIRE", "notícias"],
+            keywords=["pesquisar", "empresas", "NIF", "contratos públicos", "insolvências", "CIRE", "notícias", "Sabemos"],
             blocks=[
                 b.pesquisa(
                     "Sabemos",
                     "Empresas, contratos públicos, notícias e insolvências — a mesma caixa para tudo o que os dados abertos dizem.",
                     hint="Um nome, um NIF ou uma palavra do objeto de um contrato. Sem filtros para escolher antes de procurar.",
                     exemplos=("Galp", "Município de Lisboa", "501964843", "insolvência"),
+                    lema="Nós Sabemos e tu, Sabes?",
                 ),
                 b.texto(
                     "O que cada resultado abre",

@@ -1554,6 +1554,25 @@ def guardar_perfil(perfil: Dict[str, Any]) -> Dict[str, Any]:
     return perfil
 
 
+def em_cache(nifs: Iterable[str]) -> Dict[str, Dict[str, Any]]:
+    """Perfis já guardados localmente, por NIF — sem Elasticsearch nem rede.
+
+    É o que a pesquisa pública do site precisa: mostrar o logótipo de seis
+    empresas não pode custar seis idas ao índice (e uma empresa sem perfil
+    guardado ficaria a espera de uma consulta que não traria nada).
+    """
+    dados = _carregar()["perfis"] or {}
+    encontrados: Dict[str, Dict[str, Any]] = {}
+    for nif in nifs:
+        chave_perfil = chave(nif, None)
+        if not chave_perfil:
+            continue
+        perfil = dados.get(chave_perfil)
+        if perfil:
+            encontrados[str(nif)] = _publico(perfil, chave_perfil)
+    return encontrados
+
+
 def obter(nif: Optional[str], nome: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Perfil (da cache local ou do Elasticsearch) — sem tocar na rede externa."""
     chave_perfil = chave(nif, nome)

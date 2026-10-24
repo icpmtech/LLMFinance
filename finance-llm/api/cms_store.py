@@ -258,8 +258,8 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "blog", "label": "Últimos artigos", "hint": "Lista os artigos publicados", "icon": "Newspaper"},
     {
         "id": "pesquisa-sabemos",
-        "label": "Pesquisa Sabemos",
-        "hint": "Caixa de pesquisa (empresas, contratos, notícias e insolvências) com abas e resultados",
+        "label": "Sabemos",
+        "hint": "Pesquisa do site: empresas, contratos, notícias e insolvências, com abas e resultados",
         "icon": "Search",
     },
     {

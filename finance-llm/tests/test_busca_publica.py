@@ -277,6 +277,40 @@ def test_resultados_nao_se_indexam(instalacao, monkeypatch):
     assert 'content="noindex, nofollow"' in cms_render.render_page(pagina, query="galp")
 
 
+def test_pagina_tem_marca_lema_e_pesquisa_no_grafo(instalacao, monkeypatch):
+    """Branding e lema na abertura; o grafo diz ao motor onde vai um termo."""
+    _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
+    pagina = _pagina_com_busca()
+    pagina["blocks"][0]["data"]["tagline"] = "Nós Sabemos e tu, Sabes?"
+    pagina["seo"] = {"title": "Sabemos", "description": "Pesquisar.", "keywords": [], "noindex": False}
+
+    html = cms_render.render_page(pagina, query="")
+
+    assert '<p class="busca-lema">Nós Sabemos e tu, Sabes?</p>' in html
+    assert '"@type": "SearchAction"' in html
+    assert 'urlTemplate": "/site/pesquisar?q={search_term_string}"' in html
+
+
+def test_cartao_com_logotipo_e_com_monograma(instalacao, monkeypatch):
+    """Com logótipo é uma imagem por cima das iniciais; sem ele, o monograma."""
+    itens = [
+        _resultado("GALP", "/site/empresa/1", logo="/api/empresas/perfil/1/logo", letra="GA", cor=3),
+        _resultado("Falconriver", "/site/empresa/2", letra="FA", cor=5),
+        _resultado("Contrato", "/site/contrato/9", icone="documento"),
+    ]
+    _falsos_ambitos(monkeypatch, grupos={"empresas": {"total": 2, "items": itens[:2]}})
+    pagina = _pagina_com_busca()
+
+    html = cms_render.render_page(pagina, query="galp", tipo="empresas")
+
+    assert 'class="busca-logo"' in html
+    assert 'src="/api/empresas/perfil/1/logo"' in html
+    assert '<span class="busca-logo-letra" aria-hidden="true">GA</span>' in html
+    assert 'class="busca-logo busca-logo--cor5"' in html
+    # O cartão é uma grelha (marca + corpo), não uma linha de texto solta.
+    assert 'class="busca-corpo"' in html
+
+
 def test_ficha_de_empresa_tem_numeros_e_processos(instalacao):
     dados = {
         "nif": "512044635",
@@ -331,6 +365,31 @@ def test_ficha_de_empresa_tem_numeros_e_processos(instalacao):
     assert 'href="/site/contrato/15696069"' in html
     assert "Insolvências e processos (CIRE)" in html and "Credor" in html
     assert "18 outra(s) publicação(ões)" in html
+
+
+def test_ficha_de_empresa_tem_grafo_proprio(instalacao):
+    """A ficha diz ao motor que é uma organização identificada pelo NIF."""
+    dados = {
+        "nif": "512044635",
+        "nome": "Galp Açores",
+        "pais": "Portugal",
+        "cae": "46811",
+        "contratos_total": 0,
+        "valor_total_texto": "",
+        "contratos": [],
+        "insolvencias": {"erro": "", "insolvente": _grupo("insolvente", "Insolvente", 0, []), "outros": _grupo("outros", "Outras", 0, [])},
+        "noticias": [],
+        "logo": "/api/empresas/perfil/512044635/logo",
+        "site": "https://galp.com",
+        "letra": "GA",
+        "cor": 2,
+    }
+
+    html = cms_render.render_empresa(dados)
+
+    assert '"propertyID": "NIF"' in html and '"value": "512044635"' in html
+    assert '"sameAs": ["https://galp.com"]' in html
+    assert 'src="/api/empresas/perfil/512044635/logo"' in html
 
 
 def test_ficha_de_contrato_liga_as_partes(instalacao):

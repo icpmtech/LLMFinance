@@ -1485,4 +1485,174 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   .wrap.pagina-inicial > .hero .btn:hover { transform: none; }
 }
 @media print { .site-header, .site-footer, .draft-banner, .menu-botao { display: none; } body { background: #fff; } }
+
+/* --------------------------------------------------------------------------
+   Pesquisa do site (`/site/pesquisar`) e fichas de empresa e de contrato.
+
+   A abertura apresenta a marca e a caixa; com termo, a mesma caixa encolhe e os
+   resultados passam a cartões. Cada resultado leva o logótipo da empresa (do
+   módulo de perfis) ou, quando não há, as iniciais sobre uma cor estável — a
+   imagem só cobre a letra se carregar, porque o script do `_layout` esconde as
+   imagens que falham.
+   -------------------------------------------------------------------------- */
+.busca { display: grid; gap: 14px; margin: 0 0 18px; }
+.busca--abertura { justify-items: center; gap: 16px; padding: 30px 0 8px; text-align: center; }
+.busca--abertura .lead { max-width: 34rem; margin: 0; }
+.busca--abertura .busca-form { max-width: 44rem; }
+.busca--abertura .busca-abas { justify-content: center; border-bottom: 0; padding-bottom: 0; }
+.busca--abertura .busca-exemplos { justify-content: center; }
+.busca--resultados { gap: 10px; padding-top: 4px; }
+.busca--resultados .busca-marca h1 { font-size: 1.35rem; }
+.busca--resultados .busca-form input[type="search"] { min-height: 48px; font-size: .98rem; }
+.busca--resultados .busca-form button { min-height: 48px; }
+.busca-marca { display: inline-flex; align-items: center; gap: 12px; }
+.busca-marca img { height: 46px; width: auto; }
+.busca-marca h1 { margin: 0; letter-spacing: -.03em; }
+.busca-marca .ponto { width: .3em; height: .3em; border-radius: 50%; background: var(--accent); align-self: flex-end; margin-bottom: .22em; }
+.busca-lema { @apply text-accent; margin: 0; font-size: .98rem; font-weight: 700; letter-spacing: .01em; }
+.busca-form { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; }
+.busca-campo { position: relative; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
+.busca-lupa { position: absolute; left: 17px; display: flex; color: var(--muted); pointer-events: none; }
+.busca-form input[type="search"] {
+  @apply border border-line bg-surface;
+  width: 100%; min-height: 56px; padding: 12px 18px 12px 48px; border-radius: 999px;
+  color: var(--text); font: inherit; font-size: 1.04rem; box-shadow: var(--shadow);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.busca-form input[type="search"]::placeholder { color: color-mix(in srgb, var(--muted) 82%, transparent); }
+.busca-form input[type="search"]:hover { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); }
+.busca-form input[type="search"]:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
+}
+.busca-form button {
+  @apply text-white;
+  min-height: 56px; padding: 0 26px; border: 0; border-radius: 999px;
+  background: var(--accent); font: inherit; font-weight: 700; cursor: pointer;
+  transition: filter .15s ease, transform .05s ease;
+}
+.busca-form button:hover { filter: brightness(1.06); }
+.busca-form button:active { transform: translateY(1px); }
+.busca-abas {
+  display: flex; gap: 4px; width: 100%; margin: 2px 0 0; padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.busca-abas::-webkit-scrollbar { display: none; }
+.busca-aba {
+  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 38px; padding: 7px 15px;
+  border: 1px solid transparent; border-radius: 999px; color: var(--muted);
+  font-size: .92rem; font-weight: 600; white-space: nowrap;
+}
+.busca-aba:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); text-decoration: none; }
+.busca-aba[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, #0b1220);
+}
+.busca-exemplos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
+.busca-exemplos a {
+  @apply border border-line bg-surface;
+  padding: 5px 12px; border-radius: 999px; color: var(--text);
+  font-weight: 600; font-size: .86rem;
+}
+.busca-exemplos a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.busca-dica { margin: 0; color: var(--muted); font-size: .86rem; max-width: 40rem; }
+.busca-resumo { margin: 0; color: var(--muted); font-size: .94rem; }
+.busca-resumo strong { color: var(--text); }
+.busca-resumo a { font-weight: 600; }
+
+/* Resultados: uma lista de cartões. */
+.busca-grupo + .busca-grupo { margin-top: 26px; }
+.busca-grupo-cabeca { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; }
+.busca-grupo-cabeca h2 { margin: 0; font-size: 1.04rem; }
+.busca-grupo-icone { display: flex; color: var(--accent); }
+.busca-conta {
+  margin-left: auto; padding: 2px 9px; border-radius: 999px;
+  background: var(--code); color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums;
+}
+.busca-lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.busca-item {
+  @apply border border-line bg-surface;
+  display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; align-items: start;
+  padding: 14px 16px; border-radius: calc(var(--radius) + 2px);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.busca-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  box-shadow: 0 18px 34px -24px rgba(16, 24, 40, .5);
+  transform: translateY(-1px);
+}
+.busca-item:focus-within { border-color: var(--accent); }
+.busca-corpo { min-width: 0; }
+.busca-titulo { font-size: 1rem; font-weight: 650; line-height: 1.35; }
+.busca-titulo:hover { text-decoration: underline; }
+.busca-titulo mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: inherit; padding: 0 1px; border-radius: 3px; }
+.busca-sub { margin: 3px 0 0; color: color-mix(in srgb, var(--accent) 62%, var(--text)); font-size: .87rem; }
+.busca-texto { margin: 5px 0 0; color: var(--muted); font-size: .91rem; line-height: 1.5; }
+.busca-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; color: var(--muted); font-size: .79rem; }
+.busca-mais {
+  display: inline-flex; align-items: center; margin-top: 12px; padding: 7px 14px;
+  @apply border border-line bg-surface;
+  border-radius: 999px; color: var(--accent); font-size: .88rem; font-weight: 650;
+}
+.busca-mais:hover { border-color: var(--accent); text-decoration: none; }
+.busca-vazio { margin: 0; padding: 16px 18px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted); }
+.busca-sem-resultados {
+  @apply border border-line bg-surface;
+  display: grid; gap: 12px; justify-items: start; padding: 22px; border-radius: var(--radius);
+}
+.busca-sem-resultados h2 { margin: 0; font-size: 1.02rem; }
+.busca-sem-resultados ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .92rem; }
+.busca-sem-resultados li { margin: 3px 0; }
+
+/* O logótipo: imagem por cima das iniciais (uma falha de rede deixa a letra). */
+.busca-logo {
+  position: relative; display: grid; place-items: center;
+  width: 46px; height: 46px; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--code);
+}
+.busca-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 5px; background: #fff; }
+.busca-logo-letra { font-size: .92rem; font-weight: 800; letter-spacing: .03em; color: #fff; }
+.busca-logo--cor1 { background: #0f766e; }
+.busca-logo--cor2 { background: #1d4ed8; }
+.busca-logo--cor3 { background: #7c3aed; }
+.busca-logo--cor4 { background: #b45309; }
+.busca-logo--cor5 { background: #be123c; }
+.busca-logo--cor6 { background: #0f172a; }
+.busca-logo--icone { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.busca-logo--icone svg { width: 22px; height: 22px; }
+
+/* Fichas: cabeçalho com a marca, números, partes e listas. */
+.ficha-topo { display: grid; gap: 8px; margin: 4px 0 18px; }
+.ficha-tipo { margin: 0; color: var(--muted); font-size: .74rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.ficha-marca { display: flex; align-items: center; gap: 14px; }
+.ficha-marca .busca-logo { width: 58px; height: 58px; border-radius: 14px; }
+.ficha-marca h1 { margin: 0; }
+.ficha-selos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .85rem; }
+.ficha-selos li { padding: 3px 11px; border: 1px solid var(--border); border-radius: 999px; }
+.ficha-lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ficha-lista li { @apply border border-line bg-surface; padding: 11px 13px; border-radius: 12px; }
+.ficha-lista b { display: block; font-weight: 650; }
+.ficha-lista small { display: block; margin-top: 3px; color: var(--muted); font-size: .84rem; }
+.ficha-campos { display: grid; gap: 12px 20px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 0; }
+.ficha-campo dt { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.ficha-campo dd { margin: 3px 0 0; }
+.ficha-partes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.ficha-parte { @apply border border-line bg-surface; padding: 13px 15px; border-radius: 12px; }
+.ficha-parte h3 { margin: 0 0 7px; color: var(--muted); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
+.ficha-parte ul { margin: 0; padding-left: 18px; }
+.ficha-parte li { margin: 3px 0; }
+.ficha-nota { margin: 0; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--code); color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 640px) {
+  .busca--abertura { padding: 16px 0 4px; }
+  .busca-form { flex-wrap: wrap; }
+  .busca-form button { width: 100%; }
+  .busca--resultados .busca-form button { min-height: 46px; }
+  .busca-item { grid-template-columns: 38px minmax(0, 1fr); gap: 11px; padding: 12px 13px; }
+  .busca-logo { width: 38px; height: 38px; border-radius: 10px; }
+  .busca-logo-letra { font-size: .8rem; }
+  .ficha-marca .busca-logo { width: 46px; height: 46px; }
+}
 }

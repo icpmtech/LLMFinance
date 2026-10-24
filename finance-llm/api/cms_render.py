@@ -1406,7 +1406,7 @@ CSS_PATH = "/site/site.css"
 PWA_CACHE_PREFIX = "sabemos-site-"
 # v2: nova folha do site (página inicial). Sem o salto de versão, quem já tinha
 # a cache antiga via o desenho anterior na primeira visita depois da publicação.
-PWA_SW_VERSION = "v2"
+PWA_SW_VERSION = "v3"
 
 
 def _pwa_cores(settings: Dict[str, Any]) -> Dict[str, str]:
@@ -1912,7 +1912,8 @@ def _organization_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
 
 def _website_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
     casa = _site_home_url(settings)
-    return {
+    base_url = str(settings.get("base_url") or "")
+    dados: Dict[str, Any] = {
         "@type": "WebSite",
         "@id": f"{casa}#site",
         "name": str(settings.get("site_name") or ""),
@@ -1920,6 +1921,17 @@ def _website_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
         "inLanguage": str(settings.get("language") or "pt-PT"),
         "publisher": {"@id": f"{casa}#organizacao"},
     }
+    # Caixa de pesquisa do site (o «sitelinks search box» do Google): diz ao
+    # motor para onde vai um termo escrito nos resultados de pesquisa e é o que
+    # liga a marca à pesquisa pública.
+    alvo = _absolute(BUSCA_PATH, base_url)
+    if alvo:
+        dados["potentialAction"] = {
+            "@type": "SearchAction",
+            "target": {"@type": "EntryPoint", "urlTemplate": f"{alvo}?q={{search_term_string}}"},
+            "query-input": "required name=search_term_string",
+        }
+    return dados
 
 
 def _faq_json_ld(blocks: Iterable[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -2027,7 +2039,6 @@ def render_page(
         # infinitos e o conteúdo é o mesmo que as fichas já publicam. A página
         # (sem termo) continua indexável — é a porta de entrada.
         noindex=bool(seo.get("noindex")) or (tem_busca and bool(query)),
-        extra_css=_CSS_BUSCA if tem_busca else "",
         breadcrumb=_trilha_da_pagina(page),
         wrap_class=wrap_class,
     )
@@ -3826,127 +3837,6 @@ def _resultados_da_pesquisa(termo: str, *, limite: int = 40) -> List[Dict[str, A
 # --------------------------------------------------------------------------
 BUSCA_PATH = "/site/pesquisar"
 
-_CSS_BUSCA = """
-/* Abertura: a marca e a caixa, centradas, como num motor de busca. */
-.busca { display: grid; gap: 14px; margin: 0 0 18px; }
-.busca--abertura { justify-items: center; gap: 16px; padding: 34px 0 10px; text-align: center; }
-.busca--abertura .lead { max-width: 34rem; margin: 0; }
-.busca--abertura .busca-abas { justify-content: center; border-bottom: 0; padding-bottom: 0; }
-.busca--abertura .busca-exemplos { justify-content: center; }
-.busca--abertura .busca-form { max-width: 44rem; }
-.busca-marca { display: inline-flex; align-items: baseline; gap: 10px; }
-.busca-marca h1 { margin: 0; letter-spacing: -.03em; }
-.busca-marca .ponto { width: .34em; height: .34em; border-radius: 50%; background: var(--accent); }
-/* Resultados: a mesma caixa, mais discreta, alinhada à esquerda. */
-.busca--resultados { gap: 10px; padding-top: 4px; }
-.busca--resultados .busca-marca h1 { font-size: 1.32rem; }
-.busca--resultados .busca-form input[type="search"] { min-height: 48px; font-size: .98rem; }
-.busca--resultados .busca-form button { min-height: 48px; }
-.busca-form { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; }
-.busca-campo { position: relative; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
-.busca-lupa { position: absolute; left: 17px; display: flex; color: var(--muted); pointer-events: none; }
-.busca-form input[type="search"] {
-  width: 100%; min-height: 56px; padding: 12px 18px 12px 48px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
-  color: var(--text); font: inherit; font-size: 1.04rem; box-shadow: var(--shadow);
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-.busca-form input[type="search"]::placeholder { color: color-mix(in srgb, var(--muted) 82%, transparent); }
-.busca-form input[type="search"]:hover { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); }
-.busca-form input[type="search"]:focus-visible {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
-}
-.busca-form button {
-  min-height: 56px; padding: 0 26px; border: 0; border-radius: 999px;
-  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
-  transition: filter .15s ease, transform .05s ease;
-}
-.busca-form button:hover { filter: brightness(1.06); }
-.busca-form button:active { transform: translateY(1px); }
-.busca-abas {
-  display: flex; gap: 4px; width: 100%; margin: 2px 0 0; padding: 0 0 10px;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
-}
-.busca-abas::-webkit-scrollbar { display: none; }
-.busca-aba {
-  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 38px; padding: 7px 15px;
-  border: 1px solid transparent; border-radius: 999px; color: var(--muted);
-  font-size: .92rem; font-weight: 600; white-space: nowrap;
-}
-.busca-aba:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); text-decoration: none; }
-.busca-aba[aria-current="page"] {
-  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: color-mix(in srgb, var(--accent) 72%, #0b1220);
-}
-.busca-exemplos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
-.busca-exemplos a {
-  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
-  background: var(--surface); color: var(--text); font-weight: 600; font-size: .86rem;
-}
-.busca-exemplos a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-.busca-dica { margin: 0; color: var(--muted); font-size: .86rem; max-width: 40rem; }
-.busca-resumo { margin: 0; color: var(--muted); font-size: .94rem; }
-.busca-resumo strong { color: var(--text); }
-.busca-grupo + .busca-grupo { margin-top: 26px; }
-.busca-grupo-cabeca { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; }
-.busca-grupo-cabeca h2 { margin: 0; font-size: 1.04rem; }
-.busca-grupo-icone { display: flex; color: var(--accent); }
-.busca-conta {
-  margin-left: auto; padding: 2px 9px; border-radius: 999px;
-  background: var(--code); color: var(--muted); font-size: .78rem;
-  font-variant-numeric: tabular-nums;
-}
-.busca-lista { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
-.busca-item { padding: 14px 0; border-top: 1px solid var(--border); }
-.busca-item:first-child { border-top: 0; padding-top: 0; }
-.busca-titulo { font-size: 1.02rem; font-weight: 650; line-height: 1.35; }
-.busca-titulo:hover { text-decoration: underline; }
-.busca-titulo mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: inherit; padding: 0 1px; border-radius: 3px; }
-.busca-sub { margin: 2px 0 0; color: color-mix(in srgb, var(--accent) 62%, var(--text)); font-size: .88rem; }
-.busca-texto { margin: 5px 0 0; color: var(--muted); font-size: .92rem; line-height: 1.5; }
-.busca-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; color: var(--muted); font-size: .8rem; }
-.busca-mais {
-  display: inline-flex; align-items: center; margin-top: 10px; padding: 7px 14px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
-  color: var(--accent); font-size: .88rem; font-weight: 650;
-}
-.busca-mais:hover { border-color: var(--accent); text-decoration: none; }
-.busca-vazio { margin: 0; padding: 16px 18px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted); }
-.busca-sem-resultados { display: grid; gap: 12px; justify-items: start; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.busca-sem-resultados h2 { margin: 0; font-size: 1.02rem; }
-.busca-sem-resultados ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .92rem; }
-.busca-sem-resultados li { margin: 3px 0; }
-/* Fichas: cabeçalho, números, partes e listas. */
-.ficha-topo { display: grid; gap: 8px; margin: 4px 0 18px; }
-.ficha-tipo { margin: 0; color: var(--muted); font-size: .74rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.ficha-topo h1 { margin: 0; }
-.ficha-selos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .85rem; }
-.ficha-selos li { padding: 3px 11px; border: 1px solid var(--border); border-radius: 999px; }
-.ficha-lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.ficha-lista li { padding: 11px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.ficha-lista b { display: block; font-weight: 650; }
-.ficha-lista small { display: block; margin-top: 3px; color: var(--muted); font-size: .84rem; }
-.ficha-campos { display: grid; gap: 12px 20px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 0; }
-.ficha-campo dt { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.ficha-campo dd { margin: 3px 0 0; }
-.ficha-partes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.ficha-parte { padding: 13px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.ficha-parte h3 { margin: 0 0 7px; color: var(--muted); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
-.ficha-parte ul { margin: 0; padding-left: 18px; }
-.ficha-parte li { margin: 3px 0; }
-.ficha-nota { margin: 0; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--code); color: var(--muted); font-size: .9rem; }
-@media (max-width: 640px) {
-  .busca--abertura { padding: 18px 0 6px; }
-  .busca-form { flex-wrap: wrap; }
-  .busca-form button { width: 100%; }
-  .busca--resultados .busca-form button { min-height: 46px; }
-  .busca-item { padding: 12px 0; }
-}
-"""
-
 
 def _query_busca(termo: str = "", tipo: str = "") -> str:
     """Barra de endereço da pesquisa (`?q=…&tipo=…`), sem parâmetros vazios."""
@@ -3969,6 +3859,42 @@ _ICONE_DO_AMBITO: Dict[str, str] = {
 
 #: Sugestões da abertura quando a página não as define no CMS.
 EXEMPLOS_DE_PESQUISA: Tuple[str, ...] = ("Galp", "Município de Lisboa", "501964843", "insolvência")
+
+#: Lema da marca (o mesmo da página do CMS, salvo se o editor escrever outro).
+LEMA_SABEMOS = "Nós Sabemos e tu, Sabes?"
+
+
+def _marca_da_entidade(
+    logo: str = "",
+    letra: str = "",
+    cor: int = 0,
+    icone: str = "",
+) -> str:
+    """Quadrado do resultado: logótipo da empresa, ícone do âmbito ou iniciais.
+
+    A imagem fica **por cima** das iniciais: o script do `_layout` esconde as
+    imagens que falham, e o que resta é o monograma — nunca um quadrado vazio
+    (o logótipo é um pedido ao servidor e pode faltar).
+    """
+    if logo:
+        return (
+            '<span class="busca-logo">'
+            f'<span class="busca-logo-letra" aria-hidden="true">{_esc(letra or "?")}</span>'
+            f'<img src="{_esc(logo)}" alt="" width="46" height="46" loading="lazy" decoding="async">'
+            "</span>"
+        )
+    if icone:
+        desenho = _ICONES.get(icone)
+        if desenho:
+            return (
+                '<span class="busca-logo busca-logo--icone" aria-hidden="true">'
+                f"{_svg(desenho, 22, classe=None)}</span>"
+            )
+    classe = f" busca-logo--cor{cor}" if str(cor).isdigit() and 1 <= int(cor) <= 6 else ""
+    return (
+        f'<span class="busca-logo{classe}" aria-hidden="true">'
+        f'<span class="busca-logo-letra">{_esc(letra or "?")}</span></span>'
+    )
 
 
 def _destacar(texto: Any, termo: str) -> str:
@@ -4049,13 +3975,21 @@ def _sugestoes_de_pesquisa(data: Dict[str, Any]) -> str:
 
 
 def _item_de_busca(item: Dict[str, Any], termo: str = "") -> str:
-    """Um resultado: título com ligação, contexto, resumo, etiquetas e data."""
+    """Um resultado em cartão: marca à esquerda, título, contexto e etiquetas."""
     externo = ' target="_blank" rel="noopener"' if item.get("externo") else ""
+    marca = _marca_da_entidade(
+        str(item.get("logo") or ""),
+        str(item.get("letra") or ""),
+        int(item.get("cor") or 0),
+        str(item.get("icone") or ""),
+    )
     etiquetas = "".join(f'<span class="pill">{_esc(etiqueta)}</span>' for etiqueta in item.get("etiquetas") or [])
     data = f'<time datetime="{_esc(item["data"])}">{_esc(item["data"])}</time>' if item.get("data") else ""
     meta = f'<div class="busca-meta">{etiquetas}{data}</div>' if (etiquetas or data) else ""
     return (
         '<li class="busca-item">'
+        f"{marca}"
+        '<div class="busca-corpo">'
         f'<a class="busca-titulo" href="{_esc(item["href"])}"{externo}>'
         f'{_destacar(item["titulo"], termo)}'
         + ('<span aria-hidden="true"> ↗</span>' if item.get("externo") else "")
@@ -4063,7 +3997,7 @@ def _item_de_busca(item: Dict[str, Any], termo: str = "") -> str:
         + (f'<p class="busca-sub">{_esc(item["sub"])}</p>' if item.get("sub") else "")
         + (f'<p class="busca-texto">{_destacar(item["resumo"], termo)}</p>' if item.get("resumo") else "")
         + meta
-        + "</li>"
+        + "</div></li>"
     )
 
 
@@ -4111,6 +4045,7 @@ def _grupo_do_site(termo: str) -> str:
             "data": "",
             "etiquetas": [],
             "externo": False,
+            "icone": _ICONE_DO_AMBITO.get("site", "seccao"),
         }
         for grupo in grupos
         for item in grupo["items"]
@@ -4168,11 +4103,15 @@ def _bloco_pesquisa_sabemos(
     intro = str(data.get("intro") or "").strip()
     dica = str(data.get("hint") or "").strip()
     rotulo = str(data.get("button") or "").strip() or "Pesquisar"
+    lema = str(data.get("tagline") or "").strip() or LEMA_SABEMOS
 
     classe = "busca busca--resultados" if consulta else "busca busca--abertura"
+    # A marca é o wordmark com o ponto de acento (o logótipo completo já está no
+    # cabeçalho): repeti-lo aqui punha «Sabemos Studio» duas vezes no ecrã.
     corpo = [
         f'<section class="{classe}">'
         f'<div class="busca-marca"><h1>{_esc(titulo)}</h1><span class="ponto" aria-hidden="true"></span></div>'
+        + (f'<p class="busca-lema">{_esc(lema)}</p>' if lema and not consulta else "")
         + (f'<p class="lead">{_esc(intro)}</p>' if intro and not consulta else "")
         + _form_busca(consulta, escolhido, rotulo=rotulo, auto=not consulta)
         + _abas_busca(consulta, escolhido)
@@ -4221,12 +4160,13 @@ def _fkpi(titulo: str, valor: str, nota: str = "") -> str:
     )
 
 
-def _ficha_topo(rotulo: str, titulo: str, selos: Iterable[Any]) -> str:
+def _ficha_topo(rotulo: str, titulo: str, selos: Iterable[Any], marca: str = "") -> str:
     lista = "".join(f"<li>{_esc(selo)}</li>" for selo in selos if str(selo or "").strip())
+    cabeca = f'<div class="ficha-marca">{marca}<h1>{_esc(titulo)}</h1></div>' if marca else f"<h1>{_esc(titulo)}</h1>"
     return (
         '<header class="ficha-topo">'
         f'<p class="ficha-tipo">{_esc(rotulo)}</p>'
-        f"<h1>{_esc(titulo)}</h1>"
+        f"{cabeca}"
         + (f'<ul class="ficha-selos">{lista}</ul>' if lista else "")
         + "</header>"
     )
@@ -4345,7 +4285,19 @@ def _corpo_da_empresa(dados: Dict[str, Any]) -> str:
     if insolvente.get("total"):
         kpis.append(_fkpi("Insolvências (CIRE)", _numero(insolvente["total"]), "processos em que é insolvente"))
 
-    corpo = [_ficha_topo("Entidade", dados["nome"], selos), f'<section class="kpis">{"".join(kpis)}</section>']
+    corpo = [
+        _ficha_topo(
+            "Entidade",
+            dados["nome"],
+            selos,
+            marca=_marca_da_entidade(
+                str(dados.get("logo") or ""),
+                str(dados.get("letra") or ""),
+                int(dados.get("cor") or 0),
+            ),
+        ),
+        f'<section class="kpis">{"".join(kpis)}</section>',
+    ]
     corpo.append(_seccao_contratos_da_empresa(dados))
     corpo.append(_seccao_insolvencias(dados))
     corpo.append(_seccao_noticias_da_empresa(dados))
@@ -4374,6 +4326,22 @@ def render_empresa(
         + (f", {dados.get('valor_total_texto')} adjudicados" if contratos else "")
         + ", insolvências publicadas no CIRE e notícias, a partir de dados abertos."
     )
+    base_url = str(settings.get("base_url") or "")
+    casa = _site_home_url(settings)
+    entidade_ld: Dict[str, Any] = {
+        "@type": "Organization",
+        "@id": f"{_absolute(path, base_url)}#entidade",
+        "name": nome,
+        "url": _absolute(path, base_url),
+        "identifier": {"@type": "PropertyValue", "propertyID": "NIF", "value": nif},
+        "isPartOf": {"@id": f"{casa}#site"},
+    }
+    if dados.get("site"):
+        entidade_ld["sameAs"] = [str(dados["site"])]
+    if dados.get("logo"):
+        entidade_ld["logo"] = {"@type": "ImageObject", "url": _absolute(str(dados["logo"]), base_url)}
+    if dados.get("descricao_curta"):
+        entidade_ld["description"] = str(dados["descricao_curta"])
     return _layout(
         title=f"{nome} — contratos e insolvências",
         description=descricao,
@@ -4382,11 +4350,14 @@ def render_empresa(
         settings=settings,
         canonical=path,
         keywords=[nome, f"NIF {nif}", "contratos públicos", "insolvências", "empresas"],
+        json_ld={
+            "@context": "https://schema.org",
+            "@graph": [_website_json_ld(settings), _organization_json_ld(settings), entidade_ld],
+        },
         preview=preview,
-        extra_css=_CSS_BUSCA,
         breadcrumb=[
             {"label": "Início", "href": "/site"},
-            {"label": "Pesquisar", "href": BUSCA_PATH},
+            {"label": "Sabemos", "href": BUSCA_PATH},
             {"label": nome},
         ],
     )
@@ -4482,6 +4453,28 @@ def render_contrato(
         + (f" → {dados['adjudicatarios'][0]['nome']}" if dados.get("adjudicatarios") else "")
         + "."
     )
+    base_url = str(settings.get("base_url") or "")
+    casa = _site_home_url(settings)
+    contrato_ld: Dict[str, Any] = {
+        "@type": "WebPage",
+        "@id": f"{_absolute(path, base_url)}#contrato",
+        "name": str(dados.get("objeto") or "Contrato público"),
+        "url": _absolute(path, base_url),
+        "description": descricao,
+        "isPartOf": {"@id": f"{casa}#site"},
+        "about": {
+            "@type": "Thing",
+            "name": "Contrato público",
+            "identifier": str(dados.get("id") or ""),
+        },
+    }
+    partes = [
+        {"@type": "Organization", "name": parte["nome"], "identifier": parte.get("nif") or ""}
+        for parte in (dados.get("adjudicantes") or []) + (dados.get("adjudicatarios") or [])
+        if parte.get("nome")
+    ]
+    if partes:
+        contrato_ld["mentions"] = partes
     return _layout(
         title=f"{dados.get('objeto')} — contrato público",
         description=descricao,
@@ -4490,11 +4483,14 @@ def render_contrato(
         settings=settings,
         canonical=path,
         keywords=["contrato público", "Portal BASE", dados.get("procedimento") or "", dados.get("tipo") or ""],
+        json_ld={
+            "@context": "https://schema.org",
+            "@graph": [_website_json_ld(settings), _organization_json_ld(settings), contrato_ld],
+        },
         preview=preview,
-        extra_css=_CSS_BUSCA,
         breadcrumb=[
             {"label": "Início", "href": "/site"},
-            {"label": "Pesquisar", "href": BUSCA_PATH},
+            {"label": "Sabemos", "href": BUSCA_PATH},
             {"label": dados.get("objeto") or "Contrato"},
         ],
     )

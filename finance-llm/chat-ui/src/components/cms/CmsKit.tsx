@@ -1096,12 +1096,20 @@ function BlockSpecificFields({
       return (
         <div className="grid gap-2">
           <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
+          <TextInput
+            label="Lema"
+            value={text("tagline")}
+            onChange={(next) => set("tagline", next)}
+            wide
+            placeholder="Nós Sabemos e tu, Sabes?"
+            hint="A frase da marca, por baixo do título (só na abertura da página)."
+          />
           <TextArea
             label="Texto de apoio"
             value={text("intro")}
             onChange={(next) => set("intro", next)}
             rows={2}
-            hint="Uma frase por baixo do título: o que se procura aqui."
+            placeholder="Uma frase por baixo do título: o que se procura aqui."
           />
           <TextInput
             label="Linha de ajuda"
