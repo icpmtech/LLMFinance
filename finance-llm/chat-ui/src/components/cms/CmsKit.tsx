@@ -1092,6 +1092,53 @@ function BlockSpecificFields({
           </div>
         </div>
       );
+    case "pesquisa-sabemos":
+      return (
+        <div className="grid gap-2">
+          <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
+          <TextArea
+            label="Texto de apoio"
+            value={text("intro")}
+            onChange={(next) => set("intro", next)}
+            rows={2}
+            hint="Uma frase por baixo do título: o que se procura aqui."
+          />
+          <TextInput
+            label="Linha de ajuda"
+            value={text("hint")}
+            onChange={(next) => set("hint", next)}
+            wide
+            placeholder="Um nome, um NIF ou uma palavra do objeto de um contrato."
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextInput
+              label="Botão"
+              value={text("button")}
+              onChange={(next) => set("button", next)}
+              placeholder="Pesquisar"
+            />
+            <TextInput
+              label="Sugestões (separadas por ;)"
+              value={Array.isArray(data.exemplos) ? (data.exemplos as string[]).join("; ") : ""}
+              onChange={(next) =>
+                set(
+                  "exemplos",
+                  next
+                    .split(";")
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+                )
+              }
+              placeholder="Galp; Município de Lisboa; 501964843"
+              hint="Aparecem por baixo da caixa, enquanto ninguém pesquisou."
+            />
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+            A caixa e as abas são fixas (empresas, contratos, notícias e insolvências). Os resultados são lidos
+            da plataforma a cada pedido e cada um abre uma ficha no site — a página guarda só a apresentação.
+          </p>
+        </div>
+      );
     case "conteudo":
       return (
         <SelectInput

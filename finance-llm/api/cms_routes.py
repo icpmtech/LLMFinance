@@ -981,6 +981,35 @@ def site_municipio(slug: str) -> HTMLResponse:
     return HTMLResponse(render.render_municipio(doc, settings=settings), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/empresa/{nif}", response_class=HTMLResponse)
+def site_empresa(nif: str) -> HTMLResponse:
+    """Ficha pública de uma empresa: cadastro, contratos, insolvências e notícias.
+
+    É o destino dos resultados da pesquisa pública (`/site/pesquisar`). O que
+    não existe no cadastro responde 404 — uma ficha só com o NIF e zeros seria
+    uma página inventada.
+    """
+    from api import site_busca  # noqa: PLC0415 - import tardio: puxa o cliente do Elasticsearch
+
+    settings = store.get_settings()
+    dados = site_busca.empresa(nif)
+    if not dados:
+        return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    return HTMLResponse(render.render_empresa(dados, settings=settings), headers=_PUBLIC_HEADERS)
+
+
+@router.get("/site/contrato/{idcontrato}", response_class=HTMLResponse)
+def site_contrato(idcontrato: str) -> HTMLResponse:
+    """Ficha pública de um contrato público (partes, valores e procedimento)."""
+    from api import site_busca  # noqa: PLC0415 - import tardio: puxa o cliente do Elasticsearch
+
+    settings = store.get_settings()
+    dados = site_busca.contrato(idcontrato)
+    if not dados:
+        return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    return HTMLResponse(render.render_contrato(dados, settings=settings), headers=_PUBLIC_HEADERS)
+
+
 @router.get("/site/pesquisa", response_class=HTMLResponse)
 def site_search(q: str = Query("", description="Texto a procurar no site.")) -> HTMLResponse:
     """Pesquisa no site: páginas, artigos, estudos de benchmark e relatórios.
@@ -1202,10 +1231,23 @@ def site_documento(document_id: str) -> Response:
 
 
 @router.get("/site/{path:path}", response_class=HTMLResponse)
-def site_page(path: str) -> HTMLResponse:
-    """Qualquer página publicada, pelo seu caminho (pode ter várias pastas)."""
+def site_page(path: str, request: Request) -> HTMLResponse:
+    """Qualquer página publicada, pelo seu caminho (pode ter várias pastas).
+
+    O `q`/`tipo` da barra de endereço chegam à página: é por aí que a pesquisa do
+    site (`/site/pesquisar?q=…`) desenha os resultados no servidor, sem
+    JavaScript. Nas páginas sem o bloco da pesquisa os parâmetros são ignorados.
+    """
     settings = store.get_settings()
     page = store.resolve_page_by_path(path, published_only=True)
     if not page:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
-    return HTMLResponse(render.render_page(page, settings=settings), headers=_PUBLIC_HEADERS)
+    return HTMLResponse(
+        render.render_page(
+            page,
+            settings=settings,
+            query=str(request.query_params.get("q") or "")[:120],
+            tipo=str(request.query_params.get("tipo") or "")[:24],
+        ),
+        headers=_PUBLIC_HEADERS,
+    )

@@ -57,12 +57,22 @@ def _apply_text_operator(node: Any, operator: str) -> Any:
 
 
 
-def _text_search(client: Elasticsearch, *, index: str, body: Dict[str, Any], q: Optional[str]) -> Dict[str, Any]:
+def _text_search(
+    client: Elasticsearch,
+    *,
+    index: str,
+    body: Dict[str, Any],
+    q: Optional[str],
+    fallback_or: bool = True,
+) -> Dict[str, Any]:
     """Executa a pesquisa exigindo todos os termos; repete em OR se não houver nada.
 
     A segunda tentativa só acontece quando a primeira devolve **zero** — é o
     compromisso entre precisão (não devolver 2 milhões por causa de uma palavra)
     e cobertura (não devolver zero quando os termos existem mas dispersos).
+    Com `fallback_or=False` a pesquisa fica só nos termos todos: é o que a
+    pesquisa pública do site quer, para um termo sem sentido não devolver mil
+    resultados que casam uma palavra solta.
     """
     if not _is_multi_term(q):
         return client.search(index=index, body=body)
@@ -71,7 +81,7 @@ def _text_search(client: Elasticsearch, *, index: str, body: Dict[str, Any], q: 
     hits = response.get("hits") or {}
     total = hits.get("total") or 0
     total = total.get("value", 0) if isinstance(total, dict) else total
-    if total:
+    if total or not fallback_or:
         return response
     return client.search(index=index, body=_apply_text_operator(json.loads(json.dumps(body)), "or"))
 

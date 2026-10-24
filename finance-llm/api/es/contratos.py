@@ -433,8 +433,14 @@ def search_contracts(
     sort_by: Optional[str] = None,
     sort_order: Optional[str] = None,
     es: Optional[Elasticsearch] = None,
+    strict: bool = False,
 ) -> Dict[str, Any]:
-    """Pesquisa contratos por texto, entidades, datas e valores."""
+    """Pesquisa contratos por texto, entidades, datas e valores.
+
+    `strict=True` não repete a pesquisa em OR quando os termos todos não casam
+    nada: o resultado passa a ser vazio em vez de «casou uma palavra». É o que a
+    pesquisa pública do site usa.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
@@ -451,7 +457,7 @@ def search_contracts(
             "track_scores": True,
             "track_total_hits": True,
         }
-        resp = _text_search(client, index=CONTRACTS_INDEX, body=body, q=q)
+        resp = _text_search(client, index=CONTRACTS_INDEX, body=body, q=q, fallback_or=not strict)
         items = []
         for hit in resp["hits"]["hits"]:
             source = hit["_source"]

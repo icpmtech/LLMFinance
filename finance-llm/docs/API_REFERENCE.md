@@ -1099,6 +1099,8 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site/categoria/{slug}` | Site Category |
 | `POST` | `/site/contacto` | Site Contacto |
 | `GET` | `/site/documento/{document_id}` | Site Documento |
+| `GET` | `/site/empresa/{nif}` | Site Empresa (ficha pública) |
+| `GET` | `/site/contrato/{idcontrato}` | Site Contrato (ficha pública) |
 | `GET` | `/site/etiqueta/{tag}` | Site Tag |
 | `GET` | `/site/manifest.webmanifest` | Site Manifest |
 | `GET` | `/site/municipio/{slug}` | Site Municipio |

@@ -303,6 +303,7 @@ SEED_MEDIA_LOJA: Sequence[Sequence[str]] = (
 #: e «Loja» são links directos para a plataforma, não páginas do site.
 MENU_PRINCIPAL: Sequence[Sequence[str]] = (
     ("Início", ""),
+    ("Pesquisar", "pesquisar"),
     ("Soluções", "solucoes"),
     ("Relatórios", "relatorios-gratuitos"),
     ("Fontes", "fontes"),
@@ -316,6 +317,7 @@ MENU_PRINCIPAL: Sequence[Sequence[str]] = (
 
 #: Rodapé: o essencial, mais curto do que o cabeçalho.
 MENU_RODAPE: Sequence[Sequence[str]] = (
+    ("Pesquisar", "pesquisar"),
     ("Soluções", "solucoes"),
     ("Relatórios", "relatorios-gratuitos"),
     ("Fontes", "fontes"),
@@ -469,6 +471,32 @@ class _Blocos:
 
     def blog(self, title: str, limit: int = 3) -> Dict[str, Any]:
         return self.add("blog", {"title": title, "limit": limit})
+
+    def pesquisa(
+        self,
+        title: str,
+        intro: str = "",
+        *,
+        hint: str = "",
+        exemplos: Sequence[str] = (),
+        button: str = "",
+    ) -> Dict[str, Any]:
+        """Caixa de pesquisa do site (empresas, contratos, notícias e insolvências).
+
+        O bloco desenha a caixa, as abas por tipo e os resultados lidos da
+        plataforma em cada pedido: a página não guarda resultados, só a
+        apresentação (título, texto de apoio, sugestões e rótulo do botão).
+        """
+        data: Dict[str, Any] = {"title": title}
+        if intro:
+            data["intro"] = intro
+        if hint:
+            data["hint"] = hint
+        if exemplos:
+            data["exemplos"] = list(exemplos)
+        if button:
+            data["button"] = button
+        return self.add("pesquisa-sabemos", data)
 
     def relatorios(
         self,
@@ -804,8 +832,55 @@ def conteudo_da_sobre(media: Dict[str, str]) -> List[Dict[str, Any]]:
 
 
 def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
-    """Páginas novas do site (soluções, fontes e contactos), por ordem de menu."""
+    """Páginas novas do site (pesquisar, soluções, fontes e contactos), por ordem de menu."""
     paginas: List[Dict[str, Any]] = []
+
+    # --- Pesquisar (a caixa única do site) --------------------------------
+    b = _Blocos("pesquisar")
+    paginas.append(
+        _pagina(
+            page_id="pag_pesquisar",
+            title="Sabemos",
+            path="pesquisar",
+            prefixo="pesquisar",
+            menu_label="Sabemos",
+            menu_order=1,
+            excerpt="Uma caixa para procurar empresas, contratos públicos, notícias e insolvências a partir de dados abertos.",
+            seo_title="Sabemos — pesquisar empresas, contratos, notícias e insolvências",
+            seo_description=(
+                "Pesquise por empresa, NIF, objeto de contrato ou processo de insolvência: fichas com "
+                "contratos públicos, insolvências do CIRE e notícias, a partir de dados abertos."
+            ),
+            keywords=["pesquisar", "empresas", "NIF", "contratos públicos", "insolvências", "CIRE", "notícias"],
+            blocks=[
+                b.pesquisa(
+                    "Sabemos",
+                    "Empresas, contratos públicos, notícias e insolvências — a mesma caixa para tudo o que os dados abertos dizem.",
+                    hint="Um nome, um NIF ou uma palavra do objeto de um contrato. Sem filtros para escolher antes de procurar.",
+                    exemplos=("Galp", "Município de Lisboa", "501964843", "insolvência"),
+                ),
+                b.texto(
+                    "O que cada resultado abre",
+                    "Cada resultado abre uma **ficha no site**, com os números e a fonte à vista:\n\n"
+                    "- **Empresa** — NIF, contratos públicos, valores por papel (adjudicante e adjudicatário), "
+                    "insolvências publicadas no CIRE e notícias que a mencionam.\n"
+                    "- **Contrato** — objeto, preço contratual, procedimento, partes (com ligação à ficha de cada uma), "
+                    "CPV, local de execução e peças do procedimento.\n"
+                    "- **Notícia** — abre na publicação original (SAPO, Lusa, ECO, Observador, Jornal Económico…).\n"
+                    "- **Insolvência** — abre a ficha da entidade visada, com o processo e o tribunal.\n\n"
+                    "A pesquisa é feita sobre os índices da plataforma (Portal BASE, CIRE/CITIUS, cadastro de "
+                    "entidades e recolha de imprensa); não há resultados inventados nem estimativas.",
+                ),
+                b.cta(
+                    "Precisa do dossiê completo?",
+                    "A plataforma junta pessoas, marcas, atos societários e risco na mesma ficha — com exportação e relatório.",
+                    "Falar connosco",
+                    "/site/contactos",
+                    botoes=(("Ver as fontes", "/site/fontes"),),
+                ),
+            ],
+        )
+    )
 
     # --- Soluções (página-mãe das capacidades) -----------------------------
     b = _Blocos("solucoes")

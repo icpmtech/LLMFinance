@@ -257,6 +257,12 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "formulario", "label": "Formulário", "hint": "Formulário de contacto (as respostas ficam no CMS)", "icon": "MailPlus"},
     {"id": "blog", "label": "Últimos artigos", "hint": "Lista os artigos publicados", "icon": "Newspaper"},
     {
+        "id": "pesquisa-sabemos",
+        "label": "Pesquisa Sabemos",
+        "hint": "Caixa de pesquisa (empresas, contratos, notícias e insolvências) com abas e resultados",
+        "icon": "Search",
+    },
+    {
         "id": "relatorios",
         "label": "Relatórios e documentos",
         "hint": "Lista os relatórios do catálogo e os documentos já gerados, por área de trabalho",

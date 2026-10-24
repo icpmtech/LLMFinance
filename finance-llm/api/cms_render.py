@@ -714,11 +714,20 @@ def _grafico_barras(data: Dict[str, Any]) -> str:
     )
 
 
-def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
+def _render_block(
+    block: Dict[str, Any],
+    *,
+    preview: bool = False,
+    query: str = "",
+    tipo: str = "",
+) -> str:
     if block.get("hidden"):
         return ""
     block_type = str(block.get("type") or "texto")
     data = block.get("data") or {}
+
+    if block_type == "pesquisa-sabemos":
+        return _bloco_pesquisa_sabemos(data, query=query, tipo=tipo, preview=preview)
 
     if block_type == "hero":
         title = _esc(data.get("title") or "")
@@ -979,18 +988,30 @@ def _aplicar_aparencia(block: Dict[str, Any], html_text: str) -> str:
     return _acrescentar_classes(html_text, " ".join(classes))
 
 
-def blocks_to_html(blocks: Iterable[Dict[str, Any]], *, preview: bool = False) -> str:
+def blocks_to_html(
+    blocks: Iterable[Dict[str, Any]],
+    *,
+    preview: bool = False,
+    query: str = "",
+    tipo: str = "",
+) -> str:
+    """HTML dos blocos de uma página.
+
+    `query`/`tipo` são a pesquisa que o visitante escreveu na barra de endereço
+    (`/site/pesquisar?q=…&tipo=…`): só o bloco da pesquisa os usa, mas passam por
+    aqui porque a página é desenhada de uma vez, no servidor.
+    """
     parts = []
     for block in blocks or []:
-        html_text = _render_block(block, preview=preview)
+        html_text = _render_block(block, preview=preview, query=query, tipo=tipo)
         if html_text:
             # A raiz de cada bloco leva o tipo (`data-bloco="hero"`, …): o CSS
             # consegue assim tratar a abertura, os números ou a galeria sem
             # depender da ordem nem de uma classe genérica partilhada. Vai como
             # atributo (e não como classe) para não alterar o contrato das
             # classes que o CMS e os testes já conhecem.
-            tipo = re.sub(r"[^\w-]", "", str(block.get("type") or "texto"))
-            html_text = _acrescentar_atributo(html_text, "data-bloco", tipo)
+            tipo_bloco = re.sub(r"[^\w-]", "", str(block.get("type") or "texto"))
+            html_text = _acrescentar_atributo(html_text, "data-bloco", tipo_bloco)
             parts.append(_aplicar_aparencia(block, html_text))
     return "".join(parts)
 
@@ -1029,6 +1050,8 @@ _ICONES: Dict[str, str] = {
     "registar": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>',
     "loja": '<path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/>',
     "pesquisa": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    "empresa": '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+    "insolvencia": '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
     "seta": '<path d="m6 9 6 6 6-6"/>',
 }
 
@@ -1929,10 +1952,15 @@ def render_page(
     preview: bool = False,
     settings: Optional[Dict[str, Any]] = None,
     blog_post_count: int = 0,
+    query: str = "",
+    tipo: str = "",
 ) -> str:
     settings = settings or store.get_settings()
     seo = page.get("seo") or {}
     blocos = page.get("blocks") or []
+    # A pesquisa do site desenha-se no servidor: o bloco precisa do termo que o
+    # visitante escreveu, que chega pela barra de endereço (ver `site_page`).
+    tem_busca = any(str((bloco or {}).get("type") or "") == "pesquisa-sabemos" for bloco in blocos)
     # A página-mãe dos estudos ganha a lista do que está publicado **a seguir à
     # abertura**: é o que quem chega a `/site/benchmarks` procura, e a lista
     # acompanha a publicação de cada estudo sem ninguém editar a página.
@@ -1943,12 +1971,12 @@ def render_page(
         estudos = _seccao_estudos()
     if estudos and blocos and str((blocos[0] or {}).get("type") or "") == "hero":
         body = (
-            blocks_to_html(blocos[:1], preview=preview)
+            blocks_to_html(blocos[:1], preview=preview, query=query, tipo=tipo)
             + estudos
-            + blocks_to_html(blocos[1:], preview=preview)
+            + blocks_to_html(blocos[1:], preview=preview, query=query, tipo=tipo)
         )
     else:
-        body = blocks_to_html(blocos, preview=preview) + estudos
+        body = blocks_to_html(blocos, preview=preview, query=query, tipo=tipo) + estudos
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
     body = _garantir_h1(body, _titulo_visivel(page))
@@ -1996,6 +2024,7 @@ def render_page(
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
+        extra_css=_CSS_BUSCA if tem_busca else "",
         breadcrumb=_trilha_da_pagina(page),
         wrap_class=wrap_class,
     )
@@ -3782,6 +3811,690 @@ def _resultados_da_pesquisa(termo: str, *, limite: int = 40) -> List[Dict[str, A
         achados.sort(key=ordem)
         grupos.append({"label": rotulo, "items": achados[:limite]})
     return grupos
+
+
+# --------------------------------------------------------------------------
+# Pesquisa Sabemos (`/site/pesquisar`) e fichas de empresa e de contrato
+#
+# A página de pesquisa é um **bloco do CMS** (`pesquisa-sabemos`): o editor
+# escreve o título e o texto de apoio e a página publica-se como qualquer outra.
+# O que é fixo é o comportamento — a caixa, as abas e os resultados lidos da
+# plataforma (`api.site_busca`) — e as fichas que cada resultado abre.
+# --------------------------------------------------------------------------
+BUSCA_PATH = "/site/pesquisar"
+
+_CSS_BUSCA = """
+/* Abertura: a marca e a caixa, centradas, como num motor de busca. */
+.busca { display: grid; gap: 14px; margin: 0 0 18px; }
+.busca--abertura { justify-items: center; gap: 16px; padding: 34px 0 10px; text-align: center; }
+.busca--abertura .lead { max-width: 34rem; margin: 0; }
+.busca--abertura .busca-abas { justify-content: center; border-bottom: 0; padding-bottom: 0; }
+.busca--abertura .busca-exemplos { justify-content: center; }
+.busca--abertura .busca-form { max-width: 44rem; }
+.busca-marca { display: inline-flex; align-items: baseline; gap: 10px; }
+.busca-marca h1 { margin: 0; letter-spacing: -.03em; }
+.busca-marca .ponto { width: .34em; height: .34em; border-radius: 50%; background: var(--accent); }
+/* Resultados: a mesma caixa, mais discreta, alinhada à esquerda. */
+.busca--resultados { gap: 10px; padding-top: 4px; }
+.busca--resultados .busca-marca h1 { font-size: 1.32rem; }
+.busca--resultados .busca-form input[type="search"] { min-height: 48px; font-size: .98rem; }
+.busca--resultados .busca-form button { min-height: 48px; }
+.busca-form { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; }
+.busca-campo { position: relative; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
+.busca-lupa { position: absolute; left: 17px; display: flex; color: var(--muted); pointer-events: none; }
+.busca-form input[type="search"] {
+  width: 100%; min-height: 56px; padding: 12px 18px 12px 48px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--text); font: inherit; font-size: 1.04rem; box-shadow: var(--shadow);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.busca-form input[type="search"]::placeholder { color: color-mix(in srgb, var(--muted) 82%, transparent); }
+.busca-form input[type="search"]:hover { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); }
+.busca-form input[type="search"]:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
+}
+.busca-form button {
+  min-height: 56px; padding: 0 26px; border: 0; border-radius: 999px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+  transition: filter .15s ease, transform .05s ease;
+}
+.busca-form button:hover { filter: brightness(1.06); }
+.busca-form button:active { transform: translateY(1px); }
+.busca-abas {
+  display: flex; gap: 4px; width: 100%; margin: 2px 0 0; padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.busca-abas::-webkit-scrollbar { display: none; }
+.busca-aba {
+  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 38px; padding: 7px 15px;
+  border: 1px solid transparent; border-radius: 999px; color: var(--muted);
+  font-size: .92rem; font-weight: 600; white-space: nowrap;
+}
+.busca-aba:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); text-decoration: none; }
+.busca-aba[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, #0b1220);
+}
+.busca-exemplos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
+.busca-exemplos a {
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); font-weight: 600; font-size: .86rem;
+}
+.busca-exemplos a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.busca-dica { margin: 0; color: var(--muted); font-size: .86rem; max-width: 40rem; }
+.busca-resumo { margin: 0; color: var(--muted); font-size: .94rem; }
+.busca-resumo strong { color: var(--text); }
+.busca-grupo + .busca-grupo { margin-top: 26px; }
+.busca-grupo-cabeca { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; }
+.busca-grupo-cabeca h2 { margin: 0; font-size: 1.04rem; }
+.busca-grupo-icone { display: flex; color: var(--accent); }
+.busca-conta {
+  margin-left: auto; padding: 2px 9px; border-radius: 999px;
+  background: var(--code); color: var(--muted); font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+}
+.busca-lista { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.busca-item { padding: 14px 0; border-top: 1px solid var(--border); }
+.busca-item:first-child { border-top: 0; padding-top: 0; }
+.busca-titulo { font-size: 1.02rem; font-weight: 650; line-height: 1.35; }
+.busca-titulo:hover { text-decoration: underline; }
+.busca-titulo mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: inherit; padding: 0 1px; border-radius: 3px; }
+.busca-sub { margin: 2px 0 0; color: color-mix(in srgb, var(--accent) 62%, var(--text)); font-size: .88rem; }
+.busca-texto { margin: 5px 0 0; color: var(--muted); font-size: .92rem; line-height: 1.5; }
+.busca-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; color: var(--muted); font-size: .8rem; }
+.busca-mais {
+  display: inline-flex; align-items: center; margin-top: 10px; padding: 7px 14px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--accent); font-size: .88rem; font-weight: 650;
+}
+.busca-mais:hover { border-color: var(--accent); text-decoration: none; }
+.busca-vazio { margin: 0; padding: 16px 18px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted); }
+.busca-sem-resultados { display: grid; gap: 12px; justify-items: start; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.busca-sem-resultados h2 { margin: 0; font-size: 1.02rem; }
+.busca-sem-resultados ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .92rem; }
+.busca-sem-resultados li { margin: 3px 0; }
+/* Fichas: cabeçalho, números, partes e listas. */
+.ficha-topo { display: grid; gap: 8px; margin: 4px 0 18px; }
+.ficha-tipo { margin: 0; color: var(--muted); font-size: .74rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.ficha-topo h1 { margin: 0; }
+.ficha-selos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .85rem; }
+.ficha-selos li { padding: 3px 11px; border: 1px solid var(--border); border-radius: 999px; }
+.ficha-lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ficha-lista li { padding: 11px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.ficha-lista b { display: block; font-weight: 650; }
+.ficha-lista small { display: block; margin-top: 3px; color: var(--muted); font-size: .84rem; }
+.ficha-campos { display: grid; gap: 12px 20px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 0; }
+.ficha-campo dt { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.ficha-campo dd { margin: 3px 0 0; }
+.ficha-partes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.ficha-parte { padding: 13px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.ficha-parte h3 { margin: 0 0 7px; color: var(--muted); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
+.ficha-parte ul { margin: 0; padding-left: 18px; }
+.ficha-parte li { margin: 3px 0; }
+.ficha-nota { margin: 0; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--code); color: var(--muted); font-size: .9rem; }
+@media (max-width: 640px) {
+  .busca--abertura { padding: 18px 0 6px; }
+  .busca-form { flex-wrap: wrap; }
+  .busca-form button { width: 100%; }
+  .busca--resultados .busca-form button { min-height: 46px; }
+  .busca-item { padding: 12px 0; }
+}
+"""
+
+
+def _query_busca(termo: str = "", tipo: str = "") -> str:
+    """Barra de endereço da pesquisa (`?q=…&tipo=…`), sem parâmetros vazios."""
+    partes = []
+    if termo:
+        partes.append(f"q={quote(termo)}")
+    if tipo and tipo != "tudo":
+        partes.append(f"tipo={quote(tipo)}")
+    return ("?" + "&".join(partes)) if partes else ""
+
+
+#: Ícone de cada âmbito nos títulos dos resultados (o mesmo desenho das fichas).
+_ICONE_DO_AMBITO: Dict[str, str] = {
+    "empresas": "empresa",
+    "contratos": "documento",
+    "noticias": "blog",
+    "insolvencias": "insolvencia",
+    "site": "seccao",
+}
+
+#: Sugestões da abertura quando a página não as define no CMS.
+EXEMPLOS_DE_PESQUISA: Tuple[str, ...] = ("Galp", "Município de Lisboa", "501964843", "insolvência")
+
+
+def _destacar(texto: Any, termo: str) -> str:
+    """Texto já escapado, com as palavras do termo realçadas (`<mark>`).
+
+    É o que faz o resultado responder à pergunta «porque é que isto apareceu?».
+    Palavras com uma ou duas letras ficam de fora: realçariam meio resultado.
+    """
+    seguro = _esc(texto)
+    palavras = sorted(
+        {palavra for palavra in re.split(r"\s+", str(termo or "").strip()) if len(palavra) > 2},
+        key=len,
+        reverse=True,
+    )
+    if not palavras:
+        return seguro
+    padrao = re.compile("(" + "|".join(re.escape(_esc(palavra)) for palavra in palavras) + ")", re.IGNORECASE)
+    return padrao.sub(r"<mark>\1</mark>", seguro)
+
+
+def _form_busca(
+    termo: str = "",
+    tipo: str = "tudo",
+    *,
+    placeholder: str = "Empresa, NIF, contrato, notícia…",
+    rotulo: str = "Pesquisar",
+    auto: bool = False,
+) -> str:
+    """A caixa de pesquisa (a mesma no topo da página e no fim das fichas)."""
+    escondido = "" if tipo in ("", "tudo") else f'<input type="hidden" name="tipo" value="{_esc(tipo)}">'
+    foco = " autofocus" if auto else ""
+    return (
+        f'<form class="busca-form" action="{BUSCA_PATH}" method="get" role="search">'
+        '<div class="busca-campo">'
+        f'<span class="busca-lupa">{_svg(_ICONES["pesquisa"], 20, classe=None)}</span>'
+        f'<input type="search" name="q" value="{_esc(termo)}" placeholder="{_esc(placeholder)}" '
+        'aria-label="Pesquisar empresas, contratos, notícias e insolvências" autocomplete="off" '
+        f'spellcheck="false" enterkeyhint="search"{foco}>'
+        "</div>"
+        f"{escondido}"
+        f'<button type="submit">{_esc(rotulo)}</button>'
+        "</form>"
+    )
+
+
+def _abas_busca(termo: str, tipo: str = "tudo") -> str:
+    """Abas por tipo de resultado, com a escolhida marcada."""
+    from api import site_busca  # noqa: PLC0415 - import tardio: puxa o cliente do Elasticsearch
+
+    atual = tipo if tipo in site_busca.TIPO_IDS else "tudo"
+    abas = "".join(
+        f'<a class="busca-aba" href="{_esc(BUSCA_PATH + _query_busca(termo, opcao["id"]))}"'
+        + (' aria-current="page"' if opcao["id"] == atual else "")
+        + f">{_esc(opcao['label'])}</a>"
+        for opcao in site_busca.TIPOS
+    )
+    return f'<nav class="busca-abas" aria-label="Tipo de resultado">{abas}</nav>'
+
+
+def _exemplos_de_pesquisa(data: Dict[str, Any]) -> List[str]:
+    """Sugestões escritas no CMS (uma por linha, ou separadas por `;`)."""
+    exemplos = data.get("exemplos")
+    if isinstance(exemplos, str):
+        exemplos = re.split(r"[;\n]", exemplos)
+    if not exemplos:
+        exemplos = list(EXEMPLOS_DE_PESQUISA)
+    return [str(exemplo).strip() for exemplo in exemplos if str(exemplo).strip()][:6]
+
+
+def _sugestoes_de_pesquisa(data: Dict[str, Any]) -> str:
+    exemplos = _exemplos_de_pesquisa(data)
+    if not exemplos:
+        return ""
+    ligacoes = "".join(
+        f'<a href="{_esc(BUSCA_PATH + _query_busca(exemplo))}">{_esc(exemplo)}</a>' for exemplo in exemplos
+    )
+    return f'<p class="busca-exemplos"><span>Experimente:</span>{ligacoes}</p>'
+
+
+def _item_de_busca(item: Dict[str, Any], termo: str = "") -> str:
+    """Um resultado: título com ligação, contexto, resumo, etiquetas e data."""
+    externo = ' target="_blank" rel="noopener"' if item.get("externo") else ""
+    etiquetas = "".join(f'<span class="pill">{_esc(etiqueta)}</span>' for etiqueta in item.get("etiquetas") or [])
+    data = f'<time datetime="{_esc(item["data"])}">{_esc(item["data"])}</time>' if item.get("data") else ""
+    meta = f'<div class="busca-meta">{etiquetas}{data}</div>' if (etiquetas or data) else ""
+    return (
+        '<li class="busca-item">'
+        f'<a class="busca-titulo" href="{_esc(item["href"])}"{externo}>'
+        f'{_destacar(item["titulo"], termo)}'
+        + ('<span aria-hidden="true"> ↗</span>' if item.get("externo") else "")
+        + "</a>"
+        + (f'<p class="busca-sub">{_esc(item["sub"])}</p>' if item.get("sub") else "")
+        + (f'<p class="busca-texto">{_destacar(item["resumo"], termo)}</p>' if item.get("resumo") else "")
+        + meta
+        + "</li>"
+    )
+
+
+def _cabeca_de_grupo(rotulo: str, total: int, ambito: str) -> str:
+    icone = _ICONES.get(_ICONE_DO_AMBITO.get(ambito, ""))
+    marca = f'<span class="busca-grupo-icone">{_svg(icone, 18, classe=None)}</span>' if icone else ""
+    conta = f'<span class="busca-conta">{_numero(total)}</span>' if total else ""
+    return f'<header class="busca-grupo-cabeca">{marca}<h2>{_esc(rotulo)}</h2>{conta}</header>'
+
+
+def _grupo_de_busca(grupo: Dict[str, Any], termo: str, tipo: str) -> str:
+    """Uma secção de resultados (ou o aviso de que aquele âmbito falhou)."""
+    itens = grupo.get("items") or []
+    if not itens:
+        if not grupo.get("erro"):
+            return ""
+        return (
+            f'<section class="busca-grupo">{_cabeca_de_grupo(grupo["label"], 0, grupo["id"])}'
+            '<p class="busca-vazio">Este âmbito está indisponível neste momento.</p></section>'
+        )
+    mais = ""
+    if tipo == "tudo" and grupo["total"] > len(itens):
+        mais = (
+            f'<a class="busca-mais" href="{_esc(BUSCA_PATH + _query_busca(termo, grupo["id"]))}">'
+            f"Ver resultados em {_esc(grupo['label'])} ({_numero(grupo['total'])}) →</a>"
+        )
+    return (
+        f'<section class="busca-grupo">{_cabeca_de_grupo(grupo["label"], grupo["total"], grupo["id"])}'
+        f'<ol class="busca-lista">{"".join(_item_de_busca(item, termo) for item in itens)}</ol>'
+        f"{mais}</section>"
+    )
+
+
+def _grupo_do_site(termo: str) -> str:
+    """Páginas, artigos e relatórios do próprio site (a pesquisa do CMS)."""
+    grupos = _resultados_da_pesquisa(termo)
+    if not grupos:
+        return ""
+    itens = [
+        {
+            "titulo": item["title"],
+            "href": item["href"],
+            "sub": "no site",
+            "resumo": item.get("text") or "",
+            "data": "",
+            "etiquetas": [],
+            "externo": False,
+        }
+        for grupo in grupos
+        for item in grupo["items"]
+    ][:6]
+    if not itens:
+        return ""
+    total = sum(len(grupo["items"]) for grupo in grupos)
+    return (
+        f'<section class="busca-grupo">{_cabeca_de_grupo("No site", total, "site")}'
+        f'<ol class="busca-lista">{"".join(_item_de_busca(item, termo) for item in itens)}</ol>'
+        "</section>"
+    )
+
+
+def _plural(numero: int, singular: str, plural: str) -> str:
+    """«1 resultado» / «240 068 resultados» — sem o feio «resultado(s)»."""
+    return f"{_numero(numero)} {singular if numero == 1 else plural}"
+
+
+def _sem_resultados(termo: str) -> str:
+    """Quando não há nada: o que fazer a seguir, em vez de uma página vazia."""
+    return (
+        '<section class="section busca-sem-resultados">'
+        f"<h2>Nada encontrado para «{_esc(termo)}»</h2>"
+        "<ul>"
+        "<li>Confirme o nome ou o NIF (nove dígitos, sem espaços).</li>"
+        "<li>Tente só uma parte do nome: «galp» chega para «GALP AÇORES, UNIPESSOAL LDA.».</li>"
+        "<li>Procure pelo objeto do contrato («gasóleo», «limpeza», «obras»).</li>"
+        "<li>Os nomes das notícias estão escritos como o jornal os publicou.</li>"
+        "</ul>"
+        f'<a class="btn ghost" href="{BUSCA_PATH}">Limpar a pesquisa</a>'
+        "</section>"
+    )
+
+
+def _bloco_pesquisa_sabemos(
+    data: Dict[str, Any],
+    *,
+    query: str = "",
+    tipo: str = "",
+    preview: bool = False,
+) -> str:
+    """Bloco «pesquisa-sabemos»: caixa, abas e resultados lidos da plataforma.
+
+    Sem termo, a página apresenta-se como um motor de busca: a marca ao centro, a
+    caixa e sugestões. Com `q`, a caixa encolhe e os resultados são desenhados no
+    servidor, âmbito a âmbito — o mesmo endereço (`/site/pesquisar?q=…`) para
+    partilhar, voltar atrás e favoritar.
+    """
+    from api import site_busca  # noqa: PLC0415 - import tardio: puxa o cliente do Elasticsearch
+
+    consulta = " ".join(str(query or "").split())
+    escolhido = tipo if tipo in site_busca.TIPO_IDS else "tudo"
+    titulo = str(data.get("title") or "").strip() or "Sabemos"
+    intro = str(data.get("intro") or "").strip()
+    dica = str(data.get("hint") or "").strip()
+    rotulo = str(data.get("button") or "").strip() or "Pesquisar"
+
+    classe = "busca busca--resultados" if consulta else "busca busca--abertura"
+    corpo = [
+        f'<section class="{classe}">'
+        f'<div class="busca-marca"><h1>{_esc(titulo)}</h1><span class="ponto" aria-hidden="true"></span></div>'
+        + (f'<p class="lead">{_esc(intro)}</p>' if intro and not consulta else "")
+        + _form_busca(consulta, escolhido, rotulo=rotulo, auto=not consulta)
+        + _abas_busca(consulta, escolhido)
+        + ("" if consulta else _sugestoes_de_pesquisa(data))
+        + (f'<p class="busca-dica">{_esc(dica)}</p>' if dica and not consulta else "")
+        + "</section>"
+    ]
+
+    if not consulta:
+        return "".join(corpo)
+
+    resultado = site_busca.pesquisar(consulta, tipo=escolhido)
+    rotulo_ambito = next(
+        (opcao["label"] for opcao in site_busca.TIPOS if opcao["id"] == escolhido),
+        "Tudo",
+    )
+    if resultado["total"]:
+        onde = "" if escolhido == "tudo" else f" em {_esc(rotulo_ambito.lower())}"
+        resumo = (
+            f'<p class="busca-resumo">Cerca de <strong>{_plural(resultado["total"], "resultado", "resultados")}</strong>'
+            f" para «{_esc(consulta)}»{onde}. "
+            f'<a href="{BUSCA_PATH}">Limpar</a></p>'
+        )
+    else:
+        resumo = ""
+    if resumo:
+        corpo.append(f'<div class="section">{resumo}</div>')
+
+    for grupo in resultado["grupos"]:
+        corpo.append(_grupo_de_busca(grupo, consulta, escolhido))
+
+    if escolhido == "tudo":
+        corpo.append(_grupo_do_site(consulta))
+
+    if not resultado["total"]:
+        corpo.append(_sem_resultados(consulta))
+
+    return "".join(corpo)
+
+
+def _fkpi(titulo: str, valor: str, nota: str = "") -> str:
+    return (
+        f'<div class="kpi"><span>{_esc(titulo)}</span><strong>{_esc(valor)}</strong>'
+        + (f"<small>{_esc(nota)}</small>" if nota else "")
+        + "</div>"
+    )
+
+
+def _ficha_topo(rotulo: str, titulo: str, selos: Iterable[Any]) -> str:
+    lista = "".join(f"<li>{_esc(selo)}</li>" for selo in selos if str(selo or "").strip())
+    return (
+        '<header class="ficha-topo">'
+        f'<p class="ficha-tipo">{_esc(rotulo)}</p>'
+        f"<h1>{_esc(titulo)}</h1>"
+        + (f'<ul class="ficha-selos">{lista}</ul>' if lista else "")
+        + "</header>"
+    )
+
+
+def _seccao_contratos_da_empresa(dados: Dict[str, Any]) -> str:
+    contratos = dados.get("contratos") or []
+    if not contratos:
+        return (
+            '<section class="section"><h2>Contratos públicos</h2>'
+            '<p class="ficha-nota">Não há contratos públicos indexados para esta entidade. '
+            "O cadastro do Portal BASE só inclui quem já contratou com o Estado.</p></section>"
+        )
+    linhas = "".join(
+        "<tr>"
+        f'<td>{_esc(contrato["data"])}</td>'
+        f'<td><a href="/site/contrato/{_esc(contrato["id"])}">{_esc(contrato["objeto"])}</a></td>'
+        f'<td>{_esc(contrato["contraparte"])}</td>'
+        f'<td>{_esc(contrato["papel"])}</td>'
+        f'<td>{_esc(contrato["valor"])}</td>'
+        "</tr>"
+        for contrato in contratos
+    )
+    return (
+        '<section class="section prose"><h2>Contratos recentes</h2>'
+        '<div class="tabela-rolavel larga"><table><thead><tr>'
+        "<th>Data</th><th>Objeto</th><th>Contraparte</th><th>Papel</th><th>Valor</th>"
+        f"</tr></thead><tbody>{linhas}</tbody></table></div>"
+        f'<p class="library-count"><a href="{BUSCA_PATH}?q={quote(dados["nome"])}&amp;tipo=contratos">'
+        "Procurar mais contratos desta entidade</a></p></section>"
+    )
+
+
+def _seccao_insolvencias(dados: Dict[str, Any]) -> str:
+    insolvencias = dados.get("insolvencias") or {}
+    insolvente = insolvencias.get("insolvente") or {}
+    outros = insolvencias.get("outros") or {}
+    if not insolvente.get("total") and not outros.get("total"):
+        return ""
+
+    def publicacao(item: Dict[str, Any]) -> str:
+        detalhe = " · ".join(
+            filter(None, [item.get("tipo"), item.get("especie"), item.get("ato"), item.get("processo")])
+        )
+        tribunal = item.get("tribunal") or ""
+        papel = item.get("papel") or ""
+        titulo = item.get("ato") or item.get("especie") or item.get("tipo") or "Publicação"
+        documento = (
+            f' · <a href="{_esc(item["documento"])}" target="_blank" rel="noopener">ver documento</a>'
+            if item.get("documento")
+            else ""
+        )
+        return (
+            f'<li><b>{_esc(titulo)}</b>'
+            f'<small>{_esc(item.get("data"))}'
+            + (f" · {_esc(papel)}" if papel else "")
+            + (f" · {_esc(detalhe)}" if detalhe else "")
+            + (f" · {_esc(tribunal)}" if tribunal else "")
+            + f"{documento}</small></li>"
+        )
+
+    corpo = ['<section class="section"><h2>Insolvências e processos (CIRE)</h2>']
+    if insolvente.get("total"):
+        corpo.append(
+            f'<p class="library-count">{_numero(insolvente["total"])} publicação(ões) em que a entidade '
+            "é o <strong>insolvente</strong>.</p>"
+            f'<ul class="ficha-lista">{"".join(publicacao(item) for item in insolvente.get("items") or [])}</ul>'
+        )
+    else:
+        corpo.append('<p class="ficha-nota">Nenhuma insolvência publicada no CIRE em que esta entidade seja o insolvente.</p>')
+    if outros.get("total"):
+        corpo.append(
+            f'<p class="library-count" style="margin-top:16px">{_numero(outros["total"])} outra(s) publicação(ões) '
+            "em que aparece como parte interessada (credor, requerente ou similar).</p>"
+            f'<ul class="ficha-lista">{"".join(publicacao(item) for item in outros.get("items") or [])}</ul>'
+        )
+    corpo.append("</section>")
+    return "".join(corpo)
+
+
+def _seccao_noticias_da_empresa(dados: Dict[str, Any]) -> str:
+    noticias = dados.get("noticias") or []
+    if not noticias:
+        return ""
+    itens = "".join(
+        f'<li><b><a href="{_esc(noticia["url"])}" target="_blank" rel="noopener">{_esc(noticia["titulo"])}</a></b>'
+        f'<small>{_esc(" · ".join(filter(None, [noticia.get("fonte") or "", noticia.get("data") or ""])))}</small></li>'
+        for noticia in noticias
+    )
+    return f'<section class="section"><h2>Notícias</h2><ul class="ficha-lista">{itens}</ul></section>'
+
+
+def _corpo_da_empresa(dados: Dict[str, Any]) -> str:
+    selos = [
+        f"NIF {dados['nif']}",
+        dados.get("pais") or "",
+        dados.get("localizacao") or "",
+        f"CAE {dados['cae']}" if dados.get("cae") else "",
+        dados.get("forma_juridica") or "",
+    ]
+    kpis = [
+        _fkpi("Contratos públicos", _numero(dados.get("contratos_total")), "Portal BASE"),
+        _fkpi("Valor contratado", dados.get("valor_total_texto") or "—", "soma dos preços contratuais"),
+    ]
+    for rotulo, papel in (("Como adjudicatário", "adjudicatario"), ("Como adjudicante", "adjudicante")):
+        # Um papel a zeros não é informação: sai da tira de números.
+        if (dados.get(papel) or {}).get("total"):
+            kpis.append(
+                _fkpi(
+                    rotulo,
+                    _numero(dados[papel]["total"]),
+                    dados[papel].get("valor") or "",
+                )
+            )
+    insolvente = (dados.get("insolvencias") or {}).get("insolvente") or {}
+    if insolvente.get("total"):
+        kpis.append(_fkpi("Insolvências (CIRE)", _numero(insolvente["total"]), "processos em que é insolvente"))
+
+    corpo = [_ficha_topo("Entidade", dados["nome"], selos), f'<section class="kpis">{"".join(kpis)}</section>']
+    corpo.append(_seccao_contratos_da_empresa(dados))
+    corpo.append(_seccao_insolvencias(dados))
+    corpo.append(_seccao_noticias_da_empresa(dados))
+    corpo.append(
+        '<section class="section cta"><div><h2>Procurar outra entidade</h2>'
+        "<p>Nome, NIF, objeto de contrato, notícia ou processo de insolvência.</p></div></section>"
+    )
+    corpo.append(f'<section class="section">{_form_busca()}</section>')
+    return "".join(corpo)
+
+
+def render_empresa(
+    dados: Dict[str, Any],
+    *,
+    settings: Optional[Dict[str, Any]] = None,
+    preview: bool = False,
+) -> str:
+    """Ficha pública de uma empresa (`/site/empresa/<nif>`)."""
+    settings = settings or store.get_settings()
+    nome = str(dados.get("nome") or "Empresa")
+    nif = str(dados.get("nif") or "")
+    path = f"/site/empresa/{nif}"
+    contratos = int(dados.get("contratos_total") or 0)
+    descricao = (
+        f"{nome} (NIF {nif}): {contratos} contrato(s) público(s)"
+        + (f", {dados.get('valor_total_texto')} adjudicados" if contratos else "")
+        + ", insolvências publicadas no CIRE e notícias, a partir de dados abertos."
+    )
+    return _layout(
+        title=f"{nome} — contratos e insolvências",
+        description=descricao,
+        body=_corpo_da_empresa(dados),
+        current_path=path,
+        settings=settings,
+        canonical=path,
+        keywords=[nome, f"NIF {nif}", "contratos públicos", "insolvências", "empresas"],
+        preview=preview,
+        extra_css=_CSS_BUSCA,
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Pesquisar", "href": BUSCA_PATH},
+            {"label": nome},
+        ],
+    )
+
+
+def _corpo_do_contrato(dados: Dict[str, Any]) -> str:
+    corpo = [
+        _ficha_topo(
+            "Contrato público",
+            dados["objeto"],
+            [
+                f"Contrato {dados['id']}",
+                dados.get("ano") or "",
+                dados.get("tipo") or "",
+                dados.get("procedimento") or "",
+            ],
+        ),
+        '<section class="kpis">'
+        + _fkpi("Preço contratual", dados.get("preco_texto") or "—", dados.get("preco_efetivo") and f"pago: {dados['preco_efetivo']}" or "")
+        + _fkpi("Preço base", dados.get("preco_base") or "—", "valor posto a concurso")
+        + _fkpi("Celebrado", dados.get("data_celebracao") or "—", dados.get("data_publicacao") and f"publicado a {dados['data_publicacao']}" or "")
+        + _fkpi("Prazo de execução", f"{dados['prazo']} dias" if dados.get("prazo") else "—", dados.get("data_fecho") and f"fecho a {dados['data_fecho']}" or "")
+        + "</section>",
+    ]
+
+    def partes(rotulo: str, lista: List[Dict[str, str]]) -> str:
+        if not lista:
+            return ""
+        itens = "".join(
+            f'<li><a href="/site/empresa/{_esc(parte["nif"])}">{_esc(parte["nome"])}</a>'
+            + (f' <small>NIF {_esc(parte["nif"])}</small>' if parte.get("nif") else "")
+            + "</li>"
+            for parte in lista
+        )
+        return f'<div class="ficha-parte"><h3>{_esc(rotulo)}</h3><ul>{itens}</ul></div>'
+
+    partes_html = partes("Adjudicante", dados.get("adjudicantes") or []) + partes(
+        "Adjudicatário", dados.get("adjudicatarios") or []
+    )
+    if partes_html:
+        corpo.append(f'<section class="section"><h2>Partes</h2><div class="ficha-partes">{partes_html}</div></section>')
+
+    campos = [
+        ("Objeto", dados.get("objeto")),
+        ("Descrição", dados.get("descricao") if dados.get("descricao") != dados.get("objeto") else ""),
+        ("Procedimento", dados.get("procedimento")),
+        ("Regime", dados.get("regime")),
+        ("Fundamentação", dados.get("fundamentacao")),
+        ("Decisão de adjudicação", dados.get("data_decisao")),
+        ("Local de execução", dados.get("local")),
+        ("NUT", dados.get("nuts")),
+        ("CPV", " · ".join(f"{item['codigo']} {item['descricao']}".strip() for item in dados.get("cpv") or [])),
+        ("PME", dados.get("pmes")),
+        ("Contratação ecológica", dados.get("ecologico") if dados.get("ecologico") not in ("", "Não") else ""),
+        ("Procedimento centralizado", dados.get("centralizado") if dados.get("centralizado") not in ("", "Não") else ""),
+        ("Concorrentes", dados.get("concorrentes")),
+    ]
+    definicoes = "".join(
+        f'<div class="ficha-campo"><dt>{_esc(rotulo)}</dt><dd>{_esc(valor)}</dd></div>'
+        for rotulo, valor in campos
+        if str(valor or "").strip()
+    )
+    if definicoes:
+        corpo.append(f'<section class="section"><h2>Detalhe</h2><dl class="ficha-campos">{definicoes}</dl></section>')
+
+    if dados.get("pecas"):
+        corpo.append(
+            '<section class="section"><h2>Peças do procedimento</h2>'
+            f'<p><a class="btn ghost" href="{_esc(dados["pecas"])}" target="_blank" rel="noopener">'
+            "Abrir no portal de contratos</a></p></section>"
+        )
+
+    corpo.append(
+        '<section class="section cta"><div><h2>Procurar outra entidade ou contrato</h2>'
+        "<p>Uma caixa para empresas, contratos, notícias e insolvências.</p></div></section>"
+    )
+    corpo.append(f'<section class="section">{_form_busca()}</section>')
+    return "".join(corpo)
+
+
+def render_contrato(
+    dados: Dict[str, Any],
+    *,
+    settings: Optional[Dict[str, Any]] = None,
+    preview: bool = False,
+) -> str:
+    """Ficha pública de um contrato (`/site/contrato/<idcontrato>`)."""
+    settings = settings or store.get_settings()
+    path = f"/site/contrato/{dados.get('id')}"
+    descricao = (
+        f"{dados.get('objeto')} — {dados.get('preco_texto')}"
+        + (f", {dados['adjudicantes'][0]['nome']}" if dados.get("adjudicantes") else "")
+        + (f" → {dados['adjudicatarios'][0]['nome']}" if dados.get("adjudicatarios") else "")
+        + "."
+    )
+    return _layout(
+        title=f"{dados.get('objeto')} — contrato público",
+        description=descricao,
+        body=_corpo_do_contrato(dados),
+        current_path=path,
+        settings=settings,
+        canonical=path,
+        keywords=["contrato público", "Portal BASE", dados.get("procedimento") or "", dados.get("tipo") or ""],
+        preview=preview,
+        extra_css=_CSS_BUSCA,
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Pesquisar", "href": BUSCA_PATH},
+            {"label": dados.get("objeto") or "Contrato"},
+        ],
+    )
 
 
 def render_search(query: str = "", *, settings: Optional[Dict[str, Any]] = None) -> str:
