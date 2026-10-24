@@ -2023,7 +2023,10 @@ def render_page(
         keywords=seo.get("keywords") or (settings.get("seo") or {}).get("keywords") or None,
         json_ld=json_ld,
         preview=preview,
-        noindex=bool(seo.get("noindex")),
+        # Resultados de pesquisa não se indexam: os endereços com `?q=` são
+        # infinitos e o conteúdo é o mesmo que as fichas já publicam. A página
+        # (sem termo) continua indexável — é a porta de entrada.
+        noindex=bool(seo.get("noindex")) or (tem_busca and bool(query)),
         extra_css=_CSS_BUSCA if tem_busca else "",
         breadcrumb=_trilha_da_pagina(page),
         wrap_class=wrap_class,

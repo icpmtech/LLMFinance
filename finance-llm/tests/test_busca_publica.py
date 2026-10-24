@@ -268,6 +268,15 @@ def test_pagina_do_ambito_escolhido(instalacao, monkeypatch):
     assert "Ver os" not in html
 
 
+def test_resultados_nao_se_indexam(instalacao, monkeypatch):
+    """A página entra no índice; os resultados com `?q=` não."""
+    _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
+    pagina = _pagina_com_busca()
+
+    assert 'content="index, follow"' in cms_render.render_page(pagina, query="")
+    assert 'content="noindex, nofollow"' in cms_render.render_page(pagina, query="galp")
+
+
 def test_ficha_de_empresa_tem_numeros_e_processos(instalacao):
     dados = {
         "nif": "512044635",
