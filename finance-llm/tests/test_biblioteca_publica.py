@@ -497,7 +497,10 @@ def test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato(instalacao):
     # O estado é o da classe `aberto` (posto pelo clique), não o do rato ou do foco.
     assert "nav.main .tem-submenu.aberto>.submenu{display:block}" in css
     assert ":hover>.submenu" not in css
-    assert ":focus-within" not in css
+    # Nenhuma regra do **menu** abre o submenu ao foco (o clique é que manda).
+    # A guarda é sobre o seletor do menu, e não sobre a palavra: o resto do site
+    # pode usar `:focus-within`/`:has(:focus-visible)` para realçar cartões.
+    assert ".tem-submenu:focus-within" not in css
     # Uma seta por item com submenu, com o rótulo a continuar a ser o link, e sem
     # a seta antiga (feita em CSS) ao lado.
     assert nav.count('class="menu-abre"') >= 1

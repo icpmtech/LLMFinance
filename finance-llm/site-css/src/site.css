@@ -1583,7 +1583,7 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   box-shadow: 0 18px 34px -24px rgba(16, 24, 40, .5);
   transform: translateY(-1px);
 }
-.busca-item:focus-within { border-color: var(--accent); }
+.busca-item:has(:focus-visible) { border-color: var(--accent); }
 .busca-corpo { min-width: 0; }
 .busca-titulo { font-size: 1rem; font-weight: 650; line-height: 1.35; }
 .busca-titulo:hover { text-decoration: underline; }
