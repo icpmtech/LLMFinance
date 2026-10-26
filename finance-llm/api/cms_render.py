@@ -802,14 +802,15 @@ def _render_block(
         tiles = []
         for item in items:
             href = str(item.get("href") or "").strip()
-            # Ícone opcional: sem imagem o cartão fica como sempre foi, para o
-            # conteúdo escrito antes dos ícones continuar a servir.
-            icone_url = _media_url(item.get("icon_id"))
-            icone = (
-                f'<img class="tile-icon" src="{_esc(icone_url)}" alt="" width="44" height="44" loading="lazy">'
-                if icone_url
-                else ""
-            )
+            # Ícone opcional: SVG interno ou imagem da biblioteca de media.
+            icone_id = str(item.get("icon_id") or "").strip()
+            icone_url = _media_url(icone_id) if icone_id and icone_id.startswith("med_") else ""
+            icone_svg = _ICONES.get(icone_id) if icone_id and not icone_url else ""
+            icone = ""
+            if icone_url:
+                icone = f'<img class="tile-icon" src="{_esc(icone_url)}" alt="" width="44" height="44" loading="lazy">'
+            elif icone_svg:
+                icone = f'<span class="tile-icon tile-icon--svg">{_svg(icone_svg, 22, classe=None)}</span>'
             corpo = f'{icone}<h3>{_esc(item.get("title"))}</h3><p>{_esc(item.get("text"))}</p>'
             if href:
                 tiles.append(f'<a class="tile link" href="{_esc(href)}">{corpo}</a>')
@@ -820,7 +821,7 @@ def _render_block(
         # deixar uma linha órfã de um cartão (era o que acontecia com o
         # `auto-fit` genérico).
         colunas = f" grelha--n{len(items)}" if len(items) in (3, 4, 6) else ""
-        return f'<div class="section">{title}<div class="grelha{colunas}">{"".join(tiles)}</div></div>'
+        return f'<div class="section destaques-section">{title}<div class="grelha{colunas}">{"".join(tiles)}</div></div>'
 
     if block_type == "numeros":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -1807,11 +1808,13 @@ def _layout(
                 'document.addEventListener("click",function(e){'
                 'if(e.target===c||n.contains(e.target)||b.contains(e.target))return;'
                 'if(c.checked){c.checked=false;update();}else{fechar();}});'
-                'document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar();});update();})();</script>'
+                'document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar();});update();})();\x3c/script\x3e'
                 # Um submenu dentro de outro abre ao lado; no fim da fila (o menu
                 # vive à direita) não cabe e sai do ecrã. Aqui vira-se para a
                 # esquerda, no momento em que a seta o abre.
-                '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
+                '\x3cscript\x3e(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right\x3ewindow.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();\x3c/script\x3e'
+                # Loader da pesquisa: mostra o spinner quando o formulário é submetido.
+                '\x3cscript\x3e(function(){document.querySelectorAll("[data-busca-form]").forEach(function(f){f.addEventListener("submit",function(){f.setAttribute("aria-busy","true");});f.querySelectorAll("a,button:not([type=submit])").forEach(function(e){e.addEventListener("click",function(){f.setAttribute("aria-busy","true");});});window.addEventListener("pageshow",function(){f.removeAttribute("aria-busy");});});})();\x3c/script\x3e'
             )
         )
         + "</body></html>"
@@ -3927,12 +3930,13 @@ def _form_busca(
     escondido = "" if tipo in ("", "tudo") else f'<input type="hidden" name="tipo" value="{_esc(tipo)}">'
     foco = " autofocus" if auto else ""
     return (
-        f'<form class="busca-form" action="{BUSCA_PATH}" method="get" role="search">'
+        f'<form class="busca-form" action="{BUSCA_PATH}" method="get" role="search" data-busca-form>'
         '<div class="busca-campo">'
         f'<span class="busca-lupa">{_svg(_ICONES["pesquisa"], 20, classe=None)}</span>'
         f'<input type="search" name="q" value="{_esc(termo)}" placeholder="{_esc(placeholder)}" '
         'aria-label="Pesquisar empresas, contratos, notícias e insolvências" autocomplete="off" '
         f'spellcheck="false" enterkeyhint="search"{foco}>'
+        f'<span class="busca-loader" aria-hidden="true"></span>'
         "</div>"
         f"{escondido}"
         f'<button type="submit">{_esc(rotulo)}</button>'

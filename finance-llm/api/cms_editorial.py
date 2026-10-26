@@ -872,13 +872,19 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                 ),
                 b.texto(
                     "O que cada resultado abre",
-                    "Cada resultado abre uma **ficha no site**, com os números e a fonte à vista:\n\n"
-                    "- **Empresa** — NIF, contratos públicos, valores por papel (adjudicante e adjudicatário), "
-                    "insolvências publicadas no CIRE e notícias que a mencionam.\n"
-                    "- **Contrato** — objeto, preço contratual, procedimento, partes (com ligação à ficha de cada uma), "
-                    "CPV, local de execução e peças do procedimento.\n"
-                    "- **Notícia** — abre na publicação original (SAPO, Lusa, ECO, Observador, Jornal Económico…).\n"
-                    "- **Insolvência** — abre a ficha da entidade visada, com o processo e o tribunal.\n\n"
+                    "Cada resultado abre uma **ficha no site**, com os números e a fonte à vista.",
+                ),
+                b.cartoes_com_icone(
+                    "",
+                    (
+                        ("Empresa", "NIF, contratos públicos, valores por papel (adjudicante e adjudicatário), insolvências publicadas no CIRE e notícias que a mencionam.", "empresa"),
+                        ("Contrato", "Objeto, preço contratual, procedimento, partes (com ligação à ficha de cada uma), CPV, local de execução e peças do procedimento.", "documento"),
+                        ("Notícia", "Abre na publicação original (SAPO, Lusa, ECO, Observador, Jornal Económico…).", "blog"),
+                        ("Insolvência", "Abre a ficha da entidade visada, com o processo e o tribunal.", "insolvencia"),
+                    ),
+                ),
+                b.texto(
+                    "",
                     "A pesquisa é feita sobre os índices da plataforma (Portal BASE, CIRE/CITIUS, cadastro de "
                     "entidades e recolha de imprensa); não há resultados inventados nem estimativas.",
                 ),
