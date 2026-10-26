@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Sequence
 #: título e o texto alternativo com que aparecem no CMS.
 SEED_MEDIA: Sequence[Sequence[str]] = (
     ("logo-sabemos-studio.svg", "Logótipo Sabemos Studio", "Sabemos Studio", ""),
+    ("logo-sabemos.svg", "Logótipo Sabemos (pesquisa)", "Sabemos", "Marca da pesquisa pública: lupa com barras."),
+    ("marca-sabemos.svg", "Marca Sabemos (ícone)", "Sabemos", "Ícone da marca, para a abertura da pesquisa."),
     ("icone-sabemos-studio.svg", "Ícone Sabemos Studio", "Sabemos Studio", "Usado como favicon do site."),
     (
         "capa-sabemos-studio.svg",
@@ -481,12 +483,14 @@ class _Blocos:
         exemplos: Sequence[str] = (),
         button: str = "",
         lema: str = "",
+        logo: str = "",
     ) -> Dict[str, Any]:
         """Caixa de pesquisa do site (empresas, contratos, notícias e insolvências).
 
         O bloco desenha a caixa, as abas por tipo e os resultados lidos da
         plataforma em cada pedido: a página não guarda resultados, só a
-        apresentação (título, lema, texto de apoio, sugestões e rótulo do botão).
+        apresentação (título, lema, marca, texto de apoio, sugestões e rótulo do
+        botão).
         """
         data: Dict[str, Any] = {"title": title}
         if intro:
@@ -499,6 +503,8 @@ class _Blocos:
             data["button"] = button
         if lema:
             data["tagline"] = lema
+        if logo:
+            data["logo_id"] = logo
         return self.add("pesquisa-sabemos", data)
 
     def relatorios(
@@ -862,6 +868,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     hint="Um nome, um NIF ou uma palavra do objeto de um contrato. Sem filtros para escolher antes de procurar.",
                     exemplos=("Galp", "Município de Lisboa", "501964843", "insolvência"),
                     lema="Nós Sabemos e tu, Sabes?",
+                    logo=media.get("marca-sabemos.svg", ""),
                 ),
                 b.texto(
                     "O que cada resultado abre",
