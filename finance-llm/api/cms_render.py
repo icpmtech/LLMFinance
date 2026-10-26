@@ -4025,7 +4025,7 @@ def _grupo_de_busca(grupo: Dict[str, Any], termo: str, tipo: str) -> str:
             f"Ver resultados em {_esc(grupo['label'])} ({_numero(grupo['total'])}) →</a>"
         )
     return (
-        f'<section class="busca-grupo">{_cabeca_de_grupo(grupo["label"], grupo["total"], grupo["id"])}'
+        f'<section class="busca-grupo busca-grupo--card">{_cabeca_de_grupo(grupo["label"], grupo["total"], grupo["id"])}'
         f'<ol class="busca-lista">{"".join(_item_de_busca(item, termo) for item in itens)}</ol>'
         f"{mais}</section>"
     )
@@ -4114,15 +4114,22 @@ def _bloco_pesquisa_sabemos(
     )
     # A marca é o wordmark com o ponto de acento (o logótipo completo já está no
     # cabeçalho): repeti-lo aqui punha «Sabemos Studio» duas vezes no ecrã.
-    corpo = [
-        f'<section class="{classe}">'
+    cabeca = (
+        f'<div class="busca-cabeca">'
         f'<div class="busca-marca">{logo_html}<h1>{_esc(titulo)}</h1><span class="ponto" aria-hidden="true"></span></div>'
         + (f'<p class="busca-lema">{_esc(lema)}</p>' if lema and not consulta else "")
-        + (f'<p class="lead">{_esc(intro)}</p>' if intro and not consulta else "")
+        + (f'<p class="busca-intro">{_esc(intro)}</p>' if intro and not consulta else "")
+        + "</div>"
+    )
+    corpo = [
+        f'<section class="{classe}">'
+        + cabeca
+        + '<div class="busca-card">'
         + _form_busca(consulta, escolhido, rotulo=rotulo, auto=not consulta)
         + _abas_busca(consulta, escolhido)
         + ("" if consulta else _sugestoes_de_pesquisa(data))
         + (f'<p class="busca-dica">{_esc(dica)}</p>' if dica and not consulta else "")
+        + "</div>"
         + "</section>"
     ]
 
