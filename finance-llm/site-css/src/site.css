@@ -1678,6 +1678,68 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
 .ficha-parte li { margin: 3px 0; }
 .ficha-nota { margin: 0; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--code); color: var(--muted); font-size: .9rem; }
 
+/* Ficha da entidade: contratos em cards + tabela filtrável */
+.ficha-contratos-lista { display: grid; gap: 12px; margin: 0 0 22px; }
+.ficha-contrato-card {
+  @apply border border-line bg-surface;
+  padding: 16px 18px; border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.ficha-contrato-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  box-shadow: 0 18px 34px -22px rgba(16, 24, 40, .42);
+  transform: translateY(-2px);
+}
+.ficha-contrato-cabeca { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; color: var(--muted); font-size: .82rem; }
+.ficha-contrato-cabeca time { font-variant-numeric: tabular-nums; }
+.ficha-contrato-papel {
+  margin-left: auto; padding: 3px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 72%, #0b1220);
+  font-size: .75rem; font-weight: 700;
+}
+.ficha-contrato-titulo { margin: 0; font-size: 1rem; line-height: 1.35; }
+.ficha-contrato-titulo a { color: var(--text); }
+.ficha-contrato-titulo a:hover { color: var(--accent); text-decoration: underline; }
+.ficha-contrato-parte { margin: 8px 0 0; color: var(--muted); font-size: .88rem; }
+.ficha-contrato-parte span { color: var(--text); font-weight: 600; }
+.ficha-contrato-valor { margin: 8px 0 0; font-size: .96rem; font-weight: 700; color: var(--text); }
+
+/* Filtros da tabela de contratos (reaproveitam .rem-filtro do quadro de remunerações) */
+.rem-filtro { display: grid; gap: 12px; margin: 0 0 18px; }
+.rem-filtro-campos {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px);
+  background: var(--surface); box-shadow: var(--shadow);
+}
+.rem-filtro-campos input[type="search"] {
+  flex: 1 1 220px; min-width: 0; min-height: 42px; padding: 8px 14px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit;
+}
+.rem-filtro-campos input[type="search"]:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.rem-filtro-campo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .88rem; color: var(--muted); }
+.rem-filtro-campo select { flex: 1 1 auto; min-width: 0; min-height: 42px; padding: 8px 28px 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; }
+.rem-filtro-conta { margin-left: auto; font-size: .84rem; color: var(--muted); }
+.rem-filtro-limpar {
+  padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--muted); font: inherit; cursor: pointer;
+}
+.rem-filtro-limpar:hover { border-color: var(--accent); color: var(--accent); }
+.rem-filtro-vazio { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code); color: var(--muted); font-size: .9rem; }
+.rem-filtro-linha { display: none; }
+
+@media (min-width: 700px) {
+  .ficha-contratos-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .ficha-contrato-card { padding: 14px 15px; }
+  .rem-filtro-campos { display: grid; grid-template-columns: 1fr; align-items: stretch; gap: 10px; }
+  .rem-filtro-campos input[type="search"], .rem-filtro-campo, .rem-filtro-campo select { width: 100%; box-sizing: border-box; }
+  .rem-filtro-conta { margin-left: 0; }
+  .tabela-rolavel.larga table { min-width: 0; }
+}
+
 @media (max-width: 640px) {
   .busca--abertura { padding: 16px 0 4px; }
   .busca-card { padding: 16px 16px 12px; }

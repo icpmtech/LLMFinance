@@ -2111,7 +2111,7 @@ def _tabela_nua(
             f' data-{_esc(chave)}="{_esc(valor)}"' for chave, valor in dados.items() if str(valor or "")
         )
         corpo.append(
-            f"<tr{extra}>" + "".join(f"<td>{_esc(celula)}</td>" for celula in linha) + "</tr>"
+            f"<tr{extra}>" + "".join(f"<td>{celula}</td>" for celula in linha) + "</tr>"
         )
     extra_classe = f" {classe}" if classe else ""
     return (
@@ -2850,7 +2850,7 @@ def _tabela_filtravel(
         f'data-unidade-singular="{_esc(singular)}">'
         f'<div class="rem-filtro-campos">{"".join(campos)}</div>'
         f"{_tabela_nua(cabecalho, linhas, classe=classe, atributos=atributos)}"
-        '<p class="rem-filtro-vazio meta" data-papel="vazio" hidden>Nenhuma linha corresponde à pesquisa.</p>'
+        '<p class="rem-filtro-vazio" data-papel="vazio" hidden>Nenhuma linha corresponde à pesquisa.</p>'
         "</div>"
     )
 
@@ -4197,21 +4197,61 @@ def _seccao_contratos_da_empresa(dados: Dict[str, Any]) -> str:
             '<p class="ficha-nota">Não há contratos públicos indexados para esta entidade. '
             "O cadastro do Portal BASE só inclui quem já contratou com o Estado.</p></section>"
         )
-    linhas = "".join(
-        "<tr>"
-        f'<td>{_esc(contrato["data"])}</td>'
-        f'<td><a href="/site/contrato/{_esc(contrato["id"])}">{_esc(contrato["objeto"])}</a></td>'
-        f'<td>{_esc(contrato["contraparte"])}</td>'
-        f'<td>{_esc(contrato["papel"])}</td>'
-        f'<td>{_esc(contrato["valor"])}</td>'
-        "</tr>"
+
+    # Cards com a mesma informação da tabela: melhor leitura no telemóvel.
+    cards = "".join(
+        f'<article class="ficha-contrato-card" data-papel="{_esc(contrato.get("papel_slug") or contrato.get("papel", "").lower())}">'
+        f'<div class="ficha-contrato-cabeca">'
+        f'<time datetime="{_esc(contrato.get("data_iso") or "")}">{_esc(contrato["data"])}</time>'
+        f'<span class="ficha-contrato-papel">{_esc(contrato["papel"])}</span>'
+        f'</div>'
+        f'<h3 class="ficha-contrato-titulo"><a href="/site/contrato/{_esc(contrato["id"])}">{_esc(contrato["objeto"])}</a></h3>'
+        f'<p class="ficha-contrato-parte"><span>Contraparte:</span> {_esc(contrato["contraparte"])}</p>'
+        f'<p class="ficha-contrato-valor">{_esc(contrato["valor"])}</p>'
+        f'</article>'
         for contrato in contratos
     )
+
+    # Tabela filtrável: busca + filtro por papel, com atributos nas linhas.
+    cabecalho = ["Data", "Objeto", "Contraparte", "Papel", "Valor"]
+    linhas: List[List[str]] = []
+    atributos: List[Dict[str, str]] = []
+    for contrato in contratos:
+        papel = str(contrato.get("papel") or "")
+        papel_slug = str(contrato.get("papel_slug") or "").lower() or papel.lower()
+        linhas.append([
+            str(contrato.get("data") or ""),
+            f'<a href="/site/contrato/{_esc(contrato["id"])}">{_esc(contrato["objeto"])}</a>',
+            str(contrato.get("contraparte") or ""),
+            papel,
+            str(contrato.get("valor") or ""),
+        ])
+        atributos.append({"papel": papel_slug})
+
+    opcoes_papel = sorted(
+        {(str(c.get("papel_slug") or "").lower() or str(c.get("papel") or "").lower(), str(c.get("papel") or "")) for c in contratos},
+        key=lambda x: x[1].lower(),
+    )
+    opcoes_papel = [(slug, rotulo) for slug, rotulo in opcoes_papel if slug]
+
+    filtros: List[Dict[str, Any]] = []
+    if opcoes_papel:
+        filtros.append({"atributo": "papel", "rotulo": "Papel", "opcoes": opcoes_papel})
+
+    tabela = _tabela_filtravel(
+        cabecalho=cabecalho,
+        linhas=linhas,
+        busca="Procurar nos contratos…",
+        atributos=atributos,
+        filtros=filtros,
+        unidade="contratos",
+        unidade_singular="contrato",
+    )
+
     return (
-        '<section class="section prose"><h2>Contratos recentes</h2>'
-        '<div class="tabela-rolavel larga"><table><thead><tr>'
-        "<th>Data</th><th>Objeto</th><th>Contraparte</th><th>Papel</th><th>Valor</th>"
-        f"</tr></thead><tbody>{linhas}</tbody></table></div>"
+        '<section class="section"><h2>Contratos recentes</h2>'
+        f'<div class="ficha-contratos-lista">{cards}</div>'
+        f'{tabela}'
         f'<p class="library-count"><a href="{BUSCA_PATH}?q={quote(dados["nome"])}&amp;tipo=contratos">'
         "Procurar mais contratos desta entidade</a></p></section>"
     )
@@ -4323,7 +4363,11 @@ def _corpo_da_empresa(dados: Dict[str, Any]) -> str:
         "<p>Nome, NIF, objeto de contrato, notícia ou processo de insolvência.</p></div></section>"
     )
     corpo.append(f'<section class="section">{_form_busca()}</section>')
-    return "".join(corpo)
+    corpo_html = "".join(corpo)
+    # A tabela filtrável de contratos precisa do script de filtros no fim da página.
+    if 'data-tabela-filtro' in corpo_html:
+        corpo_html += _JS_FILTROS_TABELAS
+    return corpo_html
 
 
 def render_empresa(
