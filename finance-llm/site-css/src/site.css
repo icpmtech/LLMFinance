@@ -1740,6 +1740,33 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   .tabela-rolavel.larga table { min-width: 0; }
 }
 
+/* Paginação dos resultados de pesquisa */
+.busca-paginacao {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.busca-paginacao a, .busca-paginacao-atual, .busca-paginacao-elipse {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; min-height: 34px; padding: 0 10px;
+  border-radius: 999px; font-size: .88rem; font-weight: 600;
+}
+.busca-paginacao a {
+  @apply border border-line bg-surface;
+  color: var(--text); text-decoration: none;
+  transition: border-color .15s ease, color .15s ease;
+}
+.busca-paginacao a:hover { border-color: var(--accent); color: var(--accent); }
+.busca-paginacao-atual {
+  background: var(--accent); color: #fff;
+}
+.busca-paginacao-elipse {
+  color: var(--muted);
+}
+.busca-paginacao-anterior, .busca-paginacao-proxima { padding: 0 14px !important; }
+.busca-paginacao-info {
+  margin-left: auto; color: var(--muted); font-size: .84rem;
+}
+
 @media (max-width: 640px) {
   .busca--abertura { padding: 16px 0 4px; }
   .busca-card { padding: 16px 16px 12px; }
@@ -1752,5 +1779,6 @@ figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
   .busca-logo { width: 38px; height: 38px; border-radius: 10px; }
   .busca-logo-letra { font-size: .8rem; }
   .ficha-marca .busca-logo { width: 46px; height: 46px; }
+  .busca-paginacao-info { width: 100%; margin-left: 0; text-align: center; }
 }
 }

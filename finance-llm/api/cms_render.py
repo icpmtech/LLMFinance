@@ -720,6 +720,7 @@ def _render_block(
     preview: bool = False,
     query: str = "",
     tipo: str = "",
+    pagina: int = 1,
 ) -> str:
     if block.get("hidden"):
         return ""
@@ -727,7 +728,7 @@ def _render_block(
     data = block.get("data") or {}
 
     if block_type == "pesquisa-sabemos":
-        return _bloco_pesquisa_sabemos(data, query=query, tipo=tipo, preview=preview)
+        return _bloco_pesquisa_sabemos(data, query=query, tipo=tipo, pagina=pagina, preview=preview)
 
     if block_type == "hero":
         title = _esc(data.get("title") or "")
@@ -995,16 +996,17 @@ def blocks_to_html(
     preview: bool = False,
     query: str = "",
     tipo: str = "",
+    pagina: int = 1,
 ) -> str:
     """HTML dos blocos de uma página.
 
-    `query`/`tipo` são a pesquisa que o visitante escreveu na barra de endereço
-    (`/site/pesquisar?q=…&tipo=…`): só o bloco da pesquisa os usa, mas passam por
-    aqui porque a página é desenhada de uma vez, no servidor.
+    `query`/`tipo`/`pagina` são a pesquisa que o visitante escreveu na barra de
+    endereço (`/site/pesquisar?q=…&tipo=…&pagina=…`): só o bloco da pesquisa os
+    usa, mas passam por aqui porque a página é desenhada de uma vez, no servidor.
     """
     parts = []
     for block in blocks or []:
-        html_text = _render_block(block, preview=preview, query=query, tipo=tipo)
+        html_text = _render_block(block, preview=preview, query=query, tipo=tipo, pagina=pagina)
         if html_text:
             # A raiz de cada bloco leva o tipo (`data-bloco="hero"`, …): o CSS
             # consegue assim tratar a abertura, os números ou a galeria sem
@@ -1969,6 +1971,7 @@ def render_page(
     blog_post_count: int = 0,
     query: str = "",
     tipo: str = "",
+    pagina: int = 1,
 ) -> str:
     settings = settings or store.get_settings()
     seo = page.get("seo") or {}
@@ -1986,12 +1989,12 @@ def render_page(
         estudos = _seccao_estudos()
     if estudos and blocos and str((blocos[0] or {}).get("type") or "") == "hero":
         body = (
-            blocks_to_html(blocos[:1], preview=preview, query=query, tipo=tipo)
+            blocks_to_html(blocos[:1], preview=preview, query=query, tipo=tipo, pagina=pagina)
             + estudos
-            + blocks_to_html(blocos[1:], preview=preview, query=query, tipo=tipo)
+            + blocks_to_html(blocos[1:], preview=preview, query=query, tipo=tipo, pagina=pagina)
         )
     else:
-        body = blocks_to_html(blocos, preview=preview, query=query, tipo=tipo) + estudos
+        body = blocks_to_html(blocos, preview=preview, query=query, tipo=tipo, pagina=pagina) + estudos
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
     body = _garantir_h1(body, _titulo_visivel(page))
@@ -3841,13 +3844,18 @@ def _resultados_da_pesquisa(termo: str, *, limite: int = 40) -> List[Dict[str, A
 BUSCA_PATH = "/site/pesquisar"
 
 
-def _query_busca(termo: str = "", tipo: str = "") -> str:
-    """Barra de endereço da pesquisa (`?q=…&tipo=…`), sem parâmetros vazios."""
+def _query_busca(termo: str = "", tipo: str = "", pagina: int = 0) -> str:
+    """Barra de endereço da pesquisa (`?q=…&tipo=…&pagina=…`), sem parâmetros vazios.
+
+    `pagina=0` omite o parâmetro (usado na abertura e na primeira página).
+    """
     partes = []
     if termo:
         partes.append(f"q={quote(termo)}")
     if tipo and tipo != "tudo":
         partes.append(f"tipo={quote(tipo)}")
+    if pagina and pagina > 1:
+        partes.append(f"pagina={pagina}")
     return ("?" + "&".join(partes)) if partes else ""
 
 
@@ -4012,7 +4020,59 @@ def _cabeca_de_grupo(rotulo: str, total: int, ambito: str) -> str:
     return f'<header class="busca-grupo-cabeca">{marca}<h2>{_esc(rotulo)}</h2>{conta}</header>'
 
 
-def _grupo_de_busca(grupo: Dict[str, Any], termo: str, tipo: str) -> str:
+def _paginacao_de_busca(
+    termo: str,
+    tipo: str,
+    *,
+    pagina: int,
+    total: int,
+    tamanho: int,
+) -> str:
+    """Links de paginação para um âmbito específico.
+
+    Mostra página anterior, números próximos e página seguinte. O parâmetro
+    `tipo` já está na aba, por isso mantém-se; `pagina=1` omite-se.
+    """
+    if total <= tamanho:
+        return ""
+    ultima = max(1, (total + tamanho - 1) // tamanho)
+    pagina = max(1, min(pagina, ultima))
+
+    def link(p: int, rotulo: str, classe: str = "") -> str:
+        extra = f' class="{_esc(classe)}"' if classe else ""
+        return f'<a{extra} href="{_esc(BUSCA_PATH + _query_busca(termo, tipo, p))}">{_esc(rotulo)}</a>'
+
+    partes = ["\u003cnav class=\"busca-paginacao\" aria-label=\"Páginas de resultados\"\u003e"]
+    if pagina > 1:
+        partes.append(link(pagina - 1, "← Anterior", "busca-paginacao-anterior"))
+
+    janela = 2
+    for p in range(1, ultima + 1):
+        if p == 1 or p == ultima or abs(p - pagina) <= janela:
+            if p == pagina:
+                partes.append(f'<span class="busca-paginacao-atual" aria-current="page">{p}</span>')
+            else:
+                partes.append(link(p, str(p)))
+        elif abs(p - pagina) == janela + 1:
+            partes.append('<span class="busca-paginacao-elipse"\u003e…</span\u003e')
+
+    if pagina < ultima:
+        partes.append(link(pagina + 1, "Próxima →", "busca-paginacao-proxima"))
+
+    resumo = f"Página {pagina} de {ultima}"
+    partes.append(f'<span class="busca-paginacao-info">{_esc(resumo)}</span>')
+    partes.append("</nav\u003e")
+    return "".join(partes)
+
+
+def _grupo_de_busca(
+    grupo: Dict[str, Any],
+    termo: str,
+    tipo: str,
+    *,
+    pagina: int = 1,
+    tamanho_pagina: int = 20,
+) -> str:
     """Uma secção de resultados (ou o aviso de que aquele âmbito falhou)."""
     itens = grupo.get("items") or []
     if not itens:
@@ -4028,10 +4088,15 @@ def _grupo_de_busca(grupo: Dict[str, Any], termo: str, tipo: str) -> str:
             f'<a class="busca-mais" href="{_esc(BUSCA_PATH + _query_busca(termo, grupo["id"]))}">'
             f"Ver resultados em {_esc(grupo['label'])} ({_numero(grupo['total'])}) →</a>"
         )
+    paginacao = ""
+    if tipo != "tudo" and grupo["total"] > tamanho_pagina:
+        paginacao = _paginacao_de_busca(
+            termo, tipo, pagina=pagina, total=grupo["total"], tamanho=tamanho_pagina
+        )
     return (
         f'<section class="busca-grupo busca-grupo--card">{_cabeca_de_grupo(grupo["label"], grupo["total"], grupo["id"])}'
         f'<ol class="busca-lista">{"".join(_item_de_busca(item, termo) for item in itens)}</ol>'
-        f"{mais}</section>"
+        f"{mais}{paginacao}</section>"
     )
 
 
@@ -4090,6 +4155,7 @@ def _bloco_pesquisa_sabemos(
     *,
     query: str = "",
     tipo: str = "",
+    pagina: int = 1,
     preview: bool = False,
 ) -> str:
     """Bloco «pesquisa-sabemos»: caixa, abas e resultados lidos da plataforma.
@@ -4103,6 +4169,7 @@ def _bloco_pesquisa_sabemos(
 
     consulta = " ".join(str(query or "").split())
     escolhido = tipo if tipo in site_busca.TIPO_IDS else "tudo"
+    pagina = max(1, int(pagina or 1))
     titulo = str(data.get("title") or "").strip() or "Sabemos"
     intro = str(data.get("intro") or "").strip()
     dica = str(data.get("hint") or "").strip()
@@ -4140,7 +4207,13 @@ def _bloco_pesquisa_sabemos(
     if not consulta:
         return "".join(corpo)
 
-    resultado = site_busca.pesquisar(consulta, tipo=escolhido)
+    tamanho_pagina = site_busca.LIMITE_DO_TIPO
+    resultado = site_busca.pesquisar(
+        consulta,
+        tipo=escolhido,
+        pagina=pagina,
+        tamanho_pagina=tamanho_pagina,
+    )
     rotulo_ambito = next(
         (opcao["label"] for opcao in site_busca.TIPOS if opcao["id"] == escolhido),
         "Tudo",
@@ -4158,7 +4231,15 @@ def _bloco_pesquisa_sabemos(
         corpo.append(f'<div class="section">{resumo}</div>')
 
     for grupo in resultado["grupos"]:
-        corpo.append(_grupo_de_busca(grupo, consulta, escolhido))
+        corpo.append(
+            _grupo_de_busca(
+                grupo,
+                consulta,
+                escolhido,
+                pagina=pagina,
+                tamanho_pagina=tamanho_pagina,
+            )
+        )
 
     if escolhido == "tudo":
         corpo.append(_grupo_do_site(consulta))

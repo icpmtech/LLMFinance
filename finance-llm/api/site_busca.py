@@ -245,9 +245,9 @@ def _chave(valor: Any) -> str:
 # --------------------------------------------------------------------------
 # Âmbitos
 # --------------------------------------------------------------------------
-def _empresas(termo: str, limite: int) -> Dict[str, Any]:
+def _empresas(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Cadastro de entidades. O NIF exato e o nome exato vêm à frente."""
-    achado = search_entities(q=termo, size=max(limite * 3, 15))
+    achado = search_entities(q=termo, size=max(limite * 3, 15), from_=offset)
     if achado.get("error"):
         return _grupo("empresas", "Empresas", 0, [], _texto(achado["error"]))
 
@@ -305,9 +305,9 @@ def _empresas(termo: str, limite: int) -> Dict[str, Any]:
     return _grupo("empresas", "Empresas", achado.get("total") or 0, itens)
 
 
-def _contratos(termo: str, limite: int) -> Dict[str, Any]:
+def _contratos(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Contratos públicos, por relevância (objeto, partes e CPV)."""
-    achado = search_contracts(q=termo, size=limite, sort_by="relevance", strict=True)
+    achado = search_contracts(q=termo, size=limite, from_=offset, sort_by="relevance", strict=True)
     if achado.get("error"):
         return _grupo("contratos", "Contratos", 0, [], _texto(achado["error"]))
 
@@ -338,11 +338,12 @@ def _contratos(termo: str, limite: int) -> Dict[str, Any]:
     return _grupo("contratos", "Contratos", achado.get("total") or 0, itens)
 
 
-def _noticias(termo: str, limite: int) -> Dict[str, Any]:
+def _noticias(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Notícias da imprensa recolhida (SAPO, Lusa, ECO, Observador…)."""
     achado = search_scraped(
         q=termo,
         size=limite,
+        from_=offset,
         sort="relevance",
         exclude_prefixes=NON_NEWS_SOURCE_PREFIXES,
         exclude_ids=NON_NEWS_SOURCE_IDS,
@@ -397,7 +398,7 @@ def _nif_do_insolvente(publicacao: Dict[str, Any]) -> str:
     return ""
 
 
-def _cire_por_relevancia(termo: str, limite: int) -> Dict[str, Any]:
+def _cire_por_relevancia(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Publicações do CIRE por relevância.
 
     `search_cire` ordena por data (é o que serve as páginas do módulo); numa
@@ -413,6 +414,7 @@ def _cire_por_relevancia(termo: str, limite: int) -> Dict[str, Any]:
             index=CIRE_INDEX,
             body={
                 "size": max(1, min(limite, 50)),
+                "from": max(0, offset),
                 "track_total_hits": True,
                 "query": {
                     "multi_match": {"query": termo, "fields": list(_CIRE_CAMPOS), "operator": "and"}
@@ -429,9 +431,9 @@ def _cire_por_relevancia(termo: str, limite: int) -> Dict[str, Any]:
     }
 
 
-def _insolvencias(termo: str, limite: int) -> Dict[str, Any]:
+def _insolvencias(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Insolvências e revitalizações (CIRE): o visado é o insolvente."""
-    achado = _cire_por_relevancia(termo, limite)
+    achado = _cire_por_relevancia(termo, limite, offset=offset)
     if achado.get("error"):
         return _grupo("insolvencias", "Insolvências", 0, [], achado["error"])
 
@@ -479,25 +481,42 @@ def _ambitos() -> Dict[str, Any]:
     }
 
 
-def pesquisar(termo: str, *, tipo: str = "tudo", limite: int = LIMITE_POR_TIPO) -> Dict[str, Any]:
-    """Pesquisa pública: devolve os grupos do tipo pedido (ou de todos)."""
+def pesquisar(
+    termo: str,
+    *,
+    tipo: str = "tudo",
+    limite: int = LIMITE_POR_TIPO,
+    pagina: int = 1,
+    tamanho_pagina: int = LIMITE_DO_TIPO,
+) -> Dict[str, Any]:
+    """Pesquisa pública: devolve os grupos do tipo pedido (ou de todos).
+
+    Quando `tipo != "tudo"`, `pagina` e `tamanho_pagina` ativam a paginação
+    real no Elasticsearch. A aba «Tudo» mantém o comportamento anterior: mostra
+    até `LIMITE_POR_TIPO` resultados de cada âmbito e um link para ver o âmbito.
+    """
     consulta = " ".join(str(termo or "").split())
     escolhido = tipo if tipo in TIPO_IDS else "tudo"
     if not consulta:
         return {"termo": "", "tipo": escolhido, "total": 0, "grupos": [], "erro": ""}
 
+    pagina = max(1, int(pagina or 1))
+    tamanho_pagina = max(1, min(int(tamanho_pagina or LIMITE_DO_TIPO), 100))
+    offset = (pagina - 1) * tamanho_pagina
+
     ambitos = _ambitos()
     if escolhido == "tudo":
         pedidos = list(ambitos.items())
         tamanho = max(1, min(int(limite or LIMITE_POR_TIPO), LIMITE_POR_TIPO))
+        offset = 0
     else:
         pedidos = [(escolhido, ambitos[escolhido])]
-        tamanho = max(1, min(int(limite or LIMITE_DO_TIPO), LIMITE_DO_TIPO))
+        tamanho = tamanho_pagina
 
     grupos: List[Dict[str, Any]] = []
     for ambito_id, funcao in pedidos:
         try:
-            grupos.append(funcao(consulta, tamanho))
+            grupos.append(funcao(consulta, tamanho, offset=offset))
         except Exception as exc:  # noqa: BLE001 - um âmbito em baixo não derruba a pesquisa
             logger.warning("Pesquisa pública: âmbito %s falhou: %s", ambito_id, exc)
             grupos.append(_grupo(ambito_id, ambito_id.title(), 0, [], f"{type(exc).__name__}: {exc}"))
@@ -505,6 +524,9 @@ def pesquisar(termo: str, *, tipo: str = "tudo", limite: int = LIMITE_POR_TIPO) 
     return {
         "termo": consulta,
         "tipo": escolhido,
+        "pagina": pagina,
+        "tamanho_pagina": tamanho_pagina,
+        "offset": offset,
         "total": sum(grupo["total"] for grupo in grupos),
         "grupos": grupos,
         "erro": "",

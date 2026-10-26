@@ -1242,12 +1242,18 @@ def site_page(path: str, request: Request) -> HTMLResponse:
     page = store.resolve_page_by_path(path, published_only=True)
     if not page:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    pagina = request.query_params.get("pagina") or "1"
+    try:
+        pagina = max(1, int(pagina))
+    except ValueError:
+        pagina = 1
     return HTMLResponse(
         render.render_page(
             page,
             settings=settings,
             query=str(request.query_params.get("q") or "")[:120],
             tipo=str(request.query_params.get("tipo") or "")[:24],
+            pagina=pagina,
         ),
         headers=_PUBLIC_HEADERS,
     )

@@ -63,11 +63,11 @@ def _falsos_ambitos(monkeypatch, *, grupos: Dict[str, Dict[str, Any]]) -> None:
     """Substitui as quatro pesquisas por resultados fixos (por âmbito)."""
 
     def fabrica(grupo_id: str, rotulo: str):
-        def pesquisa(termo: str, limite: int) -> Dict[str, Any]:
+        def pesquisa(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
             if grupo_id not in grupos:
                 raise RuntimeError("índice em baixo")
             dados = grupos[grupo_id]
-            return _grupo(grupo_id, rotulo, dados["total"], dados["items"][:limite], dados.get("erro", ""))
+            return _grupo(grupo_id, rotulo, dados["total"], dados["items"][offset:offset + limite], dados.get("erro", ""))
 
         return pesquisa
 
@@ -210,7 +210,8 @@ def test_bloco_registado_no_catalogo():
     assert "pesquisa-sabemos" in cms_store.BLOCK_IDS
 
 
-def _pagina_com_busca() -> Dict[str, Any]:
+@pytest.fixture()
+def pagina_com_busca(instalacao) -> Dict[str, Any]:
     return cms_store.save_item(
         "pages",
         {
@@ -229,8 +230,10 @@ def _pagina_com_busca() -> Dict[str, Any]:
     )
 
 
-def test_pagina_da_pesquisa_sem_termo_apresenta_a_caixa(instalacao, monkeypatch):
-    pagina = _pagina_com_busca()
+
+
+def test_pagina_da_pesquisa_sem_termo_apresenta_a_caixa(instalacao, monkeypatch, pagina_com_busca):
+    pagina = pagina_com_busca
 
     html = cms_render.render_page(pagina, query="")
 
@@ -241,9 +244,9 @@ def test_pagina_da_pesquisa_sem_termo_apresenta_a_caixa(instalacao, monkeypatch)
     assert "resultado(s) para" not in html
 
 
-def test_pagina_da_pesquisa_desenha_os_resultados(instalacao, monkeypatch):
+def test_pagina_da_pesquisa_desenha_os_resultados(instalacao, monkeypatch, pagina_com_busca):
     _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
-    pagina = _pagina_com_busca()
+    pagina = pagina_com_busca
 
     html = cms_render.render_page(pagina, query="galp")
 
@@ -257,9 +260,9 @@ def test_pagina_da_pesquisa_desenha_os_resultados(instalacao, monkeypatch):
     assert 'href="https://exemplo.pt/noticia" target="_blank" rel="noopener"' in html
 
 
-def test_pagina_do_ambito_escolhido(instalacao, monkeypatch):
+def test_pagina_do_ambito_escolhido(instalacao, monkeypatch, pagina_com_busca):
     _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
-    pagina = _pagina_com_busca()
+    pagina = pagina_com_busca
 
     html = cms_render.render_page(pagina, query="galp", tipo="noticias")
 
@@ -268,19 +271,19 @@ def test_pagina_do_ambito_escolhido(instalacao, monkeypatch):
     assert "Ver os" not in html
 
 
-def test_resultados_nao_se_indexam(instalacao, monkeypatch):
+def test_resultados_nao_se_indexam(instalacao, monkeypatch, pagina_com_busca):
     """A página entra no índice; os resultados com `?q=` não."""
     _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
-    pagina = _pagina_com_busca()
+    pagina = pagina_com_busca
 
     assert 'content="index, follow"' in cms_render.render_page(pagina, query="")
     assert 'content="noindex, nofollow"' in cms_render.render_page(pagina, query="galp")
 
 
-def test_pagina_tem_marca_lema_e_pesquisa_no_grafo(instalacao, monkeypatch):
+def test_pagina_tem_marca_lema_e_pesquisa_no_grafo(instalacao, monkeypatch, pagina_com_busca):
     """Branding e lema na abertura; o grafo diz ao motor onde vai um termo."""
     _falsos_ambitos(monkeypatch, grupos=_ambitos_de_exemplo())
-    pagina = _pagina_com_busca()
+    pagina = pagina_com_busca
     pagina["blocks"][0]["data"]["tagline"] = "Nós Sabemos e tu, Sabes?"
     pagina["seo"] = {"title": "Sabemos", "description": "Pesquisar.", "keywords": [], "noindex": False}
 
@@ -291,7 +294,7 @@ def test_pagina_tem_marca_lema_e_pesquisa_no_grafo(instalacao, monkeypatch):
     assert 'urlTemplate": "/site/pesquisar?q={search_term_string}"' in html
 
 
-def test_cartao_com_logotipo_e_com_monograma(instalacao, monkeypatch):
+def test_cartao_com_logotipo_e_com_monograma(instalacao, monkeypatch, pagina_com_busca):
     """Com logótipo é uma imagem por cima das iniciais; sem ele, o monograma."""
     itens = [
         _resultado("GALP", "/site/empresa/1", logo="/api/empresas/perfil/1/logo", letra="GA", cor=3),
@@ -299,7 +302,7 @@ def test_cartao_com_logotipo_e_com_monograma(instalacao, monkeypatch):
         _resultado("Contrato", "/site/contrato/9", icone="documento"),
     ]
     _falsos_ambitos(monkeypatch, grupos={"empresas": {"total": 2, "items": itens[:2]}})
-    pagina = _pagina_com_busca()
+    pagina = pagina_com_busca
 
     html = cms_render.render_page(pagina, query="galp", tipo="empresas")
 
