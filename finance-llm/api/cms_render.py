@@ -4106,11 +4106,17 @@ def _bloco_pesquisa_sabemos(
     lema = str(data.get("tagline") or "").strip() or LEMA_SABEMOS
 
     classe = "busca busca--resultados" if consulta else "busca busca--abertura"
+    logo_url = _media_url(data.get("logo_id"))
+    logo_html = (
+        f'<img class="busca-logo" src="{_esc(logo_url)}" alt="{_esc(titulo)}" loading="eager">'
+        if logo_url
+        else ""
+    )
     # A marca é o wordmark com o ponto de acento (o logótipo completo já está no
     # cabeçalho): repeti-lo aqui punha «Sabemos Studio» duas vezes no ecrã.
     corpo = [
         f'<section class="{classe}">'
-        f'<div class="busca-marca"><h1>{_esc(titulo)}</h1><span class="ponto" aria-hidden="true"></span></div>'
+        f'<div class="busca-marca">{logo_html}<h1>{_esc(titulo)}</h1><span class="ponto" aria-hidden="true"></span></div>'
         + (f'<p class="busca-lema">{_esc(lema)}</p>' if lema and not consulta else "")
         + (f'<p class="lead">{_esc(intro)}</p>' if intro and not consulta else "")
         + _form_busca(consulta, escolhido, rotulo=rotulo, auto=not consulta)
