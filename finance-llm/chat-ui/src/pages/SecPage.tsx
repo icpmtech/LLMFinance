@@ -32,12 +32,17 @@ import type {
 import {
   fetchSecDocument,
   getSecAnalytics,
+  getSecBulkStatus,
   getSecFactsXbrl,
   getSecFilings,
   getSecFiling,
   getSecMeta,
   getSecSchedule,
   indexSecFactsXbrl,
+  ingestSecBulkBoth,
+  ingestSecBulkBothLimited,
+  ingestSecBulkCompanyfacts,
+  ingestSecBulkSubmissions,
   ingestSecFilings,
   reloadSecSchedule,
   runSecSchedule,
@@ -723,7 +728,100 @@ function AgendadorTab() {
         ))}
         {!carregando && schedule?.jobs.length === 0 && <EmptyState>Nenhum ticker na lista local. Adiciona tickers em Ações/Mercado.</EmptyState>}
       </div>
+
+      <BulkSection />
     </SectionCard>
+  );
+}
+
+function BulkSection() {
+  const [status, setStatus] = useState<{ dir: string; submissions?: { exists: boolean; size_bytes: number; size_mb: number }; companyfacts?: { exists: boolean; size_bytes: number; size_mb: number } } | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [resultado, setResultado] = useState<string>("");
+  const [limit, setLimit] = useState(1000);
+
+  const carregarStatus = useCallback(() => {
+    getSecBulkStatus()
+      .then(setStatus)
+      .catch((exc: unknown) => setErro(exc instanceof Error ? exc.message : "Erro ao carregar estado bulk."));
+  }, []);
+
+  useEffect(() => {
+    carregarStatus();
+  }, [carregarStatus]);
+
+  const executar = async (fn: () => Promise<any>, label: string) => {
+    setCarregando(true);
+    setErro("");
+    setResultado("");
+    try {
+      const res = await fn();
+      setResultado(`${label}: ${JSON.stringify(res).slice(0, 400)}`);
+    } catch (exc) {
+      setErro(exc instanceof Error ? exc.message : `Erro ao executar ${label}.`);
+    } finally {
+      setCarregando(false);
+      carregarStatus();
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+        <Download size={16} />
+        Bulk SEC (arquivos ZIP diários)
+      </h3>
+      {status && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          Submissions: {status.submissions?.exists ? `${status.submissions.size_mb} MB` : "não disponível"} ·
+          Companyfacts: {status.companyfacts?.exists ? `${status.companyfacts.size_mb} MB` : "não disponível"}
+        </p>
+      )}
+      {erro && <EmptyState tone="warn">{erro}</EmptyState>}
+      {resultado && <p className="mb-3 text-xs break-words text-teal-200">{resultado}</p>}
+      <div className="mb-3 flex flex-wrap gap-2">
+        <FilterField label="Limite teste">
+          <input
+            type="number"
+            value={limit}
+            onChange={(e) => setLimit(Math.max(1, parseInt(e.target.value || "1", 10)))}
+            className="w-24 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+          />
+        </FilterField>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => executar(ingestSecBulkSubmissions, "Submissions")}
+          disabled={carregando}
+          className="rounded-lg bg-sky-500/20 px-3 py-2 text-xs text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
+        >
+          Submissions
+        </button>
+        <button
+          onClick={() => executar(ingestSecBulkCompanyfacts, "Companyfacts")}
+          disabled={carregando}
+          className="rounded-lg bg-sky-500/20 px-3 py-2 text-xs text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
+        >
+          Companyfacts
+        </button>
+        <button
+          onClick={() => executar(() => ingestSecBulkBothLimited(limit), `Ambos limitado (${limit})`)}
+          disabled={carregando}
+          className="rounded-lg bg-teal-500/20 px-3 py-2 text-xs text-teal-200 hover:bg-teal-500/30 disabled:opacity-50"
+        >
+          Ambos (limitado)
+        </button>
+        <button
+          onClick={() => executar(ingestSecBulkBoth, "Ambos completos")}
+          disabled={carregando}
+          className="rounded-lg bg-teal-500/20 px-3 py-2 text-xs text-teal-200 hover:bg-teal-500/30 disabled:opacity-50"
+        >
+          Ambos (completos)
+        </button>
+      </div>
+      {carregando && <Loading label="A processar arquivos SEC bulk..." />}
+    </div>
   );
 }
 

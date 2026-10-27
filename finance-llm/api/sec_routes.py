@@ -8,6 +8,7 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from api import sec_scheduler
@@ -90,7 +91,7 @@ async def sec_filings_ingestao(
             service.index_filings_for_cik,
             cik,
             limit,
-            session.user_id,
+            session.user.id,
         )
     )
 
@@ -105,7 +106,7 @@ async def sec_facts_indexar(
     cik: str,
     session: Session,
 ) -> Dict[str, Any]:
-    return _ou_erro(await run_in_threadpool(service.index_company_facts, cik, session.user_id))
+    return _ou_erro(await run_in_threadpool(service.index_company_facts, cik, session.user.id))
 
 
 # ---------------------------------------------------------------------------
@@ -184,4 +185,38 @@ async def sec_schedule_reload(session: Session) -> Dict[str, Any]:
 
 @router.post("/schedule/{ticker}/executar", summary="Executar recolha SEC manualmente")
 async def sec_schedule_run(ticker: str, session: Session) -> Dict[str, Any]:
-    return sec_scheduler.run_now(ticker, session.user_id)
+    return sec_scheduler.run_now(ticker, session.user.id)
+
+
+# ---------------------------------------------------------------------------
+# Bulk ingestion from SEC daily ZIP archives
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bulk/status", summary="Estado dos arquivos bulk locais")
+async def sec_bulk_status() -> Dict[str, Any]:
+    return await run_in_threadpool(service.bulk_status)
+
+
+@router.post("/bulk/submissions", summary="Ingerir submissions.zip da SEC")
+async def sec_bulk_submissions(session: Session) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.bulk_download_submissions, session.user.id))
+
+
+@router.post("/bulk/companyfacts", summary="Ingerir companyfacts.zip da SEC")
+async def sec_bulk_companyfacts(session: Session) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.bulk_download_companyfacts, session.user.id))
+
+
+@router.post("/bulk/ambos", summary="Ingerir submissions.zip e companyfacts.zip")
+async def sec_bulk_ambos(session: Session) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.bulk_ingest_both, session.user.id))
+
+
+class BulkLimitRequest(BaseModel):
+    limit: int = Field(1000, ge=1, le=20000, description="Limite de empresas/factos a processar para teste")
+
+
+@router.post("/bulk/ambos-limitado", summary="Ingerir bulk com limite (teste/dev)")
+async def sec_bulk_ambos_limitado(body: BulkLimitRequest, session: Session) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.bulk_ingest_both_limited, body.limit, session.user.id))

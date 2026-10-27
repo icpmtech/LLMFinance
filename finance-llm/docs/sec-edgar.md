@@ -84,6 +84,11 @@ respeitar os limites de utilização da SEC.
 | `POST /sec/facts/{cik}/indexar` | Indexa factos XBRL da empresa. |
 | `POST /sec/schedule/recarregar` | Sincroniza jobs com a lista de tickers. |
 | `POST /sec/schedule/{ticker}/executar` | Executa recolha manual para um ticker. |
+| `GET /sec/bulk/status` | Estado dos arquivos bulk ZIP locais. |
+| `POST /sec/bulk/submissions` | Ingestão completa de `submissions.zip`. |
+| `POST /sec/bulk/companyfacts` | Ingestão completa de `companyfacts.zip`. |
+| `POST /sec/bulk/ambos` | Ingestão completa de ambos os arquivos. |
+| `POST /sec/bulk/ambos-limitado` | Ingestão limitada (`limit`) para testes. |
 
 ### Integração com tickers
 
@@ -93,12 +98,16 @@ ticker não está mapeado no catálogo SEC.
 
 ## 4. Agendador
 
-O ficheiro `api/sec_scheduler.py` arranca no *lifespan* da API e cria um job do
-APScheduler para cada ticker guardado em `data/tickers_extended.json`.
+O ficheiro `api/sec_scheduler.py` arranca no *lifespan* da API e cria:
+- um job do APScheduler para cada ticker guardado em `data/tickers_extended.json`;
+- um job bulk diário (`sec:bulk`) que descarrega e ingere os arquivos ZIP diários
+  `submissions.zip` e `companyfacts.zip`.
 
-- Expressão por omissão: `0 4 * * 0` (domingo, 04h00 UTC).
-- Cada execução ingere os últimos 20 filings **e** indexa os factos XBRL da
-  empresa.
+- Expressão por omissão do job por ticker: `0 4 * * 0` (domingo, 04h00 UTC).
+- Expressão por omissão do job bulk: `0 5 * * *` (diariamente 05h00 UTC).
+- Cada execução por ticker ingere os últimos 20 filings **e** indexa os factos XBRL.
+- O job bulk utiliza os ficheiros locais em `data/sec_bulk` e só os volta a
+  descarregar se estiverem em falta.
 - O agendador só funciona se o `apscheduler` estiver instalado
   (`pip install "apscheduler>=3.10"`).
 
@@ -156,6 +165,12 @@ npm run dev
 - O catálogo `company_tickers.json` já mudou de localização várias vezes; o
   serviço tenta os caminhos conhecidos.
 - companyfacts XBRL só está disponível para empresas que reportam XBRL à SEC.
+- Os arquivos `submissions.zip` (~1.5 GB) e `companyfacts.zip` (~1.4 GB) são
+  recompilados todas as noites. A primeira descarga é lenta; as seguintes usam
+  os ficheiros locais até serem removidos.
+- A ingestão completa dos arquivos bulk pode demorar vários minutos e gerar
+  milhões de documentos no Elasticsearch. Usa `/sec/bulk/ambos-limitado` para
+  validar em desenvolvimento.
 
 ## 7. Testes rápidos
 

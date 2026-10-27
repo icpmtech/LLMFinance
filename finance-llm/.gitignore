@@ -64,6 +64,8 @@ deploy/kamatera/es/_export/
 # acima de 100 MiB. As listas de códigos `codigos/*.gc` são pequenas e ficam
 # versionadas: o coletor e os testes leem-nas.
 data/contratos-espanha/*.zip
+# SEC EDGAR bulk archives: re-downloadable nightly (~1.5 GB + ~1.4 GB).
+data/sec_bulk/*.zip
 
 # Partidos políticos (Tribunal Constitucional + CNE). As páginas anuais do TC,
 # as fichas da CNE e, sobretudo, os PDF das contas (centenas de ficheiros, que

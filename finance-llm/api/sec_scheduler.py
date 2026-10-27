@@ -1,8 +1,10 @@
 """Agendamento (cron) da recolha automática de filings SEC EDGAR.
 
-O módulo mantém um `BackgroundScheduler` com um job por ticker da lista local
-(`data/tickers_extended.json`). Cada job (`sec:<ticker>`) executa a ingestão
-EDGAR num horário configurável e regista o resultado na recolha do SEC.
+O módulo mantém um `BackgroundScheduler` com:
+- um job por ticker da lista local (`data/tickers_extended.json`); cada job
+  (`sec:<ticker>`) executa a ingestão EDGAR num horário configurável;
+- um job bulk diário (`sec:bulk`) que descarrega e ingere os arquivos ZIP
+  diários `submissions.zip` e `companyfacts.zip`.
 
 - `start()`       — arranca o agendador (chamado no lifespan da API);
 - `shutdown()`    — para o agendador ao encerrar a API;
@@ -26,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 JOB_PREFIX = "sec:"
 DEFAULT_CRON = "0 4 * * 0"  # domingo 04h00 UTC
+BULK_CRON = "0 5 * * *"  # 05h00 UTC diariamente
 DEFAULT_TIMEZONE = "UTC"
 
 _scheduler: Optional[Any] = None
@@ -84,6 +87,19 @@ def _job_function(ticker: str, user_id: Optional[str] = None) -> None:
         logger.warning("Cron SEC %s falhou: %s", ticker, exc)
 
 
+def _bulk_job_function(user_id: Optional[str] = None) -> None:
+    """Corpo do job bulk: descarrega e ingere os arquivos ZIP diários da SEC."""
+    try:
+        status = service.bulk_ingest_both(user_id=user_id)
+        logger.info(
+            "Cron SEC bulk: submissions=%s, companyfacts=%s",
+            status.get("submissions", {}).get("indexed"),
+            status.get("companyfacts", {}).get("indexed"),
+        )
+    except Exception as exc:
+        logger.warning("Cron SEC bulk falhou: %s", exc)
+
+
 def _job_id(ticker: str) -> str:
     return f"{JOB_PREFIX}{ticker}"
 
@@ -116,6 +132,7 @@ def start(cron: Optional[str] = None, timezone_name: Optional[str] = None) -> Di
     return status()
 
 
+
 def shutdown() -> None:
     """Para o agendador ao encerrar a API."""
     global _scheduler, _started
@@ -129,8 +146,8 @@ def shutdown() -> None:
         _started = False
 
 
-def reload_jobs(cron: Optional[str] = None, timezone_name: Optional[str] = None) -> Dict[str, Any]:
-    """Sincroniza os jobs com a lista de tickers guardada."""
+def reload_jobs(cron: Optional[str] = None, timezone_name: Optional[str] = None, bulk_cron: Optional[str] = None) -> Dict[str, Any]:
+    """Sincroniza os jobs com a lista de tickers guardada e mantém o job bulk."""
     with _lock:
         if not _started or _scheduler is None:
             return status()
@@ -151,6 +168,21 @@ def reload_jobs(cron: Optional[str] = None, timezone_name: Optional[str] = None)
                     replace_existing=True,
                     args=[ticker, None],
                 )
+        # Job bulk diário.
+        bulk_job_id = f"{JOB_PREFIX}bulk"
+        wanted.add(bulk_job_id)
+        bulk_trigger = _trigger_for(bulk_cron or BULK_CRON, timezone_name)
+        if bulk_trigger and _scheduler.get_job(bulk_job_id) is None:
+            _scheduler.add_job(
+                _bulk_job_function,
+                trigger=bulk_trigger,
+                id=bulk_job_id,
+                name="SEC EDGAR: bulk submissions + companyfacts",
+                replace_existing=True,
+                args=[None],
+            )
+        elif _scheduler.get_job(bulk_job_id) is not None and bulk_trigger is None:
+            _scheduler.remove_job(bulk_job_id)
         # Remover tickers que deixaram de existir.
         for job in list(_scheduler.get_jobs()):
             if job.id.startswith(JOB_PREFIX) and job.id not in wanted:

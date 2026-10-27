@@ -194,3 +194,33 @@ export async function reloadSecSchedule(): Promise<{ started: boolean; error?: s
 export async function runSecSchedule(ticker: string): Promise<{ ticker: string; triggered: boolean }> {
   return postJson(`/sec/schedule/${encodeURIComponent(ticker)}/executar`);
 }
+
+export async function getSecBulkStatus(): Promise<{
+  dir: string;
+  submissions?: { exists: boolean; size_bytes: number; size_mb: number };
+  companyfacts?: { exists: boolean; size_bytes: number; size_mb: number };
+}> {
+  return getJson("/sec/bulk/status");
+}
+
+export async function ingestSecBulkSubmissions(): Promise<{ recolha_id: string; indexed: number; error?: string }> {
+  return postJson("/sec/bulk/submissions");
+}
+
+export async function ingestSecBulkCompanyfacts(): Promise<{ recolha_id: string; indexed: number; error?: string }> {
+  return postJson("/sec/bulk/companyfacts");
+}
+
+export async function ingestSecBulkBoth(): Promise<{
+  submissions: { recolha_id: string; indexed: number; error?: string };
+  companyfacts: { recolha_id: string; indexed: number; error?: string };
+}> {
+  return postJson("/sec/bulk/ambos");
+}
+
+export async function ingestSecBulkBothLimited(limit: number): Promise<{
+  submissions: { recolha_id: string; indexed: number; error?: string };
+  companyfacts: { recolha_id: string; indexed: number; error?: string };
+}> {
+  return postJson("/sec/bulk/ambos-limitado", { limit });
+}

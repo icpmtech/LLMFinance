@@ -5,6 +5,7 @@ Funcionalidades:
 - Listar os filings mais recentes de uma empresa via EDGAR API.
 - Descarregar o texto integral dos documentos (8-K, 10-K, 10-Q, 20-F, etc.).
 - Indexar metadados e factos extraídos no Elasticsearch.
+- Ingestão em bulk a partir dos arquivos ZIP diários da SEC.
 - Análise agregada por tipo de documento, ano e ticker.
 
 Toda a comunicação com a SEC segue as políticas da EDGAR:
@@ -14,15 +15,17 @@ Toda a comunicação com a SEC segue as políticas da EDGAR:
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import requests
 
@@ -627,6 +630,320 @@ def index_filings_for_cik(cik: str, limit: int = 20, user_id: Optional[str] = No
         "analyzed": analyzed,
         "recolha_id": recolha_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# Bulk ingestion from SEC daily ZIP archives
+# ---------------------------------------------------------------------------
+
+BULK_DIR = ROOT / "data" / "sec_bulk"
+BULK_DIR.mkdir(parents=True, exist_ok=True)
+
+SUBMISSIONS_ZIP_URL = "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
+COMPANYFACTS_ZIP_URL = "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
+
+_FILING_TYPES_BULK = {
+    "8-K", "8-K/A", "10-K", "10-K/A", "10-Q", "10-Q/A",
+    "20-F", "20-F/A", "40-F", "40-F/A", "6-K", "6-K/A",
+    "S-1", "S-1/A", "424B2", "424B3", "424B4", "424B5",
+    "DEF 14A", "DEFA14A", "SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A",
+}
+
+
+def _download_sec_zip(url: str, dest: Path, chunk_size: int = 256 * 1024) -> bool:
+    """Download a SEC bulk ZIP with streaming and throttling."""
+    try:
+        time.sleep(0.12)
+        with requests.get(url, headers={"User-Agent": _SEC_USER_AGENT, "Accept": "application/zip"}, stream=True, timeout=600) as resp:
+            resp.raise_for_status()
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with open(dest, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+        return True
+    except Exception as exc:
+        logger.warning("Falha ao descarregar %s: %s", url, exc)
+        return False
+
+
+def _ensure_bulk_zip(url: str, filename: str) -> Optional[Path]:
+    dest = BULK_DIR / filename
+    if dest.exists():
+        return dest
+    if _download_sec_zip(url, dest):
+        return dest
+    return None
+
+
+def _parse_submissions_bulk(zip_path: Path, limit: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
+    """Yield normalized filing items from the submissions bulk ZIP."""
+    count = 0
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        for name in names:
+            if limit is not None and count >= limit:
+                break
+            if not name.startswith("CIK") or not name.endswith(".json"):
+                continue
+            try:
+                data = json.loads(z.read(name))
+            except Exception:
+                continue
+            cik = str(data.get("cik", "")).zfill(10)
+            tickers = data.get("tickers") or []
+            ticker = str(tickers[0]).upper() if tickers else ""
+            company_name = (data.get("name") or "").title()
+            recent = data.get("filings", {}).get("recent", {})
+            forms = recent.get("form", [])
+            dates = recent.get("filingDate", [])
+            accessions = recent.get("accessionNumber", [])
+            primary_docs = recent.get("primaryDocument", [])
+            descriptions = recent.get("primaryDocDescription", []) or recent.get("description", [])
+            report_dates = recent.get("reportDate", [])
+            is_xbrl = recent.get("isXBRL", [])
+
+            for i, form in enumerate(forms):
+                if limit is not None and count >= limit:
+                    break
+                if form not in _FILING_TYPES_BULK:
+                    continue
+                if i >= len(dates) or i >= len(accessions) or i >= len(primary_docs):
+                    break
+                acc = str(accessions[i]).replace("-", "").replace(" ", "")
+                doc = str(primary_docs[i])
+                if doc and not doc.startswith("/"):
+                    doc = "/" + doc
+                url = f"{_SEC_BASE}/Archives/edgar/data/{int(cik)}/{acc}{doc}" if doc else None
+                if not url:
+                    continue
+                count += 1
+                yield {
+                    "cik": cik,
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "accession_number": accessions[i],
+                    "form": form,
+                    "date": dates[i] or report_dates[i] if i < len(report_dates) else dates[i],
+                    "report_date": report_dates[i] if i < len(report_dates) else None,
+                    "description": (descriptions[i] if i < len(descriptions) else None) or form,
+                    "primary_document": primary_docs[i],
+                    "is_xbrl": bool(is_xbrl[i]) if i < len(is_xbrl) else False,
+                    "url": url,
+                }
+
+
+def _parse_companyfacts_bulk(zip_path: Path, limit: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
+    """Yield normalized XBRL facts from the companyfacts bulk ZIP."""
+    count = 0
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        for name in names:
+            if limit is not None and count >= limit:
+                break
+            if not name.startswith("CIK") or not name.endswith(".json"):
+                continue
+            try:
+                data = json.loads(z.read(name))
+            except Exception:
+                continue
+            cik = str(data.get("cik", "")).zfill(10)
+            company_name = data.get("entityName", "")
+            facts = data.get("facts", {})
+            seen = set()
+            for taxonomy, concepts in facts.items():
+                if not isinstance(concepts, dict):
+                    continue
+                for concept_name, concept in concepts.items():
+                    priority = _FACTS_PRIORITIES.get(concept_name)
+                    label = concept.get("label", concept_name)
+                    description = concept.get("description")
+                    for unit_key, entries in concept.get("units", {}).items():
+                        if not isinstance(entries, list):
+                            continue
+                        for entry in entries:
+                            if limit is not None and count >= limit:
+                                break
+                            end = entry.get("end")
+                            if not end:
+                                continue
+                            val = entry.get("val")
+                            if val is None:
+                                continue
+                            key = (cik, taxonomy, concept_name, unit_key, end, val)
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            count += 1
+                            yield {
+                                "cik": cik,
+                                "ticker": "",
+                                "company_name": company_name,
+                                "concept": concept_name,
+                                "category": priority,
+                                "label": label,
+                                "description": description,
+                                "unit": unit_key,
+                                "value": val,
+                                "end": end,
+                                "start": entry.get("start"),
+                                "fy": entry.get("fy"),
+                                "fp": entry.get("fp"),
+                                "form": entry.get("form", ""),
+                                "accession_number": entry.get("accn", ""),
+                            }
+
+
+def bulk_download_submissions(user_id: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+    """Download and parse the submissions bulk ZIP into Elasticsearch."""
+    es = _garantir_indices()
+    if not es:
+        return {"error": "Elasticsearch indisponível"}
+    path = _ensure_bulk_zip(SUBMISSIONS_ZIP_URL, "submissions.zip")
+    if not path:
+        return {"error": "Não foi possível descarregar submissions.zip"}
+
+    recolha_id = str(uuid.uuid4())
+    try:
+        from elasticsearch.helpers import bulk
+        actions = []
+        total = 0
+        for item in _parse_submissions_bulk(path, limit=limit):
+            doc_id = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{item['cik']}-{item['accession_number']}")[:64]
+            actions.append({
+                "_op_type": "index",
+                "_index": SEC_FILINGS_INDEX,
+                "_id": doc_id,
+                "_source": {
+                    **item,
+                    "indexed_at": _now(),
+                    "autor_id": user_id,
+                    "source": "bulk_submissions",
+                },
+            })
+            total += 1
+            if len(actions) >= 2500:
+                bulk(es, actions, raise_on_error=False, refresh=False)
+                actions = []
+        if actions:
+            bulk(es, actions, raise_on_error=False, refresh=False)
+        try:
+            es.indices.refresh(index=SEC_FILINGS_INDEX)
+        except Exception:
+            pass
+        run_doc = {
+            "id": recolha_id,
+            "fonte": "sec_bulk_submissions",
+            "url": SUBMISSIONS_ZIP_URL,
+            "data": _now(),
+            "total_docs": total,
+            "autor_id": user_id,
+            "parametros": {"limit": limit},
+        }
+        try:
+            es.index(index=SEC_RECOLHAS_INDEX, id=recolha_id, body=run_doc)
+        except Exception as exc:
+            logger.warning("Falha ao registar recolha bulk submissions: %s", exc)
+        return {"recolha_id": recolha_id, "indexed": total}
+    except Exception as exc:
+        return {"error": f"Falha ao indexar submissions: {exc}", "indexed": 0}
+
+
+def bulk_download_submissions_limited(limit: int = 1000, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience wrapper for testing with a limit."""
+    return bulk_download_submissions(user_id=user_id, limit=limit)
+
+
+def bulk_download_companyfacts(user_id: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+    """Download and parse the companyfacts bulk ZIP into Elasticsearch."""
+    es = _garantir_indices()
+    if not es:
+        return {"error": "Elasticsearch indisponível"}
+    path = _ensure_bulk_zip(COMPANYFACTS_ZIP_URL, "companyfacts.zip")
+    if not path:
+        return {"error": "Não foi possível descarregar companyfacts.zip"}
+
+    recolha_id = str(uuid.uuid4())
+    try:
+        from elasticsearch.helpers import bulk
+        actions = []
+        total = 0
+        for fact in _parse_companyfacts_bulk(path, limit=limit):
+            fact_id = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{fact['cik']}-{fact['concept']}-{fact['end']}-{fact.get('form', '')}")[:64]
+            actions.append({
+                "_op_type": "index",
+                "_index": SEC_FACTS_INDEX,
+                "_id": fact_id,
+                "_source": {
+                    **fact,
+                    "indexed_at": _now(),
+                    "autor_id": user_id,
+                    "source": "bulk_companyfacts",
+                },
+            })
+            total += 1
+            if len(actions) >= 5000:
+                bulk(es, actions, raise_on_error=False, refresh=False)
+                actions = []
+        if actions:
+            bulk(es, actions, raise_on_error=False, refresh=False)
+        try:
+            es.indices.refresh(index=SEC_FACTS_INDEX)
+        except Exception:
+            pass
+        run_doc = {
+            "id": recolha_id,
+            "fonte": "sec_bulk_companyfacts",
+            "url": COMPANYFACTS_ZIP_URL,
+            "data": _now(),
+            "total_docs": total,
+            "autor_id": user_id,
+            "parametros": {"limit": limit},
+        }
+        try:
+            es.index(index=SEC_RECOLHAS_INDEX, id=recolha_id, body=run_doc)
+        except Exception as exc:
+            logger.warning("Falha ao registar recolha bulk companyfacts: %s", exc)
+        return {"recolha_id": recolha_id, "indexed": total}
+    except Exception as exc:
+        return {"error": f"Falha ao indexar companyfacts: {exc}", "indexed": 0}
+
+
+def bulk_download_companyfacts_limited(limit: int = 1000, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience wrapper for testing with a limit."""
+    return bulk_download_companyfacts(user_id=user_id, limit=limit)
+
+
+def bulk_ingest_both(user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run both bulk downloads in sequence."""
+    submissions = bulk_download_submissions(user_id=user_id)
+    companyfacts = bulk_download_companyfacts(user_id=user_id)
+    return {
+        "submissions": submissions,
+        "companyfacts": companyfacts,
+    }
+
+
+def bulk_ingest_both_limited(limit: int = 1000, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run both bulk downloads in sequence, limiting the number of records for testing."""
+    submissions = bulk_download_submissions_limited(limit=limit, user_id=user_id)
+    companyfacts = bulk_download_companyfacts_limited(limit=limit, user_id=user_id)
+    return {
+        "submissions": submissions,
+        "companyfacts": companyfacts,
+    }
+
+
+def bulk_status() -> Dict[str, Any]:
+    """Report the presence and size of locally cached bulk ZIP files."""
+    status: Dict[str, Any] = {"dir": str(BULK_DIR)}
+    for key, filename in (("submissions", "submissions.zip"), ("companyfacts", "companyfacts.zip")):
+        path = BULK_DIR / filename
+        if path.exists():
+            status[key] = {"exists": True, "size_bytes": path.stat().st_size, "size_mb": round(path.stat().st_size / (1024 * 1024), 2)}
+        else:
+            status[key] = {"exists": False}
+    return status
 
 
 # ---------------------------------------------------------------------------
