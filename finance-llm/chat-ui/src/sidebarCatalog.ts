@@ -138,6 +138,12 @@ export const APP_MODULES: AppModule[] = [
     ids: ["dora"],
   },
   {
+    id: "sec",
+    label: "SEC EDGAR",
+    hint: "Filings oficiais da SEC: pesquisa de empresas, recolha, indexação, análise de documentos e factos extraídos",
+    ids: ["sec"],
+  },
+  {
     id: "pessoas",
     label: "Pessoas",
     hint: "Pessoas, cargos, políticos e as contas dos partidos",

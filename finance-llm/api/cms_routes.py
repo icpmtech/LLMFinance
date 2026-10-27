@@ -1021,6 +1021,20 @@ def site_search(q: str = Query("", description="Texto a procurar no site.")) -> 
     return HTMLResponse(render.render_search(q), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/nifs", response_class=HTMLResponse)
+def site_nifs(
+    q: str = Query("", description="NIF ou nome da entidade."),
+    pagina: int = Query(1, ge=1, description="Página de resultados."),
+) -> HTMLResponse:
+    """Página dedicada de pesquisa por NIF.
+
+    Aceita texto livre (parte do nome ou fragmento do NIF) e lista entidades do
+    cadastro com destaque para a identificação fiscal e os detalhes empresariais.
+    """
+    settings = store.get_settings()
+    return HTMLResponse(render.render_nifs(q, page=pagina, settings=settings), headers=_PUBLIC_HEADERS)
+
+
 @router.get("/site/pesquisa/{slug}", response_class=HTMLResponse)
 def site_pesquisa(slug: str) -> HTMLResponse:
     """Página pública de uma pesquisa (a fotografia guardada, com marca e SEO)."""

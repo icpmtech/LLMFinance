@@ -104,6 +104,7 @@ export type AppView =
   | "esg"
   | "eu-taxonomy"
   | "dora"
+  | "sec"
   | "societario"
   | "empresas-recolha"
   | "gleif"

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from elasticsearch import Elasticsearch
 from api.es.core import get_es_client
-from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, EMPRESAS_LOCAIS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, FREGUESIAS_CONTACTOS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
+from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, EMPRESAS_LOCAIS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, FREGUESIAS_CONTACTOS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SEC_FACTS_INDEX, SEC_FILINGS_INDEX, SEC_RECOLHAS_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -3362,6 +3362,54 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # SEC EDGAR: filings de empresas cotadas (metadados + texto), factos
+    # extraídos e registo das recolhas.
+    sec_filings_mappings = {
+        "properties": {
+            "cik": {"type": "keyword"},
+            "ticker": {"type": "keyword"},
+            "company_name": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "accession_number": {"type": "keyword"},
+            "form": {"type": "keyword"},
+            "date": {"type": "date"},
+            "description": {"type": "text", "analyzer": "world_folding"},
+            "primary_document": {"type": "keyword"},
+            "url": {"type": "keyword"},
+            "text": {"type": "text", "analyzer": "world_folding"},
+            "facts_count": {"type": "integer"},
+            "indexed_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    sec_facts_mappings = {
+        "properties": {
+            "cik": {"type": "keyword"},
+            "ticker": {"type": "keyword"},
+            "company_name": {"type": "text", "analyzer": "world_folding"},
+            "accession_number": {"type": "keyword"},
+            "form": {"type": "keyword"},
+            "date": {"type": "date"},
+            "filing_id": {"type": "keyword"},
+            "text": {"type": "text", "analyzer": "world_folding"},
+            "category": {"type": "keyword"},
+            "indexed_at": {"type": "date"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
+    sec_recolhas_mappings = {
+        "properties": {
+            "fonte": {"type": "keyword"},
+            "url": {"type": "keyword"},
+            "data": {"type": "date"},
+            "total_docs": {"type": "integer"},
+            "autor_id": {"type": "keyword", "ignore_above": 64},
+            "parametros": {"type": "object", "enabled": False},
+            "detalhes": {"type": "object", "enabled": False},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -3465,6 +3513,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (DORA_RELATORIOS_INDEX, dora_relatorios_mappings),
         (DORA_CONTEUDO_INDEX, dora_conteudo_mappings),
         (DORA_RECOLHAS_INDEX, dora_recolhas_mappings),
+        # SEC EDGAR: filings, factos e recolhas.
+        (SEC_FILINGS_INDEX, sec_filings_mappings),
+        (SEC_FACTS_INDEX, sec_facts_mappings),
+        (SEC_RECOLHAS_INDEX, sec_recolhas_mappings),
         (EU_TAXONOMY_INDEX, eu_taxonomy_mappings),
     ]:
         if not client.indices.exists(index=name):

@@ -425,6 +425,8 @@ from api.base_impic_routes import router as base_impic_router
 # DORA: Digital Operational Resilience Act — Register of Information, incidentes,
 # riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
 from api.dora_routes import router as dora_router
+# SEC: filings EDGAR — recolha, indexação, pesquisa e análise de documentos.
+from api.sec_routes import router as sec_router
 from api import auth_service as auth
 from api import events_service as events
 from api import permissions_service as permissions
@@ -1033,6 +1035,8 @@ app.include_router(governo_router)
 # DORA: Digital Operational Resilience Act — Register of Information, incidentes,
 # riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
 app.include_router(dora_router)
+# SEC: filings EDGAR — recolha, indexação, pesquisa e análise de documentos.
+app.include_router(sec_router)
 
 
 @app.get("/governo")

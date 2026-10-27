@@ -589,6 +589,16 @@ DORA_CONTEUDO_INDEX = "finance_dora_conteudo"
 DORA_RECOLHAS_INDEX = "finance_dora_recolhas"
 
 
+# Módulo SEC — filings EDGAR: metadados, texto integral e factos extraídos.
+SEC_FILINGS_INDEX = "finance_sec_filings"
+
+
+SEC_FACTS_INDEX = "finance_sec_facts"
+
+
+SEC_RECOLHAS_INDEX = "finance_sec_recolhas"
+
+
 
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
@@ -1297,4 +1307,38 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
             }
         }
     },
+    SEC_FILINGS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    SEC_FACTS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    SEC_RECOLHAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
 }
+

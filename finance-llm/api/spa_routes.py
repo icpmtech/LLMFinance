@@ -154,6 +154,7 @@ SEGMENTOS_DA_APP = frozenset(
         "search",
         "search360",
         "social",
+        "sec",
         "societario",
         "visualizador",
         "vortal",

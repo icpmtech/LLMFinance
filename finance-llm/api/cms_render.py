@@ -3861,6 +3861,7 @@ def _query_busca(termo: str = "", tipo: str = "", pagina: int = 0) -> str:
 
 #: Ícone de cada âmbito nos títulos dos resultados (o mesmo desenho das fichas).
 _ICONE_DO_AMBITO: Dict[str, str] = {
+    "nifs": "empresa",
     "empresas": "empresa",
     "contratos": "documento",
     "noticias": "blog",
@@ -3870,6 +3871,9 @@ _ICONE_DO_AMBITO: Dict[str, str] = {
 
 #: Sugestões da abertura quando a página não as define no CMS.
 EXEMPLOS_DE_PESQUISA: Tuple[str, ...] = ("Galp", "Município de Lisboa", "501964843", "insolvência")
+
+#: Sugestões de NIFs conhecidos para a área dedicada de NIFs.
+EXEMPLOS_DE_NIFS: Tuple[str, ...] = ("503412031", "510728189", "501964843", "500830321")
 
 #: Lema da marca (o mesmo da página do CMS, salvo se o editor escrever outro).
 LEMA_SABEMOS = "Nós Sabemos e tu, Sabes?"
@@ -4689,6 +4693,85 @@ def render_search(query: str = "", *, settings: Optional[Dict[str, Any]] = None)
         noindex=True,
         breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Pesquisar"}],
     )
+
+
+def render_nifs(
+    query: str = "",
+    *,
+    page: int = 1,
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Página dedicada de pesquisa por NIF (`/site/nifs?q=`).
+
+    Aceita texto livre (parte do nome ou fragmento do NIF) e lista entidades do
+    cadastro com destaque para a identificação fiscal e os detalhes empresariais.
+    """
+    from api import site_busca  # noqa: PLC0415 - import tardio: puxa o cliente do Elasticsearch
+
+    settings = settings or store.get_settings()
+    termo = " ".join(str(query or "").split())
+    pagina = max(1, int(page or 1))
+    tamanho_pagina = site_busca.LIMITE_DO_TIPO
+
+    if termo:
+        resultado = site_busca.pesquisar(
+            termo,
+            tipo="nifs",
+            pagina=pagina,
+            tamanho_pagina=tamanho_pagina,
+        )
+        grupo = resultado["grupos"][0] if resultado["grupos"] else _grupo_nifs_vazio()
+        resumo = (
+            f'<p class="busca-resumo">Cerca de <strong>{_plural(grupo["total"], "resultado", "resultados")}</strong>'
+            f" para «{_esc(termo)}» em NIFs. "
+            f'<a href="/site/nifs">Limpar</a></p>'
+        )
+        resultados_html = (
+            f'<div class="section">{resumo}</div>'
+            + _grupo_de_busca(grupo, termo, "nifs", pagina=pagina, tamanho_pagina=tamanho_pagina)
+        )
+        if not grupo["total"]:
+            resultados_html += _sem_resultados(termo)
+    else:
+        resultados_html = (
+            '<div class="section"><p class="busca-resumo">Pesquise pelo NIF ou pelo nome da entidade. '
+            'Experimente um dos exemplos em baixo.</p></div>'
+        )
+
+    exemplos = "".join(
+        f'<a class="pill" href="/site/nifs?q={quote(exemplo)}">{_esc(exemplo)}</a>'
+        for exemplo in EXEMPLOS_DE_NIFS
+    )
+    body = (
+        '<section class="busca busca--nifs">'
+        '<div class="busca-cabeca">'
+        '<h1>Pesquisar por NIF</h1>'
+        '<p class="busca-intro">Encontre uma entidade pelo número de identificação fiscal ou pelo nome.</p>'
+        "</div>"
+        '<div class="busca-card">'
+        + _form_busca(termo, "nifs", placeholder="NIF ou nome da empresa…", rotulo="Procurar", auto=not termo)
+        + f'<p class="busca-exemplos"><span>Exemplos de NIFs:</span>{exemplos}</p>'
+        + "</div>"
+        + "</section>"
+        + resultados_html
+    )
+    return _layout(
+        title="Pesquisar por NIF",
+        description=(
+            "Pesquise entidades portuguesas pelo NIF ou pelo nome: contratos públicos, insolvências, "
+            "marcas e atividade económica."
+        ),
+        body=body,
+        current_path="/site/nifs",
+        settings=settings,
+        canonical="/site/nifs",
+        noindex=True if termo else False,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Pesquisar por NIF"}],
+    )
+
+
+def _grupo_nifs_vazio() -> Dict[str, Any]:
+    return {"id": "nifs", "label": "NIFs", "total": 0, "items": [], "erro": ""}
 
 
 def _lista_do_blog_no_lugar_do_bloco(block: Dict[str, Any], lista: str) -> str:

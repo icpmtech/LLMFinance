@@ -130,6 +130,7 @@ import RiscoPage from "./pages/RiscoPage";
 import EsgPage from "./pages/EsgPage";
 import EuTaxonomyPage from "./pages/EuTaxonomyPage";
 import DoraPage from "./pages/DoraPage";
+import SecPage from "./pages/SecPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
 import RigorbizPage from "./pages/RigorbizPage";
@@ -273,6 +274,7 @@ type AppView =
   | "esg"
   | "eu-taxonomy"
   | "dora"
+  | "sec"
   | "societario"
   | "empresas-recolha"
   | "arquivo"
@@ -495,6 +497,7 @@ function pathForView(
   if (view === "risco") return "/empresas-risco";
   if (view === "esg") return "/esg";
   if (view === "eu-taxonomy") return "/eu-taxonomy";
+  if (view === "sec") return "/sec";
   if (view === "societario") return "/societario";
   if (view === "empresas-recolha") return "/empresas-recolha";
   if (view === "arquivo") return "/arquivo";
@@ -1946,6 +1949,7 @@ export default function App() {
     if (target === "esg") return <EsgPage />;
     if (target === "eu-taxonomy") return <EuTaxonomyPage />;
     if (target === "dora") return <DoraPage />;
+    if (target === "sec") return <SecPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;
     if (target === "arquivo") return <ArquivoPage />;

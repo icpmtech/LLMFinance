@@ -740,6 +740,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "59,130,246",
   },
   {
+    id: "sec",
+    label: "SEC · Filings EDGAR",
+    hint: "Filings oficiais da SEC: pesquisa de empresas, recolha, indexação, análise de documentos e factos extraídos",
+    icon: Globe2,
+    gradient: "from-blue-200 via-indigo-500 to-slate-700",
+    accent: "99,102,241",
+  },
+  {
     id: "societario",
     label: "Recolha Societária",
     hint: "Recolha massiva de atos societários (MJ) para JSON e indexação: alvos pelos anos dos contratos e por empresa",

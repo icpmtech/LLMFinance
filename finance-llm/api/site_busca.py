@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 #: Abas da página. `tudo` não é um grupo: significa «todos os âmbitos».
 TIPOS: Tuple[Dict[str, str], ...] = (
     {"id": "tudo", "label": "Tudo"},
+    {"id": "nifs", "label": "NIFs"},
     {"id": "empresas", "label": "Empresas"},
     {"id": "contratos", "label": "Contratos"},
     {"id": "noticias", "label": "Notícias"},
@@ -305,6 +306,86 @@ def _empresas(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     return _grupo("empresas", "Empresas", achado.get("total") or 0, itens)
 
 
+def _nifs(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
+    """Cadastro de entidades enriquecido para pesquisa por NIF.
+
+    Aceita texto livre (parte do nome ou fragmento do NIF) e devolve os mesmos
+    resultados do cadastro de entidades, mas com destaque para os campos de
+    identificação fiscal e detalhe empresarial.
+    """
+    achado = search_entities(q=termo, size=max(limite * 3, 15), from_=offset)
+    if achado.get("error"):
+        return _grupo("nifs", "NIFs", 0, [], _texto(achado["error"]))
+
+    chave = _chave(termo)
+    linhas = achado.get("items") or []
+
+    def ordem(linha: Dict[str, Any]) -> Tuple[int, float]:
+        nif = str(linha.get("nif") or "")
+        nome = _chave(linha.get("name"))
+        # NIF exato à frente, depois nome exato, prefixo do nome e valor.
+        if _nif(termo) and nif == termo:
+            return (0, 0.0)
+        if nome == chave:
+            return (1, 0.0)
+        if nome.startswith(chave):
+            return (2, 0.0)
+        return (3, -float(linha.get("total_value") or 0))
+
+    escolhidas = sorted(linhas, key=ordem)[:limite]
+    perfis = _perfis(str(linha.get("nif") or "") for linha in escolhidas)
+    itens = []
+    for linha in escolhidas:
+        nif = str(linha.get("nif") or "")
+        if not nif:
+            continue
+        nome = _texto(linha.get("name"))
+        perfil = perfis.get(nif) or {}
+        contratos = int(linha.get("contracts_count") or 0)
+        valor = linha.get("total_value")
+        adjudicante = int(linha.get("as_adjudicante_count") or 0)
+        adjudicatario = int(linha.get("as_adjudicatario_count") or 0)
+        papel: List[str] = []
+        if adjudicante:
+            papel.append("adjudicante")
+        if adjudicatario:
+            papel.append("adjudicatário")
+
+        sub_partes = [
+            f"NIF {nif}",
+            _texto(linha.get("country")),
+            _texto(linha.get("localizacao")),
+            _texto(linha.get("atividade")),
+            _texto(linha.get("cae_principal")),
+            _texto(linha.get("forma_juridica")),
+            (f"Capital social {euros(linha.get('capital_social_eur'))}" if linha.get("capital_social_eur") else ""),
+        ]
+        etiquetas = [*papel]
+        if linha.get("trademarks_total"):
+            etiquetas.append(f"{linha['trademarks_total']} marca(s)")
+        if linha.get("firmas_total"):
+            etiquetas.append(f"{linha['firmas_total']} firma(s)")
+
+        itens.append(
+            _resultado(
+                nome,
+                f"/site/empresa/{nif}",
+                sub=" · ".join(parte for parte in sub_partes if parte),
+                resumo=(
+                    f"{contratos} contrato(s) · {euros(valor)}"
+                    if contratos
+                    else "Sem contratos públicos indexados"
+                ),
+                etiquetas=etiquetas,
+                logo=str(perfil.get("logo_url") or ""),
+                letra=_letra(nome),
+                cor=_cor(nome),
+                icone="empresa",
+            )
+        )
+    return _grupo("nifs", "NIFs", achado.get("total") or 0, itens)
+
+
 def _contratos(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]:
     """Contratos públicos, por relevância (objeto, partes e CPV)."""
     achado = search_contracts(q=termo, size=limite, from_=offset, sort_by="relevance", strict=True)
@@ -474,6 +555,7 @@ def _insolvencias(termo: str, limite: int, *, offset: int = 0) -> Dict[str, Any]
 #: a funcionar quando um índice está em baixo.
 def _ambitos() -> Dict[str, Any]:
     return {
+        "nifs": _nifs,
         "empresas": _empresas,
         "contratos": _contratos,
         "noticias": _noticias,
