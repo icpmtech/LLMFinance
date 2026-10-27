@@ -21,7 +21,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { TawkChat } from "../components/TawkChat";
+import { SupportChat } from "../components/SupportChat";
 import { PublicFooter, PublicHeader } from "../components/PublicShell";
 
 const CATEGORIES = [
@@ -304,8 +304,8 @@ export function LandingPage() {
       {/* Footer */}
       <PublicFooter />
 
-      {/* Apoio ao cliente (Tawk.to) — só na landing page pública. */}
-      <TawkChat />
+      {/* Apoio ao cliente (widget IQ OS) — só na landing page pública. */}
+      <SupportChat />
     </div>
   );
 }

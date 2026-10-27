@@ -8,7 +8,7 @@ O HTML é **autónomo** (CSS embutido, JS mínimo) para poder ser servido por
 qualquer proxy e indexado pelos motores de busca: cada página leva `title`,
 `meta description`, canónica, Open Graph e JSON-LD. A aparência vem das
 definições do site (`theme`, `accent`, `radius`). O único script de terceiros é
-o widget de apoio ao cliente (`api/tawk.py`).
+o widget de apoio ao cliente (`api/support_widget.py`).
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ import markdown as markdown_lib
 from api import captcha
 from api import cms_store as store
 from api import site_acoes
-from api import tawk
+from api import support_widget
 
 logger = logging.getLogger(__name__)
 
@@ -1709,8 +1709,7 @@ def _layout(
     # Apoio ao cliente nas páginas públicas. A pré-visualização é do editor, não
     # de quem visita o site: aí o widget não entra.
     if not preview:
-        meta.append(tawk.TAWK_SNIPPET)
-        meta.append(tawk.TAWK_TRADUCAO_SNIPPET)
+        meta.append(support_widget.SUPPORT_SNIPPET)
     if json_ld:
         meta.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
     if breadcrumb and len(breadcrumb) >= 2:

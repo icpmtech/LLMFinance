@@ -10,7 +10,7 @@ aplicação de carrinho em JavaScript: o carrinho vive no `localStorage` do
 visitante e o **servidor continua a ser a autoridade** — o browser só envia
 identificadores e quantidades, os preços, o stock e os portes são recalculados
 em `shop_store.checkout`. O único script de terceiros é o widget de apoio ao
-cliente (`api/tawk.py`).
+cliente (`api/support_widget.py`).
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from urllib.parse import quote
 import markdown as markdown_lib
 
 from api import shop_store as store
-from api import tawk
+from api import support_widget
 
 logger = logging.getLogger(__name__)
 
@@ -1484,8 +1484,7 @@ def _layout(
     # Apoio ao cliente nas páginas públicas. A pré-visualização é do editor da
     # loja, não de quem compra: aí o widget não entra.
     if not preview:
-        meta.append(tawk.TAWK_SNIPPET)
-        meta.append(tawk.TAWK_TRADUCAO_SNIPPET)
+        meta.append(support_widget.SUPPORT_SNIPPET)
     cores = _pwa_cores(settings)
     meta.extend(
         [

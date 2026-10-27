@@ -35,6 +35,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  MessageSquare,
   Pause,
   PanelLeft,
   Play,
@@ -81,8 +82,9 @@ import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 import { AdminReportsTab } from "./AdminReports";
 import { AdminBaseImpicTab } from "./AdminBaseImpic";
 import { AdminPlatformTab } from "./AdminPlatform";
+import AdminSupportPanel from "../components/AdminSupportPanel";
 
-type Tab = "overview" | "users" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic" | "platform";
+type Tab = "overview" | "users" | "support" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic" | "platform";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -1274,6 +1276,7 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Visão geral", icon: <Server size={13} /> },
     { id: "users", label: "Utilizadores", icon: <UserCog size={13} /> },
+    { id: "support", label: "Suporte", icon: <MessageSquare size={13} /> },
     { id: "payments", label: "Pagamentos", icon: <CreditCard size={13} /> },
     { id: "reports", label: "Relatórios", icon: <ReceiptText size={13} /> },
     { id: "base-impic", label: "Portal Base", icon: <HardDriveDownload size={13} /> },
@@ -1335,6 +1338,7 @@ export default function AdminPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
         {tab === "overview" && <OverviewTab overview={overview} onError={setError} />}
         {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
+        {tab === "support" && <AdminSupportPanel onError={setError} />}
         {tab === "payments" && <PaymentsTab onError={setError} />}
       {tab === "reports" && <AdminReportsTab onError={setError} />}
         {tab === "base-impic" && <AdminBaseImpicTab onError={setError} />}

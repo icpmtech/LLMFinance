@@ -93,6 +93,18 @@ SETTINGS_INDEX = "finance_settings"
 
 
 
+# Apoio ao cliente: conversas entre visitantes (site, loja e SPA) e operadores
+# (administração). As mensagens ficam num índice próprio para as conversas
+# crescerem sem reescrever o documento da sessão a cada mensagem.
+SUPPORT_VISITORS_INDEX = "finance_support_visitors"
+SUPPORT_SESSIONS_INDEX = "finance_support_sessions"
+SUPPORT_MESSAGES_INDEX = "finance_support_messages"
+SUPPORT_TICKETS_INDEX = "finance_support_tickets"
+SUPPORT_EVENTS_INDEX = "finance_support_events"
+SUPPORT_OPERATORS_INDEX = "finance_support_operators"
+
+
+
 # Módulo de CRM: contas, contactos, oportunidades e atividades num único índice.
 # O campo `kind` distingue o tipo de registo e `owner_id` o utilizador dono
 # (os administradores veem todos os registos).

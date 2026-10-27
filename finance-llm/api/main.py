@@ -261,6 +261,8 @@ from api.auth_routes import router as auth_router, optional_session, CurrentSess
 from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
+from api.support_routes import admin_router as support_admin_router
+from api.support_routes import router as support_router
 from api.app_shell_routes import router as app_shell_router
 from api.indexnow_routes import router as indexnow_router
 from api.providers_routes import router as providers_router
@@ -866,6 +868,10 @@ app.include_router(permissions_router)
 app.include_router(billing_router)
 app.include_router(cli_router)
 app.include_router(admin_router)
+# Apoio ao cliente: widget das páginas públicas (`/support/*`), consola de
+# operadores (`/admin/support/*`) e conversas em tempo real (`/support/ws`).
+app.include_router(support_router)
+app.include_router(support_admin_router)
 # Cabeçalho e rodapé das páginas públicas da plataforma: leitura aberta em
 # `/app-shell` e edição no backoffice em `/admin/app-shell`.
 app.include_router(app_shell_router)
