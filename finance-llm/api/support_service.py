@@ -36,6 +36,7 @@ from typing import Any, Deque, Dict, Iterable, List, Optional, Tuple
 from api import events_service as system_events
 from api.elasticsearch_client import (
     SUPPORT_EVENTS_INDEX,
+    SUPPORT_FORM_RESPONSES_INDEX,
     SUPPORT_MESSAGES_INDEX,
     SUPPORT_OPERATORS_INDEX,
     SUPPORT_SESSIONS_INDEX,
@@ -62,6 +63,61 @@ AUTHOR_VISITOR = "visitor"
 AUTHOR_OPERATOR = "operator"
 AUTHOR_SYSTEM = "system"
 AUTHOR_NOTE = "note"
+
+MESSAGE_TEXT = "text"
+MESSAGE_LINK = "link"
+MESSAGE_REPORT = "report"
+MESSAGE_FORM = "form"
+MESSAGE_FORM_RESPONSE = "form_response"
+MESSAGE_KINDS = (MESSAGE_TEXT, MESSAGE_LINK, MESSAGE_REPORT, MESSAGE_FORM)
+
+FORM_FIELD_TYPES = ("text", "email", "tel", "textarea", "select", "number", "date")
+FORM_MAX_FIELDS = 12
+FORM_MAX_OPTIONS = 20
+FORM_VALUE_MAX_LEN = 2000
+LINK_TITLE_MAX_LEN = 160
+LINK_DESCRIPTION_MAX_LEN = 1000
+REPORT_SUMMARY_MAX_LEN = 1500
+
+#: Modelos de formulário que o operador pode enviar sem construir campos.
+FORM_TEMPLATES: Tuple[Dict[str, Any], ...] = (
+    {
+        "id": "contacto",
+        "title": "Dados de contacto",
+        "description": "Para falarmos consigo, indique os seus dados.",
+        "fields": [
+            {"key": "nome", "label": "Nome", "type": "text", "required": True},
+            {"key": "email", "label": "Email", "type": "email", "required": True},
+            {"key": "telefone", "label": "Telefone", "type": "tel", "required": False},
+            {"key": "mensagem", "label": "Como podemos ajudar?", "type": "textarea", "required": True},
+        ],
+    },
+    {
+        "id": "empresa",
+        "title": "Dados da empresa",
+        "description": "Identifique a empresa para prepararmos a resposta.",
+        "fields": [
+            {"key": "nome", "label": "Nome", "type": "text", "required": True},
+            {"key": "email", "label": "Email", "type": "email", "required": True},
+            {"key": "empresa", "label": "Empresa", "type": "text", "required": True},
+            {"key": "nif", "label": "NIF", "type": "text", "required": False},
+            {"key": "funcao", "label": "Função", "type": "text", "required": False},
+            {"key": "mensagem", "label": "O que precisa?", "type": "textarea", "required": True},
+        ],
+    },
+    {
+        "id": "faturacao",
+        "title": "Dados de faturação",
+        "description": "Indique os dados para tratarmos da faturação.",
+        "fields": [
+            {"key": "nome", "label": "Nome", "type": "text", "required": True},
+            {"key": "email", "label": "Email", "type": "email", "required": True},
+            {"key": "nif", "label": "NIF", "type": "text", "required": True},
+            {"key": "referencia", "label": "Referência", "type": "text", "required": False},
+            {"key": "descricao", "label": "Descrição", "type": "textarea", "required": True},
+        ],
+    },
+)
 
 TICKET_OPEN = "open"
 TICKET_PENDING = "pending"
@@ -176,6 +232,134 @@ def _valid_email(value: str) -> bool:
         return True
     local, _, domain = value.partition("@")
     return bool(local and domain and "." in domain and " " not in value)
+
+
+def _valid_url(value: Any) -> str:
+    """Aceita apenas http(s) absoluto ou caminho interno iniciado por `/`."""
+    from urllib.parse import urlparse
+
+    text = _clean(value, 2000)
+    if not text:
+        return ""
+    parsed = urlparse(text)
+    if parsed.scheme:
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ""
+        return text
+    if text.startswith("/") and not text.startswith("//"):
+        return text
+    return ""
+
+
+def _slug_key(value: Any, fallback: str = "campo") -> str:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = re.sub(r"[^a-zA-Z0-9_]+", "_", text).strip("_").lower()
+    return (text or fallback)[:40]
+
+
+def normalise_rich_payload(kind: str, payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Valida e normaliza o conteúdo de uma mensagem rica (link/relatório/form)."""
+    raw = payload if isinstance(payload, dict) else {}
+    if kind == MESSAGE_LINK:
+        url = _valid_url(raw.get("url"))
+        if not url:
+            raise SupportError("Indique um endereço http(s) válido.", 400, "invalid_url")
+        title = _clean(raw.get("title"), LINK_TITLE_MAX_LEN) or url
+        return {
+            "url": url,
+            "title": title,
+            "description": _clean(raw.get("description"), LINK_DESCRIPTION_MAX_LEN),
+        }
+    if kind == MESSAGE_REPORT:
+        url = _valid_url(raw.get("url"))
+        title = _clean(raw.get("title"), LINK_TITLE_MAX_LEN)
+        if not title:
+            raise SupportError("Indique o título do relatório.", 400, "invalid_report")
+        if not url:
+            raise SupportError("Indique o endereço do relatório.", 400, "invalid_url")
+        return {
+            "report_id": _clean(raw.get("report_id"), 80),
+            "title": title,
+            "summary": _clean(raw.get("summary"), REPORT_SUMMARY_MAX_LEN),
+            "url": url,
+            "free": bool(raw.get("free")),
+            "area": _clean(raw.get("area"), 60),
+        }
+    if kind == MESSAGE_FORM:
+        fields: List[Dict[str, Any]] = []
+        seen: set = set()
+        for index, item in enumerate(raw.get("fields") or []):
+            if not isinstance(item, dict) or len(fields) >= FORM_MAX_FIELDS:
+                continue
+            field_type = _clean(item.get("type"), 20).lower() or "text"
+            if field_type not in FORM_FIELD_TYPES:
+                field_type = "text"
+            label = _clean(item.get("label"), 80)
+            if not label:
+                continue
+            key = _slug_key(item.get("key") or label, f"campo_{index + 1}")
+            while key in seen:
+                key = f"{key}_{index + 1}"
+            seen.add(key)
+            options = [
+                _clean(option, 80)
+                for option in (item.get("options") or [])
+                if _clean(option, 80)
+            ][:FORM_MAX_OPTIONS]
+            fields.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "type": field_type,
+                    "required": bool(item.get("required")),
+                    "placeholder": _clean(item.get("placeholder"), 120),
+                    "options": options,
+                }
+            )
+        if not fields:
+            raise SupportError("O formulário tem de ter pelo menos um campo.", 400, "invalid_form")
+        return {
+            "form_id": "f_" + secrets.token_hex(8),
+            "title": _clean(raw.get("title"), 120) or "Formulário de apoio",
+            "description": _clean(raw.get("description"), 1000),
+            "submit_label": _clean(raw.get("submit_label"), 40) or "Enviar",
+            "template": _clean(raw.get("template"), 40),
+            "fields": fields,
+        }
+    raise SupportError("Tipo de mensagem inválido.", 400, "invalid_kind")
+
+
+def validate_form_values(payload: Dict[str, Any], values: Dict[str, Any]) -> Dict[str, str]:
+    """Valida as respostas de um formulário e devolve apenas os campos previstos."""
+    fields = payload.get("fields") or []
+    clean_values: Dict[str, str] = {}
+    if not isinstance(values, dict):
+        raise SupportError("Resposta inválida.", 400, "invalid_form_response")
+    for field in fields:
+        key = str(field.get("key") or "")
+        raw = values.get(key)
+        text = _clean(raw, FORM_VALUE_MAX_LEN)
+        if field.get("required") and not text:
+            raise SupportError(f"Preencha o campo «{field.get('label')}».", 400, "missing_field")
+        if not text:
+            continue
+        if field.get("type") == "email" and not _valid_email(text):
+            raise SupportError(f"O email em «{field.get('label')}» não é válido.", 400, "invalid_email")
+        if field.get("type") == "number":
+            try:
+                float(text.replace(",", "."))
+            except ValueError as exc:
+                raise SupportError(f"«{field.get('label')}» tem de ser um número.", 400, "invalid_number") from exc
+        if field.get("type") == "select":
+            options = [str(option) for option in (field.get("options") or [])]
+            if options and text not in options:
+                raise SupportError(f"Escolha uma opção válida em «{field.get('label')}».", 400, "invalid_option")
+        clean_values[key] = text
+    return clean_values
 
 
 def _source(hit: Dict[str, Any]) -> Dict[str, Any]:
@@ -639,6 +823,9 @@ def public_message(document: Dict[str, Any]) -> Dict[str, Any]:
         "author_id": document.get("author_id") or "",
         "author_name": document.get("author_name") or "",
         "body": document.get("body") or "",
+        "kind": document.get("kind") or MESSAGE_TEXT,
+        "payload": document.get("payload") or {},
+        "form_response": document.get("form_response") or None,
         "client_id": document.get("client_id") or "",
         "internal": bool(document.get("internal")),
         "created_at": document.get("created_at"),
@@ -654,10 +841,21 @@ def add_message(
     body: str,
     client_id: str = "",
     internal: bool = False,
+    kind: str = MESSAGE_TEXT,
+    payload: Optional[Dict[str, Any]] = None,
+    form_response: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    if kind not in MESSAGE_KINDS and kind != MESSAGE_FORM_RESPONSE:
+        raise SupportError("Tipo de mensagem inválido.", 400, "invalid_kind")
     text = _clean(body, BODY_MAX_LEN)
-    if not text:
+    data = payload or {}
+    if kind == MESSAGE_TEXT and not text:
         raise SupportError("A mensagem está vazia.", 400, "empty_message")
+    if kind != MESSAGE_TEXT and not data:
+        raise SupportError("Conteúdo da mensagem em falta.", 400, "empty_payload")
+    if not text:
+        # Texto de pesquisa/notificação para mensagens ricas (o widget desenha o cartão).
+        text = _clean(data.get("title") if isinstance(data, dict) else "", BODY_MAX_LEN)
     session = require_session(session_id)
     if session.get("status") == STATUS_CLOSED:
         raise SupportError("A conversa já está fechada.", 409, "session_closed")
@@ -671,6 +869,9 @@ def add_message(
         "author_id": author_id,
         "author_name": _clean(author_name, NAME_MAX_LEN),
         "body": text,
+        "kind": kind,
+        "payload": data,
+        "form_response": form_response or {},
         "client_id": _clean(client_id, 80),
         "internal": bool(internal),
         "created_at": _iso(),
@@ -732,6 +933,154 @@ def list_messages(session_id: str, *, include_internal: bool = True, size: int =
     except Exception as exc:  # noqa: BLE001
         raise SupportError("Não foi possível carregar as mensagens.", 503, "storage_error") from exc
     return [public_message(_source(hit)) for hit in response.get("hits", {}).get("hits", [])]
+
+
+def get_message(message_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        response = _client().get(index=SUPPORT_MESSAGES_INDEX, id=message_id)
+    except Exception:
+        return None
+    return _source(response)
+
+
+def send_rich_message(
+    session_id: str,
+    *,
+    kind: str,
+    payload: Optional[Dict[str, Any]],
+    author_id: str,
+    author_name: str,
+    client_id: str = "",
+    internal: bool = False,
+) -> Dict[str, Any]:
+    """Envia um link, relatório ou formulário para o visitante."""
+    if kind not in (MESSAGE_LINK, MESSAGE_REPORT, MESSAGE_FORM):
+        raise SupportError("Tipo de mensagem inválido.", 400, "invalid_kind")
+    if internal:
+        raise SupportError("Uma nota interna não pode ser um cartão.", 400, "invalid_internal")
+    data = normalise_rich_payload(kind, payload)
+    return add_message(
+        session_id,
+        author_type=AUTHOR_OPERATOR,
+        author_id=author_id,
+        author_name=author_name,
+        body=str(data.get("title") or ""),
+        client_id=client_id,
+        internal=False,
+        kind=kind,
+        payload=data,
+    )
+
+
+def public_form_response(document: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": document.get("response_id"),
+        "form_id": document.get("form_id") or "",
+        "message_id": document.get("message_id") or "",
+        "session_id": document.get("session_id") or "",
+        "visitor_id": document.get("visitor_id") or "",
+        "visitor_name": document.get("visitor_name") or "",
+        "visitor_email": document.get("visitor_email") or "",
+        "title": document.get("title") or "",
+        "values": document.get("values") or {},
+        "submitted_at": document.get("submitted_at"),
+    }
+
+
+def submit_form_response(
+    session_id: str,
+    message_id: str,
+    values: Dict[str, Any],
+    *,
+    visitor_id: str,
+    visitor_name: str = "",
+    visitor_email: str = "",
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Guarda a resposta do visitante a um formulário e marca a mensagem como respondida."""
+    message = get_message(message_id)
+    if not message or str(message.get("session_id") or "") != session_id:
+        raise SupportError("Formulário não encontrado.", 404, "form_not_found")
+    if (message.get("kind") or MESSAGE_TEXT) != MESSAGE_FORM:
+        raise SupportError("Esta mensagem não é um formulário.", 400, "not_a_form")
+    if message.get("form_response"):
+        raise SupportError("Este formulário já foi respondido.", 409, "form_already_answered")
+    payload = message.get("payload") if isinstance(message.get("payload"), dict) else {}
+    clean_values = validate_form_values(payload, values)
+    now = _iso()
+    response_id = "fr_" + secrets.token_hex(10)
+    document = {
+        "response_id": response_id,
+        "form_id": payload.get("form_id") or "",
+        "message_id": message_id,
+        "session_id": session_id,
+        "visitor_id": visitor_id,
+        "visitor_name": _clean(visitor_name, NAME_MAX_LEN),
+        "visitor_email": _clean(visitor_email, EMAIL_MAX_LEN).lower(),
+        "title": payload.get("title") or "",
+        "values": clean_values,
+        "submitted_at": now,
+        "created_at": now,
+    }
+    try:
+        _client().index(
+            index=SUPPORT_FORM_RESPONSES_INDEX,
+            id=response_id,
+            document=document,
+            refresh="wait_for",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise SupportError("Não foi possível guardar a resposta.", 503, "storage_error") from exc
+
+    form_response = {
+        "response_id": response_id,
+        "submitted_at": now,
+        "values": clean_values,
+        "by": _clean(visitor_name, NAME_MAX_LEN),
+    }
+    try:
+        _client().update(
+            index=SUPPORT_MESSAGES_INDEX,
+            id=message_id,
+            doc={"form_response": form_response},
+            refresh="wait_for",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise SupportError("Não foi possível marcar o formulário como respondido.", 503, "storage_error") from exc
+
+    session = require_session(session_id)
+    _patch_session(
+        session_id,
+        {
+            "unread_operator": int(session.get("unread_operator") or 0) + 1,
+            "last_message_at": now,
+            "last_visitor_message_at": now,
+            "last_seen_at": now,
+        },
+    )
+    log_support_event(
+        "form.submitted",
+        session_id=session_id,
+        actor_type=AUTHOR_VISITOR,
+        actor_id=visitor_id,
+        actor_name=visitor_name,
+        detail=f"Formulário «{payload.get('title') or ''}» respondido",
+        data={"response_id": response_id, "message_id": message_id, "fields": list(clean_values)},
+    )
+    updated = get_message(message_id)
+    return public_message(updated or {**message, "form_response": form_response}), public_form_response(document)
+
+
+def list_form_responses(session_id: str) -> List[Dict[str, Any]]:
+    body = {
+        "query": {"term": {"session_id": session_id}},
+        "size": 200,
+        "sort": [{"submitted_at": {"order": "asc"}}],
+    }
+    try:
+        response = _client().search(index=SUPPORT_FORM_RESPONSES_INDEX, body=body)
+    except Exception:
+        return []
+    return [public_form_response(_source(hit)) for hit in response.get("hits", {}).get("hits", [])]
 
 
 # -------------------------------------------------------------------- tickets

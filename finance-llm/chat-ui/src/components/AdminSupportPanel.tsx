@@ -11,19 +11,26 @@ import {
   Activity,
   ArrowUpRight,
   CheckCircle2,
+  ClipboardList,
   Clock,
+  FileText,
   Globe2,
   Inbox,
+  Link2,
   Loader2,
   MessageSquare,
   Monitor,
+  Plus,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
   Star,
   Ticket,
+  Trash2,
   UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -37,6 +44,8 @@ import {
   createSupportTicket,
   getSupportOverview,
   getSupportSession,
+  listSupportFormTemplates,
+  listSupportReports,
   listSupportSessions,
   readSupportSession,
   releaseSupportSession,
@@ -45,9 +54,13 @@ import {
   supportOperatorSocketUrl,
   updateSupportTicket,
   type SupportEvent,
+  type SupportFormField,
+  type SupportFormPayload,
+  type SupportFormTemplate,
   type SupportMessage,
   type SupportOperator,
   type SupportOverview,
+  type SupportReportOption,
   type SupportSession,
   type SupportSessionDetail,
   type SupportTicket,
@@ -168,6 +181,77 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function safeHref(value: unknown): string {
+  const raw = text(value);
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "";
+}
+
+function RichMessageCard({ message }: { message: SupportMessage }) {
+  const payload = (message.payload || {}) as Record<string, unknown>;
+  const kind = message.kind || "text";
+  const href = safeHref(payload.url);
+  const response = message.form_response;
+  const fields = Array.isArray(payload.fields) ? (payload.fields as SupportFormField[]) : [];
+
+  const kindLabel = kind === "link" ? "Link" : kind === "report" ? "Relatório" : "Formulário";
+
+  return (
+    <div className="max-w-[88%] rounded-xl border border-teal-400/25 bg-gradient-to-br from-teal-400/[0.1] to-sky-400/[0.05] px-2.5 py-2">
+      <p className="mb-1 w-fit rounded-full border border-teal-400/30 bg-teal-400/10 px-1.5 py-px text-[9px] uppercase tracking-wide text-teal-200">
+        {kindLabel}
+        {kind === "report" && payload.free ? " · gratuito" : ""}
+      </p>
+      <p className="text-[12px] font-semibold">{text(payload.title, "—")}</p>
+      {text(payload.description || payload.summary) ? (
+        <p className="mt-0.5 whitespace-pre-wrap text-[10.5px] text-muted-foreground">
+          {text(payload.description || payload.summary)}
+        </p>
+      ) : null}
+      {kind !== "form" && href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-teal-300 to-sky-400 px-2 py-1 text-[10.5px] font-semibold text-slate-900"
+        >
+          {kind === "report" ? "Abrir relatório" : "Abrir link"} <ArrowUpRight size={10} />
+        </a>
+      ) : null}
+      {kind === "form" ? (
+        <div className="mt-1.5 flex flex-col gap-1">
+          {fields.map((field) => (
+            <p key={field.key} className="text-[10.5px] text-muted-foreground">
+              <span className="text-foreground/80">{field.label}</span>
+              {field.required ? " *" : ""}
+              {response?.values?.[field.key] ? (
+                <span className="block whitespace-pre-wrap text-[11px] text-foreground">→ {response.values[field.key]}</span>
+              ) : null}
+            </p>
+          ))}
+          {response ? (
+            <p className="mt-1 text-[10px] font-medium text-teal-200">
+              Respondido {response.submitted_at ? `· ${fmtDate(response.submitted_at)}` : ""}
+            </p>
+          ) : (
+            <p className="mt-1 text-[10px] text-amber-200/80">A aguardar resposta do visitante.</p>
+          )}
+        </div>
+      ) : null}
+      <p className="mt-1 text-[9.5px] text-muted-foreground">
+        {message.author_name || "Operador"} · {fmtTime(message.created_at)}
+      </p>
+    </div>
+  );
+}
+
+const DEFAULT_FORM_FIELDS: SupportFormField[] = [
+  { key: "nome", label: "Nome", type: "text", required: true },
+  { key: "email", label: "Email", type: "email", required: true },
+  { key: "mensagem", label: "Como podemos ajudar?", type: "textarea", required: true },
+];
+
 export default function AdminSupportPanel({ onError }: Props) {
   const [overview, setOverview] = useState<SupportOverview | null>(null);
   const [operators, setOperators] = useState<SupportOperator[]>([]);
@@ -189,6 +273,18 @@ export default function AdminSupportPanel({ onError }: Props) {
   const [away, setAway] = useState(false);
   const [ticketForm, setTicketForm] = useState({ subject: "", description: "", category: TICKET_CATEGORIES[0], priority: "normal" });
   const [ticketNotes, setTicketNotes] = useState<Record<string, string>>({});
+  const [composerMode, setComposerMode] = useState<"text" | "link" | "report" | "form">("text");
+  const [linkDraft, setLinkDraft] = useState({ title: "", url: "", description: "" });
+  const [reports, setReports] = useState<SupportReportOption[]>([]);
+  const [reportQuery, setReportQuery] = useState("");
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [formTemplates, setFormTemplates] = useState<SupportFormTemplate[]>([]);
+  const [formDraft, setFormDraft] = useState<{
+    template: string;
+    title: string;
+    description: string;
+    fields: SupportFormField[];
+  }>({ template: "contacto", title: "Dados de contacto", description: "Para falarmos consigo, indique os seus dados.", fields: DEFAULT_FORM_FIELDS });
 
   const selectedRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -329,6 +425,7 @@ export default function AdminSupportPanel({ onError }: Props) {
           name?: string;
           session_id?: string;
         } | null = null;
+        // `form.submitted` traz a mesma mensagem atualizada em `message`.
         try {
           payload = JSON.parse(event.data as string);
         } catch {
@@ -367,6 +464,22 @@ export default function AdminSupportPanel({ onError }: Props) {
             }
           }
           setTyping(null);
+          return;
+        }
+        if (payload.type === "form.submitted" && payload.message) {
+          const message = payload.message;
+          if (payload.session) upsertSession(payload.session);
+          if (selectedRef.current === message.session_id) {
+            setDetail((current) =>
+              current
+                ? {
+                    ...current,
+                    messages: current.messages.map((item) => (item.id === message.id ? message : item)),
+                    session: payload.session ? { ...current.session, ...payload.session } : current.session,
+                  }
+                : current,
+            );
+          }
           return;
         }
         if ((payload.type === "session.updated" || payload.type === "session.closed") && payload.session) {
@@ -502,6 +615,162 @@ export default function AdminSupportPanel({ onError }: Props) {
     }
     setSending(false);
   }, [detail, draft, internal, report, wsSend]);
+
+  const sendRich = useCallback(
+    async (kind: "link" | "report" | "form", payload: Record<string, unknown>) => {
+      if (!detail) return;
+      const sessionId = detail.session.id;
+      const clientId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const optimistic: SupportMessage = {
+        id: clientId,
+        client_id: clientId,
+        session_id: sessionId,
+        author_type: "operator",
+        author_id: "me",
+        author_name: "Eu",
+        body: text(payload.title),
+        kind,
+        payload,
+        form_response: null,
+        internal: false,
+        created_at: new Date().toISOString(),
+        pending: true,
+      };
+      setDetail((current) => (current ? { ...current, messages: [...current.messages, optimistic] } : current));
+      const sent = wsSend({ type: "message", session_id: sessionId, kind, payload, client_id: clientId });
+      if (!sent) {
+        try {
+          const result = await sendSupportMessage(sessionId, "", { kind, payload, clientId });
+          setDetail((current) => {
+            if (!current) return current;
+            const index = current.messages.findIndex((item) => item.client_id === clientId);
+            const messages =
+              index >= 0
+                ? current.messages.map((item, position) => (position === index ? result.message : item))
+                : [...current.messages, result.message];
+            return { ...current, messages, session: { ...current.session, ...result.session } };
+          });
+        } catch (error) {
+          setDetail((current) =>
+            current
+              ? {
+                  ...current,
+                  messages: current.messages.map((item) =>
+                    item.client_id === clientId ? { ...item, pending: false, body: `${item.body} (não enviado)` } : item,
+                  ),
+                }
+              : current,
+          );
+          report(error instanceof Error ? error.message : "Não foi possível enviar o cartão.");
+          return;
+        }
+      }
+      setComposerMode("text");
+    },
+    [detail, report, wsSend],
+  );
+
+  const loadReports = useCallback(
+    async (q: string) => {
+      setReportsLoading(true);
+      try {
+        const data = await listSupportReports(q.trim());
+        setReports(data.items);
+      } catch (error) {
+        report(error instanceof Error ? error.message : "Não foi possível carregar os relatórios.");
+      } finally {
+        setReportsLoading(false);
+      }
+    },
+    [report],
+  );
+
+  useEffect(() => {
+    if (composerMode !== "report") return;
+    const timer = window.setTimeout(() => {
+      void loadReports(reportQuery);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [composerMode, loadReports, reportQuery]);
+
+  useEffect(() => {
+    if (composerMode !== "form" || formTemplates.length) return;
+    void listSupportFormTemplates()
+      .then((data) => setFormTemplates(data.templates || []))
+      .catch((error) => report(error instanceof Error ? error.message : "Não foi possível carregar os modelos de formulário."));
+  }, [composerMode, formTemplates.length, report]);
+
+  const chooseTemplate = useCallback(
+    (templateId: string) => {
+      if (templateId === "custom") {
+        setFormDraft({ template: "custom", title: "Formulário", description: "", fields: [...DEFAULT_FORM_FIELDS] });
+        return;
+      }
+      const template = formTemplates.find((item) => item.id === templateId);
+      if (!template) return;
+      setFormDraft({
+        template: template.id,
+        title: template.title,
+        description: template.description,
+        fields: template.fields.map((field) => ({ ...field, options: [...(field.options || [])] })),
+      });
+    },
+    [formTemplates],
+  );
+
+  const submitLink = useCallback(async () => {
+    const url = safeHref(linkDraft.url);
+    if (!url) {
+      report("Indique um endereço http(s) válido.");
+      return;
+    }
+    await sendRich("link", {
+      url,
+      title: linkDraft.title.trim() || url,
+      description: linkDraft.description.trim(),
+    });
+    setLinkDraft({ title: "", url: "", description: "" });
+  }, [linkDraft, report, sendRich]);
+
+  const submitReport = useCallback(
+    async (item: SupportReportOption) => {
+      const url = safeHref(item.url);
+      if (!url) {
+        report("Este relatório não tem um endereço público.");
+        return;
+      }
+      await sendRich("report", {
+        report_id: item.report_id,
+        title: item.title,
+        summary: item.summary || item.subtitle,
+        url,
+        free: item.free,
+        area: item.area,
+      });
+    },
+    [report, sendRich],
+  );
+
+  const submitFormMessage = useCallback(async () => {
+    const fields = formDraft.fields.filter((field) => field.label.trim());
+    if (!fields.length) {
+      report("Adicione pelo menos um campo ao formulário.");
+      return;
+    }
+    const payload: Omit<SupportFormPayload, "form_id"> & { form_id?: string } = {
+      title: formDraft.title.trim() || "Formulário de apoio",
+      description: formDraft.description.trim(),
+      submit_label: "Enviar",
+      template: formDraft.template,
+      fields: fields.map((field) => ({
+        ...field,
+        key: field.key || "",
+        label: field.label.trim(),
+        options: field.options || [],
+      })),
+    };
+    await sendRich("form", payload as unknown as Record<string, unknown>);
+  }, [formDraft, report, sendRich]);
 
   const addTicket = useCallback(async () => {
     if (!detail) return;
@@ -814,6 +1083,9 @@ export default function AdminSupportPanel({ onError }: Props) {
                           </p>
                         );
                       }
+                      if (message.kind && message.kind !== "text") {
+                        return <RichMessageCard key={message.id} message={message} />;
+                      }
                       const mine = message.author_type === "operator" || message.author_type === "note";
                       const note = message.author_type === "note" || message.internal;
                       return (
@@ -845,52 +1117,329 @@ export default function AdminSupportPanel({ onError }: Props) {
               {typing ? <p className="px-3 pb-1 text-[10.5px] text-teal-200">{typing} está a escrever…</p> : null}
 
               {detail.session.status !== "closed" ? (
-                <form
-                  className="shrink-0 border-t border-white/8 p-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void sendMessage();
-                  }}
-                >
-                  <div className="flex items-end gap-1.5">
-                    <textarea
-                      value={draft}
-                      onChange={(event) => {
-                        setDraft(event.target.value);
-                        const now = Date.now();
-                        if (event.target.value.trim() && now - lastTypingSent.current > 2000) {
-                          lastTypingSent.current = now;
-                          wsSend({ type: "typing", session_id: detail.session.id });
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          void sendMessage();
-                        }
-                      }}
-                      rows={2}
-                      placeholder={internal ? "Nota interna (o visitante não vê)…" : "Escreva a resposta…"}
-                      className={`max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border px-2.5 py-1.5 text-[12px] outline-none ${
-                        internal
-                          ? "border-amber-400/30 bg-amber-400/[0.06] focus:border-amber-400/60"
-                          : "border-white/10 bg-black/30 focus:border-teal-400/40"
-                      }`}
-                    />
-                    <button
-                      type="submit"
-                      disabled={sending || !draft.trim()}
-                      className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-300 to-sky-400 text-slate-900 disabled:opacity-40"
-                      title="Enviar"
-                    >
-                      <Send size={15} />
-                    </button>
+                <div className="shrink-0 border-t border-white/8 p-2">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1">
+                    {(
+                      [
+                        ["text", "Mensagem", <MessageSquare key="m" size={11} />],
+                        ["link", "Link", <Link2 key="l" size={11} />],
+                        ["report", "Relatório", <FileText key="r" size={11} />],
+                        ["form", "Formulário", <ClipboardList key="f" size={11} />],
+                      ] as [typeof composerMode, string, ReactNode][]
+                    ).map(([value, label, icon]) => (
+                      <button
+                        key={String(value)}
+                        type="button"
+                        onClick={() => setComposerMode(value as typeof composerMode)}
+                        className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] transition ${
+                          composerMode === value
+                            ? "border-teal-400/40 bg-teal-400/10 text-teal-200"
+                            : "border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.07]"
+                        }`}
+                      >
+                        {icon} {label}
+                      </button>
+                    ))}
                   </div>
-                  <label className="mt-1 flex w-fit cursor-pointer items-center gap-1 text-[10.5px] text-muted-foreground">
-                    <input type="checkbox" checked={internal} onChange={(event) => setInternal(event.target.checked)} />
-                    Nota interna
-                  </label>
-                </form>
+
+                  {composerMode === "text" ? (
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void sendMessage();
+                      }}
+                    >
+                      <div className="flex items-end gap-1.5">
+                        <textarea
+                          value={draft}
+                          onChange={(event) => {
+                            setDraft(event.target.value);
+                            const now = Date.now();
+                            if (event.target.value.trim() && now - lastTypingSent.current > 2000) {
+                              lastTypingSent.current = now;
+                              wsSend({ type: "typing", session_id: detail.session.id });
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              void sendMessage();
+                            }
+                          }}
+                          rows={2}
+                          placeholder={internal ? "Nota interna (o visitante não vê)…" : "Escreva a resposta…"}
+                          className={`max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border px-2.5 py-1.5 text-[12px] outline-none ${
+                            internal
+                              ? "border-amber-400/30 bg-amber-400/[0.06] focus:border-amber-400/60"
+                              : "border-white/10 bg-black/30 focus:border-teal-400/40"
+                          }`}
+                        />
+                        <button
+                          type="submit"
+                          disabled={sending || !draft.trim()}
+                          className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-300 to-sky-400 text-slate-900 disabled:opacity-40"
+                          title="Enviar"
+                        >
+                          <Send size={15} />
+                        </button>
+                      </div>
+                      <label className="mt-1 flex w-fit cursor-pointer items-center gap-1 text-[10.5px] text-muted-foreground">
+                        <input type="checkbox" checked={internal} onChange={(event) => setInternal(event.target.checked)} />
+                        Nota interna
+                      </label>
+                    </form>
+                  ) : null}
+
+                  {composerMode === "link" ? (
+                    <div className="flex flex-col gap-1">
+                      <input
+                        value={linkDraft.url}
+                        onChange={(event) => setLinkDraft((current) => ({ ...current, url: event.target.value }))}
+                        placeholder="https://exemplo.pt/pagina"
+                        className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] outline-none focus:border-teal-400/40"
+                      />
+                      <input
+                        value={linkDraft.title}
+                        onChange={(event) => setLinkDraft((current) => ({ ...current, title: event.target.value }))}
+                        placeholder="Título do link (opcional)"
+                        className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] outline-none focus:border-teal-400/40"
+                      />
+                      <input
+                        value={linkDraft.description}
+                        onChange={(event) => setLinkDraft((current) => ({ ...current, description: event.target.value }))}
+                        placeholder="Descrição curta (opcional)"
+                        className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] outline-none focus:border-teal-400/40"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void submitLink()}
+                          className="rounded-md bg-gradient-to-r from-teal-300 to-sky-400 px-2 py-1 text-[10.5px] font-semibold text-slate-900"
+                        >
+                          Enviar link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode("text")}
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] text-muted-foreground"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {composerMode === "report" ? (
+                    <div className="flex max-h-60 flex-col gap-1">
+                      <div className="flex gap-1">
+                        <div className="relative min-w-0 flex-1">
+                          <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            value={reportQuery}
+                            onChange={(event) => setReportQuery(event.target.value)}
+                            placeholder="Pesquisar relatórios…"
+                            className="w-full rounded-md border border-white/10 bg-black/30 py-1 pl-6 pr-2 text-[11px] outline-none focus:border-teal-400/40"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode("text")}
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 text-[10.5px] text-muted-foreground"
+                          title="Fechar"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-y-auto">
+                        {reportsLoading ? (
+                          <p className="flex items-center gap-1 p-1 text-[10.5px] text-muted-foreground">
+                            <Loader2 size={10} className="animate-spin" /> A carregar relatórios…
+                          </p>
+                        ) : reports.length === 0 ? (
+                          <p className="p-1 text-[10.5px] text-muted-foreground">Sem relatórios publicados.</p>
+                        ) : (
+                          reports.map((item) => (
+                            <div
+                              key={`${item.report_id}-${item.title}`}
+                              className="mb-1 flex items-start gap-1 rounded-md border border-white/8 bg-white/[0.03] px-1.5 py-1"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[11px] font-medium">{item.title}</p>
+                                <p className="truncate text-[9.5px] text-muted-foreground">
+                                  {item.area || item.kind_label} · {item.free ? "gratuito" : `${item.price} €`}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void submitReport(item)}
+                                className="shrink-0 rounded-md border border-teal-400/30 bg-teal-400/10 px-1.5 py-0.5 text-[10px] text-teal-200"
+                              >
+                                Enviar
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {composerMode === "form" ? (
+                    <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                      <div className="flex gap-1">
+                        <select
+                          value={formDraft.template}
+                          onChange={(event) => chooseTemplate(event.target.value)}
+                          className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[10.5px] outline-none"
+                        >
+                          {formTemplates.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.title}
+                            </option>
+                          ))}
+                          <option value="custom">Personalizado</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode("text")}
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 text-[10.5px] text-muted-foreground"
+                          title="Fechar"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                      <input
+                        value={formDraft.title}
+                        onChange={(event) => setFormDraft((current) => ({ ...current, title: event.target.value }))}
+                        placeholder="Título do formulário"
+                        className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] outline-none focus:border-teal-400/40"
+                      />
+                      <input
+                        value={formDraft.description}
+                        onChange={(event) => setFormDraft((current) => ({ ...current, description: event.target.value }))}
+                        placeholder="Descrição (opcional)"
+                        className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] outline-none focus:border-teal-400/40"
+                      />
+                      <div className="flex flex-col gap-1">
+                        {formDraft.fields.map((field, index) => (
+                          <div key={`${field.key}-${index}`} className="rounded-md border border-white/8 bg-white/[0.03] p-1">
+                            <div className="flex items-center gap-1">
+                              <input
+                                value={field.label}
+                                onChange={(event) =>
+                                  setFormDraft((current) => ({
+                                    ...current,
+                                    fields: current.fields.map((item, position) =>
+                                      position === index ? { ...item, label: event.target.value } : item,
+                                    ),
+                                  }))
+                                }
+                                placeholder="Etiqueta do campo"
+                                className="min-w-0 flex-1 rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10.5px] outline-none"
+                              />
+                              <select
+                                value={field.type}
+                                onChange={(event) =>
+                                  setFormDraft((current) => ({
+                                    ...current,
+                                    fields: current.fields.map((item, position) =>
+                                      position === index ? { ...item, type: event.target.value } : item,
+                                    ),
+                                  }))
+                                }
+                                className="w-20 rounded border border-white/10 bg-black/30 px-1 py-0.5 text-[10px] outline-none"
+                              >
+                                {["text", "email", "tel", "textarea", "select", "number", "date"].map((type) => (
+                                  <option key={type} value={type}>
+                                    {type}
+                                  </option>
+                                ))}
+                              </select>
+                              <label className="flex items-center gap-0.5 text-[9.5px] text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={field.required}
+                                  onChange={(event) =>
+                                    setFormDraft((current) => ({
+                                      ...current,
+                                      fields: current.fields.map((item, position) =>
+                                        position === index ? { ...item, required: event.target.checked } : item,
+                                      ),
+                                    }))
+                                  }
+                                />
+                                obrig.
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormDraft((current) => ({
+                                    ...current,
+                                    fields: current.fields.filter((_, position) => position !== index),
+                                  }))
+                                }
+                                className="rounded p-0.5 text-rose-300/80 hover:bg-rose-400/10"
+                                title="Remover campo"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                            {field.type === "select" ? (
+                              <input
+                                value={(field.options || []).join(", ")}
+                                onChange={(event) =>
+                                  setFormDraft((current) => ({
+                                    ...current,
+                                    fields: current.fields.map((item, position) =>
+                                      position === index
+                                        ? {
+                                            ...item,
+                                            options: event.target.value
+                                              .split(",")
+                                              .map((option) => option.trim())
+                                              .filter(Boolean),
+                                          }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                                placeholder="Opções separadas por vírgulas"
+                                className="mt-1 w-full rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] outline-none"
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormDraft((current) => ({
+                            ...current,
+                            fields: [...current.fields, { key: "", label: "", type: "text", required: false, options: [] }],
+                          }))
+                        }
+                        className="flex w-fit items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        <Plus size={10} /> Campo
+                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void submitFormMessage()}
+                          className="rounded-md bg-gradient-to-r from-teal-300 to-sky-400 px-2 py-1 text-[10.5px] font-semibold text-slate-900"
+                        >
+                          Enviar formulário
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode("text")}
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] text-muted-foreground"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <p className="shrink-0 border-t border-white/8 px-3 py-2 text-[11px] text-muted-foreground">
                   Conversa fechada{detail.session.closed_at ? ` em ${fmtDate(detail.session.closed_at)}` : ""}.

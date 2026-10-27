@@ -166,6 +166,66 @@ def _sec_get(path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any
         return None
 
 
+def _fetch_company_tickers() -> Optional[List[Dict[str, Any]]]:
+    """Descarrega o catálogo público CIK → ticker/nome.
+
+    O ficheiro oficial tem vindo em `/files/company_tickers.json`, mas a SEC já o
+    moveu várias vezes; tentamos os caminhos conhecidos. O formato atual é um
+    dicionário numérico com `cik_str`/`ticker`/`title`.
+    """
+    data = _sec_get("/files/company_tickers.json")
+    if data is None:
+        data = _sec_get("/Archives/edgar/daily-index/cik-company-tickers.json")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [
+            {
+                "cik": item.get("cik_str") or item.get("cik"),
+                "ticker": item.get("ticker", ""),
+                "name": item.get("title", "") or item.get("name", ""),
+            }
+            for item in data.values()
+            if isinstance(item, dict)
+        ]
+    return None
+
+
+def _ticker_by_cik() -> Dict[str, Dict[str, str]]:
+    """Índice `CIK(10 dígitos)` → `{ticker, name}`, guardado em cache.
+
+    Construído a partir do mesmo catálogo usado pela pesquisa de empresas, para
+    que os factos XBRL ingeridos em bulk fiquem com o ticker preenchido — sem
+    isto, `GET /sec/facts?ticker=AAPL` nunca devolvia nada.
+    """
+    cache_key = _cache_key("ticker_by_cik")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached.get("data", {})
+
+    catalog = _cache_get(_cache_key("company_tickers"))
+    if catalog is None:
+        data = _fetch_company_tickers()
+        if data is None:
+            return {}
+        catalog = {"data": data}
+        _cache_set(_cache_key("company_tickers"), catalog, ttl=3600)
+
+    index: Dict[str, Dict[str, str]] = {}
+    for item in catalog.get("data", []):
+        cik = item.get("cik")
+        ticker = (item.get("ticker") or "").upper()
+        if not cik or not ticker:
+            continue
+        index.setdefault(str(cik).zfill(10), {
+            "ticker": ticker,
+            "name": (item.get("name") or "").title(),
+        })
+    result = {"data": index}
+    _cache_set(cache_key, result, ttl=3600)
+    return index
+
+
 def search_companies_sec(q: str, max_results: int = 20) -> Dict[str, Any]:
     """Pesquisar empresas na SEC pelo nome ou ticker.
 
@@ -178,24 +238,9 @@ def search_companies_sec(q: str, max_results: int = 20) -> Dict[str, Any]:
     cache_key = _cache_key("company_tickers")
     tickers = _cache_get(cache_key)
     if tickers is None:
-        # O ficheiro oficial tem vindo em /files/company_tickers.json, mas a
-        # SEC moveu-o várias vezes. Tentamos ambos.
-        data = _sec_get("/files/company_tickers.json")
+        data = _fetch_company_tickers()
         if data is None:
-            data = _sec_get("/Archives/edgar/daily-index/cik-company-tickers.json")
-        if not isinstance(data, list):
-            # Formato atual: dicionário numérico com cik_str/ticker/title.
-            if isinstance(data, dict):
-                data = [
-                    {
-                        "cik": item.get("cik_str") or item.get("cik"),
-                        "ticker": item.get("ticker", ""),
-                        "name": item.get("title", "") or item.get("name", ""),
-                    }
-                    for item in data.values()
-                ]
-            else:
-                return {"error": "Não foi possível carregar o catálogo de tickers da SEC"}
+            return {"error": "Não foi possível carregar o catálogo de tickers da SEC"}
         tickers = {"data": data}
         _cache_set(cache_key, tickers, ttl=3600)
 
@@ -236,20 +281,10 @@ def filings_for_company(cik: str, limit: int = 40, form_types: Optional[List[str
     if cached is not None:
         return cached
 
-    # Resolver ticker/nome a partir do catálogo em cache.
-    catalog = _cache_get(_cache_key("company_tickers"))
-    if catalog and isinstance(catalog.get("data"), list):
-        for item in catalog["data"]:
-            if str(item.get("cik", "")).zfill(10) == cik:
-                ticker = (item.get("ticker") or "").upper()
-                name = (item.get("name") or "").title()
-                break
-        else:
-            ticker = ""
-            name = ""
-    else:
-        ticker = ""
-        name = ""
+    # Resolver ticker/nome a partir do índice CIK → ticker.
+    info = _ticker_by_cik().get(cik) or {}
+    ticker = info.get("ticker", "")
+    name = info.get("name", "")
 
     submissions = _sec_get(f"{_SEC_DATA_BASE}/submissions/CIK{cik}.json")
     if not isinstance(submissions, dict):
@@ -455,18 +490,13 @@ def company_facts(cik: str) -> Dict[str, Any]:
 
 
 def _enrich_facts_with_ticker(facts: List[Dict[str, Any]], cik: str) -> None:
-    """Preenche o ticker/nome a partir do catálogo em cache."""
-    catalog = _cache_get(_cache_key("company_tickers"))
-    if not catalog or not isinstance(catalog.get("data"), list):
+    """Preenche o ticker/nome a partir do catálogo de tickers."""
+    info = _ticker_by_cik().get(str(cik).zfill(10))
+    if not info:
         return
-    for item in catalog["data"]:
-        if str(item.get("cik", "")).zfill(10) == str(cik).zfill(10):
-            ticker = (item.get("ticker") or "").upper()
-            name = (item.get("name") or "").title()
-            for fact in facts:
-                fact["ticker"] = ticker
-                fact["company_name"] = fact["company_name"] or name
-            break
+    for fact in facts:
+        fact["ticker"] = info["ticker"]
+        fact["company_name"] = fact["company_name"] or info["name"]
 
 
 def index_company_facts(cik: str, user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -733,9 +763,18 @@ def _parse_submissions_bulk(zip_path: Path, limit: Optional[int] = None) -> Gene
                 }
 
 
-def _parse_companyfacts_bulk(zip_path: Path, limit: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
-    """Yield normalized XBRL facts from the companyfacts bulk ZIP."""
+def _parse_companyfacts_bulk(
+    zip_path: Path,
+    limit: Optional[int] = None,
+    tickers: Optional[Dict[str, Dict[str, str]]] = None,
+) -> Generator[Dict[str, Any], None, None]:
+    """Yield normalized XBRL facts from the companyfacts bulk ZIP.
+
+    `tickers` é o índice CIK → `{ticker, name}` (ver `_ticker_by_cik`), resolvido
+    uma única vez pela chamada e não por cada facto.
+    """
     count = 0
+    tickers = tickers or {}
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
         for name in names:
@@ -749,6 +788,7 @@ def _parse_companyfacts_bulk(zip_path: Path, limit: Optional[int] = None) -> Gen
                 continue
             cik = str(data.get("cik", "")).zfill(10)
             company_name = data.get("entityName", "")
+            ticker = (tickers.get(cik) or {}).get("ticker", "")
             facts = data.get("facts", {})
             seen = set()
             for taxonomy, concepts in facts.items():
@@ -777,10 +817,13 @@ def _parse_companyfacts_bulk(zip_path: Path, limit: Optional[int] = None) -> Gen
                             count += 1
                             yield {
                                 "cik": cik,
-                                "ticker": "",
+                                "ticker": ticker,
                                 "company_name": company_name,
                                 "concept": concept_name,
-                                "category": priority,
+                                # Conceitos fora da lista prioritária entram como
+                                # `other` e não como `null`: o campo é `keyword` e
+                                # a UI filtra por categoria.
+                                "category": priority or "other",
                                 "label": label,
                                 "description": description,
                                 "unit": unit_key,
@@ -868,7 +911,7 @@ def bulk_download_companyfacts(user_id: Optional[str] = None, limit: Optional[in
         from elasticsearch.helpers import bulk
         actions = []
         total = 0
-        for fact in _parse_companyfacts_bulk(path, limit=limit):
+        for fact in _parse_companyfacts_bulk(path, limit=limit, tickers=_ticker_by_cik()):
             fact_id = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{fact['cik']}-{fact['concept']}-{fact['end']}-{fact.get('form', '')}")[:64]
             actions.append({
                 "_op_type": "index",

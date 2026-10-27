@@ -58,6 +58,8 @@
     ticketSent: "",
     lastTypingSent: 0,
     lastPage: "",
+    formDrafts: {},
+    formBusy: {},
   };
 
   var socket = null;
@@ -481,6 +483,15 @@
       case "ticket.created":
         if (payload.ticket) S.ticketSent = payload.ticket.id || "ok";
         render();
+        break;
+      case "form.submitted":
+        if (payload.message) {
+          upsertMessage(payload.message);
+          delete S.formDrafts[payload.message.id];
+        }
+        if (payload.session) S.session = payload.session;
+        render();
+        scrollToEnd();
         break;
       case "typing":
         if (payload.actor === "operator") {
@@ -989,9 +1000,147 @@
     renderMessages();
   }
 
+  function safeUrl(value) {
+    var raw = String(value || "");
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.charAt(0) === "/" && raw.charAt(1) !== "/") return raw;
+    return "";
+  }
+
+  function richCard(kindLabel, title, description, url, actionLabel) {
+    var card = el("div", "iq-card");
+    card.appendChild(el("span", "iq-card-kind", kindLabel));
+    card.appendChild(el("p", "iq-card-title", title));
+    if (description) card.appendChild(el("p", "iq-card-text", description));
+    var href = safeUrl(url);
+    if (href) {
+      var link = el("a", "iq-card-action", actionLabel || "Abrir");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      card.appendChild(link);
+    }
+    return card;
+  }
+
+  function updateFormDraft(messageId, key, value) {
+    var draft = S.formDrafts[messageId] || {};
+    draft[key] = value;
+    S.formDrafts[messageId] = draft;
+  }
+
+  function formCard(message) {
+    var payload = message.payload || {};
+    var fields = Array.isArray(payload.fields) ? payload.fields : [];
+    var card = el("div", "iq-card iq-form-card");
+    card.appendChild(el("span", "iq-card-kind", "Formulário"));
+    card.appendChild(el("p", "iq-card-title", payload.title || "Formulário"));
+    if (payload.description) card.appendChild(el("p", "iq-card-text", payload.description));
+
+    var response = message.form_response;
+    if (response && response.values) {
+      var done = el("div", "iq-form-done");
+      done.appendChild(el("p", "iq-form-done-title", "Resposta enviada"));
+      fields.forEach(function (field) {
+        var value = response.values[field.key];
+        if (!value) return;
+        var line = el("p", "iq-form-answer");
+        line.appendChild(el("span", "iq-form-answer-label", field.label + ": "));
+        line.appendChild(document.createTextNode(value));
+        done.appendChild(line);
+      });
+      if (response.submitted_at) {
+        done.appendChild(el("p", "iq-form-answer", "Enviado em " + relativeTime(response.submitted_at)));
+      }
+      card.appendChild(done);
+      return card;
+    }
+
+    var form = el("form", "iq-form");
+    var draft = S.formDrafts[message.id] || {};
+    fields.forEach(function (field) {
+      var wrapper = el("label", "iq-field");
+      wrapper.appendChild(el("span", null, field.label + (field.required ? " *" : "")));
+      var input;
+      if (field.type === "textarea") {
+        input = document.createElement("textarea");
+        input.rows = 3;
+      } else if (field.type === "select") {
+        input = document.createElement("select");
+        var empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "Escolha…";
+        input.appendChild(empty);
+        (field.options || []).forEach(function (option) {
+          var node = document.createElement("option");
+          node.value = option;
+          node.textContent = option;
+          input.appendChild(node);
+        });
+      } else {
+        input = document.createElement("input");
+        input.type =
+          field.type === "email" || field.type === "tel" || field.type === "number" || field.type === "date"
+            ? field.type
+            : "text";
+      }
+      input.name = field.key;
+      input.required = !!field.required;
+      if (field.placeholder) input.placeholder = field.placeholder;
+      if (draft[field.key] !== undefined) input.value = draft[field.key];
+      input.addEventListener("input", function () {
+        updateFormDraft(message.id, field.key, input.value);
+      });
+      input.addEventListener("change", function () {
+        updateFormDraft(message.id, field.key, input.value);
+      });
+      wrapper.appendChild(input);
+      form.appendChild(wrapper);
+    });
+    var submit = el("button", "iq-primary", payload.submit_label || "Enviar");
+    submit.type = "submit";
+    submit.disabled = !!S.formBusy[message.id];
+    submit.textContent = S.formBusy[message.id] ? "A enviar…" : payload.submit_label || "Enviar";
+    form.appendChild(submit);
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      if (S.formBusy[message.id]) return;
+      var values = {};
+      fields.forEach(function (field) {
+        var input = form.elements[field.key];
+        values[field.key] = input ? input.value : "";
+      });
+      S.formBusy[message.id] = true;
+      S.error = "";
+      render();
+      api("/support/sessions/" + encodeURIComponent(S.sessionId) + "/forms/" + encodeURIComponent(message.id), {
+        method: "POST",
+        body: { values: values },
+      })
+        .then(function (data) {
+          S.formBusy[message.id] = false;
+          if (data && data.message) upsertMessage(data.message);
+          if (data && data.session) S.session = data.session;
+          delete S.formDrafts[message.id];
+          render();
+          scrollToEnd();
+        })
+        .catch(function (error) {
+          S.formBusy[message.id] = false;
+          S.error = error.message || "Não foi possível enviar o formulário.";
+          render();
+        });
+    });
+    card.appendChild(form);
+    return card;
+  }
+
   function renderMessages() {
     var list = refs.scroll;
     if (!list) return;
+    var active = root && root.activeElement;
+    var activeName = active && active.getAttribute ? active.getAttribute("name") : "";
+    var selectionStart = active && typeof active.selectionStart === "number" ? active.selectionStart : null;
     list.innerHTML = "";
     var lastAuthor = "";
     S.messages.forEach(function (message) {
@@ -999,6 +1148,33 @@
       if (author === "system") {
         var system = el("p", "iq-system", message.body);
         list.appendChild(system);
+        lastAuthor = author;
+        return;
+      }
+      var kind = message.kind || "text";
+      if (kind === "link" || kind === "report" || kind === "form") {
+        var richRow = el("div", "iq-rich is-" + author);
+        var payload = message.payload || {};
+        if (kind === "link") {
+          richRow.appendChild(
+            richCard("Link", payload.title || payload.url, payload.description, payload.url, "Abrir link"),
+          );
+        } else if (kind === "report") {
+          richRow.appendChild(
+            richCard(
+              "Relatório" + (payload.free ? " · gratuito" : ""),
+              payload.title || "Relatório",
+              payload.summary,
+              payload.url,
+              "Abrir relatório",
+            ),
+          );
+        } else {
+          richRow.appendChild(formCard(message));
+        }
+        var richMeta = el("span", "iq-meta", (message.author_name || "Equipa") + " · " + relativeTime(message.created_at));
+        richRow.appendChild(richMeta);
+        list.appendChild(richRow);
         lastAuthor = author;
         return;
       }
@@ -1015,6 +1191,19 @@
       list.appendChild(row);
       lastAuthor = author;
     });
+    if (activeName) {
+      var again = list.querySelector('[name="' + (window.CSS && window.CSS.escape ? window.CSS.escape(activeName) : activeName) + '"]');
+      if (again) {
+        again.focus();
+        try {
+          if (selectionStart !== null && typeof again.setSelectionRange === "function") {
+            again.setSelectionRange(selectionStart, selectionStart);
+          }
+        } catch (error) {
+          /* tipo de campo sem seleção */
+        }
+      }
+    }
   }
 
   function scrollToEnd() {
@@ -1103,6 +1292,33 @@
 .iq-bubble.is-pending { opacity: .65; }
 .iq-bubble.is-failed { background: rgba(244,63,94,.18); color: #fecdd3; border-color: rgba(244,63,94,.35); }
 .iq-meta { font-size: 10px; color: #64748b; padding: 0 4px; }
+.iq-rich { display: flex; flex-direction: column; gap: 4px; max-width: 92%; }
+.iq-rich.is-operator { align-self: flex-start; align-items: flex-start; }
+.iq-rich.is-visitor { align-self: flex-end; align-items: flex-end; }
+.iq-card {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 10px 12px;
+  border-radius: 12px; border: 1px solid rgba(45,212,191,.28);
+  background: linear-gradient(160deg, rgba(45,212,191,.12), rgba(14,165,233,.07));
+}
+.iq-card-kind {
+  align-self: flex-start; border-radius: 999px; padding: 1px 8px; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .4px; color: #99f6e4;
+  background: rgba(45,212,191,.16); border: 1px solid rgba(94,234,212,.24);
+}
+.iq-card-title { margin: 0; font-size: 13px; font-weight: 700; color: #f1f5f9; }
+.iq-card-text { margin: 0; font-size: 11.5px; color: #94a3b8; white-space: pre-wrap; }
+.iq-card-action {
+  align-self: flex-start; margin-top: 2px; border-radius: 8px; padding: 6px 10px;
+  font-size: 11.5px; font-weight: 700; text-decoration: none; color: #042f2e;
+  background: linear-gradient(135deg, #5eead4, #22d3ee);
+}
+.iq-card-action:hover { filter: brightness(1.05); }
+.iq-form { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.iq-form .iq-primary { margin-top: 2px; }
+.iq-form-done { display: flex; flex-direction: column; gap: 3px; }
+.iq-form-done-title { margin: 0 0 2px; font-size: 11.5px; font-weight: 700; color: #5eead4; }
+.iq-form-answer { margin: 0; font-size: 11.5px; color: #cbd5e1; white-space: pre-wrap; }
+.iq-form-answer-label { color: #94a3b8; font-weight: 600; }
 .iq-system {
   align-self: center; max-width: 92%; text-align: center; font-size: 11px;
   color: #94a3b8; background: rgba(148,163,184,.09); border-radius: 999px; padding: 4px 10px; margin: 2px 0;

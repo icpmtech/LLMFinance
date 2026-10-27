@@ -39,6 +39,48 @@ export type SupportSession = {
   closed_at: string | null;
 };
 
+export type SupportMessageKind = "text" | "link" | "report" | "form" | "form_response" | string;
+
+export type SupportFormField = {
+  key: string;
+  label: string;
+  type: "text" | "email" | "tel" | "textarea" | "select" | "number" | "date" | string;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+};
+
+export type SupportFormPayload = {
+  form_id: string;
+  title: string;
+  description: string;
+  submit_label: string;
+  template?: string;
+  fields: SupportFormField[];
+};
+
+export type SupportLinkPayload = {
+  url: string;
+  title: string;
+  description: string;
+};
+
+export type SupportReportPayload = {
+  report_id: string;
+  title: string;
+  summary: string;
+  url: string;
+  free: boolean;
+  area: string;
+};
+
+export type SupportFormResponse = {
+  response_id: string;
+  submitted_at: string | null;
+  values: Record<string, string>;
+  by: string;
+};
+
 export type SupportMessage = {
   id: string;
   session_id: string;
@@ -46,6 +88,9 @@ export type SupportMessage = {
   author_id: string;
   author_name: string;
   body: string;
+  kind: SupportMessageKind;
+  payload: Record<string, unknown>;
+  form_response: SupportFormResponse | null;
   client_id: string;
   internal: boolean;
   created_at: string | null;
@@ -110,9 +155,30 @@ export type SupportSessionDetail = {
   session: SupportSession;
   messages: SupportMessage[];
   tickets: SupportTicket[];
+  form_responses: SupportFormResponse[];
   events: SupportEvent[];
   account: Record<string, unknown> | null;
   visitor: Record<string, unknown> | null;
+};
+
+export type SupportReportOption = {
+  report_id: string;
+  title: string;
+  subtitle: string;
+  summary: string;
+  url: string;
+  free: boolean;
+  kind: string;
+  kind_label: string;
+  area: string;
+  price: number;
+};
+
+export type SupportFormTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  fields: SupportFormField[];
 };
 
 export const TICKET_STATUS_LABELS: Record<string, string> = {
@@ -210,13 +276,35 @@ export function readSupportSession(sessionId: string): Promise<{ session: Suppor
 export function sendSupportMessage(
   sessionId: string,
   body: string,
-  options: { internal?: boolean; clientId?: string } = {},
+  options: {
+    internal?: boolean;
+    clientId?: string;
+    kind?: SupportMessageKind;
+    payload?: Record<string, unknown>;
+  } = {},
 ): Promise<{ message: SupportMessage; session: SupportSession }> {
   return post(`/admin/support/sessions/${encodeURIComponent(sessionId)}/messages`, {
     body,
     client_id: options.clientId ?? "",
     internal: options.internal ?? false,
+    kind: options.kind ?? "text",
+    payload: options.payload,
   });
+}
+
+export function listSupportReports(q = ""): Promise<{ items: SupportReportOption[]; total: number }> {
+  const query = new URLSearchParams();
+  if (q) query.set("q", q);
+  query.set("limit", "60");
+  return request(`/admin/support/reports?${query}`);
+}
+
+export function listSupportFormTemplates(): Promise<{
+  templates: SupportFormTemplate[];
+  field_types: string[];
+  max_fields: number;
+}> {
+  return request("/admin/support/forms");
 }
 
 export function listSupportTickets(

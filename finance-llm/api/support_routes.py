@@ -66,6 +66,10 @@ class MessageIn(BaseModel):
     client_id: str = ""
 
 
+class FormResponseIn(BaseModel):
+    values: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ContextIn(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict)
     profile: Optional[Dict[str, Any]] = None
@@ -84,9 +88,11 @@ class RatingIn(BaseModel):
 
 
 class AdminMessageIn(BaseModel):
-    body: str
+    body: str = ""
     client_id: str = ""
     internal: bool = False
+    kind: str = support.MESSAGE_TEXT
+    payload: Optional[Dict[str, Any]] = None
 
 
 class TicketPatch(BaseModel):
@@ -425,6 +431,49 @@ async def support_open_ticket(session_id: str, payload: TicketIn, visitor_id: Vi
     return {"ticket": ticket, "session": _public_session(refreshed)}
 
 
+@router.post("/sessions/{session_id}/forms/{message_id}")
+async def support_submit_form(
+    session_id: str,
+    message_id: str,
+    payload: FormResponseIn,
+    visitor_id: VisitorId,
+) -> Dict[str, Any]:
+    """Guarda a resposta do visitante a um formulário enviado pelo operador."""
+    document = _owned_session(session_id, visitor_id)
+    try:
+        support.check_rate(f"form:{visitor_id}", limit=20, window_seconds=60)
+        message, response = await run_in_threadpool(
+            support.submit_form_response,
+            session_id,
+            message_id,
+            payload.values,
+            visitor_id=visitor_id,
+            visitor_name=str(document.get("visitor_name") or "Visitante"),
+            visitor_email=str(document.get("visitor_email") or ""),
+        )
+    except support.SupportError as error:
+        raise _auth_error(error) from error
+    refreshed = support.require_session(session_id)
+    await hub.send_to_visitor(
+        visitor_id,
+        {
+            "type": "form.submitted",
+            "message": message,
+            "response": response,
+            "session": support.public_session(refreshed),
+        },
+    )
+    await hub.send_to_operators(
+        {
+            "type": "form.submitted",
+            "message": message,
+            "response": response,
+            "session": _public_session(refreshed),
+        }
+    )
+    return {"message": message, "response": response, "session": _public_session(refreshed)}
+
+
 @router.post("/sessions/{session_id}/rate")
 def support_rate_session(session_id: str, payload: RatingIn, visitor_id: VisitorId) -> Dict[str, Any]:
     _owned_session(session_id, visitor_id)
@@ -502,6 +551,7 @@ def admin_support_session_detail(session_id: str, current: AdminSession) -> Dict
         "session": _public_session(document, operator_id=current.user.id),
         "messages": support.list_messages(session_id, include_internal=True),
         "tickets": support.list_session_tickets(session_id),
+        "form_responses": support.list_form_responses(session_id),
         "events": support.list_events(session_id=session_id, size=60)["items"],
         "account": account,
         "visitor": support.get_visitor(str(document.get("visitor_id") or "")),
@@ -576,16 +626,28 @@ async def admin_support_message(session_id: str, payload: AdminMessageIn, curren
         document = await run_in_threadpool(support.require_session, session_id)
         if not document.get("assigned_operator_id"):
             document = await run_in_threadpool(support.claim_session, session_id, operator["id"], operator["name"])
-        message = await run_in_threadpool(
-            support.add_message,
-            session_id,
-            author_type=support.AUTHOR_OPERATOR,
-            author_id=operator["id"],
-            author_name=operator["name"],
-            body=payload.body,
-            client_id=payload.client_id,
-            internal=payload.internal,
-        )
+        if payload.kind != support.MESSAGE_TEXT:
+            message = await run_in_threadpool(
+                support.send_rich_message,
+                session_id,
+                kind=payload.kind,
+                payload=payload.payload,
+                author_id=operator["id"],
+                author_name=operator["name"],
+                client_id=payload.client_id,
+                internal=payload.internal,
+            )
+        else:
+            message = await run_in_threadpool(
+                support.add_message,
+                session_id,
+                author_type=support.AUTHOR_OPERATOR,
+                author_id=operator["id"],
+                author_name=operator["name"],
+                body=payload.body,
+                client_id=payload.client_id,
+                internal=payload.internal,
+            )
     except support.SupportError as error:
         raise _auth_error(error) from error
     document = await run_in_threadpool(support.require_session, session_id)
@@ -636,6 +698,61 @@ async def admin_support_create_ticket(session_id: str, payload: TicketIn, curren
         {"type": "ticket.created", "ticket": ticket_payload, "session": _public_session(refreshed, operator_id=operator["id"])}
     )
     return {"ticket": ticket_payload, "session": _public_session(refreshed, operator_id=operator["id"])}
+
+
+@admin_router.get("/reports")
+def admin_support_reports(q: str = Query(""), limit: int = Query(40, ge=1, le=100)) -> Dict[str, Any]:
+    """Relatórios que o operador pode enviar para a conversa.
+
+    Usa a biblioteca pública (pacotes e documentos publicados): o link enviado é
+    o download público quando o documento é gratuito, ou a página do catálogo
+    quando é pago — nunca uma rota interna do Estúdio.
+    """
+    try:
+        from api import reports_library  # noqa: PLC0415 - evita ciclo no arranque
+
+        items = reports_library.items(include_paid=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Apoio: relatórios indisponíveis: %s", exc)
+        return {"items": [], "total": 0}
+    needle = str(q or "").strip().lower()
+    result: List[Dict[str, Any]] = []
+    for item in items:
+        title = str(item.get("title") or "")
+        subtitle = str(item.get("subtitle") or "")
+        summary = str(item.get("note") or "") or subtitle
+        haystack = " ".join(
+            [title, subtitle, summary, str(item.get("area_label") or ""), str(item.get("kind_label") or "")]
+        ).lower()
+        if needle and needle not in haystack:
+            continue
+        result.append(
+            {
+                "report_id": str(item.get("ref") or ""),
+                "title": title,
+                "subtitle": subtitle,
+                "summary": summary,
+                "url": str(item.get("download") or item.get("href") or "/reports"),
+                "free": bool(item.get("free")),
+                "kind": str(item.get("kind") or ""),
+                "kind_label": str(item.get("kind_label") or ""),
+                "area": str(item.get("area_label") or ""),
+                "price": item.get("price") or 0,
+            }
+        )
+        if len(result) >= limit:
+            break
+    return {"items": result, "total": len(result)}
+
+
+@admin_router.get("/forms")
+def admin_support_form_templates() -> Dict[str, Any]:
+    """Modelos de formulário prontos e tipos de campo aceites."""
+    return {
+        "templates": list(support.FORM_TEMPLATES),
+        "field_types": list(support.FORM_FIELD_TYPES),
+        "max_fields": support.FORM_MAX_FIELDS,
+    }
 
 
 @admin_router.get("/tickets")
@@ -919,16 +1036,29 @@ async def _operator_socket(websocket: WebSocket, token: str) -> None:
                         document = await run_in_threadpool(
                             support.claim_session, session_id, operator_id, operator_name
                         )
-                    message = await run_in_threadpool(
-                        support.add_message,
-                        session_id,
-                        author_type=support.AUTHOR_OPERATOR,
-                        author_id=operator_id,
-                        author_name=operator_name,
-                        body=str(payload.get("body") or ""),
-                        client_id=str(payload.get("client_id") or ""),
-                        internal=bool(payload.get("internal")),
-                    )
+                    message_kind = str(payload.get("kind") or support.MESSAGE_TEXT)
+                    if message_kind != support.MESSAGE_TEXT:
+                        message = await run_in_threadpool(
+                            support.send_rich_message,
+                            session_id,
+                            kind=message_kind,
+                            payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else {},
+                            author_id=operator_id,
+                            author_name=operator_name,
+                            client_id=str(payload.get("client_id") or ""),
+                            internal=bool(payload.get("internal")),
+                        )
+                    else:
+                        message = await run_in_threadpool(
+                            support.add_message,
+                            session_id,
+                            author_type=support.AUTHOR_OPERATOR,
+                            author_id=operator_id,
+                            author_name=operator_name,
+                            body=str(payload.get("body") or ""),
+                            client_id=str(payload.get("client_id") or ""),
+                            internal=bool(payload.get("internal")),
+                        )
                 except support.SupportError as error:
                     await _send_error(websocket, error.message)
                     continue

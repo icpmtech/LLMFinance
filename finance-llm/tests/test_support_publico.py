@@ -93,6 +93,10 @@ def test_widget_js_tem_conversa_tempo_real_e_tickets() -> None:
     assert "WebSocket" in script
     assert "/ticket" in script
     assert "pageContext" in script
+    assert "/forms/" in script
+    assert "iq-form-card" in script
+    assert "Abrir relatório" in script
+    assert "form.submitted" in script
 
 
 @pytest.mark.parametrize("pagina", ["LandingPage.tsx", "LoginPage.tsx"])
@@ -120,6 +124,10 @@ def test_administracao_tem_aba_de_suporte() -> None:
     assert "/support/ws" in (RAIZ / "chat-ui" / "src" / "supportApi.ts").read_text(encoding="utf-8")
     assert "Tickets" in consola
     assert "Páginas por onde passou" in consola
+    assert "Enviar link" in consola
+    assert "Enviar formulário" in consola
+    assert "listSupportReports" in consola
+    assert "listSupportFormTemplates" in consola
 
 
 def test_nao_resta_integracao_com_tawk() -> None:

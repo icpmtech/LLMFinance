@@ -12,6 +12,7 @@ from elasticsearch import Elasticsearch
 
 from api.es.indices import (
     SUPPORT_EVENTS_INDEX,
+    SUPPORT_FORM_RESPONSES_INDEX,
     SUPPORT_MESSAGES_INDEX,
     SUPPORT_OPERATORS_INDEX,
     SUPPORT_SESSIONS_INDEX,
@@ -76,8 +77,26 @@ SUPPORT_INDEX_MAPPINGS: Dict[str, Dict[str, Any]] = {
             "author_id": {"type": "keyword"},
             "author_name": {"type": "keyword"},
             "body": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "kind": {"type": "keyword"},
+            "payload": {"type": "object", "enabled": False},
+            "form_response": {"type": "object", "enabled": False},
             "client_id": {"type": "keyword"},
             "internal": {"type": "boolean"},
+            "created_at": {"type": "date"},
+        }
+    },
+    SUPPORT_FORM_RESPONSES_INDEX: {
+        "properties": {
+            "response_id": {"type": "keyword"},
+            "form_id": {"type": "keyword"},
+            "message_id": {"type": "keyword"},
+            "session_id": {"type": "keyword"},
+            "visitor_id": {"type": "keyword"},
+            "visitor_name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "visitor_email": {"type": "keyword"},
+            "title": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "values": {"type": "object", "enabled": False},
+            "submitted_at": {"type": "date"},
             "created_at": {"type": "date"},
         }
     },

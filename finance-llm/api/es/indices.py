@@ -100,6 +100,7 @@ SUPPORT_VISITORS_INDEX = "finance_support_visitors"
 SUPPORT_SESSIONS_INDEX = "finance_support_sessions"
 SUPPORT_MESSAGES_INDEX = "finance_support_messages"
 SUPPORT_TICKETS_INDEX = "finance_support_tickets"
+SUPPORT_FORM_RESPONSES_INDEX = "finance_support_form_responses"
 SUPPORT_EVENTS_INDEX = "finance_support_events"
 SUPPORT_OPERATORS_INDEX = "finance_support_operators"
 
