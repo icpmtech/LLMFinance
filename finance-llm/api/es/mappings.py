@@ -3393,6 +3393,16 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "filing_id": {"type": "keyword"},
             "text": {"type": "text", "analyzer": "world_folding"},
             "category": {"type": "keyword"},
+            # XBRL structured facts.
+            "concept": {"type": "keyword"},
+            "label": {"type": "text", "analyzer": "world_folding"},
+            "description": {"type": "text", "analyzer": "world_folding"},
+            "unit": {"type": "keyword"},
+            "value": {"type": "double"},
+            "end": {"type": "date"},
+            "start": {"type": "date"},
+            "fy": {"type": "integer"},
+            "fp": {"type": "keyword"},
             "indexed_at": {"type": "date"},
             "autor_id": {"type": "keyword", "ignore_above": 64},
         }

@@ -352,6 +352,157 @@ def index_filings(items: List[Dict[str, Any]], user_id: Optional[str] = None) ->
         return {"error": str(exc), "indexed_count": 0}
 
 
+# ---------------------------------------------------------------------------
+# XBRL / companyfacts
+# ---------------------------------------------------------------------------
+
+# Métricas XBRL mais úteis para análise financeira rápida.
+_FACTS_PRIORITIES = {
+    "Revenues": "revenue",
+    "RevenueFromContractWithCustomerExcludingAssessedTax": "revenue",
+    "SalesRevenueNet": "revenue",
+    "NetIncomeLoss": "net_income",
+    "NetIncomeLossAvailableToCommonStockholdersBasic": "net_income",
+    "EarningsPerShareBasic": "eps",
+    "EarningsPerShareDiluted": "eps_diluted",
+    "Assets": "assets",
+    "Liabilities": "liabilities",
+    "CashAndCashEquivalentsAtCarryingValue": "cash",
+    "StockholdersEquity": "equity",
+    "LongTermDebt": "long_term_debt",
+    "OperatingIncomeLoss": "operating_income",
+}
+
+
+def company_facts(cik: str) -> Dict[str, Any]:
+    """Obtém factos XBRL estruturados da SEC via companyfacts API.
+
+    https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json
+    """
+    cik = str(cik).zfill(10)
+    cache_key = _cache_key("companyfacts", cik)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    url = f"{_SEC_DATA_BASE}/api/xbrl/companyfacts/CIK{cik}.json"
+    data = _sec_get(url)
+    if not isinstance(data, dict):
+        return {"error": "Não foi possível obter companyfacts da SEC"}
+
+    facts = data.get("facts", {})
+    taxonomy = "us-gaap"
+    concepts = facts.get(taxonomy) or facts.get("ifrs-full") or facts.get("dei") or {}
+    if not concepts:
+        return {"error": "Nenhum conceito XBRL encontrado"}
+
+    normalized: List[Dict[str, Any]] = []
+    seen = set()
+    for concept_name, concept in concepts.items():
+        priority = _FACTS_PRIORITIES.get(concept_name)
+        if not priority:
+            continue
+        label = concept.get("label", concept_name)
+        description = concept.get("description")
+        for unit_key, entries in concept.get("units", {}).items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries[-60:]:  # últimos 5 anos aproximadamente
+                end = entry.get("end")
+                if not end:
+                    continue
+                val = entry.get("val")
+                if val is None:
+                    continue
+                accn = entry.get("accn", "")
+                form = entry.get("form", "")
+                fy = entry.get("fy")
+                fp = entry.get("fp")
+                key = (concept_name, unit_key, end, val)
+                if key in seen:
+                    continue
+                seen.add(key)
+                normalized.append({
+                    "cik": cik,
+                    "ticker": "",
+                    "company_name": data.get("entityName", ""),
+                    "concept": concept_name,
+                    "category": priority,
+                    "label": label,
+                    "description": description,
+                    "unit": unit_key,
+                    "value": val,
+                    "end": end,
+                    "start": entry.get("start"),
+                    "fy": fy,
+                    "fp": fp,
+                    "form": form,
+                    "accession_number": accn,
+                })
+
+    result = {
+        "cik": cik,
+        "company_name": data.get("entityName", ""),
+        "taxonomy": taxonomy,
+        "total_concepts": len(concepts),
+        "facts": sorted(normalized, key=lambda x: (x["concept"], x["end"]), reverse=True),
+    }
+    _cache_set(cache_key, result, ttl=1800)
+    return result
+
+
+def _enrich_facts_with_ticker(facts: List[Dict[str, Any]], cik: str) -> None:
+    """Preenche o ticker/nome a partir do catálogo em cache."""
+    catalog = _cache_get(_cache_key("company_tickers"))
+    if not catalog or not isinstance(catalog.get("data"), list):
+        return
+    for item in catalog["data"]:
+        if str(item.get("cik", "")).zfill(10) == str(cik).zfill(10):
+            ticker = (item.get("ticker") or "").upper()
+            name = (item.get("name") or "").title()
+            for fact in facts:
+                fact["ticker"] = ticker
+                fact["company_name"] = fact["company_name"] or name
+            break
+
+
+def index_company_facts(cik: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Indexa factos XBRL da empresa no Elasticsearch."""
+    es = _garantir_indices()
+    if not es:
+        return {"error": "Elasticsearch indisponível"}
+
+    data = company_facts(cik)
+    if data.get("error"):
+        return data
+
+    facts = data.get("facts", [])
+    if not facts:
+        return {"cik": cik, "indexed_facts": 0}
+
+    _enrich_facts_with_ticker(facts, cik)
+
+    try:
+        from elasticsearch.helpers import bulk
+        actions = []
+        for fact in facts:
+            fact_id = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{cik}-{fact['concept']}-{fact['end']}-{fact.get('form','')}")[:64]
+            actions.append({
+                "_op_type": "index",
+                "_index": SEC_FACTS_INDEX,
+                "_id": fact_id,
+                "_source": {
+                    **fact,
+                    "indexed_at": _now(),
+                    "autor_id": user_id,
+                },
+            })
+        success, errors = bulk(es, actions, raise_on_error=False, refresh=True)
+        return {"cik": cik, "indexed_facts": success, "errors": len(errors)}
+    except Exception as exc:
+        return {"error": f"Falha ao indexar factos XBRL: {exc}"}
+
+
 def _extract_facts(text: str, filing: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Heurística simples: extrai frases com números e termos financeiros."""
     facts = []

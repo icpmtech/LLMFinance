@@ -10,6 +10,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
+from api import sec_scheduler
 from api import sec_service as service
 from api.auth_routes import CurrentSession, require_session
 
@@ -94,6 +95,19 @@ async def sec_filings_ingestao(
     )
 
 
+@router.get("/facts/{cik}/xbrl", summary="Factos XBRL estruturados da empresa")
+async def sec_facts_xbrl(cik: str) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.company_facts, cik))
+
+
+@router.post("/facts/{cik}/indexar", summary="Indexar factos XBRL da empresa")
+async def sec_facts_indexar(
+    cik: str,
+    session: Session,
+) -> Dict[str, Any]:
+    return _ou_erro(await run_in_threadpool(service.index_company_facts, cik, session.user_id))
+
+
 # ---------------------------------------------------------------------------
 # Pesquisa e análise
 # ---------------------------------------------------------------------------
@@ -156,3 +170,18 @@ async def sec_filing(doc_id: str) -> Dict[str, Any]:
 @router.get("/analytics", summary="Agregações por tipo, ano e ticker")
 async def sec_analytics() -> Dict[str, Any]:
     return _ou_erro(await run_in_threadpool(service.analytics))
+
+
+@router.get("/schedule", summary="Estado do agendador SEC")
+async def sec_schedule_status() -> Dict[str, Any]:
+    return sec_scheduler.status()
+
+
+@router.post("/schedule/recarregar", summary="Recarregar jobs de agendamento SEC")
+async def sec_schedule_reload(session: Session) -> Dict[str, Any]:
+    return sec_scheduler.reload_jobs()
+
+
+@router.post("/schedule/{ticker}/executar", summary="Executar recolha SEC manualmente")
+async def sec_schedule_run(ticker: str, session: Session) -> Dict[str, Any]:
+    return sec_scheduler.run_now(ticker, session.user_id)

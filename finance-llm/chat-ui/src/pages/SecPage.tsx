@@ -27,32 +27,42 @@ import type {
   SecFact,
   SecFilingItem,
   SecMeta,
+  SecSchedule,
 } from "../secApi";
 import {
   fetchSecDocument,
   getSecAnalytics,
+  getSecFactsXbrl,
   getSecFilings,
   getSecFiling,
   getSecMeta,
+  getSecSchedule,
+  indexSecFactsXbrl,
   ingestSecFilings,
+  reloadSecSchedule,
+  runSecSchedule,
   searchSecCompanies,
   searchSecFacts,
   searchSecFilings,
 } from "../secApi";
 import { EmptyState, FilterField, Loading, SearchInput, SectionCard } from "../components/padroes/padroesKit";
 
-type Aba = "painel" | "empresas" | "filings" | "facts" | "documentos" | "analytics";
+type Aba = "painel" | "empresas" | "filings" | "facts" | "xbrl" | "documentos" | "analytics" | "agendador";
 
 const ABAS: { id: Aba; label: string; icon: typeof BookOpen }[] = [
   { id: "painel", label: "Painel", icon: LayoutDashboard },
   { id: "empresas", label: "Empresas", icon: Building2 },
   { id: "filings", label: "Filings indexados", icon: FileText },
   { id: "facts", label: "Factos", icon: Sparkles },
+  { id: "xbrl", label: "XBRL", icon: BarChart3 },
   { id: "documentos", label: "Documentos", icon: BookOpen },
   { id: "analytics", label: "Análises", icon: BarChart3 },
+  { id: "agendador", label: "Agendador", icon: Calendar },
 ];
 
 const FORMS = ["8-K", "10-K", "10-Q", "20-F", "40-F", "6-K", "S-1", "DEF 14A"];
+
+const FACT_CATEGORIES = ["revenue", "net_income", "eps", "eps_diluted", "assets", "liabilities", "cash", "equity", "long_term_debt", "operating_income"];
 
 function useSecMeta() {
   const [meta, setMeta] = useState<SecMeta | null>(null);
@@ -515,6 +525,208 @@ function DocumentosTab() {
   );
 }
 
+function XbrlTab() {
+  const [cik, setCik] = useState("");
+  const [facts, setFacts] = useState<SecFact[]>([]);
+  const [companyName, setCompanyName] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [category, setCategory] = useState("");
+  const [indexing, setIndexing] = useState(false);
+
+  const carregar = useCallback(() => {
+    if (!cik.trim()) return;
+    setCarregando(true);
+    setErro("");
+    getSecFactsXbrl(cik)
+      .then((res) => {
+        if (res.error) {
+          setErro(res.error);
+          return;
+        }
+        setFacts(res.facts);
+        setCompanyName(res.company_name);
+      })
+      .catch((exc: unknown) => setErro(exc instanceof Error ? exc.message : "Erro ao carregar factos XBRL."))
+      .finally(() => setCarregando(false));
+  }, [cik]);
+
+  const indexar = async () => {
+    if (!cik.trim()) return;
+    setIndexing(true);
+    try {
+      await indexSecFactsXbrl(cik);
+      setErro("");
+    } catch (exc) {
+      setErro(exc instanceof Error ? exc.message : "Erro ao indexar factos XBRL.");
+    } finally {
+      setIndexing(false);
+    }
+  };
+
+  const filtered = category ? facts.filter((f) => f.category === category) : facts;
+
+  return (
+    <SectionCard title="Factos XBRL" subtitle="Métricas financeiras estruturadas da SEC (companyfacts API)" icon={BarChart3}
+      actions={
+        cik ? (
+          <button
+            onClick={indexar}
+            disabled={indexing}
+            className="flex items-center gap-1 rounded-lg bg-teal-500/20 px-3 py-1.5 text-xs text-teal-200 hover:bg-teal-500/30 disabled:opacity-50"
+          >
+            {indexing ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Indexar no ES
+          </button>
+        ) : null
+      }
+    >
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="min-w-[200px] flex-1">
+          <FilterField label="CIK da empresa">
+            <input
+              value={cik}
+              onChange={(e) => setCik(e.target.value)}
+              placeholder="0000320193"
+              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+            />
+          </FilterField>
+        </div>
+        <FilterField label="Categoria">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+          >
+            <option value="">Todas</option>
+            {FACT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </FilterField>
+        <button
+          onClick={carregar}
+          disabled={carregando || !cik}
+          className="self-end rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >
+          {carregando ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+        </button>
+      </div>
+
+      {companyName && <p className="mb-3 text-sm text-muted-foreground">{companyName}</p>}
+      {erro && <EmptyState tone="warn">{erro}</EmptyState>}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {filtered.slice(0, 60).map((f) => (
+          <div key={`${f.concept}-${f.end}-${f.fp}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-xs font-medium text-muted-foreground">{f.label || f.concept}</p>
+            <p className="text-lg font-semibold">
+              {f.value !== undefined ? f.value.toLocaleString("en-US") : "—"} <span className="text-xs font-normal text-muted-foreground">{f.unit}</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {f.form || "—"} · FY{f.fy ?? "—"} {f.fp || ""} · {f.end || ""}
+            </p>
+          </div>
+        ))}
+      </div>
+      {!carregando && filtered.length === 0 && !erro && <EmptyState>Indica um CIK para carregar factos XBRL.</EmptyState>}
+      {carregando && <Loading label="A carregar factos XBRL..." />}
+    </SectionCard>
+  );
+}
+
+function AgendadorTab() {
+  const [schedule, setSchedule] = useState<SecSchedule | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [ticker, setTicker] = useState("");
+
+  const carregar = useCallback(() => {
+    setCarregando(true);
+    setErro("");
+    getSecSchedule()
+      .then(setSchedule)
+      .catch((exc: unknown) => setErro(exc instanceof Error ? exc.message : "Erro ao carregar agendador."))
+      .finally(() => setCarregando(false));
+  }, []);
+
+  const recarregar = async () => {
+    setCarregando(true);
+    try {
+      const res = await reloadSecSchedule();
+      setSchedule(res);
+    } catch (exc) {
+      setErro(exc instanceof Error ? exc.message : "Erro ao recarregar.");
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const executar = async () => {
+    if (!ticker.trim()) return;
+    try {
+      await runSecSchedule(ticker);
+      setTicker("");
+    } catch (exc) {
+      setErro(exc instanceof Error ? exc.message : "Erro ao executar recolha.");
+    }
+  };
+
+  useEffect(() => {
+    const t = setTimeout(carregar, 0);
+    return () => clearTimeout(t);
+  }, [carregar]);
+
+  return (
+    <SectionCard title="Agendador SEC" subtitle="Recolha automática de filings para os tickers guardados" icon={Calendar}
+      actions={
+        <button
+          onClick={recarregar}
+          disabled={carregando}
+          className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >
+          {carregando ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+        </button>
+      }
+    >
+      {schedule && <p className="mb-3 text-sm text-muted-foreground">{schedule.started ? `${schedule.job_count} jobs configurados` : `Inativo${schedule.error ? `: ${schedule.error}` : ""}`}</p>}
+      {erro && <EmptyState tone="warn">{erro}</EmptyState>}
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="min-w-[200px] flex-1">
+          <FilterField label="Executar agora para o ticker">
+            <input
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              placeholder="AAPL"
+              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+            />
+          </FilterField>
+        </div>
+        <button
+          onClick={executar}
+          disabled={!ticker}
+          className="self-end rounded-lg bg-teal-500/20 px-3 py-2 text-sm text-teal-200 hover:bg-teal-500/30 disabled:opacity-50"
+        >
+          Executar
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {schedule?.jobs.map((job: { id: string; name: string; next_run?: string }) => (
+          <div key={job.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{job.name}</p>
+              <p className="text-[11px] text-muted-foreground">{job.next_run ? new Date(job.next_run).toLocaleString("pt-PT") : "—"}</p>
+            </div>
+          </div>
+        ))}
+        {!carregando && schedule?.jobs.length === 0 && <EmptyState>Nenhum ticker na lista local. Adiciona tickers em Ações/Mercado.</EmptyState>}
+      </div>
+    </SectionCard>
+  );
+}
+
 function AnalyticsTab() {
   const [data, setData] = useState<SecAnalytics | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -625,8 +837,10 @@ export default function SecPage() {
         {tab === "empresas" && <EmpresasTab />}
         {tab === "filings" && <FilingsTab />}
         {tab === "facts" && <FactsTab />}
+        {tab === "xbrl" && <XbrlTab />}
         {tab === "documentos" && <DocumentosTab />}
         {tab === "analytics" && <AnalyticsTab />}
+        {tab === "agendador" && <AgendadorTab />}
       </div>
     </div>
   );

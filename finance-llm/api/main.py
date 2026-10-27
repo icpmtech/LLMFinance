@@ -231,6 +231,7 @@ from api.openapi_meta import (
     describe as describe_openapi,
 )
 from api.import_service import ingest_rows, parse_file
+from api import sec_service as sec_service_for_tickers
 from api.tools import (
     _normalize_ticker,
     add_ticker,
@@ -530,6 +531,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador do sentimento de mercado não arrancou: %s", exc)
 
+    # Agendador da recolha automática de filings SEC EDGAR.
+    try:
+        from api import sec_scheduler
+
+        sec_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador SEC não arrancou: %s", exc)
+
     # Agendador do World Model (reconstrução do mundo + ciclo da rede).
     try:
         from api import world_scheduler
@@ -597,6 +606,12 @@ async def lifespan(app: FastAPI):
         from api import sentiment_market_scheduler
 
         sentiment_market_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import sec_scheduler
+
+        sec_scheduler.shutdown()
     except Exception:
         pass
     try:
@@ -3024,9 +3039,24 @@ def ticker_financials(ticker: str):
 
 
 @app.get("/tickers/{ticker}/sec-filings", response_model=SecFilingsResponse)
-def ticker_sec_filings(ticker: str, days: int = Query(365, ge=30, le=3650)):
-    """Devolve os SEC filings publicados no Yahoo Finance para o ticker."""
+def ticker_sec_filings(ticker: str, days: int = Query(365, ge=30, le=3650), use_edgar: bool = Query(True, description="Usar SEC EDGAR em vez do Yahoo Finance")):
+    """Devolve os SEC filings do ticker. Por omissão tenta a SEC EDGAR; recua para o Yahoo Finance."""
     ticker = _normalize_ticker(ticker)
+    if use_edgar:
+        companies = sec_service_for_tickers.search_companies_sec(ticker, max_results=10)
+        if not companies.get("error"):
+            for company in companies.get("items", []):
+                if company.get("ticker") == ticker:
+                    edgar = sec_service_for_tickers.filings_for_company(company["cik"], limit=40)
+                    if not edgar.get("error"):
+                        filings = []
+                        for item in edgar.get("items", []):
+                            try:
+                                date = str(item.get("date") or "")
+                                filings.append(SecFiling(date=date, type=item.get("form", ""), title=item.get("description", ""), url=item.get("url")))
+                            except Exception:
+                                continue
+                        return SecFilingsResponse(ticker=ticker, filings=filings)
     filings = get_sec_filings_yahoo(ticker, max_age_days=days)
     return SecFilingsResponse(
         ticker=ticker,

@@ -70,6 +70,16 @@ export type SecFact = {
   filing_id: string;
   text: string;
   category: string;
+  // XBRL structured fields.
+  concept?: string;
+  label?: string;
+  description?: string;
+  unit?: string;
+  value?: number;
+  end?: string;
+  start?: string;
+  fy?: number;
+  fp?: string;
 };
 
 export type SecSearchResult<T> = {
@@ -87,6 +97,13 @@ export type SecMeta = {
 };
 
 export type SecBucket = { value: string; count: number };
+
+export type SecSchedule = {
+  started: boolean;
+  error?: string;
+  job_count: number;
+  jobs: { id: string; name: string; next_run?: string }[];
+};
 
 export type SecAnalytics = {
   by_form: SecBucket[];
@@ -144,4 +161,36 @@ export async function fetchSecDocument(url: string): Promise<{ text: string; err
 
 export async function getSecAnalytics(): Promise<SecAnalytics> {
   return getJson("/sec/analytics");
+}
+
+export async function getSecFactsXbrl(cik: string): Promise<{
+  cik: string;
+  company_name: string;
+  taxonomy: string;
+  total_concepts: number;
+  facts: SecFact[];
+  error?: string;
+}> {
+  return getJson(`/sec/facts/${encodeURIComponent(cik)}/xbrl`);
+}
+
+export async function indexSecFactsXbrl(cik: string): Promise<{ cik: string; indexed_facts: number; errors?: number; error?: string }> {
+  return postJson(`/sec/facts/${encodeURIComponent(cik)}/indexar`);
+}
+
+export async function getSecSchedule(): Promise<{
+  started: boolean;
+  error?: string;
+  job_count: number;
+  jobs: { id: string; name: string; next_run?: string }[];
+}> {
+  return getJson("/sec/schedule");
+}
+
+export async function reloadSecSchedule(): Promise<{ started: boolean; error?: string; job_count: number; jobs: { id: string; name: string; next_run?: string }[] }> {
+  return postJson("/sec/schedule/recarregar");
+}
+
+export async function runSecSchedule(ticker: string): Promise<{ ticker: string; triggered: boolean }> {
+  return postJson(`/sec/schedule/${encodeURIComponent(ticker)}/executar`);
 }
