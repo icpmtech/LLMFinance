@@ -259,10 +259,12 @@ if ($fazerBackend) { $sondas += @{ Nome = 'backend'; Url = 'http://127.0.0.1:800
 if ($fazerBackend) { $sondas += @{ Nome = 'mcp'; Url = 'http://127.0.0.1:8765/' } }
 foreach ($s in $sondas) {
     # Com repeticao: o contentor acabou de ser recriado, e um `curl` imediato da
-    # 000 -- o que fez um deploy que correu bem parecer falhado.
+    # 000 -- o que fez um deploy que correu bem parecer falhado. A janela tem de
+    # cobrir o arranque do backend (carrega modelos e garante os indices: ~90 s
+    # medidos na VM); com 12x5 s dava falso negativo.
     $codigo = '000'
-    for ($i = 1; $i -le 12; $i++) {
-        $codigo = (Invoke-Vm "curl -s -o /dev/null -m 8 -w %{http_code} $($s.Url)").Output.Trim()
+    for ($i = 1; $i -le 30; $i++) {
+        $codigo = (Invoke-Vm "curl -s -o /dev/null -m 6 -w %{http_code} $($s.Url)").Output.Trim()
         if ($codigo -match '^[234]') { break }
         Start-Sleep -Seconds 5
     }
