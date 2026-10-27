@@ -64,6 +64,10 @@ class FakeES:
             for key in self._matching(index, query["filter"])
             if not (excluded and self.docs[key].get("verified") is True)
         ]
+        sort = body.get("sort") or []
+        if sort and "created_at" in (sort[0] or {}):
+            newest_first = (sort[0]["created_at"] or {}).get("order") == "desc"
+            hits.sort(key=lambda hit: str(hit["_source"].get("created_at") or ""), reverse=newest_first)
         return {"hits": {"total": {"value": len(hits)}, "hits": hits[: int(body.get("size") or 10)]}}
 
     def _matching(self, index: str, filters: list) -> list:
@@ -128,6 +132,15 @@ def _user(**extra: object) -> dict:
     }
     user.update(extra)
     return user
+
+
+def _age_challenge(fake: FakeES, challenge_id: str, *, seconds: int) -> None:
+    """Recua o `created_at` de um desafio (para testar janelas de tempo)."""
+    from datetime import datetime, timedelta, timezone
+
+    key = (mfa.AUTH_CHALLENGES_INDEX, challenge_id)
+    when = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+    fake.docs[key]["created_at"] = when.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 # ---------------------------------------------------------------- preferência
@@ -251,19 +264,35 @@ def test_codigo_com_formato_invalido(fake: FakeES) -> None:
     assert caught.value.status_code == 422
 
 
-def test_novo_login_anula_o_codigo_anterior(fake: FakeES) -> None:
+def test_segundo_login_imediato_reutiliza_o_desafio(fake: FakeES) -> None:
+    """Repetir o login (duplo clique, recarregar) não invalida o código já enviado."""
+    first = mfa.create_challenge(_user())
+    code = fake.sent["code"]
+    again = mfa.create_challenge(_user())
+
+    assert again["challenge_id"] == first["challenge_id"]
+    assert again["code_sent"] is False
+    assert mfa.verify(first["challenge_id"], code)["user_id"] == "u-1"
+
+
+def test_novo_login_depois_da_janela_anula_o_codigo_anterior(fake: FakeES) -> None:
     first = mfa.create_challenge(_user())
     first_code = fake.sent["code"]
-    mfa.create_challenge(_user())
+    _age_challenge(fake, first["challenge_id"], seconds=mfa.REUSE_WINDOW_SECONDS + 30)
+
+    second = mfa.create_challenge(_user())
+    assert second["challenge_id"] != first["challenge_id"]
+    assert second["code_sent"] is True
 
     with pytest.raises(mfa.MfaError) as caught:
         mfa.verify(first["challenge_id"], first_code)
-    assert caught.value.code in {"mfa_invalid", "mfa_used", "mfa_expired"}
+    assert caught.value.code == "mfa_used"
 
 
 def test_pedidos_em_serie_sao_travados(fake: FakeES) -> None:
     for _ in range(mfa.CHALLENGE_LIMIT_PER_WINDOW):
-        mfa.create_challenge(_user())
+        challenge = mfa.create_challenge(_user())
+        _age_challenge(fake, challenge["challenge_id"], seconds=mfa.REUSE_WINDOW_SECONDS + 5)
 
     with pytest.raises(mfa.MfaError) as caught:
         mfa.create_challenge(_user())
@@ -275,6 +304,7 @@ def test_logins_concluidos_nao_contam_para_o_travao(fake: FakeES) -> None:
     """Quem entra várias vezes com sucesso não fica bloqueado."""
     for _ in range(mfa.CHALLENGE_LIMIT_PER_WINDOW + 2):
         challenge = mfa.create_challenge(_user())
+        _age_challenge(fake, challenge["challenge_id"], seconds=mfa.REUSE_WINDOW_SECONDS + 5)
         mfa.verify(challenge["challenge_id"], fake.sent["code"])
 
 

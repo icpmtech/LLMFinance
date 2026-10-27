@@ -61,6 +61,12 @@ MAX_RESEND_SECONDS = 600
 CHALLENGE_WINDOW_MINUTES = 15
 CHALLENGE_LIMIT_PER_WINDOW = 10
 
+# Um segundo login imediato (duplo clique, repetir, recarregar) reutiliza o
+# desafio que já está aberto em vez de criar outro: o código que seguiu por email
+# continua a valer e o ecrã recebe o mesmo `challenge_id`. Sem isto, o email que o
+# utilizador tem à frente deixava de servir assim que o login fosse repetido.
+REUSE_WINDOW_SECONDS = 60
+
 
 class MfaError(Exception):
     """Erro de verificação em dois passos com código HTTP associado."""
@@ -337,6 +343,41 @@ def _recent_challenges(user_id: str, client) -> int:
         return 0
 
 
+def _age_seconds(value: Any) -> Optional[float]:
+    created = _parse_iso(value)
+    if not created:
+        return None
+    try:
+        return (_now() - created).total_seconds()
+    except TypeError:
+        return None
+
+
+def _open_challenge(user_id: str, client) -> Optional[Dict[str, Any]]:
+    """Desafio aberto (não usado e ainda válido) mais recente da conta."""
+    try:
+        response = client.search(
+            index=AUTH_CHALLENGES_INDEX,
+            body={
+                "size": 1,
+                "query": {"bool": {"filter": [{"term": {"user_id": user_id}}, {"term": {"used": False}}]}},
+                "sort": [{"created_at": {"order": "desc"}}],
+            },
+        )
+    except Exception as error:  # noqa: BLE001 - sem leitura, cria-se um desafio novo
+        logger.debug("MFA: não foi possível ler o desafio aberto: %s", error)
+        return None
+    hits = response.get("hits", {}).get("hits", [])
+    if not hits:
+        return None
+    document = dict(hits[0].get("_source") or {})
+    document["challenge_id"] = hits[0].get("_id") or document.get("challenge_id")
+    expires = _parse_iso(document.get("expires_at"))
+    if not expires or expires <= _now():
+        return None
+    return document
+
+
 def _retire_open_challenges(user_id: str, client) -> None:
     """Um código novo anula os anteriores da mesma conta.
 
@@ -401,6 +442,25 @@ def create_challenge(
 
     client = _client()
     user_key = str(user.get("id") or email)
+
+    # Login repetido há instantes: devolve o mesmo desafio (o código já enviado
+    # continua válido e não se gera outro email).
+    existing = _open_challenge(user_key, client)
+    if existing:
+        age = _age_seconds(existing.get("created_at"))
+        if age is not None and age < REUSE_WINDOW_SECONDS:
+            if bool(existing.get("remember")) != bool(remember):
+                try:
+                    client.update(
+                        index=AUTH_CHALLENGES_INDEX,
+                        id=existing["challenge_id"],
+                        doc={"remember": bool(remember)},
+                        refresh=False,
+                    )
+                except Exception as error:  # noqa: BLE001 - não impede o login
+                    logger.debug("MFA: não foi possível atualizar o desafio: %s", error)
+            return _public_challenge({**existing, "remember": bool(remember)}, settings, code_sent=False)
+
     if _recent_challenges(user_key, client) >= CHALLENGE_LIMIT_PER_WINDOW:
         raise MfaError(
             "Demasiados códigos pedidos em pouco tempo. Aguarde alguns minutos e tente novamente.",
@@ -461,14 +521,16 @@ def _deliver(user: Dict[str, Any], code: str, settings: Dict[str, Any], ip: str)
     )
 
 
-def _public_challenge(document: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+def _public_challenge(
+    document: Dict[str, Any], settings: Dict[str, Any], *, code_sent: bool = True
+) -> Dict[str, Any]:
     return {
         "mfa_required": True,
         "challenge_id": document["challenge_id"],
         "email": mask_email(str(document.get("email") or "")),
         "expires_at": document.get("expires_at"),
         "resend_cooldown_seconds": settings["resend_cooldown_seconds"],
-        "code_sent": True,
+        "code_sent": bool(code_sent),
     }
 
 
@@ -545,7 +607,8 @@ def verify(challenge_id: str, code: str) -> Dict[str, Any]:
                 code="mfa_locked",
             )
         raise MfaError(
-            f"Código incorreto. Restam {remaining} tentativa{'s' if remaining != 1 else ''}.",
+            f"Código incorreto. Restam {remaining} tentativa{'s' if remaining != 1 else ''}. "
+            "Se recebeu mais do que um email, use o código do mais recente.",
             status_code=401,
             code="mfa_invalid",
         )

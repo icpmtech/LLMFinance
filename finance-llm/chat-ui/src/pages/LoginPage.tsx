@@ -103,7 +103,11 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
         if (outcome.status === "mfa_required") {
           setChallenge(outcome.challenge);
           setCode("");
-          setNotice(`Enviámos um código de 6 dígitos para ${outcome.challenge.email}.`);
+          setNotice(
+            outcome.challenge.code_sent
+              ? `Enviámos um código de 6 dígitos para ${outcome.challenge.email}.`
+              : `Já enviámos um código para ${outcome.challenge.email}. Introduza-o abaixo ou use «Reenviar código».`,
+          );
           setCooldown(Math.max(0, Math.round(outcome.challenge.resend_cooldown_seconds)));
         }
       } else {

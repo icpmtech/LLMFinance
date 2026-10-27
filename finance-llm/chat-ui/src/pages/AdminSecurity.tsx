@@ -228,7 +228,11 @@ export function AdminSecurityTab({ onError }: { onError: (message: string | null
         <ul className="mt-1.5 space-y-1 text-[11.5px] leading-relaxed text-muted-foreground">
           <li>· O código de 6 dígitos é gerado no servidor e nunca é guardado em claro (só o HMAC).</li>
           <li>· Cada código serve uma única vez e expira ao fim do prazo configurado.</li>
-          <li>· Um código novo anula os anteriores da mesma conta; as tentativas erradas ficam registadas nos eventos.</li>
+          <li>
+            · Repetir o login até 60 s depois reutiliza o mesmo código (evita ficar com um email inválido à frente);
+            passado esse intervalo, um login novo gera outro e anula o anterior.
+          </li>
+          <li>· As tentativas erradas ficam registadas nos eventos e o número de pedidos por conta é limitado.</li>
           <li>· «Apenas administradores» protege as contas com mais privilégios sem incomodar os restantes utilizadores.</li>
         </ul>
       </section>
