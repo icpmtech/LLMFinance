@@ -21,6 +21,9 @@ export type IframePagePreference = {
 
 const TOKEN_KEY = "finance-llm-token";
 
+/** Prazo dos pedidos de autenticação (login, sessão, MFA) em milissegundos. */
+const REQUEST_TIMEOUT_MS = 30000;
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -138,14 +141,25 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Sem prazo, um servidor lento deixava o botão em «A processar…» para sempre
+  // (visto na produção a 2026-10-27, com a VM saturada). O pedido é abortado e o
+  // utilizador recebe uma mensagem que pode resolver.
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
+      signal: controller.signal,
       headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     });
-  } catch {
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError("O servidor demorou demasiado a responder. Verifique a ligação e tente novamente.", null);
+    }
     throw new ApiError("Não foi possível contactar o servidor. Verifique se a API está a correr.", null);
+  } finally {
+    window.clearTimeout(timer);
   }
 
   const text = await response.text();
