@@ -713,6 +713,17 @@ export type MarketLiveSummary = {
   negative_share: number | null;
   sentiment: number | null;
   coverage: number | null;
+  /** Manchetes em que o léxico reconheceu vocabulário — as únicas com tom. */
+  covered: number;
+  /** Manchetes sem vocabulário: são «sem tom», não «neutras». */
+  unread: number;
+  /** Neutras a sério (vocabulário reconhecido, mas sem sinal). */
+  neutral_read: number;
+  /** Tom médio só das manchetes lidas (as sem vocabulário não diluem a média). */
+  sentiment_read: number | null;
+  label_read: string | null;
+  /** Abaixo desta cobertura a leitura é fraca (mesmo limiar da série). */
+  low_coverage: number;
   label: string | null;
 };
 

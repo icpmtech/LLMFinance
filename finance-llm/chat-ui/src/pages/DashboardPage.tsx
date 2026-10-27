@@ -106,6 +106,27 @@ function share(value: number | null | undefined, digits = 0): string {
   return `${(value * 100).toFixed(digits)} %`;
 }
 
+/** Polaridade com sinal à vista (o tom médio é simétrico: ±1). */
+function signedTone(value: number | null | undefined, digits = 3): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
+}
+
+/** Fatias do anel: cada valor em % do total; as fatias vazias ficam de fora. */
+function ringArcs(items: { value: number; color: string }[]): { color: string; length: number; offset: number }[] {
+  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0);
+  if (!total) return [];
+  let cursor = 0;
+  const arcs: { color: string; length: number; offset: number }[] = [];
+  for (const item of items) {
+    if (item.value <= 0) continue;
+    const length = (item.value / total) * 100;
+    arcs.push({ color: item.color, length, offset: cursor });
+    cursor += length;
+  }
+  return arcs;
+}
+
 function stamp(value: string | null | undefined): string {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -424,6 +445,25 @@ export function DashboardPage({
   const validation = live?.validation;
   const failed = validation?.failed ?? [];
   const erreurs = summary?.errors ?? [];
+
+  /**
+   * Só as manchetes em que o léxico reconheceu vocabulário têm tom. As restantes
+   * são «sem tom» — contá-las como «neutras» transformaria falta de leitura em
+   * neutralidade, por isso vão à parte (é a mesma regra do alerta `cobertura`).
+   */
+  const newsCount = summary?.news ?? 0;
+  const coveredCount =
+    summary?.covered ?? Math.round((summary?.coverage ?? 0) * newsCount);
+  const unreadCount = summary?.unread ?? Math.max(0, newsCount - coveredCount);
+  const neutralReadCount = summary?.neutral_read ?? Math.max(0, (summary?.neutral ?? 0) - unreadCount);
+  const readTone = summary?.sentiment_read ?? summary?.sentiment ?? null;
+  const readLabel = coveredCount ? summary?.label_read ?? summary?.label ?? null : null;
+  const sentimentArcs = ringArcs([
+    { value: summary?.positive ?? 0, color: "#10b981" },
+    { value: neutralReadCount, color: "#9ca3af" },
+    { value: summary?.negative ?? 0, color: "#ef4444" },
+    { value: unreadCount, color: "#334155" },
+  ]);
 
   /** Idade das manchetes lidas: uma leitura pode ser «fresca» mas com notícias velhas. */
   const headlines = useMemo(() => {
@@ -804,15 +844,22 @@ export function DashboardPage({
                 <h3 className="font-semibold">Sentimento do Mercado</h3>
               </div>
               <span
-                className={`text-[11px] px-2 py-0.5 rounded-full border ${labelChip(summary?.label)}`}
-                title="Média da polaridade das manchetes distintas da carteira"
+                className={`text-[11px] px-2 py-0.5 rounded-full border ${labelChip(readLabel)}`}
+                title={
+                  coveredCount
+                    ? `Tom médio das ${coveredCount} manchete(s) com vocabulário (de ${newsCount}): ${signedTone(readTone)}`
+                    : "Nenhuma manchete tem vocabulário de sentimento — é «sem leitura», não «neutro»"
+                }
               >
-                {summary?.label ?? "sem leitura"}
+                {readLabel ?? "sem leitura"}
               </span>
             </div>
 
             <div className="flex items-center gap-6">
-              <div className="relative w-28 h-28 shrink-0">
+              <div
+                className="relative w-28 h-28 shrink-0"
+                title={`${summary?.positive ?? 0} de ${newsCount} manchetes distintas com sinal positivo`}
+              >
                 <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -820,14 +867,17 @@ export function DashboardPage({
                     stroke="#1e2128"
                     strokeWidth="4"
                   />
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="#10b981"
-                    strokeDasharray={`${(summary?.positive_share ?? 0) * 100}, 100`}
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
+                  {sentimentArcs.map((arc) => (
+                    <path
+                      key={`${arc.color}-${arc.offset}`}
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      fill="none"
+                      stroke={arc.color}
+                      strokeWidth="4"
+                      strokeDasharray={`${arc.length} ${100 - arc.length}`}
+                      strokeDashoffset={-arc.offset}
+                    />
+                  ))}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-2xl font-bold stat-value">{share(summary?.positive_share)}</span>
@@ -839,34 +889,52 @@ export function DashboardPage({
                   color="#10b981"
                   label="Positivo"
                   value={summary?.positive ?? 0}
-                  shareValue={summary?.positive_share}
+                  total={newsCount}
+                  hint="Manchetes com sinal positivo e a sua fatia das manchetes distintas"
                 />
                 <SentimentRow
                   color="#9ca3af"
                   label="Neutro"
-                  value={summary?.neutral ?? 0}
-                  shareValue={summary?.neutral_share}
+                  value={neutralReadCount}
+                  total={newsCount}
+                  hint="Manchetes com vocabulário reconhecido mas sem sinal (as positivas e negativas anulam-se)"
                 />
                 <SentimentRow
                   color="#ef4444"
                   label="Negativo"
                   value={summary?.negative ?? 0}
-                  shareValue={summary?.negative_share}
+                  total={newsCount}
+                  hint="Manchetes com sinal negativo e a sua fatia das manchetes distintas"
                 />
+                {unreadCount > 0 ? (
+                  <SentimentRow
+                    color="#334155"
+                    label="Sem vocabulário"
+                    value={unreadCount}
+                    total={newsCount}
+                    muted
+                    hint="O léxico PT/EN não reconheceu nenhum termo de tom: estas manchetes não são «neutras», são «sem tom»"
+                  />
+                ) : null}
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-              <span>
-                Manchetes distintas: <strong className="text-foreground">{summary?.news ?? 0}</strong>
+              <span title="Manchetes distintas na carteira (as repetidas já foram removidas)">
+                Manchetes distintas: <strong className="text-foreground">{newsCount}</strong>
               </span>
-              <span>
-                Com vocabulário: <strong className="text-foreground">{share(summary?.coverage)}</strong>
+              <span title="Só as manchetes com vocabulário reconhecido têm tom lido">
+                Com vocabulário:{" "}
+                <strong className="text-foreground">
+                  {coveredCount} de {newsCount} ({share(newsCount ? coveredCount / newsCount : null)})
+                </strong>
               </span>
-              <span>
-                Tom médio: <strong className="text-foreground">{(summary?.sentiment ?? 0).toFixed(3)}</strong>
+              <span
+                title={`Média da polaridade das ${coveredCount} manchete(s) com vocabulário. A média de todas as ${newsCount} — contando as sem vocabulário como 0 — é ${signedTone(summary?.sentiment)}.`}
+              >
+                Tom médio (lidas): <strong className="text-foreground">{signedTone(readTone)}</strong>
               </span>
-              <span>
+              <span title="Tickers com cotação a subir / a descer nesta leitura">
                 Em alta / em baixa:{" "}
                 <strong className="text-foreground">
                   {summary?.advancers ?? 0}/{summary?.decliners ?? 0}
@@ -880,6 +948,17 @@ export function DashboardPage({
                 pedido, com IA.
               </p>
             )}
+
+            {live && newsCount > 0 && coveredCount < newsCount && (summary?.coverage ?? 0) < (summary?.low_coverage ?? 0.25) ? (
+              <p className="mt-3 flex items-start gap-2 text-[11px] text-amber-200">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  Só <strong>{coveredCount} de {newsCount}</strong> manchetes têm vocabulário de tom. As
+                  outras <strong>{unreadCount}</strong> não são «neutras» — são «sem tom» — e não entram
+                  na média das lidas.
+                </span>
+              </p>
+            ) : null}
 
             {headlines ? (
               <p className={`mt-2 text-[11px] ${headlines.stale ? "text-amber-200" : "text-muted-foreground"}`}>
@@ -1300,19 +1379,32 @@ function SentimentRow({
   color,
   label,
   value,
-  shareValue,
+  total,
+  muted = false,
+  hint,
 }: {
   color: string;
   label: string;
   value: number;
-  shareValue?: number | null;
+  total: number;
+  muted?: boolean;
+  hint?: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
-      <span className="text-sm text-muted-foreground flex-1">{label}</span>
-      <span className="text-xs text-muted-foreground">{value}</span>
-      <span className="text-sm font-semibold stat-value w-14 text-right">{share(shareValue)}</span>
+    <div className="flex items-center gap-2" title={hint}>
+      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+      <span className={`text-sm flex-1 truncate ${muted ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
+        {label}
+      </span>
+      <span className="text-xs text-muted-foreground tabular-nums w-9 text-right">{value}</span>
+      <span className="text-[10px] text-muted-foreground/50">·</span>
+      <span
+        className={`text-sm font-semibold stat-value tabular-nums w-14 text-right ${
+          muted ? "text-muted-foreground" : ""
+        }`}
+      >
+        {total ? share(value / total) : "—"}
+      </span>
     </div>
   );
 }

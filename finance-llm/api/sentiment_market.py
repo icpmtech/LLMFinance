@@ -2138,7 +2138,9 @@ def live_snapshot(
     polarities = [float(article["polarity"]) for article in unique_articles]
     total = len(unique_articles)
     mean_polarity = (sum(polarities) / len(polarities)) if polarities else None
-    signal = sum(1 for article in unique_articles if int(article.get("hits") or 0) > 0)
+    read_polarities = [float(article["polarity"]) for article in unique_articles if int(article.get("hits") or 0) > 0]
+    signal = len(read_polarities)
+    read_mean = (sum(read_polarities) / len(read_polarities)) if read_polarities else None
 
     def _share(label: str) -> Optional[float]:
         return round(labels.get(label, 0) / total, 4) if total else None
@@ -2238,6 +2240,17 @@ def live_snapshot(
             "negative_share": _share("negativo"),
             "sentiment": round(mean_polarity, 4) if mean_polarity is not None else None,
             "coverage": round(signal / total, 4) if total else None,
+            # Uma manchete sem vocabulário reconhecido não é «neutra»: é «sem tom»
+            # (ver o alerta `cobertura` da série). Vai contada à parte, para a
+            # neutralidade à vista não ser só diluição.
+            "covered": signal,
+            "unread": total - signal,
+            "neutral_read": max(0, labels.get("neutro", 0) - (total - signal)),
+            # Tom só com as manchetes lidas — a mesma regra de `analyze_documents`
+            # (o que não tem sinal não dilui a média).
+            "sentiment_read": round(read_mean, 4) if read_mean is not None else None,
+            "label_read": tone_of(read_mean) if read_mean is not None else None,
+            "low_coverage": LOW_COVERAGE,
             "label": tone_of(mean_polarity) if mean_polarity is not None else None,
         },
         "news": unique_articles,
