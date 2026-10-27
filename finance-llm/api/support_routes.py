@@ -853,6 +853,8 @@ async def _visitor_socket(websocket: WebSocket, token: str, session_id: str) -> 
         removed = await hub.remove_visitor(websocket)
         if removed and document:
             try:
+                refreshed = await run_in_threadpool(support.require_session, str(document.get("session_id")))
+                await hub.send_to_operators({"type": "session.updated", "session": _public_session(refreshed)})
                 await hub.send_to_operators(
                     {"type": "visitor.offline", "session_id": document.get("session_id"), "visitor_id": removed}
                 )

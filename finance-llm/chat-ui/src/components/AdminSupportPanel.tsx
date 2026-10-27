@@ -349,10 +349,13 @@ export default function AdminSupportPanel({ onError }: Props) {
           if (selectedRef.current === message.session_id) {
             setDetail((current) => {
               if (!current) return current;
-              const exists = current.messages.some((item) => item.id === message.id);
-              const messages = exists
-                ? current.messages.map((item) => (item.id === message.id ? message : item))
-                : [...current.messages, message];
+              const index = current.messages.findIndex(
+                (item) => item.id === message.id || (!!message.client_id && item.client_id === message.client_id),
+              );
+              const messages =
+                index >= 0
+                  ? current.messages.map((item, position) => (position === index ? message : item))
+                  : [...current.messages, message];
               return {
                 ...current,
                 messages,
@@ -550,6 +553,7 @@ export default function AdminSupportPanel({ onError }: Props) {
   }, [away, loadOverview, report, wsSend]);
 
   const account = detail?.account || null;
+  const subscription = (account?.subscription || {}) as Record<string, unknown>;
   const context = (detail?.session.context || {}) as Record<string, unknown>;
   const visitor = (detail?.session.visitor || {}) as Record<string, unknown>;
   const pages = detail?.session.pages || [];
@@ -949,8 +953,10 @@ export default function AdminSupportPanel({ onError }: Props) {
                       <Field label="Organização / cargo">
                         {text(account.organization, "—")} · {text(account.title, "—")}
                       </Field>
-                      <Field label="Plano">{text(account.plan_id, "—")}</Field>
-                      <Field label="Último início de sessão">{fmtDate(text(account.last_login_at)) || "—"}</Field>
+                      <Field label="Plano">
+                        {text(subscription.plan_id, "—")} · {text(subscription.status, "sem subscrição")}
+                      </Field>
+                      <Field label="Último início de sessão">{fmtDate(text(account.last_login_at))}</Field>
                     </div>
                   </section>
                 ) : null}

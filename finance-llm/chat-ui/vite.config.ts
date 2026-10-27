@@ -17,6 +17,7 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8002',
         changeOrigin: true,
+        ws: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       // O site público (CMS) vive em `/site/...`, servido pelo backend. Sem esta

@@ -1,13 +1,12 @@
-"""Widget de apoio ao cliente (Tawk.to) nas páginas públicas.
+"""Widget de apoio ao cliente nas superfícies públicas.
 
 O widget tem de chegar a todas as superfícies que um visitante anónimo vê: o
 site do CMS (`/site/...`), a loja (`/loja/...`) e a SPA (landing, login e
-registo). Na SPA o widget é montado pelo React (`TawkChat.tsx`); aqui fixa-se o
-lado servidor — o snippet entra no `<head>` das páginas públicas e fica de fora
-das pré-visualizações.
+registo). No servidor o snippet entra no `<head>` das páginas públicas e fica de
+fora das pré-visualizações; na SPA o mesmo script é instalado por
+`SupportChat.tsx`.
 
-A propriedade é a mesma nos dois lados (`api/tawk.py` e
-`chat-ui/src/components/TawkChat.tsx`): se mudar, muda nos dois.
+A consola de operadores vive na Administração (`AdminPage` → **Suporte**).
 """
 from __future__ import annotations
 
@@ -25,7 +24,7 @@ from api import cms_render  # noqa: E402
 from api import cms_store  # noqa: E402
 from api import shop_render  # noqa: E402
 from api import shop_store  # noqa: E402
-from api import tawk  # noqa: E402
+from api import support_widget  # noqa: E402
 
 
 @pytest.fixture()
@@ -60,57 +59,73 @@ def _layout_do_site(*, preview: bool = False) -> str:
 def test_site_publico_leva_o_widget() -> None:
     html = _layout_do_site()
 
-    assert tawk.TAWK_SNIPPET in html
-    assert tawk.TAWK_TRADUCAO_SNIPPET in html
-    assert f"https://embed.tawk.to/{tawk.TAWK_PROPERTY}" in html
+    assert support_widget.SUPPORT_SNIPPET in html
+    assert support_widget.WIDGET_PATH in html
+    assert "data-iqos-support" in html
 
 
 def test_pre_visualizacao_do_site_nao_leva_o_widget() -> None:
     html = _layout_do_site(preview=True)
 
-    assert tawk.TAWK_SNIPPET not in html
-    assert tawk.TAWK_TRADUCAO_SNIPPET not in html
+    assert support_widget.SUPPORT_SNIPPET not in html
 
 
 def test_loja_publica_leva_o_widget(instalacao_limpa: Any) -> None:
     html = shop_render.render_home(settings=instalacao_limpa.get_settings())
 
-    assert tawk.TAWK_SNIPPET in html
-    assert tawk.TAWK_TRADUCAO_SNIPPET in html
+    assert support_widget.SUPPORT_SNIPPET in html
 
 
 def test_pre_visualizacao_da_loja_nao_leva_o_widget(instalacao_limpa: Any) -> None:
     html = shop_render.render_home(settings=instalacao_limpa.get_settings(), preview=True)
 
-    assert tawk.TAWK_SNIPPET not in html
-    assert tawk.TAWK_TRADUCAO_SNIPPET not in html
+    assert support_widget.SUPPORT_SNIPPET not in html
 
 
-def test_traducao_cobre_os_textos_do_widget() -> None:
-    """O widget vem em pt, mas o conteúdo do agente chega sempre em inglês."""
-    for original, traduzido in (
-        ("Hi! How can we help?", "Olá! Em que podemos ajudar?"),
-        ("👋 Hi! How can we help?", "👋 Olá! Em que podemos ajudar?"),
-        ("I have a question", "Tenho uma pergunta"),
-        ("Tell me more", "Quero saber mais"),
-        ("Customer Support", "Apoio ao cliente"),
-    ):
-        assert f'"{original}": "{traduzido}"' in tawk.TAWK_TRADUCAO_SNIPPET
+def test_widget_js_tem_conversa_tempo_real_e_tickets() -> None:
+    script = (RAIZ / "api" / "support_widget.js").read_text(encoding="utf-8")
+
+    assert "attachShadow" in script
+    assert "/support/visitors" in script
+    assert "/support/sessions" in script
+    assert "/support/ws" in script
+    assert "X-Support-Token" in script
+    assert "WebSocket" in script
+    assert "/ticket" in script
+    assert "pageContext" in script
 
 
 @pytest.mark.parametrize("pagina", ["LandingPage.tsx", "LoginPage.tsx"])
 def test_spa_monta_o_widget_nas_paginas_publicas(pagina: str) -> None:
     fonte = (RAIZ / "chat-ui" / "src" / "pages" / pagina).read_text(encoding="utf-8")
 
-    assert 'from "../components/TawkChat"' in fonte
-    assert "<TawkChat />" in fonte
+    assert 'from "../components/SupportChat"' in fonte
+    assert "<SupportChat />" in fonte
 
 
-def test_spa_traduz_o_conteudo_do_widget() -> None:
-    componente = (RAIZ / "chat-ui" / "src" / "components" / "TawkChat.tsx").read_text(encoding="utf-8")
-    traducao = (RAIZ / "chat-ui" / "src" / "components" / "tawkTraducao.ts").read_text(encoding="utf-8")
+def test_spa_instala_o_mesmo_widget_do_servidor() -> None:
+    componente = (RAIZ / "chat-ui" / "src" / "components" / "SupportChat.tsx").read_text(encoding="utf-8")
 
-    assert 'from "./tawkTraducao"' in componente
-    assert "instalarTraducaoTawk()" in componente
-    assert '"Hi! How can we help?"' in traducao
-    assert '"Olá! Em que podemos ajudar?"' in traducao
+    assert "/support/widget.js" in componente
+    assert "data-iqos-support" in componente
+    assert "__IQOS_SUPPORT_API__" in componente
+
+
+def test_administracao_tem_aba_de_suporte() -> None:
+    fonte = (RAIZ / "chat-ui" / "src" / "pages" / "AdminPage.tsx").read_text(encoding="utf-8")
+    consola = (RAIZ / "chat-ui" / "src" / "components" / "AdminSupportPanel.tsx").read_text(encoding="utf-8")
+
+    assert 'id: "support"' in fonte
+    assert "<AdminSupportPanel" in fonte
+    assert "/support/ws" in (RAIZ / "chat-ui" / "src" / "supportApi.ts").read_text(encoding="utf-8")
+    assert "Tickets" in consola
+    assert "Páginas por onde passou" in consola
+
+
+def test_nao_resta_integracao_com_tawk() -> None:
+    """A substituição é completa: nem o snippet nem a consola antiga ficam."""
+    assert not (RAIZ / "api" / "tawk.py").exists()
+    assert not (RAIZ / "chat-ui" / "src" / "components" / "TawkChat.tsx").exists()
+    for caminho in ("api/cms_render.py", "api/shop_render.py"):
+        fonte = (RAIZ / caminho).read_text(encoding="utf-8")
+        assert "tawk" not in fonte.lower()

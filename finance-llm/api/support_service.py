@@ -957,7 +957,8 @@ def log_support_event(
         "created_at": _iso(),
     }
     try:
-        _client().index(index=SUPPORT_EVENTS_INDEX, document=document, refresh=False)
+        # `refresh` imediato: os registos aparecem logo na consola do operador.
+        _client().index(index=SUPPORT_EVENTS_INDEX, document=document, refresh=True)
     except Exception as exc:  # noqa: BLE001 - o registo nunca deve derrubar a conversa
         logger.debug("Apoio: evento não registado (%s): %s", kind, exc)
     if kind in {"session.created", "session.claimed", "session.closed", "ticket.created"}:
