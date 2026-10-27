@@ -139,6 +139,8 @@ SEGMENTOS_DA_APP = frozenset(
         "import",
         "jarvis",
         "mirofish",
+        # Modelo de contratos (fine-tuning LoRA): `/modelo/contratos`.
+        "modelo",
         "office",
         "ontology",
         "osint",

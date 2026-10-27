@@ -270,6 +270,10 @@ def main() -> int:
                         "perplexidade": round(math.exp(min(perda, 20)), 2),
                         "tokens": tokens_vistos,
                         "segundos": round(time.time() - inicio, 1),
+                        # Instante absoluto: é o que permite à página distinguir
+                        # «treino em curso» de «parou no passo 37» sem ter de
+                        # perguntar ao processo (que pode nem estar a correr).
+                        "ts": round(time.time(), 3),
                     },
                     ensure_ascii=False,
                 )

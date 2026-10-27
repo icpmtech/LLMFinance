@@ -14,6 +14,8 @@ export type PontoTreino = {
   perplexidade: number;
   tokens: number;
   segundos: number;
+  /** Instante absoluto (epoch, segundos) — distingue «em curso» de «parou». */
+  ts?: number;
 };
 
 export type ModeloEstado = {

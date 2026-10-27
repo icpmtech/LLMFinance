@@ -312,7 +312,7 @@ function CurvaDePerda({ pontos, emCurso }: { pontos: PontoTreino[]; emCurso: boo
         fill="#e8e9ec"
         fontWeight={600}
       >
-        passos {ultimo.tokens.toLocaleString("pt-PT")} tokens · perda {ultimo.perda.toFixed(3)}
+        {ultimo.tokens.toLocaleString("pt-PT")} tokens · perda {ultimo.perda.toFixed(3)}
       </text>
       <text x={margem.esq} y={altura - 10} fontSize={10.5} fill="#9aa0aa">
         passo {pontos[0].step}
@@ -325,9 +325,9 @@ function CurvaDePerda({ pontos, emCurso }: { pontos: PontoTreino[]; emCurso: boo
 }
 
 /** O ciclo de um passo de treino: o que acontece entre duas actualizações. */
-function CicloDeUmPasso({ ativo }: { ativo: boolean }) {
+function CicloDeUmPasso({ ativo, paresPorPasso }: { ativo: boolean; paresPorPasso: number }) {
   const etapas = [
-    { titulo: "Lote", nota: "8 pares do dataset" },
+    { titulo: "Lote", nota: `${paresPorPasso} pares do dataset` },
     { titulo: "Forward", nota: "24 camadas do Qwen" },
     { titulo: "Perda", nota: "só nos tokens da resposta" },
     { titulo: "Backward", nota: "gradientes nas matrizes LoRA" },
@@ -398,29 +398,32 @@ function MapaDaLoRA({ emCurso }: { emCurso: boolean }) {
   );
 }
 
-function BarraComparativa({ rotulo, base, treinado, sufixo = "", inverter = false }: { rotulo: string; base: number; treinado: number; sufixo?: string; inverter?: boolean }) {
+function BarraComparativa({ rotulo, base, treinado, inverter = false }: { rotulo: string; base: number; treinado: number; inverter?: boolean }) {
   const maximo = Math.max(base, treinado, 1e-6);
   const melhor = inverter ? treinado < base : treinado > base;
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{rotulo}</span>
-        <span className={melhor ? "text-primary" : "text-amber-400"}>
-          {melhor ? "melhor" : "pior"} · {sufixo}
-          {fmt(inverter ? treinado : treinado, 3)} vs {fmt(base, 3)}
-        </span>
+        <span className={melhor ? "text-primary" : "text-amber-400"}>{melhor ? "adaptador melhor" : "adaptador pior"}</span>
       </div>
-      <div className="space-y-1">
-        <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-slate-500 transition-all duration-700" style={{ width: `${(base / maximo) * 100}%` }} />
+      {[
+        { nome: "base", valor: base, classe: "bg-slate-500", destaque: false },
+        { nome: "adaptador", valor: treinado, classe: melhor ? "bg-primary" : "bg-amber-400", destaque: true },
+      ].map((linha) => (
+        <div key={linha.nome} className="flex items-center gap-2">
+          <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{linha.nome}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${linha.classe}`}
+              style={{ width: `${(linha.valor / maximo) * 100}%` }}
+            />
+          </div>
+          <span className={`w-14 text-right text-[10px] tabular-nums ${linha.destaque ? "text-foreground" : "text-muted-foreground"}`}>
+            {fmt(linha.valor, 3)}
+          </span>
         </div>
-        <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ${melhor ? "bg-primary" : "bg-amber-400"}`}
-            style={{ width: `${(treinado / maximo) * 100}%` }}
-          />
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -465,9 +468,13 @@ export default function ModeloContratosPage() {
   const treino = estado?.treino?.treino;
   const passos = treino?.passos ?? (curva.length ? curva[curva.length - 1].step : 0);
   const planeados = treino?.passos_planeados ?? 0;
-  const emCurso = Boolean(planeados && passos > 0 && passos < planeados && !estado?.pausado);
-  const percentagem = planeados ? Math.min(100, (passos / planeados) * 100) : 0;
   const ultimo = curva.length ? curva[curva.length - 1] : null;
+  // «Em curso» não se decide pelo plano (que muda de corrida para corrida, ex.:
+  // 30 passos e depois 50 ao retomar): decide-se pelo instante do último ponto.
+  // Um treino pausado ou interrompido deixa de acender ao fim de 4 minutos.
+  const segundosDesdeOPonto = ultimo?.ts ? Date.now() / 1000 - ultimo.ts : null;
+  const emCurso = !estado?.pausado && segundosDesdeOPonto !== null && segundosDesdeOPonto < 240;
+  const percentagem = planeados ? Math.min(100, (passos / planeados) * 100) : 0;
   const anterior = curva.length > 1 ? curva[curva.length - 2] : null;
   const velocidade = ultimo && anterior && ultimo.segundos > anterior.segundos
     ? (ultimo.tokens - anterior.tokens) / (ultimo.segundos - anterior.segundos)
@@ -610,7 +617,10 @@ export default function ModeloContratosPage() {
 
           <section className="grid gap-3 lg:grid-cols-2">
             <div className="space-y-3">
-              <CicloDeUmPasso ativo={emCurso} />
+              <CicloDeUmPasso
+                ativo={emCurso}
+                paresPorPasso={(estado.treino?.treino?.batch_size ?? 1) * (estado.treino?.treino?.grad_accum ?? 4)}
+              />
               <div className="rounded-xl border border-border bg-card/60 p-4 text-sm">
                 <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                   <Database size={14} className="text-primary" />
@@ -665,7 +675,6 @@ export default function ModeloContratosPage() {
                     base={resultado.base?.perplexidade ?? 0}
                     treinado={resultado.treinado?.perplexidade ?? 0}
                     inverter
-                    sufixo=""
                   />
                   <BarraComparativa
                     rotulo="exatidão por token (maior é melhor)"
