@@ -1082,6 +1082,13 @@ def serve_dora_spa_page(request: Request, path: str = ""):
     return spa_page_response(str(request.url.path))
 
 
+@app.get("/sec")
+@app.get("/sec/{path:path}")
+def serve_sec_spa_page(request: Request, path: str = ""):
+    """Página do módulo **SEC** — filings EDGAR."""
+    return spa_page_response(str(request.url.path))
+
+
 @app.get("/osint")
 def serve_osint_spa_page(request: Request):
     """Página do módulo OSINT."""

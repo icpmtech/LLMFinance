@@ -69,8 +69,9 @@ function useSecMeta() {
   }, []);
 
   useEffect(() => {
-    carregar();
-  }, []);
+    const t = setTimeout(carregar, 0);
+    return () => clearTimeout(t);
+  }, [carregar]);
 
   return { meta, erro, carregando, recarregar: carregar };
 }
@@ -362,7 +363,8 @@ function FactsTab() {
   }, [q, ticker, form]);
 
   useEffect(() => {
-    pesquisar();
+    const t = setTimeout(pesquisar, 0);
+    return () => clearTimeout(t);
   }, [pesquisar]);
 
   return (
@@ -528,7 +530,8 @@ function AnalyticsTab() {
   }, []);
 
   useEffect(() => {
-    carregar();
+    const t = setTimeout(carregar, 0);
+    return () => clearTimeout(t);
   }, [carregar]);
 
   return (

@@ -8,7 +8,6 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from api import sec_service as service

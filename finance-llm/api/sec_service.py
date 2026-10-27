@@ -46,13 +46,17 @@ _INDICES_LOCK = threading.Lock()
 ROOT = Path(__file__).resolve().parents[1]
 
 # User-Agent institucional obrigatório para a SEC.
+# A SEC rejeita pedidos sem User-Agent ou com User-Agent genérico.
 # Exemplo: "Sample Company Name AdminContact@example.com"
-_SEC_USER_AGENT = "Sabemos Studio IQ OS (pedro.mourao.martins@sabemos.pt)"
+_SEC_USER_AGENT = "Sabemos Studio IQ OS sec@sabemos.studio"
 _SEC_HEADERS = {
     "User-Agent": _SEC_USER_AGENT,
     "Accept": "application/json",
 }
+# A SEC fornece dados JSON em www.sec.gov; data.sec.gov exige headers idênticos.
+# Submissions e XBRL vivem em data.sec.gov; documentos e catálogos em www.sec.gov.
 _SEC_BASE = "https://www.sec.gov"
+_SEC_DATA_BASE = "https://data.sec.gov"
 
 _FILING_TYPES = {"8-K", "10-K", "10-Q", "20-F", "40-F", "6-K", "S-1", "424B2", "DEF 14A"}
 
@@ -142,7 +146,7 @@ def _cache_set(key: Tuple[Any, ...], value: Dict[str, Any], ttl: int = 300) -> N
 
 def _sec_get(path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
     """GET para a SEC com throttling básico e cache curta."""
-    url = f"{_SEC_BASE}{path}"
+    url = path if path.startswith("http") else f"{_SEC_BASE}{path}"
     try:
         # Throttle mínimo para respeitar os limites da SEC.
         time.sleep(0.12)
@@ -171,11 +175,22 @@ def search_companies_sec(q: str, max_results: int = 20) -> Dict[str, Any]:
     cache_key = _cache_key("company_tickers")
     tickers = _cache_get(cache_key)
     if tickers is None:
-        data = _sec_get("/Archives/edgar/daily-index/cik-company-tickers.json")
+        # O ficheiro oficial tem vindo em /files/company_tickers.json, mas a
+        # SEC moveu-o várias vezes. Tentamos ambos.
+        data = _sec_get("/files/company_tickers.json")
+        if data is None:
+            data = _sec_get("/Archives/edgar/daily-index/cik-company-tickers.json")
         if not isinstance(data, list):
-            # Formato alternativo: dicionário {cik: {ticker, name}}.
+            # Formato atual: dicionário numérico com cik_str/ticker/title.
             if isinstance(data, dict):
-                data = [{"cik": int(k), **v} for k, v in data.items()]
+                data = [
+                    {
+                        "cik": item.get("cik_str") or item.get("cik"),
+                        "ticker": item.get("ticker", ""),
+                        "name": item.get("title", "") or item.get("name", ""),
+                    }
+                    for item in data.values()
+                ]
             else:
                 return {"error": "Não foi possível carregar o catálogo de tickers da SEC"}
         tickers = {"data": data}
@@ -210,7 +225,7 @@ def search_companies_sec(q: str, max_results: int = 20) -> Dict[str, Any]:
 def filings_for_company(cik: str, limit: int = 40, form_types: Optional[List[str]] = None) -> Dict[str, Any]:
     """Filings recentes de uma empresa via submissions API.
 
-    /submissions/CIK{cik}.json
+    https://data.sec.gov/submissions/CIK{cik}.json
     """
     cik = str(cik).zfill(10)
     cache_key = _cache_key("submissions", cik, limit)
@@ -218,9 +233,10 @@ def filings_for_company(cik: str, limit: int = 40, form_types: Optional[List[str
     if cached is not None:
         return cached
 
-    data = _sec_get(f"/Archives/edgar/daily-index/cik-company-tickers.json")
-    if isinstance(data, list):
-        for item in data:
+    # Resolver ticker/nome a partir do catálogo em cache.
+    catalog = _cache_get(_cache_key("company_tickers"))
+    if catalog and isinstance(catalog.get("data"), list):
+        for item in catalog["data"]:
             if str(item.get("cik", "")).zfill(10) == cik:
                 ticker = (item.get("ticker") or "").upper()
                 name = (item.get("name") or "").title()
@@ -232,7 +248,7 @@ def filings_for_company(cik: str, limit: int = 40, form_types: Optional[List[str
         ticker = ""
         name = ""
 
-    submissions = _sec_get(f"/submissions/CIK{cik}.json")
+    submissions = _sec_get(f"{_SEC_DATA_BASE}/submissions/CIK{cik}.json")
     if not isinstance(submissions, dict):
         return {"error": "Não foi possível obter submissions da SEC"}
 
@@ -295,6 +311,8 @@ def fetch_filing_text(url: str) -> Dict[str, Any]:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"&nbsp;", " ", text)
     text = re.sub(r"&#\d+;", " ", text)
+    # Quebrar camelCase/XBRL tokens para melhor legibilidade.
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
     text = re.sub(r"\s+", " ", text).strip()
     return {"text": text[:100000], "error": None}
 

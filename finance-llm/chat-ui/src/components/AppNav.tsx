@@ -235,6 +235,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   world: ["world-rede"],
   esg: [],
   "eu-taxonomy": [],
+  sec: [],
   gleif: ["gleif-mapa", "gleif-ingestao"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],
