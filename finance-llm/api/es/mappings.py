@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from elasticsearch import Elasticsearch
 from api.es.core import get_es_client
 from api.es.indices import AGENT_CONFIGS_INDEX, ANALISES_EMPRESA_INDEX, ARQUIVO_PT_INDEX, AUTH_SESSIONS_INDEX, AUTH_USERS_INDEX, CIRE_INDEX, CITACOES_INDEX, CONTRACTS_INDEX, CONTRATOS_ES_INDEX, CONTRATOS_FR_INDEX, CONTRIBUINTES_INDEX, CRM_INDEX, CRM_RBAC_INDEX, DEVEDORES_INDEX, DEVEDORES_RECOLHAS_INDEX, DORA_CONTEUDO_INDEX, DORA_INCIDENTES_INDEX, DORA_RECOLHAS_INDEX, DORA_REGISTO_INDEX, DORA_RELATORIOS_INDEX, DORA_RISCOS_INDEX, DORA_WORKFLOWS_INDEX, EMPRESAS_LOCAIS_INDEX, ENTITIES_INDEX, EPT_DECLARACOES_INDEX, EPT_RECOLHAS_INDEX, EPT_TITULARES_INDEX, EPT_TITULARIDADES_INDEX, ERC_ENTIDADES_INDEX, ERC_OCS_INDEX, ERC_PESSOAS_INDEX, ERC_RECOLHAS_INDEX, ESG_EMPRESAS_INDEX, ESG_INDICADORES_INDEX, ESG_RECOLHAS_INDEX, EU_TAXONOMY_INDEX, EVENTS_INDEX, FIRMAS_INDEX, FREGUESIAS_CONTACTOS_INDEX, GLEIF_LEI_INDEX, GLOBAL_PADROES_INDEX, GRANDES_LITIGANTES_INDEX, GRANDES_LITIGANTES_RECOLHAS_INDEX, INDEX_SETTINGS, INVESTIGATIONS_INDEX, LORENZ_RUNS_INDEX, MASSA_INSOLVENTE_INDEX, MERCADO_RUNS_INDEX, MUNICIPIOS_CONTACTOS_INDEX, MUNICIPIOS_DESPESAS_INDEX, MUNICIPIO_PESSOAS_INDEX, NETWORK_STATE_INDEX, NODE_SUMMARIES_INDEX, OSINT_INDEX, PARTIDOS_INDEX, PARTIDOS_RECOLHAS_INDEX, PARTIDOS_REGISTO_INDEX, PEOPLE_INDEX, PROVIDER_KEYS_INDEX, REMUNERACOES_INDEX, REMUNERACOES_PESSOAS_INDEX, REMUNERACOES_TERRITORIOS_INDEX, RIGORBIZ_INDEX, SCRAPED_INDEX, SEC_FACTS_INDEX, SEC_FILINGS_INDEX, SEC_RECOLHAS_INDEX, SETTINGS_INDEX, SIMULATIONS_INDEX, SOCIAL_INDEX, SOCIETARIO_INDEX, SUBVENCOES_INDEX, SUBVENCOES_LOTES_INDEX, SUPPORT_EVENTS_INDEX, SUPPORT_MESSAGES_INDEX, SUPPORT_OPERATORS_INDEX, SUPPORT_SESSIONS_INDEX, SUPPORT_TICKETS_INDEX, SUPPORT_VISITORS_INDEX, TICKER_TRANSLATIONS_INDEX, TRADEMARKS_INDEX, TRANSPARENCIA_GRAFO_ARESTAS_INDEX, TRANSPARENCIA_GRAFO_NOS_INDEX, TRANSPARENCIA_GRAFO_RECOLHAS_INDEX, USER_STATE_INDEX, VENDAS_PENHORADOS_INDEX, VEREADORES_INDEX, VORTAL_PECAS_INDEX, WORLD_EVENTS_INDEX, WORLD_HISTORY_INDEX, WORLD_RELATIONS_INDEX, WORLD_STATE_INDEX
+from api.es.support_mappings import SUPPORT_INDEX_MAPPINGS
 
 logger = logging.getLogger(__name__)
 
@@ -996,115 +997,6 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "revoked_at": {"type": "date"},
             "user_agent": {"type": "keyword", "ignore_above": 512},
             "ip": {"type": "keyword"},
-        }
-    }
-
-    support_visitors_mappings = {
-        "properties": {
-            "visitor_id": {"type": "keyword"},
-            "user_id": {"type": "keyword"},
-            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
-            "email": {"type": "keyword"},
-            "phone": {"type": "keyword"},
-            "organization": {"type": "keyword"},
-            "profile": {"type": "object", "enabled": False},
-            "context": {"type": "object", "enabled": False},
-            "first_page": {"type": "keyword", "ignore_above": 1024},
-            "last_page": {"type": "keyword", "ignore_above": 1024},
-            "sessions": {"type": "integer"},
-            "created_at": {"type": "date"},
-            "updated_at": {"type": "date"},
-            "last_seen_at": {"type": "date"},
-        }
-    }
-
-    support_sessions_mappings = {
-        "properties": {
-            "session_id": {"type": "keyword"},
-            "visitor_id": {"type": "keyword"},
-            "user_id": {"type": "keyword"},
-            "status": {"type": "keyword"},
-            "visitor_name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
-            "visitor_email": {"type": "keyword"},
-            "assigned_operator_id": {"type": "keyword"},
-            "assigned_operator_name": {"type": "keyword"},
-            "subject": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
-            "tags": {"type": "keyword"},
-            "visitor": {"type": "object", "enabled": False},
-            "context": {"type": "object", "enabled": False},
-            "pages": {"type": "object", "enabled": False},
-            "unread_operator": {"type": "integer"},
-            "unread_visitor": {"type": "integer"},
-            "message_count": {"type": "integer"},
-            "rating": {"type": "integer"},
-            "rating_comment": {"type": "text"},
-            "created_at": {"type": "date"},
-            "updated_at": {"type": "date"},
-            "last_message_at": {"type": "date"},
-            "last_visitor_message_at": {"type": "date"},
-            "last_operator_message_at": {"type": "date"},
-            "last_seen_at": {"type": "date"},
-            "closed_at": {"type": "date"},
-        }
-    }
-
-    support_messages_mappings = {
-        "properties": {
-            "message_id": {"type": "keyword"},
-            "session_id": {"type": "keyword"},
-            "visitor_id": {"type": "keyword"},
-            "author_type": {"type": "keyword"},
-            "author_id": {"type": "keyword"},
-            "author_name": {"type": "keyword"},
-            "body": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
-            "client_id": {"type": "keyword"},
-            "internal": {"type": "boolean"},
-            "created_at": {"type": "date"},
-        }
-    }
-
-    support_tickets_mappings = {
-        "properties": {
-            "ticket_id": {"type": "keyword"},
-            "session_id": {"type": "keyword"},
-            "visitor_id": {"type": "keyword"},
-            "subject": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
-            "description": {"type": "text"},
-            "status": {"type": "keyword"},
-            "priority": {"type": "keyword"},
-            "category": {"type": "keyword"},
-            "requester": {"type": "object", "enabled": False},
-            "assigned_operator_id": {"type": "keyword"},
-            "assigned_operator_name": {"type": "keyword"},
-            "notes": {"type": "object", "enabled": False},
-            "created_at": {"type": "date"},
-            "updated_at": {"type": "date"},
-            "closed_at": {"type": "date"},
-        }
-    }
-
-    support_events_mappings = {
-        "properties": {
-            "kind": {"type": "keyword"},
-            "session_id": {"type": "keyword"},
-            "ticket_id": {"type": "keyword"},
-            "actor_type": {"type": "keyword"},
-            "actor_id": {"type": "keyword"},
-            "actor_name": {"type": "keyword"},
-            "detail": {"type": "text"},
-            "data": {"type": "object", "enabled": False},
-            "created_at": {"type": "date"},
-        }
-    }
-
-    support_operators_mappings = {
-        "properties": {
-            "operator_id": {"type": "keyword"},
-            "name": {"type": "keyword"},
-            "email": {"type": "keyword"},
-            "status": {"type": "keyword"},
-            "last_seen_at": {"type": "date"},
-            "updated_at": {"type": "date"},
         }
     }
 
@@ -3556,12 +3448,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (EVENTS_INDEX, events_mappings),
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
         (SETTINGS_INDEX, settings_mappings),
-        (SUPPORT_VISITORS_INDEX, support_visitors_mappings),
-        (SUPPORT_SESSIONS_INDEX, support_sessions_mappings),
-        (SUPPORT_MESSAGES_INDEX, support_messages_mappings),
-        (SUPPORT_TICKETS_INDEX, support_tickets_mappings),
-        (SUPPORT_EVENTS_INDEX, support_events_mappings),
-        (SUPPORT_OPERATORS_INDEX, support_operators_mappings),
+        *SUPPORT_INDEX_MAPPINGS.items(),
         (CRM_INDEX, crm_mappings),
         (CRM_RBAC_INDEX, crm_rbac_mappings),
         (SCRAPED_INDEX, scraped_mappings),

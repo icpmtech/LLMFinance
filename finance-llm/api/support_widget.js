@@ -674,7 +674,15 @@
       '<label class="iq-field"><span>Nome</span><input name="name" autocomplete="name" maxlength="120" placeholder="O seu nome"></label>' +
       '<label class="iq-field"><span>Email (opcional)</span><input name="email" type="email" autocomplete="email" maxlength="160" placeholder="nome@empresa.pt"></label>';
     var startButton = el("button", "iq-primary", "Iniciar conversa");
-    startButton.type = "submit";
+    startButton.type = "button";
+    startButton.addEventListener("click", function () {
+      var name = startForm.elements.name.value.trim();
+      var email = startForm.elements.email.value.trim();
+      if (name) S.profile.name = name;
+      if (email) S.profile.email = email;
+      save();
+      startSession();
+    });
     var quick = el("div", "iq-quick");
     var ticketButtonStart = el("button", "iq-link", "Prefiro abrir um ticket");
     ticketButtonStart.type = "button";
@@ -1020,6 +1028,7 @@
   var CSS = `
 :host { all: initial; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 .iq-wrap {
   position: fixed; z-index: 2147483000; right: 20px; bottom: 20px;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

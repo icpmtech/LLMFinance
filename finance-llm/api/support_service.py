@@ -41,9 +41,9 @@ from api.elasticsearch_client import (
     SUPPORT_SESSIONS_INDEX,
     SUPPORT_TICKETS_INDEX,
     SUPPORT_VISITORS_INDEX,
-    ensure_indices,
     get_es_client,
 )
+from api.es.support_mappings import ensure_support_indices
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def _client():
         with _schema_lock:
             if now - _schema_checked_at > _SCHEMA_TTL:
                 try:
-                    ensure_indices(client)
+                    ensure_support_indices(client)
                 except Exception as exc:  # noqa: BLE001 - o índice pode ser criado na escrita
                     logger.debug("Apoio: não foi possível verificar os índices: %s", exc)
                 _schema_checked_at = time.monotonic()
