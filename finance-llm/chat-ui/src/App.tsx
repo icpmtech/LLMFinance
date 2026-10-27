@@ -775,6 +775,8 @@ export default function App() {
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
     if (path === "/esg" || path.startsWith("/esg/")) return "esg";
     if (path === "/eu-taxonomy" || path.startsWith("/eu-taxonomy/")) return "eu-taxonomy";
+    // SEC EDGAR: filings oficiais das empresas cotadas nos EUA.
+    if (path === "/sec" || path.startsWith("/sec/")) return "sec";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) return "empresas-recolha";
     if (path === "/arquivo" || path.startsWith("/arquivo/")) return "arquivo";
@@ -962,6 +964,7 @@ export default function App() {
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
       else if (path === "/esg" || path.startsWith("/esg/")) next = "esg";
       else if (path === "/eu-taxonomy" || path.startsWith("/eu-taxonomy/")) next = "eu-taxonomy";
+      else if (path === "/sec" || path.startsWith("/sec/")) next = "sec";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) next = "empresas-recolha";
       else if (path === "/arquivo" || path.startsWith("/arquivo/")) next = "arquivo";

@@ -89,6 +89,8 @@ SEGMENTOS_DA_APP = frozenset(
         "transparencia-grafo",
         "entidades",
         "entities",
+        "empresas-locais",
+        "freguesias",
         "municipios",
         "partidos",
         "remuneracoes",

@@ -138,6 +138,7 @@ const DOCK_APP_MODULE: Record<string, string | null> = {
   "remuneracoes-ap": null,
   "municipios-despesas": null,
   "eu-taxonomy": null,
+  sec: null,
   simulador: null,
   mirofish: null,
   risco: "empresas",
