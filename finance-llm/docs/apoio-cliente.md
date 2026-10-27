@@ -47,7 +47,8 @@ o socket com recuo exponencial; a consola do operador faz o mesmo.
 | `finance_support_sessions` | conversa: estado, operador, não lidos, contexto, páginas, avaliação |
 | `finance_support_messages` | mensagens (`visitor`, `operator`, `system` e notas `note`) |
 | `finance_support_tickets` | tickets: assunto, descrição, estado, prioridade, categoria e notas |
-| `finance_support_events` | registo de auditoria (aberta, assumida, mensagem, ticket, fecho, avaliação) |
+| `finance_support_form_responses` | respostas aos formulários enviados pelo operador (valores, autor, data) |
+| `finance_support_events` | registo de auditoria (aberta, assumida, mensagem, ticket, formulário, fecho, avaliação) |
 | `finance_support_operators` | presença dos operadores (online/ausente/offline) |
 
 As *mappings* vivem em `api/es/support_mappings.py`; o serviço garante apenas
@@ -68,6 +69,7 @@ pela verificação de todos os índices da plataforma.
 | `POST` | `/support/sessions/{id}/messages` | mensagem do visitante (fallback REST) |
 | `POST` | `/support/sessions/{id}/context` | página atual (navegação interna) |
 | `POST` | `/support/sessions/{id}/ticket` | abre ticket |
+| `POST` | `/support/sessions/{id}/forms/{message_id}` | resposta do visitante a um formulário |
 | `POST` | `/support/sessions/{id}/rate` | avaliação 1–5 |
 | `POST` | `/support/sessions/{id}/close` | fecha a conversa |
 
@@ -80,7 +82,25 @@ nome, email, organização, papel, estado da conta e plano.
 `GET /overview`, `GET /sessions`, `GET /sessions/{id}`, `POST
 /sessions/{id}/claim|release|close|read|messages|ticket`, `PATCH
 /tickets/{id}`, `GET /tickets`, `GET /events`, `GET /operators`, `POST
-/operators/me` (online/ausente).
+/operators/me` (online/ausente), `GET /reports` (relatórios publicados que
+podem ser enviados) e `GET /forms` (modelos de formulário e tipos de campo).
+
+### Cartões ricos e formulários
+
+O operador pode enviar, além de texto:
+
+- **link** — título, endereço (http/https ou caminho interno) e descrição;
+- **relatório** — escolhido da biblioteca pública (`/site/documento/…` para
+  documentos gratuitos publicados ou `/reports` para o catálogo); guarda
+  `report_id`, título, resumo, área e se é gratuito;
+- **formulário** — modelo pronto (Contacto, Empresa, Faturação) ou campos
+  personalizados (texto, email, telefone, área de texto, seleção, número e
+  data), com campos obrigatórios.
+
+As respostas dos formulários ficam em `finance_support_form_responses` e a
+própria mensagem do formulário é marcada com `form_response` (valores e data),
+pelo que o histórico nunca perde o que o visitante respondeu. Tudo — conversas,
+cartões, respostas, tickets e registos — fica no Elasticsearch.
 
 ### WebSocket (`/support/ws`)
 
@@ -135,7 +155,10 @@ O *hub* é em memória do processo. O backend corre com **um** worker
 
 ## Limitações conhecidas
 
-- Anexos de ficheiros ainda não estão implementados (o Tawk.to permitia).
+- Anexos de ficheiros ainda não estão implementados (o Tawk.to permitia). Os
+  relatórios são enviados como cartão com ligação pública, não como PDF anexado.
+- Os formulários são definidos no envio (modelo ou campos personalizados); não
+  há ainda uma biblioteca de formulários reutilizáveis gravada à parte.
 - A presença (online/ausente) vive no processo; reiniciar o backend marca todos
   como offline até reconectarem.
 - Notificações fora da aplicação (email/push) não estão incluídas; os eventos
@@ -146,4 +169,5 @@ O *hub* é em memória do processo. O backend corre com **um** worker
 - `tests/test_support_publico.py` — snippet no site/loja, widget na SPA, aba de
   suporte e ausência de resíduos do Tawk.to.
 - `tests/test_support_chat.py` — ciclo completo de conversa (mensagens, notas,
-  tickets, avaliação, fecho), WebSocket do visitante e configuração.
+  links, relatórios, formulários e respostas, tickets, avaliação, fecho),
+  WebSocket do visitante e configuração.
