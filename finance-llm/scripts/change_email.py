@@ -52,6 +52,7 @@ REFERENCIAS = (
     "finance_provider_keys",
     "finance_support_visitors",
     "finance_support_sessions",
+    "finance_support_operators",
     "finance_auth_challenges",
 )
 
@@ -141,9 +142,8 @@ def _replace_references(client, indices, origem: str, destino: str, *, dry_run: 
         try:
             resposta = client.update_by_query(
                 index=indice,
-                body={"query": query, "script": script},
+                body={"query": query, "script": script, "conflicts": "proceed"},
                 refresh=True,
-                conflicts="proceed",
             )
             alterados = int(resposta.get("updated", 0))
             resumo[indice] = alterados

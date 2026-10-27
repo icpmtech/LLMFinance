@@ -418,10 +418,10 @@ def _purge_old_challenges(user_id: str, client) -> None:
                             {"range": {"created_at": {"lt": cutoff}}},
                         ]
                     }
-                }
+                },
+                "conflicts": "proceed",
             },
             refresh=False,
-            conflicts="proceed",
         )
     except Exception as error:  # noqa: BLE001 - best-effort
         logger.debug("MFA: não foi possível limpar desafios antigos: %s", error)
