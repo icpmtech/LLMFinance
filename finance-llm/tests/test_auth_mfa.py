@@ -46,17 +46,57 @@ class FakeES:
 
     def delete_by_query(self, index: str, body: dict, **_: object) -> dict:
         filters = body["query"]["bool"]["filter"]
-        user_id = next(item["term"]["user_id"] for item in filters if "user_id" in item.get("term", {}))
-        only_open = any("used" in item.get("term", {}) for item in filters)
         removed = 0
-        for key, document in list(self.docs.items()):
-            if key[0] != index or document.get("user_id") != user_id:
-                continue
-            if only_open and document.get("used") is not False:
-                continue
+        for key in self._matching(index, filters):
             del self.docs[key]
             removed += 1
         return {"deleted": removed}
+
+    def search(self, index: str, body: dict) -> dict:
+        query = body["query"]["bool"]
+        excluded = [
+            term["term"]["verified"]
+            for term in query.get("must_not") or []
+            if "verified" in (term.get("term") or {})
+        ]
+        hits = [
+            {"_id": key[1], "_source": dict(self.docs[key])}
+            for key in self._matching(index, query["filter"])
+            if not (excluded and self.docs[key].get("verified") is True)
+        ]
+        return {"hits": {"total": {"value": len(hits)}, "hits": hits[: int(body.get("size") or 10)]}}
+
+    def _matching(self, index: str, filters: list) -> list:
+        """Filtros suportados: `term` em user_id/used e `range` em created_at."""
+        user_id = None
+        only_open = False
+        after = None
+        before = None
+        for item in filters:
+            term = item.get("term") or {}
+            if "user_id" in term:
+                user_id = term["user_id"]
+            if "used" in term:
+                only_open = True
+            window = (item.get("range") or {}).get("created_at") or {}
+            after = window.get("gte", after)
+            before = window.get("lt", before)
+
+        matches = []
+        for key, document in self.docs.items():
+            if key[0] != index:
+                continue
+            if user_id is not None and document.get("user_id") != user_id:
+                continue
+            if only_open and document.get("used") is not False:
+                continue
+            created = str(document.get("created_at") or "")
+            if after and created < str(after):
+                continue
+            if before and created >= str(before):
+                continue
+            matches.append(key)
+        return matches
 
 
 @pytest.fixture()
@@ -221,6 +261,23 @@ def test_novo_login_anula_o_codigo_anterior(fake: FakeES) -> None:
     assert caught.value.code in {"mfa_invalid", "mfa_used", "mfa_expired"}
 
 
+def test_pedidos_em_serie_sao_travados(fake: FakeES) -> None:
+    for _ in range(mfa.CHALLENGE_LIMIT_PER_WINDOW):
+        mfa.create_challenge(_user())
+
+    with pytest.raises(mfa.MfaError) as caught:
+        mfa.create_challenge(_user())
+    assert caught.value.code == "mfa_throttled"
+    assert caught.value.retry_after > 0
+
+
+def test_logins_concluidos_nao_contam_para_o_travao(fake: FakeES) -> None:
+    """Quem entra várias vezes com sucesso não fica bloqueado."""
+    for _ in range(mfa.CHALLENGE_LIMIT_PER_WINDOW + 2):
+        challenge = mfa.create_challenge(_user())
+        mfa.verify(challenge["challenge_id"], fake.sent["code"])
+
+
 def test_reenvio_respeita_o_intervalo_minimo(fake: FakeES) -> None:
     challenge = mfa.create_challenge(_user())
 
@@ -273,6 +330,16 @@ def test_estado_da_conta_reflete_politica_e_preferencia(fake: FakeES) -> None:
     assert status["required"] is True
     assert status["can_change"] is False
     assert status["email_configured"] is True
+
+
+def test_estado_da_conta_aceita_o_retrato_publico(fake: FakeES) -> None:
+    """`PUT /auth/mfa` devolve o estado a partir do utilizador público da API."""
+    public = auth.public_user(_user(mfa={"enabled": True}))
+
+    assert "mfa" not in public
+    assert mfa.user_enabled(public) is True
+    assert mfa.status_for(public)["user_enabled"] is True
+    assert mfa.status_for(public)["required"] is True
 
 
 def test_overview_avisa_quando_falta_smtp(fake: FakeES, monkeypatch: pytest.MonkeyPatch) -> None:

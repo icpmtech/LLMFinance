@@ -2,7 +2,13 @@
 
 Fluxo:
 - `POST /auth/register` cria a conta e devolve já um token (auto-login).
-- `POST /auth/login` valida as credenciais e abre uma sessão.
+- `POST /auth/login` valida as credenciais e abre uma sessão. Quando a conta tem
+  **verificação em dois passos** (política da administração ou escolha do
+  utilizador), devolve um `challenge_id` e envia um código de 6 dígitos por email
+  em vez do token.
+- `POST /auth/mfa/verify` troca esse código por um token de sessão;
+  `POST /auth/mfa/resend` reenvia um código novo (com intervalo mínimo).
+- `GET/PUT /auth/mfa` mostram e alteram a preferência da própria conta.
 - O browser envia o token em `Authorization: Bearer <token>`; a dependência
   `current_user` valida a assinatura e a sessão no Elasticsearch.
 - `POST /auth/logout` revoga a sessão atual (imediato).

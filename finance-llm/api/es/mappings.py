@@ -1018,6 +1018,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "sends": {"type": "integer"},
             "used": {"type": "boolean"},
             "used_at": {"type": "date"},
+            "verified": {"type": "boolean"},
             "remember": {"type": "boolean"},
             "user_agent": {"type": "keyword", "ignore_above": 512},
             "ip": {"type": "keyword"},

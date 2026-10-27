@@ -51,6 +51,19 @@ A maioria dos endpoints aceita (e alguns exige) um *token* de sessão:
 
 O mesmo token segue no cabeçalho `Authorization: Bearer <token>`.
 
+### Verificação em dois passos (MFA)
+
+Se a conta tiver MFA ativo (política definida em *Administração → Segurança*, ou
+escolha do próprio utilizador), o `POST /auth/login` devolve
+`{"mfa_required": true, "challenge_id": ...}` **sem token** e envia um código de
+6 dígitos para o email da conta. Nesse caso:
+
+1. `POST /auth/mfa/verify` com `{"challenge_id": ..., "code": "123456"}` para
+   obter o `token`;
+2. `POST /auth/mfa/resend` reenvia um código novo (respeitando o intervalo mínimo).
+
+O processo é opcional e desligado por omissão.
+
 ### Convenções
 
 * Paginação por `size` + `from` (ou `offset`, em alguns módulos);

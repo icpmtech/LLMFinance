@@ -56,6 +56,11 @@ DEFAULT_RESEND_SECONDS = 60
 MIN_RESEND_SECONDS = 15
 MAX_RESEND_SECONDS = 600
 
+# Travão contra tentativas em série: cada login cria um desafio novo, por isso o
+# limite de tentativas de um código sozinho não chegaria.
+CHALLENGE_WINDOW_MINUTES = 15
+CHALLENGE_LIMIT_PER_WINDOW = 10
+
 
 class MfaError(Exception):
     """Erro de verificação em dois passos com código HTTP associado."""
@@ -229,8 +234,17 @@ def overview() -> Dict[str, Any]:
 
 # ---------------------------------------------------------------- quem é desafiado
 def user_enabled(user: Optional[Dict[str, Any]]) -> bool:
-    """Preferência guardada na conta."""
-    return bool(((user or {}).get("mfa") or {}).get("enabled"))
+    """Preferência guardada na conta.
+
+    Aceita o documento cru do Elasticsearch (`mfa: {enabled: …}`) e o retrato
+    público devolvido pela API (`mfa_enabled`), para o mesmo cálculo servir na
+    rota de login e nas definições da conta.
+    """
+    data = user or {}
+    stored = data.get("mfa")
+    if isinstance(stored, dict):
+        return bool(stored.get("enabled"))
+    return bool(data.get("mfa_enabled"))
 
 
 def is_enforced(user: Optional[Dict[str, Any]], settings: Optional[Dict[str, Any]] = None) -> bool:
@@ -292,8 +306,66 @@ def _code_hash(challenge_id: str, code: str) -> str:
     return hmac.new(auth_service.signing_secret(), message, hashlib.sha256).hexdigest()
 
 
-def _discard_open_challenges(user_id: str, client) -> None:
-    """Um código novo invalida os anteriores da mesma conta."""
+def _recent_challenges(user_id: str, client) -> int:
+    """Quantos desafios esta conta pediu na janela recente (travão anti-força-bruta)."""
+    since = _iso(_now() - timedelta(minutes=CHALLENGE_WINDOW_MINUTES))
+    try:
+        response = client.search(
+            index=AUTH_CHALLENGES_INDEX,
+            body={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"user_id": user_id}},
+                            {"range": {"created_at": {"gte": since}}},
+                        ],
+                        # Os códigos que já foram usados com sucesso não contam:
+                        # o travão é para tentativas falhadas, não para quem entra
+                        # várias vezes de forma legítima.
+                        "must_not": [{"term": {"verified": True}}],
+                    }
+                },
+            },
+        )
+        hits = response.get("hits", {}).get("total", 0)
+        if isinstance(hits, dict):
+            hits = hits.get("value", 0)
+        return int(hits or 0)
+    except Exception as error:  # noqa: BLE001 - não travar o login por causa da contagem
+        logger.debug("MFA: contagem de desafios recentes falhou: %s", error)
+        return 0
+
+
+def _retire_open_challenges(user_id: str, client) -> None:
+    """Um código novo anula os anteriores da mesma conta.
+
+    Ficam marcados como usados (e não apagados): a marca impede a reutilização e
+    o documento continua a contar para o travão de pedidos em série.
+    """
+    now = _iso(_now())
+    try:
+        response = client.search(
+            index=AUTH_CHALLENGES_INDEX,
+            body={
+                "size": 50,
+                "query": {"bool": {"filter": [{"term": {"user_id": user_id}}, {"term": {"used": False}}]}},
+            },
+        )
+        for hit in response.get("hits", {}).get("hits", []):
+            client.update(
+                index=AUTH_CHALLENGES_INDEX,
+                id=hit["_id"],
+                doc={"used": True, "used_at": now},
+                refresh=False,
+            )
+    except Exception as error:  # noqa: BLE001 - limpeza best-effort
+        logger.debug("MFA: não foi possível anular os desafios anteriores: %s", error)
+
+
+def _purge_old_challenges(user_id: str, client) -> None:
+    """Apaga desafios antigos da conta (o histórico não serve para nada depois)."""
+    cutoff = _iso(_now() - timedelta(days=1))
     try:
         client.delete_by_query(
             index=AUTH_CHALLENGES_INDEX,
@@ -302,15 +374,15 @@ def _discard_open_challenges(user_id: str, client) -> None:
                     "bool": {
                         "filter": [
                             {"term": {"user_id": user_id}},
-                            {"term": {"used": False}},
+                            {"range": {"created_at": {"lt": cutoff}}},
                         ]
                     }
                 }
             },
-            refresh=True,
+            refresh=False,
             conflicts="proceed",
         )
-    except Exception as error:  # noqa: BLE001 - limpeza best-effort
+    except Exception as error:  # noqa: BLE001 - best-effort
         logger.debug("MFA: não foi possível limpar desafios antigos: %s", error)
 
 
@@ -328,13 +400,21 @@ def create_challenge(
         raise MfaError("A conta não tem email associado.", status_code=422, code="missing_email")
 
     client = _client()
+    user_key = str(user.get("id") or email)
+    if _recent_challenges(user_key, client) >= CHALLENGE_LIMIT_PER_WINDOW:
+        raise MfaError(
+            "Demasiados códigos pedidos em pouco tempo. Aguarde alguns minutos e tente novamente.",
+            status_code=429,
+            code="mfa_throttled",
+            retry_after=CHALLENGE_WINDOW_MINUTES * 60,
+        )
     challenge_id = secrets.token_hex(24)
     code = _new_code()
     now = _now()
     expires = now + timedelta(seconds=settings["code_ttl_seconds"])
     document = {
         "challenge_id": challenge_id,
-        "user_id": str(user.get("id") or email),
+        "user_id": user_key,
         "email": email,
         "code_hash": _code_hash(challenge_id, code),
         "created_at": _iso(now),
@@ -350,7 +430,8 @@ def create_challenge(
         "ip": (ip or "")[:64],
     }
 
-    _discard_open_challenges(document["user_id"], client)
+    _retire_open_challenges(user_key, client)
+    _purge_old_challenges(user_key, client)
     try:
         client.index(index=AUTH_CHALLENGES_INDEX, id=challenge_id, document=document, refresh=True)
     except Exception as error:  # noqa: BLE001
@@ -402,12 +483,12 @@ def _fetch(challenge_id: str, client) -> Dict[str, Any]:
     return source
 
 
-def _mark_used(challenge_id: str, client) -> None:
+def _mark_used(challenge_id: str, client, *, verified: bool = False) -> None:
     try:
         client.update(
             index=AUTH_CHALLENGES_INDEX,
             id=challenge_id,
-            doc={"used": True, "used_at": _iso(_now())},
+            doc={"used": True, "used_at": _iso(_now()), "verified": bool(verified)},
             refresh=True,
         )
     except Exception as error:  # noqa: BLE001 - best-effort
@@ -469,7 +550,7 @@ def verify(challenge_id: str, code: str) -> Dict[str, Any]:
             code="mfa_invalid",
         )
 
-    _mark_used(document["challenge_id"], client)
+    _mark_used(document["challenge_id"], client, verified=True)
     return document
 
 
