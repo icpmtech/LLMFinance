@@ -123,6 +123,24 @@ bundle     ok     assets/index-B-40BDWI.js (na imagem e servido)
   tiver. Este é o modo de falha que já aconteceu — build passa, contentor sobe,
   página serve o bundle antigo.
 
+### `-Servico frontend` sozinho deixa as rotas da app na versão anterior
+
+O `index.html` das **rotas da aplicação** (`/benchmark/portugal`, `/dashboard`…)
+não vem do nginx: o nginx manda-as para o backend (`@spa`), e é o backend que
+escreve o `<head>` a partir de `/app/chat-ui/dist`. Por isso um deploy só do
+frontend actualiza o `/` (servido do disco pelo nginx) mas deixa o backend a
+apontar para o bundle anterior — a página abre com uma mistura (HTML antigo,
+`/assets` novos e recurso ao `@assets_backend`).
+
+Regra: **quando o frontend muda, deploy dos dois** (`-Servico ambos`, o valor por
+omissão). A validação do `bundle` só olha para o `/` e por isso não apanha este
+caso; se fizer só o frontend, confirme com:
+
+```powershell
+docker exec iqos-origin-tunnel ssh -i /root/.ssh/id_ed25519 root@45.147.251.188 "docker exec iqos-backend grep -o 'assets/index-[A-Za-z0-9_-]*.js' /app/chat-ui/dist/index.html"
+```
+
+
 ## Custos, medidos
 
 | Item | Valor |

@@ -1076,6 +1076,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "34,211,238",
   },
   {
+    id: "modelo-contratos",
+    label: "Modelo de contratos",
+    hint: "Fine-tuning LoRA com contratos e empresas: pipeline, curva de perda e avaliação em directo",
+    icon: Brain,
+    gradient: "from-emerald-200 via-teal-400 to-cyan-600",
+    accent: "16,163,127",
+  },
+  {
     id: "elastic",
     label: "Elasticsearch",
     hint: "Explorar índices e documentos",

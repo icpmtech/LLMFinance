@@ -97,6 +97,8 @@ import PadroesPage from "./pages/PadroesPage";
 import LorenzPage from "./pages/LorenzPage";
 import MercadoPage from "./pages/MercadoPage";
 import MercadoCenariosPage from "./pages/MercadoCenariosPage";
+// Modelo de contratos: fine-tuning LoRA em directo (pipeline, curva, avaliação).
+import ModeloContratosPage from "./pages/ModeloContratosPage";
 import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -237,6 +239,7 @@ type AppView =
   | "lorenz"
   | "mercado"
   | "mercado-cenarios"
+  | "modelo-contratos"
   | "market"
   | "vortal"
   | "osint"
@@ -489,6 +492,7 @@ function pathForView(
   if (view === "lorenz") return "/lorenz";
   if (view === "mercado") return "/mercado";
   if (view === "mercado-cenarios") return "/mercado/cenarios";
+  if (view === "modelo-contratos") return "/modelo/contratos";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -764,6 +768,8 @@ export default function App() {
     if (path === "/lorenz" || path.startsWith("/lorenz/")) return "lorenz";
     // O módulo de mercado vive em `/mercado` (benchmark) e `/mercado/cenarios`.
     if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) return "mercado-cenarios";
+    // Modelo de contratos: fine-tuning LoRA dos dados de contratos e empresas.
+    if (path === "/modelo/contratos" || path.startsWith("/modelo/contratos/")) return "modelo-contratos";
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
     // Vista de mercado: os tickers da plataforma agrupados por país.
     if (path === "/market" || path.startsWith("/market/")) return "market";
@@ -925,6 +931,7 @@ export default function App() {
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
       else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
       else if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) next = "mercado-cenarios";
+      else if (path === "/modelo/contratos" || path.startsWith("/modelo/contratos/")) next = "modelo-contratos";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
       else if (path === "/market" || path.startsWith("/market/")) next = "market";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
@@ -1844,6 +1851,9 @@ export default function App() {
     // Inteligência de mercado: empresas no mesmo mercado, dependências e cenários.
     if (target === "mercado") return <MercadoPage onAbrirCenarios={() => setViewAndHistory("mercado-cenarios")} />;
     if (target === "mercado-cenarios") return <MercadoCenariosPage onAbrirMercado={() => setViewAndHistory("mercado")} />;
+    // Modelo de contratos: o pipeline do fine-tuning, a curva de perda em directo
+    // e a avaliação base vs adaptador.
+    if (target === "modelo-contratos") return <ModeloContratosPage />;
     // Vista de mercado: os tickers da plataforma agrupados por país, cada um
     // ligado à sua ficha (`/tickers/<símbolo>`).
     if (target === "market")

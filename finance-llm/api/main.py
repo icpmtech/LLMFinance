@@ -428,6 +428,9 @@ from api.base_impic_routes import router as base_impic_router
 # DORA: Digital Operational Resilience Act — Register of Information, incidentes,
 # riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
 from api.dora_routes import router as dora_router
+# Modelo de contratos (`/llm/modelo/*`): ficha, curva de treino, chat e avaliação
+# do adaptador LoRA afinado com os índices de contratos, entidades e subsídios.
+from api.llm_contratos_routes import router as llm_modelo_router
 # SEC: filings EDGAR — recolha, indexação, pesquisa e análise de documentos.
 from api.sec_routes import router as sec_router
 from api import auth_service as auth
@@ -1056,6 +1059,9 @@ app.include_router(governo_router)
 # DORA: Digital Operational Resilience Act — Register of Information, incidentes,
 # riscos, workflows, relatórios ITS/RTS e conteúdo PT/original da EIOPA.
 app.include_router(dora_router)
+# Modelo de contratos: Qwen2.5-0.5B afinado com contratos, entidades e subsídios
+# (treino em `training/train_lora_contratos.py`, avaliação em `inference/contratos_eval.py`).
+app.include_router(llm_modelo_router)
 # SEC: filings EDGAR — recolha, indexação, pesquisa e análise de documentos.
 app.include_router(sec_router)
 
