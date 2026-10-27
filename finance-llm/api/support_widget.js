@@ -229,10 +229,10 @@
         S.view = "chat";
         S.busy = false;
         save();
-        connect();
-        if (socket && socket.readyState === 1) {
-          socket.send(JSON.stringify({ type: "context", session_id: S.sessionId, context: pageContext() }));
-        }
+        // A ligação antiga ainda aponta para a sessão anterior (possivelmente
+        // fechada). Reconectar com o `session_id` novo evita que a próxima
+        // mensagem seja enviada para a conversa antiga.
+        reconnectSocket();
         render();
         markRead();
         scrollToEnd();
@@ -438,6 +438,23 @@
       reconnectDelay = Math.min(reconnectDelay * 1.6, 15000);
       connect();
     }, reconnectDelay);
+  }
+
+  /** Fecha a ligação atual e abre outra já com a sessão nova no handshake. */
+  function reconnectSocket() {
+    clearTimeout(reconnectTimer);
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      try {
+        socket.close();
+      } catch (error) {
+        /* já estava fechado */
+      }
+      socket = null;
+    }
+    S.connected = false;
+    connect();
   }
 
   function handleEvent(payload) {

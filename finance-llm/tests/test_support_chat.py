@@ -273,6 +273,74 @@ def test_websocket_do_visitante_entrega_a_mensagem() -> None:
         _limpar(visitor_id, session_id)
 
 
+def test_websocket_troca_para_conversa_nova_depois_de_fechar() -> None:
+    """A mesma ligação WS tem de aceitar a sessão nova depois de fechar a antiga."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from api.support_routes import admin_router, router
+
+    support.reset_schema_cache()
+    support.reset_rate_limits()
+    app = FastAPI()
+    app.include_router(router)
+    app.include_router(admin_router)
+    client = TestClient(app)
+
+    bootstrap = client.post("/support/visitors", json={"profile": {"name": "Nova Conversa"}})
+    token = bootstrap.json()["token"]
+    visitor_id = bootstrap.json()["visitor_id"]
+
+    first = client.post(
+        "/support/sessions",
+        headers={"X-Support-Token": token},
+        json={"context": {"url": "https://sabemos.studio/primeira"}},
+    )
+    first_id = first.json()["session"]["id"]
+    second_id: Optional[str] = None
+    try:
+        support.close_session(
+            first_id,
+            actor_type=support.AUTHOR_VISITOR,
+            actor_id=visitor_id,
+            actor_name="Visitante",
+            reason="teste",
+        )
+        again = client.post(
+            "/support/sessions",
+            headers={"X-Support-Token": token},
+            json={"context": {"url": "https://sabemos.studio/segunda"}},
+        )
+        assert again.status_code == 200, again.text
+        second_id = again.json()["session"]["id"]
+        assert second_id != first_id
+
+        with client.websocket_connect(
+            f"/support/ws?role=visitor&token={token}&session_id={first_id}"
+        ) as websocket:
+            ready = websocket.receive_json()
+            assert ready["type"] == "ready"
+            websocket.send_json(
+                {
+                    "type": "message",
+                    "session_id": second_id,
+                    "body": "Mensagem na conversa nova",
+                    "client_id": "c_nova",
+                }
+            )
+            event = websocket.receive_json()
+            assert event["type"] == "message.created", event
+            assert event["message"]["session_id"] == second_id
+
+        stored = support.list_messages(second_id)
+        assert any(message["body"] == "Mensagem na conversa nova" for message in stored)
+        assert support.list_messages(first_id) == []
+    finally:
+        _limpar(visitor_id, first_id)
+        if second_id:
+            _limpar(visitor_id, second_id)
+
+
 def test_formulario_publico_guarda_resposta_no_elastic() -> None:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

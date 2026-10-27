@@ -887,18 +887,23 @@ async def _visitor_socket(websocket: WebSocket, token: str, session_id: str) -> 
             if kind == "ping":
                 await hub.send(websocket, {"type": "pong"})
                 continue
+            # O widget pode começar uma conversa nova na mesma ligação (por
+            # exemplo depois de a anterior ser fechada). Nesse caso o
+            # `session_id` do evento passa a ser a fonte de verdade — sem isto
+            # a mensagem ia para a sessão antiga e voltava «já está fechada».
+            requested_id = str(payload.get("session_id") or session_id or "")
+            if requested_id and (
+                not document or requested_id != str(document.get("session_id") or "")
+            ):
+                try:
+                    candidate = support.require_session(requested_id)
+                    if str(candidate.get("visitor_id") or "") == visitor_id:
+                        document = candidate
+                except support.SupportError:
+                    pass
             if not document:
-                current_id = str(payload.get("session_id") or session_id or "")
-                if current_id:
-                    try:
-                        candidate = support.require_session(current_id)
-                        if str(candidate.get("visitor_id") or "") == visitor_id:
-                            document = candidate
-                    except support.SupportError:
-                        document = None
-                if not document:
-                    await _send_error(websocket, "Abra uma conversa antes de enviar mensagens.")
-                    continue
+                await _send_error(websocket, "Abra uma conversa antes de enviar mensagens.")
+                continue
             current_session = document
             if kind == "message":
                 try:
