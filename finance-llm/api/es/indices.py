@@ -76,6 +76,12 @@ AUTH_SESSIONS_INDEX = "finance_sessions"
 
 
 
+# Desafios de verificação em dois passos (MFA por email): o código nunca é
+# guardado em claro, apenas o HMAC, a validade e as tentativas usadas.
+AUTH_CHALLENGES_INDEX = "finance_auth_challenges"
+
+
+
 # Registo de eventos do sistema (autenticação, pedidos à API, tarefas, erros) —
 # alimenta o visualizador de eventos da área de administração.
 EVENTS_INDEX = "finance_events"

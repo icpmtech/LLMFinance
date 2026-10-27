@@ -20,6 +20,9 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `GET  /admin/service-keys`         — chaves de serviços externos (2captcha…), estado mascarado
 - `PUT  /admin/service-keys`         — gravar chaves (gravadas no Elasticsearch)
 - `POST /admin/service-keys/{id}/test`— testar uma chave junto do fornecedor (saldo da 2captcha)
+- `GET  /admin/auth/mfa`             — política de verificação em dois passos (código por email)
+- `PUT  /admin/auth/mfa`             — gravar essa política (quem é desafiado no login)
+- `POST /admin/users/{user_id}/mfa`  — ativar/desativar a verificação na conta de um utilizador
 - `POST /admin/users/{user_id}/approve` — aprovar uma conta pendente e iniciar o trial
 - `GET  /admin/payments`             — pagamentos de subscrição pendentes de confirmação
 - `POST /admin/payments/{id}/confirm`— confirmar um pagamento e ativar a subscrição
@@ -40,6 +43,7 @@ from pydantic import BaseModel, Field
 from api import auth_service as auth
 from api import billing_service as billing
 from api import events_service as events
+from api import mfa_service as mfa
 from api import notification_email
 from api import service_keys
 from api import sidebar_access
@@ -101,6 +105,23 @@ class SidebarAccessPayload(BaseModel):
         default_factory=dict,
         description="Chave = perfil (papel da plataforma ou perfil de CRM); valor = ids dos módulos escondidos.",
     )
+
+
+class MfaPolicyPayload(BaseModel):
+    """Política de verificação em dois passos (código enviado por email)."""
+
+    policy: str = Field("off", description="off | admins | all")
+    code_ttl_seconds: int = Field(mfa.DEFAULT_TTL_SECONDS, ge=mfa.MIN_TTL_SECONDS, le=mfa.MAX_TTL_SECONDS)
+    max_attempts: int = Field(
+        mfa.DEFAULT_MAX_ATTEMPTS, ge=mfa.MIN_MAX_ATTEMPTS, le=mfa.MAX_MAX_ATTEMPTS
+    )
+    resend_cooldown_seconds: int = Field(
+        mfa.DEFAULT_RESEND_SECONDS, ge=mfa.MIN_RESEND_SECONDS, le=mfa.MAX_RESEND_SECONDS
+    )
+
+
+class UserMfaPayload(BaseModel):
+    enabled: bool
 
 
 # -------------------------------------------------------------------- visão geral
@@ -415,6 +436,58 @@ def admin_revoke_sessions(user_id: str, session: AdminSession) -> Dict[str, Any]
         user_email=session.user.email,
     )
     return {"ok": True, "message": f"{count} sessão(ões) terminada(s)."}
+
+
+# ------------------------------------------- verificação em dois passos (MFA)
+@router.get("/auth/mfa")
+def admin_mfa(session: AdminSession) -> Dict[str, Any]:
+    """Política de verificação em dois passos e estado do envio de email."""
+    return {**mfa.overview(), "ok": True}
+
+
+@router.put("/auth/mfa")
+def admin_mfa_save(payload: MfaPolicyPayload, session: AdminSession) -> Dict[str, Any]:
+    """Grava a política (quem tem de introduzir o código no login)."""
+    try:
+        mfa.save_policy(payload.model_dump(), actor_email=session.user.email)
+    except mfa.MfaError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    state = mfa.overview()
+    events.log_event(
+        "warning",
+        "admin",
+        f"Política de verificação em dois passos: {state.get('label')}",
+        data={
+            "policy": state.get("policy"),
+            "code_ttl_seconds": state.get("code_ttl_seconds"),
+            "max_attempts": state.get("max_attempts"),
+            "resend_cooldown_seconds": state.get("resend_cooldown_seconds"),
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {**state, "ok": True}
+
+
+@router.post("/users/{user_id}/mfa")
+def admin_user_mfa(user_id: str, payload: UserMfaPayload, session: AdminSession) -> Dict[str, Any]:
+    """Ativa/desativa a verificação em dois passos na conta de um utilizador."""
+    try:
+        updated = auth.set_mfa_enabled(user_id, payload.enabled, actor=session.user.email)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Verificação em dois passos {'ativada' if payload.enabled else 'desativada'} "
+        f"para {updated.get('email')}",
+        data={"target_user": updated.get("email"), "enabled": bool(payload.enabled)},
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": updated}
 
 
 # -------------------------------------------------------------------- eventos

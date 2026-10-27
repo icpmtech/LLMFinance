@@ -13,7 +13,7 @@ Fluxo:
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from datetime import datetime, timezone
 
@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from api import auth_service as auth
 from api import billing_service as billing_service_module
 from api import events_service as events
+from api import mfa_service as mfa
 from api import sidebar_access
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,19 @@ class LoginRequest(BaseModel):
     email: str
     password: str
     remember: bool = False
+
+
+class MfaVerifyRequest(BaseModel):
+    challenge_id: str
+    code: str = Field(..., description="Código de 6 dígitos enviado por email")
+
+
+class MfaResendRequest(BaseModel):
+    challenge_id: str
+
+
+class MfaPreferenceRequest(BaseModel):
+    enabled: bool
 
 
 class IframePagePreference(BaseModel):
@@ -136,6 +150,34 @@ class MessageResponse(BaseModel):
     message: str = ""
 
 
+class MfaChallengeResponse(BaseModel):
+    """Resposta do login quando a conta tem verificação em dois passos."""
+
+    ok: bool = True
+    mfa_required: bool = True
+    challenge_id: str
+    email: str
+    expires_at: Optional[str] = None
+    resend_cooldown_seconds: int = mfa.DEFAULT_RESEND_SECONDS
+    code_sent: bool = True
+
+
+class MfaStatusResponse(BaseModel):
+    """Estado da verificação em dois passos para a conta autenticada."""
+
+    policy: str
+    policy_label: str
+    enforced: bool
+    user_enabled: bool
+    required: bool
+    can_change: bool
+    email: str
+    email_configured: bool
+    code_ttl_seconds: int
+    max_attempts: int
+    resend_cooldown_seconds: int
+
+
 # ------------------------------------------------------------- dependências
 def _bearer_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
@@ -215,6 +257,11 @@ def _auth_error(error: auth.AuthError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.message)
 
 
+def _mfa_error(error: mfa.MfaError) -> HTTPException:
+    headers = {"Retry-After": str(error.retry_after)} if error.retry_after else None
+    return HTTPException(status_code=error.status_code, detail=error.message, headers=headers)
+
+
 def optional_session(
     authorization: Annotated[Optional[str], Header()] = None,
 ) -> Optional[CurrentSession]:
@@ -281,30 +328,39 @@ def register(payload: RegisterRequest, request: Request):
         raise _auth_error(error) from error
 
 
-@router.post("/login", response_model=AuthResponse)
+def _open_session(user: Dict[str, Any], remember: bool, request: Request, *, method: str = "password") -> AuthResponse:
+    """Cria a sessão, regista o login e devolve o token (fluxo comum)."""
+    ttl = auth.SESSION_TTL_REMEMBER if remember else auth.SESSION_TTL_DEFAULT
+    user_id = str(user.get("id") or user.get("email") or "")
+    session = auth.create_session(user, ttl=ttl, **_client_info(request))
+    auth.record_login(user_id)
+    refreshed = auth.get_user_by_id(user_id) or user
+    events.log_event(
+        "warning",
+        "auth",
+        f"Início de sessão: {auth.public_user(refreshed).get('email')}",
+        request=request,
+        user_id=user_id,
+        user_email=auth.public_user(refreshed).get("email"),
+        data={"remember": bool(remember), "session_id": session.get("session_id"), "verified_by": method},
+    )
+    return AuthResponse(
+        token=session["token"],
+        expires_at=session["expires_at"],
+        user=UserResponse(**auth.public_user(refreshed)),
+    )
+
+
+@router.post("/login", response_model=Union[AuthResponse, MfaChallengeResponse])
 def login(payload: LoginRequest, request: Request):
-    """Valida as credenciais e abre uma sessão."""
+    """Valida as credenciais e abre uma sessão.
+
+    Quando a conta exige verificação em dois passos (política da administração ou
+    escolha do utilizador), a resposta **não** traz token: devolve o
+    `challenge_id` e o código segue por email para `POST /auth/mfa/verify`.
+    """
     try:
         user = auth.authenticate(payload.email, payload.password)
-        ttl = auth.SESSION_TTL_REMEMBER if payload.remember else auth.SESSION_TTL_DEFAULT
-        user_id = str(user.get("id") or user.get("email") or "")
-        session = auth.create_session(user, ttl=ttl, **_client_info(request))
-        auth.record_login(user_id)
-        refreshed = auth.get_user_by_id(user_id) or user
-        events.log_event(
-            "warning",
-            "auth",
-            f"Início de sessão: {auth.public_user(refreshed).get('email')}",
-            request=request,
-            user_id=user_id,
-            user_email=auth.public_user(refreshed).get("email"),
-            data={"remember": bool(payload.remember), "session_id": session.get("session_id")},
-        )
-        return AuthResponse(
-            token=session["token"],
-            expires_at=session["expires_at"],
-            user=UserResponse(**auth.public_user(refreshed)),
-        )
     except auth.AuthError as error:
         events.log_event(
             "warning",
@@ -314,6 +370,126 @@ def login(payload: LoginRequest, request: Request):
             data={"email": payload.email, "code": getattr(error, "code", None)},
         )
         raise _auth_error(error) from error
+
+    if mfa.required_for(user):
+        info = _client_info(request)
+        try:
+            challenge = mfa.create_challenge(
+                user,
+                ip=info["ip"],
+                user_agent=info["user_agent"],
+                remember=payload.remember,
+            )
+        except mfa.MfaError as error:
+            events.log_event(
+                "error",
+                "auth",
+                f"Verificação em dois passos indisponível: {payload.email} ({error.message})",
+                request=request,
+                data={"email": payload.email, "code": error.code},
+            )
+            raise _mfa_error(error) from error
+        events.log_event(
+            "warning",
+            "auth",
+            f"Verificação em dois passos pedida: {payload.email}",
+            request=request,
+            data={"email": payload.email, "challenge_id": challenge["challenge_id"]},
+        )
+        return MfaChallengeResponse(**challenge)
+
+    return _open_session(user, payload.remember, request)
+
+
+@router.post("/mfa/verify", response_model=AuthResponse)
+def verify_mfa(payload: MfaVerifyRequest, request: Request):
+    """Troca o código recebido por email por um token de sessão."""
+    try:
+        challenge = mfa.verify(payload.challenge_id, payload.code)
+    except mfa.MfaError as error:
+        events.log_event(
+            "warning",
+            "auth",
+            f"Código de verificação recusado ({error.code})",
+            request=request,
+            data={"challenge_id": payload.challenge_id, "code": error.code},
+        )
+        raise _mfa_error(error) from error
+
+    user = auth.get_user_by_id(str(challenge.get("user_id") or ""))
+    if not user:
+        raise HTTPException(status_code=401, detail="Conta não encontrada.")
+    try:
+        _require_user_active(user)
+    except HTTPException as error:
+        events.log_event(
+            "warning",
+            "auth",
+            f"Verificação em dois passos recusada: {user.get('email')} ({error.detail})",
+            request=request,
+            data={"email": user.get("email")},
+        )
+        raise
+    return _open_session(user, bool(challenge.get("remember")), request, method="email_code")
+
+
+@router.post("/mfa/resend", response_model=MfaChallengeResponse)
+def resend_mfa(payload: MfaResendRequest, request: Request):
+    """Reenvia um código novo para o mesmo desafio (respeitando o intervalo mínimo)."""
+    try:
+        challenge = mfa.resend(payload.challenge_id, ip=_client_info(request)["ip"])
+    except mfa.MfaError as error:
+        raise _mfa_error(error) from error
+    events.log_event(
+        "warning",
+        "auth",
+        f"Código de verificação reenviado: {challenge.get('email')}",
+        request=request,
+        data={"challenge_id": payload.challenge_id},
+    )
+    return MfaChallengeResponse(**challenge)
+
+
+@router.get("/mfa", response_model=MfaStatusResponse)
+def mfa_status(session: Annotated[CurrentSession, Depends(require_session)]):
+    """Estado da verificação em dois passos para a conta autenticada."""
+    user = auth.get_user_by_id(session.user.id) or {}
+    try:
+        return MfaStatusResponse(**mfa.status_for(user))
+    except mfa.MfaError as error:
+        raise _mfa_error(error) from error
+
+
+@router.put("/mfa", response_model=MfaStatusResponse)
+def update_mfa(payload: MfaPreferenceRequest, session: Annotated[CurrentSession, Depends(require_session)]):
+    """Ativa/desativa a verificação em dois passos para a própria conta.
+
+    Quando a política da administração a obriga, não é possível desligar (409).
+    """
+    user = auth.get_user_by_id(session.user.id) or {}
+    try:
+        enforced = mfa.is_enforced(user)
+    except mfa.MfaError as error:
+        raise _mfa_error(error) from error
+    if enforced and not payload.enabled:
+        raise HTTPException(
+            status_code=409,
+            detail="A verificação em dois passos é obrigatória para esta conta por decisão do administrador.",
+        )
+    try:
+        updated = auth.set_mfa_enabled(session.user.id, payload.enabled, actor=session.user.email)
+    except auth.AuthError as error:
+        raise _auth_error(error) from error
+
+    events.log_event(
+        "warning",
+        "auth",
+        f"Verificação em dois passos {'ativada' if payload.enabled else 'desativada'}: {session.user.email}",
+        user_id=session.user.id,
+        user_email=session.user.email,
+        data={"enabled": bool(payload.enabled), "enforced": enforced},
+    )
+    return MfaStatusResponse(**mfa.status_for(updated))
 
 
 @router.post("/logout", response_model=MessageResponse)

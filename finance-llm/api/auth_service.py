@@ -101,6 +101,11 @@ def _auth_secret() -> bytes:
         return _secret_cache
 
 
+def signing_secret() -> bytes:
+    """Segredo de assinatura da plataforma (tokens de sessão e códigos MFA)."""
+    return _auth_secret()
+
+
 def _b64e(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
@@ -315,6 +320,7 @@ def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
         "trial_expires_at": trial_expires_at,
         "approved_at": source.get("approved_at") or None,
         "pending_approval": status == USER_STATUS_PENDING,
+        "mfa_enabled": bool((source.get("mfa") or {}).get("enabled")),
         "subscription": source.get("subscription") or None,
     }
 
@@ -538,6 +544,36 @@ def change_password(user_id: str, current_password: str, new_password: str) -> N
     if current_password == new_password:
         raise AuthError("A nova palavra-passe tem de ser diferente da atual.", status_code=422, code="invalid_input")
     set_password(user_id, new_password)
+
+
+def set_mfa_enabled(
+    user_id: str,
+    enabled: bool,
+    *,
+    actor: str = "",
+    client: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Liga/desliga a verificação em dois passos da conta (preferência).
+
+    A obrigatoriedade vem da política global (`api.mfa_service`); aqui guarda-se
+    apenas a escolha do utilizador (ou do administrador, em seu nome).
+    """
+    es = client or _client()
+    user = get_user_by_id(user_id, es)
+    if not user:
+        raise AuthError("Conta não encontrada.", status_code=404, code="not_found")
+    key = normalize_email(user.get("email") or "")
+    now = _now_iso()
+    document = {
+        "mfa": {"enabled": bool(enabled), "updated_at": now, "updated_by": actor or ""},
+        "updated_at": now,
+    }
+    try:
+        es.update(index=AUTH_USERS_INDEX, id=key, doc=document, refresh=True)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("Falha ao atualizar a verificação em dois passos")
+        raise AuthError("Não foi possível guardar a verificação em dois passos.", status_code=502, code="es_error") from error
+    return public_user({**user, **document})
 
 
 def record_login(user_id: str) -> None:

@@ -57,6 +57,12 @@ def _smtp_config() -> Dict[str, Any]:
     }
 
 
+def is_configured() -> bool:
+    """True quando há remetente e servidor SMTP prontos a usar."""
+    cfg = _smtp_config()
+    return bool(cfg["host"] and cfg["from"])
+
+
 def _parse_from(raw: str) -> tuple[str, str]:
     """Interpreta 'Nome <email@example.com>' ou apenas 'email@example.com'."""
     raw = (raw or "").strip()
@@ -155,6 +161,43 @@ def _format_date(iso: Optional[str]) -> str:
         return dt.astimezone(timezone.utc).strftime("%d/%m/%Y às %H:%M")
     except ValueError:
         return str(iso)
+
+
+def send_login_code_email(to: str, name: str, code: str, *, ttl_minutes: int = 10, ip: str = "") -> Dict[str, Any]:
+    """Código de verificação em dois passos (login).
+
+    O código é de uso único e expira; a mensagem não revela a palavra-passe nem
+    qualquer outro dado da conta. Quando o login vem de um IP conhecido, aparece
+    na mensagem — é o sinal mais simples de «não fui eu».
+    """
+    subject = "Código de verificação IQ OS"
+    minutes = max(1, int(ttl_minutes))
+    origem = f"\nPedido a partir do IP {ip}.\n" if ip else ""
+    text = f"""Olá {name},
+
+O seu código de verificação é:
+
+    {code}
+
+Introduza-o na página de entrada para concluir o início de sessão. O código
+expira em {minutes} minutos e só pode ser usado uma vez.{origem}
+Se não tentou entrar na sua conta, ignore esta mensagem e altere a palavra-passe.
+"""
+    digits = "".join(ch for ch in code if ch.isdigit()) or code
+    html = f"""\
+<html>
+<body style="font-family: sans-serif; color: #111;">
+<p>Olá {name},</p>
+<p>O seu código de verificação é:</p>
+<p style="font-size: 28px; font-weight: 700; letter-spacing: 8px; margin: 18px 0;">{digits}</p>
+<p>Introduza-o na página de entrada para concluir o início de sessão. O código expira em
+<strong>{minutes} minutos</strong> e só pode ser usado uma vez.</p>
+{f'<p>Pedido a partir do IP <strong>{ip}</strong>.</p>' if ip else ''}
+<p>Se não tentou entrar na sua conta, ignore esta mensagem e altere a palavra-passe.</p>
+</body>
+</html>
+"""
+    return _send(to, subject, text, html)
 
 
 def send_approval_email(to: str, name: str, trial_expires_at: str) -> Dict[str, Any]:

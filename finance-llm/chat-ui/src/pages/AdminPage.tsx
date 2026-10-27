@@ -18,6 +18,8 @@
  *   perfil de CRM) vê na barra lateral, no dock e no menu Iniciar.
  * - **Plataforma** — o cabeçalho e o rodapé das páginas públicas da plataforma
  *   (`/`, `/login` e `/register`): marca, logótipo, navegação, botões e rodapé.
+ * - **Segurança** — verificação em dois passos (MFA) com código enviado por
+ *   email: quem é desafiado no login, validade do código, tentativas e reenvios.
  *
  * O acesso é restrito a contas com papel `admin` (o servidor devolve 403).
  */
@@ -63,6 +65,7 @@ import {
   listAdminUsers,
   logAdminEvent,
   revokeAdminUserSessions,
+  setAdminUserMfa,
   tailAdminLog,
   updateAdminUser,
   type AdminOverview,
@@ -82,9 +85,10 @@ import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 import { AdminReportsTab } from "./AdminReports";
 import { AdminBaseImpicTab } from "./AdminBaseImpic";
 import { AdminPlatformTab } from "./AdminPlatform";
+import { AdminSecurityTab } from "./AdminSecurity";
 import AdminSupportPanel from "../components/AdminSupportPanel";
 
-type Tab = "overview" | "users" | "support" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic" | "platform";
+type Tab = "overview" | "users" | "support" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic" | "platform" | "security";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -802,6 +806,31 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                       <button
                         type="button"
                         disabled={disabled}
+                        title={
+                          user.mfa_enabled
+                            ? "Desativar a verificação em dois passos desta conta"
+                            : "Ativar a verificação em dois passos (código por email)"
+                        }
+                        aria-pressed={Boolean(user.mfa_enabled)}
+                        onClick={() =>
+                          void act(
+                            `Verificação em dois passos ${user.mfa_enabled ? "desativada" : "ativada"} para ${user.email}`,
+                            () => setAdminUserMfa(user.id, !user.mfa_enabled),
+                            user.id,
+                          )
+                        }
+                        className={[
+                          "rounded-md border p-1 transition disabled:opacity-40",
+                          user.mfa_enabled
+                            ? "border-teal-400/30 bg-teal-400/10 text-teal-300 hover:bg-teal-400/20"
+                            : "border-white/10 bg-white/[0.04] text-muted-foreground hover:text-teal-200",
+                        ].join(" ")}
+                      >
+                        <KeyRound size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={disabled}
                         title="Terminar todas as sessões"
                         onClick={() => void act(`Sessões de ${user.email} terminadas`, () => revokeAdminUserSessions(user.id), user.id)}
                         className="rounded-md border border-white/10 bg-white/[0.04] p-1 text-muted-foreground transition hover:text-amber-200 disabled:opacity-40"
@@ -1281,6 +1310,7 @@ export default function AdminPage() {
     { id: "reports", label: "Relatórios", icon: <ReceiptText size={13} /> },
     { id: "base-impic", label: "Portal Base", icon: <HardDriveDownload size={13} /> },
     { id: "platform", label: "Plataforma", icon: <Globe2 size={13} /> },
+    { id: "security", label: "Segurança", icon: <KeyRound size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
     { id: "sidebar", label: "Menu lateral", icon: <PanelLeft size={13} /> },
     { id: "keys", label: "Chaves", icon: <KeyRound size={13} /> },
@@ -1343,6 +1373,7 @@ export default function AdminPage() {
       {tab === "reports" && <AdminReportsTab onError={setError} />}
         {tab === "base-impic" && <AdminBaseImpicTab onError={setError} />}
         {tab === "platform" && <AdminPlatformTab onError={setError} />}
+        {tab === "security" && <AdminSecurityTab onError={setError} />}
         {tab === "events" && <EventsTab onError={setError} />}
         {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
         {tab === "keys" && <AdminServiceKeysTab onError={setError} />}

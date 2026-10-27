@@ -14,10 +14,12 @@ import {
   authApi,
   getToken,
   installAuthFetch,
+  isMfaChallenge,
   setToken,
   type AuthResult,
   type AuthSession,
   type AuthUser,
+  type MfaChallenge,
   type ProfilePatch,
 } from "./authApi";
 import { syncIframePagesFromUser } from "./iframePages";
@@ -26,10 +28,17 @@ installAuthFetch();
 
 type Status = "loading" | "anonymous" | "authenticated" | "pending_approval" | "trial_expired";
 
+/** Resultado do login: sessão aberta ou pedido do código de verificação. */
+export type LoginOutcome =
+  | { status: "authenticated"; user: AuthUser }
+  | { status: "mfa_required"; challenge: MfaChallenge };
+
 type AuthContextValue = {
   status: Status;
   user: AuthUser | null;
-  login: (email: string, password: string, remember: boolean) => Promise<AuthUser>;
+  login: (email: string, password: string, remember: boolean) => Promise<LoginOutcome>;
+  verifyMfa: (challengeId: string, code: string) => Promise<AuthUser>;
+  resendMfa: (challengeId: string) => Promise<MfaChallenge>;
   register: (data: { name: string; email: string; password: string; title?: string; organization?: string }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   logoutEverywhere: () => Promise<string>;
@@ -108,10 +117,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (email: string, password: string, remember: boolean) =>
-      acceptResult(await authApi.login({ email, password, remember })),
+    async (email: string, password: string, remember: boolean): Promise<LoginOutcome> => {
+      const result = await authApi.login({ email, password, remember });
+      if (isMfaChallenge(result)) {
+        // A palavra-passe está correta, mas falta o código enviado por email:
+        // ainda não há sessão, por isso o token não é guardado.
+        setUser(null);
+        setStatus("anonymous");
+        return { status: "mfa_required", challenge: result };
+      }
+      return { status: "authenticated", user: acceptResult(result) };
+    },
     [acceptResult],
   );
+
+  const verifyMfa = useCallback(
+    async (challengeId: string, code: string) =>
+      acceptResult(await authApi.verifyMfa({ challenge_id: challengeId, code })),
+    [acceptResult],
+  );
+
+  const resendMfa = useCallback((challengeId: string) => authApi.resendMfa(challengeId), []);
 
   const register = useCallback(
     async (data: { name: string; email: string; password: string; title?: string; organization?: string }) => {
@@ -183,6 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       login,
+      verifyMfa,
+      resendMfa,
       register,
       logout,
       logoutEverywhere,
@@ -197,6 +225,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       login,
+      verifyMfa,
+      resendMfa,
       register,
       logout,
       logoutEverywhere,

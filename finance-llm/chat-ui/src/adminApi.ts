@@ -68,6 +68,7 @@ export type AdminUser = {
   trial_expires_at?: string | null;
   approved_at?: string | null;
   pending_approval?: boolean;
+  mfa_enabled?: boolean;
   subscription?: {
     plan_id?: string;
     status?: string;
@@ -195,6 +196,51 @@ export function revokeAdminUserSessions(userId: string): Promise<{ ok: boolean; 
 
 export function approveAdminUser(userId: string, trialDays = 5): Promise<{ ok: boolean; user: AdminUser }> {
   return post(`/admin/users/${encodeURIComponent(userId)}/approve`, { trial_days: trialDays });
+}
+
+/* ------------------------------------------ verificação em dois passos (MFA) */
+
+export type MfaPolicy = {
+  ok?: boolean;
+  policy: string;
+  label: string;
+  code_ttl_seconds: number;
+  max_attempts: number;
+  resend_cooldown_seconds: number;
+  updated_at?: string | null;
+  updated_by?: string;
+  email_configured: boolean;
+  warning?: string | null;
+  error?: string | null;
+  policies: { value: string; label: string }[];
+  limits: {
+    code_ttl_seconds: [number, number];
+    max_attempts: [number, number];
+    resend_cooldown_seconds: [number, number];
+  };
+};
+
+export type MfaPolicyPatch = {
+  policy: string;
+  code_ttl_seconds: number;
+  max_attempts: number;
+  resend_cooldown_seconds: number;
+};
+
+export function getAdminMfaPolicy(): Promise<MfaPolicy> {
+  return request<MfaPolicy>("/admin/auth/mfa");
+}
+
+export function saveAdminMfaPolicy(patch: MfaPolicyPatch): Promise<MfaPolicy> {
+  return request<MfaPolicy>("/admin/auth/mfa", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function setAdminUserMfa(userId: string, enabled: boolean): Promise<{ ok: boolean; user: AdminUser }> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/mfa`, { enabled });
 }
 
 /* ------------------------------------------------------- pagamentos */

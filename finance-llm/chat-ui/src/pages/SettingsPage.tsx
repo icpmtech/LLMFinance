@@ -35,7 +35,7 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "../auth";
-import type { AuthSession, AuthUser } from "../authApi";
+import { authApi, type AuthSession, type AuthUser, type MfaStatus } from "../authApi";
 import { updateDockPrefs } from "../dock";
 import { setSidebarHidden, useWindowMode } from "../layout";
 
@@ -362,6 +362,9 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      {/* Verificação em dois passos */}
+      <MfaSettings />
+
       {/* Sessões */}
       <Card
         title="Sessões ativas"
@@ -479,6 +482,122 @@ export default function SettingsPage() {
 }
 
 /* ---------------------------------------------------------------- peças */
+
+/**
+ * Verificação em dois passos da conta (código enviado por email).
+ *
+ * A política da administração pode obrigar (aí o interruptor fica bloqueado) ou
+ * deixar a escolha ao utilizador. O estado vem de `/auth/mfa`, que junta a
+ * política global com a preferência desta conta.
+ */
+function MfaSettings() {
+  const [status, setStatus] = useState<MfaStatus | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      setStatus(await authApi.mfaStatus());
+    } catch (error) {
+      setMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "Não foi possível ler a verificação em dois passos.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const toggle = async (enabled: boolean) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const next = await authApi.setMfa(enabled);
+      setStatus(next);
+      setMessage({
+        kind: "ok",
+        text: enabled
+          ? "Verificação em dois passos ativada: o próximo início de sessão pede um código enviado por email."
+          : "Verificação em dois passos desativada.",
+      });
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Erro ao guardar." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const active = Boolean(status?.required);
+
+  return (
+    <Card
+      title="Verificação em dois passos"
+      icon={<KeyRound size={15} className="text-teal-300" />}
+      action={
+        <button
+          type="button"
+          onClick={() => void load()}
+          aria-label="Atualizar verificação em dois passos"
+          className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        >
+          <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
+        </button>
+      }
+    >
+      {message && <Banner kind={message.kind} text={message.text} />}
+      {!status ? (
+        <p className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+          {busy ? <Loader2 size={13} className="animate-spin" /> : null} A carregar…
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {status.can_change ? (
+            <ToggleRow
+              label="Pedir um código no início de sessão"
+              hint={`O código é enviado para ${status.email} e expira em ${Math.round(status.code_ttl_seconds / 60)} minuto(s).`}
+              icon={<ShieldCheck size={14} />}
+              checked={Boolean(status.user_enabled)}
+              onChange={(value) => {
+                if (busy) return;
+                void toggle(value);
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-teal-300/25 bg-teal-400/10 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm">
+                  <ShieldCheck size={14} className="text-teal-300" />
+                  Verificação em dois passos obrigatória
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Definida pelo administrador para esta conta ({status.policy_label.toLowerCase()}). O código é
+                  enviado para {status.email}.
+                </p>
+              </div>
+              <span className="rounded-full border border-teal-300/30 bg-teal-400/15 px-2 py-0.5 text-[10px] text-teal-200">
+                ativa
+              </span>
+            </div>
+          )}
+
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {active
+              ? "Cada início de sessão pede um código de 6 dígitos, de uso único."
+              : "Sem código, a conta entra apenas com a palavra-passe."}
+            {status.email_configured
+              ? ""
+              : " O envio de email não está configurado no servidor — ative-o apenas depois de o administrador configurar o SMTP."}
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export function Avatar({ user, size = 32 }: { user: Pick<AuthUser, "initials" | "name" | "email">; size?: number }) {
   return (

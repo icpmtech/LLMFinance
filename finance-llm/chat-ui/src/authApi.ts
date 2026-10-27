@@ -42,6 +42,7 @@ export type AuthUser = {
   trial_expires_at?: string | null;
   approved_at?: string | null;
   pending_approval?: boolean;
+  mfa_enabled?: boolean;
   subscription?: {
     plan_id?: string;
     status?: string;
@@ -173,12 +174,55 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type AuthResult = { token: string; expires_at: string; user: AuthUser };
 
+/** Resposta do login quando a conta exige verificação em dois passos. */
+export type MfaChallenge = {
+  ok: boolean;
+  mfa_required: true;
+  challenge_id: string;
+  email: string;
+  expires_at: string | null;
+  resend_cooldown_seconds: number;
+  code_sent: boolean;
+};
+
+export type LoginResult = AuthResult | MfaChallenge;
+
+/** Estado da verificação em dois passos para a conta autenticada. */
+export type MfaStatus = {
+  policy: "off" | "admins" | "all" | string;
+  policy_label: string;
+  enforced: boolean;
+  user_enabled: boolean;
+  required: boolean;
+  can_change: boolean;
+  email: string;
+  email_configured: boolean;
+  code_ttl_seconds: number;
+  max_attempts: number;
+  resend_cooldown_seconds: number;
+};
+
+export function isMfaChallenge(result: LoginResult): result is MfaChallenge {
+  return (result as MfaChallenge).mfa_required === true;
+}
+
 export const authApi = {
   register: (data: { name: string; email: string; password: string; title?: string; organization?: string }) =>
     request<AuthResult>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
 
   login: (data: { email: string; password: string; remember?: boolean }) =>
-    request<AuthResult>("/auth/login", { method: "POST", body: JSON.stringify(data) }),
+    request<LoginResult>("/auth/login", { method: "POST", body: JSON.stringify(data) }),
+
+  verifyMfa: (data: { challenge_id: string; code: string }) =>
+    request<AuthResult>("/auth/mfa/verify", { method: "POST", body: JSON.stringify(data) }),
+
+  resendMfa: (challengeId: string) =>
+    request<MfaChallenge>("/auth/mfa/resend", { method: "POST", body: JSON.stringify({ challenge_id: challengeId }) }),
+
+  mfaStatus: () => request<MfaStatus>("/auth/mfa"),
+
+  setMfa: (enabled: boolean) =>
+    request<MfaStatus>("/auth/mfa", { method: "PUT", body: JSON.stringify({ enabled }) }),
 
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
 

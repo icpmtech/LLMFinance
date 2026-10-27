@@ -5,23 +5,27 @@
  * `finance_sessions`, pelo que o registo é imediato e o login abre uma sessão
  * real (revogável a partir das definições, noutro dispositivo).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  ArrowLeft,
   Building2,
   Check,
   Eye,
   EyeOff,
+  KeyRound,
   Loader2,
   Lock,
   LogIn,
   Mail,
+  RefreshCw,
   ShieldCheck,
   TrendingUp,
   User,
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "../auth";
+import type { MfaChallenge } from "../authApi";
 import { PublicFooter, PublicHeader } from "../components/PublicShell";
 import { SupportChat } from "../components/SupportChat";
 
@@ -34,7 +38,7 @@ const HIGHLIGHTS = [
 ];
 
 export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
-  const { login, register } = useAuth();
+  const { login, register, verifyMfa, resendMfa } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +49,18 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Verificação em dois passos: a palavra-passe já foi aceite e falta o código.
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   const passwordIssues = [
     { ok: password.length >= 8, label: "8 caracteres" },
@@ -56,6 +72,11 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
+    // Mudar de separador cancela qualquer verificação em curso.
+    setChallenge(null);
+    setCode("");
+    setNotice(null);
+    setCooldown(0);
     if (typeof window !== "undefined") {
       const path = next === "register" ? "/register" : "/login";
       if (window.location.pathname !== path) {
@@ -78,7 +99,13 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(email.trim(), password, remember);
+        const outcome = await login(email.trim(), password, remember);
+        if (outcome.status === "mfa_required") {
+          setChallenge(outcome.challenge);
+          setCode("");
+          setNotice(`Enviámos um código de 6 dígitos para ${outcome.challenge.email}.`);
+          setCooldown(Math.max(0, Math.round(outcome.challenge.resend_cooldown_seconds)));
+        }
       } else {
         const user = await register({
           name: name.trim(),
@@ -99,6 +126,50 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleVerify = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy || !challenge) return;
+    setError(null);
+    const digits = code.replace(/\D/g, "");
+    if (digits.length !== 6) return setError("Introduza os 6 dígitos do código recebido.");
+
+    setBusy(true);
+    try {
+      // Em caso de sucesso o estado global passa a «autenticado» e a aplicação
+      // navega sozinha — não é preciso redirecionar aqui.
+      await verifyMfa(challenge.challenge_id, digits);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível validar o código.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!challenge || resending || cooldown > 0) return;
+    setError(null);
+    setResending(true);
+    try {
+      const renewed = await resendMfa(challenge.challenge_id);
+      setChallenge(renewed);
+      setCode("");
+      setNotice(`Enviámos um código novo para ${renewed.email}.`);
+      setCooldown(Math.max(0, Math.round(renewed.resend_cooldown_seconds)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível reenviar o código.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const backToPassword = () => {
+    setChallenge(null);
+    setCode("");
+    setNotice(null);
+    setError(null);
+    setCooldown(0);
   };
 
   return (
@@ -159,7 +230,71 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
               ))}
             </div>
 
-            <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+            <form className="mt-5 space-y-4" onSubmit={challenge ? handleVerify : handleSubmit}>
+              {challenge ? (
+                <>
+                  <div className="flex items-start gap-2 rounded-xl border border-teal-300/25 bg-teal-400/10 px-3 py-2 text-[11.5px] text-teal-100">
+                    <ShieldCheck size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                      <span className="block font-medium">Verificação em dois passos</span>
+                      {notice || `Introduza o código enviado para ${challenge.email}.`}
+                    </span>
+                  </div>
+
+                  <Field label="Código de verificação" icon={<KeyRound size={15} />}>
+                    <input
+                      value={code}
+                      onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      autoFocus
+                      maxLength={6}
+                      placeholder="000000"
+                      aria-label="Código de verificação"
+                      className="w-full bg-transparent text-lg tracking-[0.45em] outline-none placeholder:tracking-[0.45em] placeholder:text-muted-foreground"
+                    />
+                  </Field>
+
+                  {error && (
+                    <p
+                      role="alert"
+                      className="flex items-start gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"
+                    >
+                      <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                      {error}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={busy || code.length !== 6}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-blue-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70 disabled:opacity-60"
+                  >
+                    {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+                    {busy ? "A validar…" : "Confirmar código"}
+                  </button>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+                    <button
+                      type="button"
+                      onClick={() => void handleResend()}
+                      disabled={resending || cooldown > 0}
+                      className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 disabled:opacity-50"
+                    >
+                      {resending ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                      {cooldown > 0 ? `Reenviar em ${cooldown}s` : "Reenviar código"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={backToPassword}
+                      className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+                    >
+                      <ArrowLeft size={12} /> Voltar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
               {mode === "register" && (
                 <Field label="Nome completo" icon={<User size={15} />}>
                   <input
@@ -272,6 +407,8 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                 {busy ? <Loader2 size={15} className="animate-spin" /> : mode === "login" ? <LogIn size={15} /> : <UserPlus size={15} />}
                 {busy ? "A processar…" : mode === "login" ? "Entrar" : "Criar conta"}
               </button>
+                </>
+              )}
             </form>
 
             <p className="mt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
@@ -299,8 +436,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                 </>
               )}
               <span className="mt-2 block">
-                As contas e as sessões são guardadas no Elasticsearch. A palavra-passe é derivada com scrypt e nunca é
-                guardada em texto simples.
+               Nós Sabemos e tu Sabes? Junta a nós.
               </span>
             </p>
           </div>
