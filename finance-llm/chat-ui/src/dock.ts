@@ -1093,6 +1093,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "56,189,248",
   },
   {
+    id: "modelo-chat",
+    label: "Chat do modelo",
+    hint: "Conversar com o modelo de contratos local Qwen 0.5B + LoRA",
+    icon: MessageSquare,
+    gradient: "from-violet-200 via-fuchsia-400 to-rose-500",
+    accent: "236,72,153",
+  },
+  {
     id: "elastic",
     label: "Elasticsearch",
     hint: "Explorar índices e documentos",
