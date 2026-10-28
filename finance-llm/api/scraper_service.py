@@ -589,30 +589,47 @@ def delete_source(source_id: str, *, purge_items: bool = False) -> Dict[str, Any
 
 # ------------------------------------------------------------------ Scrapling
 def _load_scrapling() -> Dict[str, Any]:
-    """Importa o Scrapling (tarde) e devolve as classes dos fetchers."""
+    """Importa o Scrapling (tarde) e devolve as classes dos fetchers.
+
+    O Scrapling 0.5 fundiu os fetchers de browser numa só família
+    (`StealthyFetcher`/`StealthySession`), enquanto o 0.4.x tinha também
+    `DynamicFetcher`/`DynamicSession`. O código mantém compatibilidade com
+    ambas as versões para não partar deploys com imagens antigas.
+    """
     try:
         from scrapling.fetchers import (  # type: ignore
-            DynamicFetcher,
-            DynamicSession,
             Fetcher,
             FetcherSession,
             StealthyFetcher,
             StealthySession,
         )
-    except Exception as exc:  # pragma: no cover - depende do ambiente
+    except ModuleNotFoundError as exc:
         raise RuntimeError(
             "O Scrapling não está instalado no interpretador que corre a API. "
             f'Instale com `"{sys.executable}" -m pip install "scrapling[fetchers]"` '
             "e, para browsers, `scrapling install`."
         ) from exc
-    return {
+    except ImportError as exc:
+        raise RuntimeError(
+            "O Scrapling está instalado mas a API mudou e o IQ OS precisa de ser "
+            "atualizado para a versão presente. Detalhe: " + str(exc)
+        ) from exc
+    classes: Dict[str, Any] = {
         "Fetcher": Fetcher,
         "FetcherSession": FetcherSession,
-        "DynamicFetcher": DynamicFetcher,
-        "DynamicSession": DynamicSession,
         "StealthyFetcher": StealthyFetcher,
         "StealthySession": StealthySession,
     }
+    # Compatibilidade com Scrapling 0.4.x, que ainda tem fetcher dinâmico.
+    try:
+        from scrapling.fetchers import DynamicFetcher, DynamicSession  # type: ignore
+        classes["DynamicFetcher"] = DynamicFetcher
+        classes["DynamicSession"] = DynamicSession
+    except ImportError:
+        # Scrapling 0.5+: o browser dinâmico passou a fazer parte do stealth.
+        classes["DynamicFetcher"] = StealthyFetcher
+        classes["DynamicSession"] = StealthySession
+    return classes
 
 
 def _browsers_installed() -> bool:
@@ -666,7 +683,8 @@ def availability() -> Dict[str, Any]:
         info["scrapling"] = True
         info["fetchers"] = {
             "http": "FetcherSession" in classes,
-            "dynamic": "DynamicSession" in classes,
+            # No 0.4.x existe `DynamicSession`; no 0.5+ o browser dinâmico é stealth.
+            "dynamic": "DynamicSession" in classes or "StealthySession" in classes,
             "stealth": "StealthySession" in classes,
         }
         try:
@@ -738,39 +756,42 @@ def _open_session(kind: str, options: Dict[str, Any]):
             kwargs["proxy"] = opts["proxy"]
         if opts.get("http_version"):
             kwargs["http_version"] = opts["http_version"]
-        # O FetcherSession actual do Scrapling 0.4.x não tem métodos de fetch;
-        # usamos o Fetcher directamente, que já reutiliza a mesma sessão HTTP
-        # subjacente e suporta `impersonate` no construtor. Como o Fetcher não
-        # implementa context manager, envolvemo-lo numa classe nula.
-        return _FetcherContext(classes["Fetcher"](**kwargs))
-    if kind == "dynamic":
-        kwargs = {"headless": bool(opts.get("headless", True))}
-        if opts.get("network_idle") is not None:
-            kwargs["network_idle"] = bool(opts["network_idle"])
-        if opts.get("disable_resources") is not None:
-            kwargs["disable_resources"] = bool(opts["disable_resources"])
-        if opts.get("proxy"):
-            kwargs["proxy"] = opts["proxy"]
-        return classes["DynamicSession"](**kwargs)
-    kwargs = {"headless": bool(opts.get("headless", True))}
-    if opts.get("solve_cloudflare") is not None:
+        # Scrapling 0.5: `FetcherSession` já expõe `.get()`/`.post()` via
+        # `SyncSessionLogic`, por isso pode ser usado directamente como CM.
+        # Scrapling 0.4.x: o `FetcherSession` não tinha esses métodos; o código
+        # de `_session_fetch`/_session_post trata a diferença.
+        return classes["FetcherSession"](**kwargs)
+    # `dynamic` e `stealth` partilham a mesma sessão stealth no Scrapling 0.5+;
+    # no 0.4.x usam as classes respectivas.
+    session_class = classes["DynamicSession"] if kind == "dynamic" else classes["StealthySession"]
+    kwargs: Dict[str, Any] = {"headless": bool(opts.get("headless", True))}
+    if kind == "stealth" and opts.get("solve_cloudflare") is not None:
         kwargs["solve_cloudflare"] = bool(opts["solve_cloudflare"])
     if opts.get("network_idle") is not None:
         kwargs["network_idle"] = bool(opts["network_idle"])
+    if opts.get("disable_resources") is not None:
+        kwargs["disable_resources"] = bool(opts["disable_resources"])
     if opts.get("proxy"):
         kwargs["proxy"] = opts["proxy"]
-    return classes["StealthySession"](**kwargs)
+    return session_class(**kwargs)
 
 
 def _session_fetch(session: Any, kind: str, url: str, options: Dict[str, Any]) -> Any:
     """Executa um pedido, uniformizando a API das sessões do Scrapling."""
     timeout = options.get("timeout")
     if kind == "http":
-        kwargs: Dict[str, Any] = {"stealthy_headers": True}
+        kwargs: Dict[str, Any] = {}
+        if callable(getattr(session, "get", None)):
+            kwargs["stealthy_headers"] = True
+            if timeout:
+                kwargs["timeout"] = timeout
+            return session.get(url, **kwargs)
+        # Scrapling 0.4.x: `FetcherSession` só tinha `fetch()`.
         if timeout:
             kwargs["timeout"] = timeout
-        return session.get(url, **kwargs)
-    kwargs = {}
+        return session.fetch(url, **kwargs)
+    # Browser (dynamic/stealth): usa `.fetch()` (API comum 0.4.x/0.5.x).
+    kwargs: Dict[str, Any] = {}
     if timeout:
         kwargs["timeout"] = timeout * 1000  # os browsers usam milissegundos
     return session.fetch(url, **kwargs)
@@ -779,8 +800,8 @@ def _session_fetch(session: Any, kind: str, url: str, options: Dict[str, Any]) -
 def _session_post(session: Any, kind: str, url: str, data: Dict[str, str], options: Dict[str, Any]) -> Any:
     """Envia um formulário (`POST`) — usado pela paginação por *postback*.
 
-    O `http` usa `Fetcher.post`; os fetchers de browser não expõem formulários,
-    pelo que aí o `__doPostBack` é executado como JavaScript na página aberta.
+    O `http` usa `FetcherSession.post`; os fetchers de browser não expõem
+    formulários, pelo que aí o `__doPostBack` é executado como JavaScript.
     """
     timeout = options.get("timeout")
     if kind == "http":
@@ -788,18 +809,20 @@ def _session_post(session: Any, kind: str, url: str, data: Dict[str, str], optio
         if timeout:
             kwargs["timeout"] = timeout
         post = getattr(session, "post", None)
-        if not callable(post):
-            # Algumas versões do Scrapling só expõem `request`.
-            post = getattr(session, "request", None)
-            if callable(post):
-                return post("POST", url, data=data, **kwargs)
-            raise RuntimeError("A sessão HTTP do Scrapling não suporta POST")
-        return post(url, data=data, **kwargs)
+        if callable(post):
+            return post(url, data=data, **kwargs)
+        # Fallback para versões onde só há `request`.
+        request = getattr(session, "request", None)
+        if callable(request):
+            return request("POST", url, data=data, **kwargs)
+        raise RuntimeError("A sessão HTTP do Scrapling não suporta POST")
     target = data.get("__EVENTTARGET") or ""
     script = f"__doPostBack({json.dumps(target)}, '')"
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
     if timeout:
         kwargs["timeout"] = timeout * 1000
+    # A sessão stealth já abriu a página no `fetch()` anterior; usa a página
+    # corrente para avaliar o postback e depois devolve a nova resposta.
     page = getattr(session, "page", None)
     if page is not None and hasattr(page, "evaluate"):
         page.evaluate(script)

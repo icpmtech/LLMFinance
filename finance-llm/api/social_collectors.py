@@ -413,10 +413,15 @@ def _fetch_html(url: str, options: Optional[Dict[str, Any]] = None) -> Any:
     """Página HTML com a impressão digital de Chrome (Scrapling `http`)."""
     try:
         from scrapling.fetchers import FetcherSession  # type: ignore
-    except Exception as exc:
+    except ModuleNotFoundError as exc:
         raise CollectorError(
             "O Scrapling não está instalado no interpretador que corre a API.",
             hint="Instale com `pip install \"scrapling[fetchers]\"`.",
+        ) from exc
+    except ImportError as exc:
+        raise CollectorError(
+            "O Scrapling está instalado mas a API mudou; o módulo social precisa de atualização.",
+            hint=str(exc),
         ) from exc
 
     options = options or {}
