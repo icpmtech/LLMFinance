@@ -50,17 +50,33 @@ def render_prompt(instruction: str, data: str, eos_token: str = "") -> str:
     return PROMPT_TEMPLATE.format(instruction=instruction.strip(), input=data.strip())
 
 
-def build_messages(instruction: str, data: str) -> List[Dict[str, str]]:
-    """Mensagens no formato do `apply_chat_template` (Qwen2.5 traz o dele)."""
+def build_messages(instruction: str, data: str, *, sistema: Optional[str] = None, contexto: Optional[str] = None) -> List[Dict[str, str]]:
+    """Mensagens no formato do `apply_chat_template` (Qwen2.5 traz o dele).
+
+    `contexto` (memória + evidências do RAG + resultados de skills) entra **antes**
+    dos dados do pedido: o modelo lê primeiro o que a plataforma sabe e só depois
+    o documento, que é o que tem de descrever.
+    """
+    partes: List[str] = []
+    if contexto and contexto.strip():
+        partes.append(contexto.strip())
+    partes.append(user_content(instruction, data))
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_content(instruction, data)},
+        {"role": "system", "content": (sistema or SYSTEM_PROMPT).strip() or SYSTEM_PROMPT},
+        {"role": "user", "content": "\n\n".join(partes)},
     ]
 
 
-def render_chat_prompt(tokenizer, instruction: str, data: str) -> str:
+def render_chat_prompt(
+    tokenizer,
+    instruction: str,
+    data: str,
+    *,
+    sistema: Optional[str] = None,
+    contexto: Optional[str] = None,
+) -> str:
     """Prompt com o `chat_template` do modelo e o turno do assistente aberto."""
-    messages = build_messages(instruction, data)
+    messages = build_messages(instruction, data, sistema=sistema, contexto=contexto)
     template = getattr(tokenizer, "chat_template", None)
     if not template:
         return render_prompt(instruction, data)
@@ -147,6 +163,12 @@ def get_model(base_model: str = DEFAULT_BASE_MODEL, adapter_dir: Path | str = DE
         return _cache[key]
 
 
+def limpar_cache() -> None:
+    """Esquece o modelo carregado (o adaptador foi reescrito por uma adaptação)."""
+    with _lock:
+        _cache.clear()
+
+
 def answer(
     instruction: str,
     data: str,
@@ -156,16 +178,24 @@ def answer(
     adapter: bool = True,
     max_new_tokens: int = 160,
     temperature: float = 0.2,
+    sistema: Optional[str] = None,
+    contexto: Optional[str] = None,
+    devolver_tokens: bool = False,
 ) -> Dict[str, Any]:
-    """Gera a resposta do modelo afinado para um documento do Elasticsearch."""
+    """Gera a resposta do modelo afinado para um documento do Elasticsearch.
+
+    Com `devolver_tokens`, devolve também a probabilidade que o modelo deu a cada
+    token gerado — é a matéria-prima do diagrama «como é que ele chegou aqui»
+    (uma resposta com tokens de 0,2 de probabilidade é um palpite).
+    """
     import torch
 
     tokenizer, model = get_model(base_model, adapter_dir, adapter)
-    prompt = render_chat_prompt(tokenizer, instruction, data)
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024)
+    prompt = render_chat_prompt(tokenizer, instruction, data, sistema=sistema, contexto=contexto)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1536)
     prompt_len = inputs["input_ids"].shape[-1]
     with torch.no_grad():
-        output = model.generate(
+        saida = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
             do_sample=temperature > 0,
@@ -174,12 +204,32 @@ def answer(
             repetition_penalty=1.05,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
+            output_scores=devolver_tokens,
+            return_dict_in_generate=devolver_tokens,
         )
-    text = tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True).strip()
-    return {
+    sequencia = saida.sequences if devolver_tokens else saida
+    gerados = sequencia[0][prompt_len:]
+    text = tokenizer.decode(gerados, skip_special_tokens=True).strip()
+    resultado: Dict[str, Any] = {
         "resposta": text,
         "modelo": base_model,
         "adaptador": str(adapter_dir) if adapter and adapter_available(adapter_dir) else None,
         "prompt_tokens": int(prompt_len),
-        "tokens_gerados": int(output.shape[-1] - prompt_len),
+        "tokens_gerados": int(sequencia.shape[-1] - prompt_len),
     }
+    if devolver_tokens:
+        tokens: List[Dict[str, Any]] = []
+        for i, token_id in enumerate(gerados.tolist()):
+            entrada: Dict[str, Any] = {"token": tokenizer.decode([token_id]), "id": token_id}
+            if i < len(saida.scores):
+                distribuicao = torch.softmax(saida.scores[i][0], dim=-1)
+                probabilidade = float(distribuicao[token_id])
+                entrada["probabilidade"] = round(probabilidade, 4)
+                # Entropia normalizada: 0 = certeza absoluta, 1 = indecisão total.
+                entrada["entropia"] = round(float(-(distribuicao * torch.log(distribuicao + 1e-12)).sum()) / 12.0, 3)
+            tokens.append(entrada)
+        resultado["tokens"] = tokens
+        if tokens:
+            probs = [t.get("probabilidade", 0.0) for t in tokens if "probabilidade" in t]
+            resultado["confianca_media"] = round(sum(probs) / len(probs), 4) if probs else None
+    return resultado

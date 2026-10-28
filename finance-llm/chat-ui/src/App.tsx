@@ -99,6 +99,8 @@ import MercadoPage from "./pages/MercadoPage";
 import MercadoCenariosPage from "./pages/MercadoCenariosPage";
 // Modelo de contratos: fine-tuning LoRA em directo (pipeline, curva, avaliação).
 import ModeloContratosPage from "./pages/ModeloContratosPage";
+// Playground do mesmo modelo: prompt de sistema, parâmetros e traço da resposta.
+import ModeloPlaygroundPage from "./pages/ModeloPlaygroundPage";
 import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -240,6 +242,7 @@ type AppView =
   | "mercado"
   | "mercado-cenarios"
   | "modelo-contratos"
+  | "modelo-playground"
   | "market"
   | "vortal"
   | "osint"
@@ -493,6 +496,7 @@ function pathForView(
   if (view === "mercado") return "/mercado";
   if (view === "mercado-cenarios") return "/mercado/cenarios";
   if (view === "modelo-contratos") return "/modelo/contratos";
+  if (view === "modelo-playground") return "/modelo/playground";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -770,6 +774,7 @@ export default function App() {
     if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) return "mercado-cenarios";
     // Modelo de contratos: fine-tuning LoRA dos dados de contratos e empresas.
     if (path === "/modelo/contratos" || path.startsWith("/modelo/contratos/")) return "modelo-contratos";
+    if (path === "/modelo/playground" || path.startsWith("/modelo/playground/")) return "modelo-playground";
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
     // Vista de mercado: os tickers da plataforma agrupados por país.
     if (path === "/market" || path.startsWith("/market/")) return "market";
@@ -932,6 +937,7 @@ export default function App() {
       else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
       else if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) next = "mercado-cenarios";
       else if (path === "/modelo/contratos" || path.startsWith("/modelo/contratos/")) next = "modelo-contratos";
+      else if (path === "/modelo/playground" || path.startsWith("/modelo/playground/")) next = "modelo-playground";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
       else if (path === "/market" || path.startsWith("/market/")) next = "market";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
@@ -1854,6 +1860,8 @@ export default function App() {
     // Modelo de contratos: o pipeline do fine-tuning, a curva de perda em directo
     // e a avaliação base vs adaptador.
     if (target === "modelo-contratos") return <ModeloContratosPage />;
+    // Playground: prompt de sistema, temperatura e tokens à vista.
+    if (target === "modelo-playground") return <ModeloPlaygroundPage />;
     // Vista de mercado: os tickers da plataforma agrupados por país, cada um
     // ligado à sua ficha (`/tickers/<símbolo>`).
     if (target === "market")

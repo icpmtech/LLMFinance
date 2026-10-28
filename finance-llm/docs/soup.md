@@ -4,6 +4,11 @@
 > usando o [Soup](https://github.com/MakazhanAlpamys/Soup) (`soup-cli`) num
 > contentor.
 
+> Para o modelo de contratos treinado **em CPU, com pausa/retoma e avaliado num
+> conjunto held-out**, ver [modelo-contratos.md](modelo-contratos.md): é o
+> caminho actual (`training/train_lora_contratos.py`), e o Soup continua a ser o
+> atalho para um treino de uma só tacada numa máquina com GPU.
+
 O treino do projecto era feito à mão, com dois loops PyTorch próprios
 (`training/train.py` para o GPT-2 e `training/train_mistral.py` para o Mistral).
 Esses loops continuam a ser o que treina os modelos pequenos em CPU, mas não têm

@@ -31,6 +31,7 @@ import {
   FileText,
   Fingerprint,
   Fish,
+  FlaskConical,
   FolderOpen,
   FolderDown,
   FolderSearch,
@@ -1082,6 +1083,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Brain,
     gradient: "from-emerald-200 via-teal-400 to-cyan-600",
     accent: "16,163,127",
+  },
+  {
+    id: "modelo-playground",
+    label: "Playground do modelo",
+    hint: "Prompt de sistema, temperatura e tokens: testar o modelo com o traço da resposta",
+    icon: FlaskConical,
+    gradient: "from-cyan-200 via-sky-400 to-indigo-600",
+    accent: "56,189,248",
   },
   {
     id: "elastic",

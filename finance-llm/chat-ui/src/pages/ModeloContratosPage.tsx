@@ -22,38 +22,36 @@ import {
   Brain,
   CheckCircle2,
   Database,
+  ExternalLink,
   FileJson2,
+  FlaskConical,
   Gauge,
   Layers,
   Loader2,
   PauseCircle,
   Play,
   RefreshCw,
-  Send,
-  Sparkles,
   Timer,
   Zap,
 } from "lucide-react";
+import MatrizDePesos from "../components/modelo/MatrizDePesos";
+import GrafoDoModelo from "../components/modelo/GrafoDoModelo";
+import LigacoesDeDados from "../components/modelo/LigacoesDeDados";
+import ChatDoModelo from "../components/modelo/ChatDoModelo";
 import {
   correrAvaliacao,
   getCurvaTreino,
+  getLigacoes,
+  getMatriz,
   getModeloEstado,
   listarAvaliacoes,
-  perguntarAoModelo,
+  type Ligacoes,
+  type MatrizAdaptador,
   type ModeloEstado,
   type PontoTreino,
   type ResultadoAvaliacao,
 } from "../llmModeloApi";
 import "../modeloContratos.css";
-
-const AMOSTRA_INSTRUCAO = "Descreve este contrato público português.";
-const AMOSTRA_DADOS = `Contrato 772453 - limpeza e desobstrução de coletores
-Adjudicante: Município de Condeixa-a-Nova
-Adjudicatário: OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS
-Tipo: Aquisição de serviços
-Procedimento: Ajuste Direto Regime Geral
-Preço contratual: 20806.2
-Descrição: Aquisição de serviços de limpeza e desobstrução de colectores`;
 
 const CAMADAS_QWEN = 24;
 const PROJECOES = ["q", "k", "v", "o", "gate", "up", "down"];
@@ -159,8 +157,13 @@ function PipelineDiagram({ estado, avaliacoes }: { estado: ModeloEstado; avaliac
     },
   ];
 
-  const largura = 940;
-  const passo = largura / nos.length;
+  // Geometria: 6 nós têm de caber sem cortar o último (o `viewBox` anterior
+  // deixava a Avaliação fora do SVG). Largura fixa por nó e folga calculada.
+  const largura = 960;
+  const margem = 8;
+  const folga = 12;
+  const larguraNo = (largura - margem * 2 - folga * (nos.length - 1)) / nos.length;
+  const xDoNo = (i: number) => margem + i * (larguraNo + folga);
 
   return (
     <svg viewBox={`0 0 ${largura} 150`} className="w-full" role="img" aria-label="Pipeline do fine-tuning">
@@ -178,8 +181,8 @@ function PipelineDiagram({ estado, avaliacoes }: { estado: ModeloEstado; avaliac
         </filter>
       </defs>
       {nos.slice(0, -1).map((_, i) => {
-        const x1 = passo * i + 62;
-        const x2 = passo * (i + 1) + 18;
+        const x1 = xDoNo(i) + larguraNo + 1;
+        const x2 = xDoNo(i + 1) - 1;
         const ligado = nos[i + 1].ativo;
         return (
           <g key={`lig-${i}`}>
@@ -203,12 +206,12 @@ function PipelineDiagram({ estado, avaliacoes }: { estado: ModeloEstado; avaliac
         );
       })}
       {nos.map((no, i) => {
-        const x = passo * i + 42;
+        const x = xDoNo(i);
         const Icone = no.icone;
         return (
           <g key={no.id} transform={`translate(${x}, 18)`}>
             <rect
-              width={140}
+              width={larguraNo}
               height={78}
               rx={14}
               fill={no.ativo ? "rgba(16,163,127,0.10)" : "rgba(30,33,40,0.65)"}
@@ -216,14 +219,14 @@ function PipelineDiagram({ estado, avaliacoes }: { estado: ModeloEstado; avaliac
               strokeWidth={no.ativo ? 1.6 : 1}
               filter={no.ativo ? "url(#mc-brilho-filtro)" : undefined}
             />
-            {no.pulsante && <rect width={140} height={78} rx={14} fill="none" stroke="#10a37f" className="mc-halo" strokeWidth={2} />}
+            {no.pulsante && <rect width={larguraNo} height={78} rx={14} fill="none" stroke="#10a37f" className="mc-halo" strokeWidth={2} />}
             <g transform="translate(12, 14)">
               <Icone size={16} color={no.ativo ? "#10a37f" : "#6b7280"} />
             </g>
             <text x={38} y={27} fontSize={12.5} fill={no.ativo ? "#e8e9ec" : "#9aa0aa"} fontWeight={600}>
               {no.titulo}
             </text>
-            <foreignObject x={12} y={36} width={118} height={36}>
+            <foreignObject x={12} y={36} width={larguraNo - 22} height={36}>
               <div className="text-[10.5px] leading-tight text-muted-foreground">{no.detalhe}</div>
             </foreignObject>
           </g>
@@ -254,7 +257,7 @@ function CurvaDePerda({ pontos, emCurso }: { pontos: PontoTreino[]; emCurso: boo
     const linha = pontos.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.perda).toFixed(1)}`).join(" ");
     const area = `${linha} L${x(pontos.length - 1).toFixed(1)},${margem.topo + alturaUtil} L${x(0).toFixed(1)},${margem.topo + alturaUtil} Z`;
     return { x, y, linha, area, piso, teto };
-  }, [pontos]);
+  }, [pontos, larguraUtil, alturaUtil, margem.esq, margem.topo]);
 
   if (!geometria) {
     return (
@@ -436,23 +439,34 @@ export default function ModeloContratosPage() {
   const [aCarregar, setACarregar] = useState(true);
   const [aAvaliar, setAAvaliar] = useState(false);
   const [resultado, setResultado] = useState<ResultadoAvaliacao | null>(null);
-  const [instrucao, setInstrucao] = useState(AMOSTRA_INSTRUCAO);
-  const [dados, setDados] = useState(AMOSTRA_DADOS);
-  const [resposta, setResposta] = useState<string | null>(null);
-  const [aPerguntar, setAPerguntar] = useState(false);
-  const [erroChat, setErroChat] = useState<string | null>(null);
+  const [matriz, setMatriz] = useState<MatrizAdaptador | null>(null);
+  const [ligacoes, setLigacoes] = useState<Ligacoes | null>(null);
+  const [camadaSelecionada, setCamadaSelecionada] = useState(23);
+  // Relógio explícito: a frescura do último ponto de treino tem de ser decidida
+  // fora do render (ler `Date.now()` no render é impuro e o React não re-renderiza
+  // sozinho quando o tempo passa).
+  const [agora, setAgora] = useState(() => Date.now() / 1000);
+
+  useEffect(() => {
+    const relogio = window.setInterval(() => setAgora(Date.now() / 1000), 30000);
+    return () => window.clearInterval(relogio);
+  }, []);
 
   const carregar = useCallback(async () => {
     try {
-      const [ficha, pontos, historico] = await Promise.all([
+      const [ficha, pontos, historico, pesos, proveniencia] = await Promise.all([
         getModeloEstado(),
         getCurvaTreino(400).catch(() => ({ pontos: [], total: 0 })),
         listarAvaliacoes(12).catch(() => ({ avaliacoes: [], total: 0 })),
+        getMatriz().catch(() => null),
+        getLigacoes().catch(() => null),
       ]);
       setEstado(ficha);
       setCurva(pontos.pontos);
       setAvaliacoes(historico.avaliacoes);
       setResultado((anterior) => anterior ?? historico.avaliacoes[0] ?? null);
+      setMatriz(pesos);
+      setLigacoes(proveniencia);
       setErroEstado(null);
     } catch (erro) {
       setErroEstado(erro instanceof Error ? erro.message : "Falha ao ler o estado do modelo");
@@ -472,7 +486,7 @@ export default function ModeloContratosPage() {
   // «Em curso» não se decide pelo plano (que muda de corrida para corrida, ex.:
   // 30 passos e depois 50 ao retomar): decide-se pelo instante do último ponto.
   // Um treino pausado ou interrompido deixa de acender ao fim de 4 minutos.
-  const segundosDesdeOPonto = ultimo?.ts ? Date.now() / 1000 - ultimo.ts : null;
+  const segundosDesdeOPonto = ultimo?.ts ? agora - ultimo.ts : null;
   const emCurso = !estado?.pausado && segundosDesdeOPonto !== null && segundosDesdeOPonto < 240;
   const percentagem = planeados ? Math.min(100, (passos / planeados) * 100) : 0;
   const anterior = curva.length > 1 ? curva[curva.length - 2] : null;
@@ -485,20 +499,6 @@ export default function ModeloContratosPage() {
     const timer = window.setInterval(() => void carregar(), 8000);
     return () => window.clearInterval(timer);
   }, [emCurso, carregar]);
-
-  const perguntar = async () => {
-    setAPerguntar(true);
-    setErroChat(null);
-    try {
-      const r = await perguntarAoModelo({ instrucao, dados, max_tokens: 160, temperatura: 0.2 });
-      setResposta(r.resposta);
-    } catch (erro) {
-      setErroChat(erro instanceof Error ? erro.message : "O modelo não respondeu");
-      setResposta(null);
-    } finally {
-      setAPerguntar(false);
-    }
-  };
 
   const avaliar = async () => {
     setAAvaliar(true);
@@ -595,6 +595,25 @@ export default function ModeloContratosPage() {
               icone={<Timer size={13} />}
               tom="rosa"
             />
+          </section>
+
+          <section className="grid gap-3 xl:grid-cols-[1fr_1.05fr]">
+            <GrafoDoModelo
+              matriz={matriz}
+              camadaSelecionada={camadaSelecionada}
+              onSelecionar={setCamadaSelecionada}
+              animar={emCurso}
+            />
+            <MatrizDePesos
+              matriz={matriz}
+              camadaSelecionada={camadaSelecionada}
+              onSelecionar={setCamadaSelecionada}
+              animar={emCurso}
+            />
+          </section>
+
+          <section>
+            <LigacoesDeDados ligacoes={ligacoes} animar={emCurso} />
           </section>
 
           <section className="space-y-3 rounded-2xl border border-border bg-card/40 p-4">
@@ -708,48 +727,26 @@ export default function ModeloContratosPage() {
           </section>
 
           <section className="space-y-3 rounded-2xl border border-border bg-card/40 p-4">
-            <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-              <Sparkles size={14} className="text-primary" />
-              perguntar ao modelo
-            </span>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="space-y-2">
-                <input
-                  value={instrucao}
-                  onChange={(e) => setInstrucao(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none focus:border-primary"
-                  placeholder="Instrução"
-                />
-                <textarea
-                  value={dados}
-                  onChange={(e) => setDados(e.target.value)}
-                  rows={8}
-                  className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-xs outline-none focus:border-primary"
-                  placeholder="Campos do documento (contrato ou entidade)"
-                />
-                <button
-                  type="button"
-                  onClick={() => void perguntar()}
-                  disabled={aPerguntar || !instrucao.trim() || !dados.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                >
-                  {aPerguntar ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  {aPerguntar ? "a gerar (CPU)" : "Gerar resposta"}
-                </button>
-              </div>
-              <div className="min-h-[180px] rounded-lg border border-border bg-muted/20 p-3 text-sm">
-                {resposta ? (
-                  <p className="leading-relaxed">{resposta}</p>
-                ) : erroChat ? (
-                  <p className="text-destructive">{erroChat}</p>
-                ) : (
-                  <p className="text-muted-foreground">
-                    A resposta vem do adaptador treinado nesta máquina. Em CPU, cada resposta leva alguns segundos — é o mesmo
-                    mecanismo que o treino usa, só que sem actualizar pesos.
-                  </p>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                <Brain size={14} className="text-primary" />
+                chat do modelo · memória, skills, RAG e raciocínio
+              </span>
+              <a
+                href="/modelo/playground"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.history.pushState({}, "", "/modelo/playground");
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <FlaskConical size={11} />
+                abrir no playground
+                <ExternalLink size={10} />
+              </a>
             </div>
+            <ChatDoModelo />
           </section>
         </>
       )}

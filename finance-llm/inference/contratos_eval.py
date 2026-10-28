@@ -48,15 +48,34 @@ _NUMERO = re.compile(r"\d[\d\s.,]*\d|\d")
 _PALAVRA = re.compile(r"[a-zà-ÿ0-9]+", re.IGNORECASE)
 
 
+def _normalizar_numero(bruto: str) -> Optional[str]:
+    """Normaliza um número escrito à portuguesa ou à inglesa.
+
+    «20 806,20» (pt) e «20806.2» (en) têm de dar o mesmo valor: sem esta
+    distinção, o ponto era sempre tratado como separador de milhares e
+    «20806.2» virava 208 062 — a verificação acusava um valor inventado que
+    estava à frente dos olhos.
+    """
+    limpo = bruto.replace(" ", "").replace("\u00a0", "")
+    if "," in limpo:
+        # vírgula decimal: os pontos são milhares
+        limpo = limpo.replace(".", "").replace(",", ".")
+    elif limpo.count(".") > 1:
+        # vários pontos e sem vírgula: são milhares («1.234.567»)
+        limpo = limpo.replace(".", "")
+    try:
+        return f"{float(limpo):.2f}"
+    except ValueError:
+        return None
+
+
 def numeric_tokens(text: str) -> List[str]:
     """Extrai valores normalizados (20 806,20 € → 20806.20) para comparar."""
     valores: List[str] = []
     for bruto in _NUMERO.findall(text or ""):
-        limpo = bruto.replace(" ", "").replace(".", "").replace(",", ".")
-        try:
-            valores.append(f"{float(limpo):.2f}")
-        except ValueError:
-            continue
+        normalizado = _normalizar_numero(bruto)
+        if normalizado is not None:
+            valores.append(normalizado)
     return valores
 
 

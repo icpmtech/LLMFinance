@@ -79,9 +79,16 @@ O que fica no disco:
 | Ficheiro | Para que serve |
 |---|---|
 | `adapter_model.safetensors` | O adaptador LoRA (o resultado do treino). |
-| `metrics.jsonl` | Uma linha por actualização (`step`, `perda`, `perplexidade`, `tokens`, `segundos`) — é a curva que a página desenha. |
+| `metrics.jsonl` | Uma linha por actualização (`step`, `perda`, `perplexidade`, `tokens`, `segundos`, `ts`) — é a curva que a página desenha. |
 | `run_metadata.json` | Modelo base, dados, LoRA, passos, perda final, duração. |
 | `state.pt` | Estado para `--resume` (passo + optimizador). |
+
+Cada `--resume` **continua** o plano em vez de o recomeçar: a corrida de
+demonstração parou no passo 30 (perda 0,05) e a retoma levou-a ao passo 37 em
+10 min, com o mesmo `state.pt`. `--max-minutes` serve para retomar com tecto de
+tempo (foi o que se usou na demonstração); `training/pause.flag` serve para
+parar a qualquer momento, e o ficheiro é removido no fim para não bloquear a
+corrida seguinte.
 
 `.dockerignore` exclui `training/` do contexto das imagens, por isso o treino
 corre no venv do host (`.venv`, com `torch`, `transformers` e `peft`). A pasta
@@ -103,6 +110,19 @@ Mede o **held-out** (as 60 linhas que o treino nunca viu, escolhidas por
 | `f1_medio` | Sobreposição de palavras entre a resposta gerada e o gabarito. |
 | `fidelidade_numerica` | Fracção dos valores (euros, NIF, datas) do gabarito que aparecem na resposta gerada. É a métrica que apanha «20 806,20 € → 20,00 €». |
 
+Resultado da corrida de demonstração (8 pares, 13 min em CPU — são dois modelos
+carregados e duas gerações por par):
+
+| | perplexidade | exatidão token | F1 | números |
+|---|---:|---:|---:|---:|
+| base (Qwen2.5-0.5B-Instruct) | 2,24 | 0,794 | 0,50 | 30 % |
+| adaptador (passo 37) | **1,01** | **0,999** | **1,00** | **100 %** |
+| delta | −1,23 | +0,205 | +0,50 | +70 pp |
+
+A amostra é pequena de propósito: o objetivo é provar a corrente ponta a ponta
+em CPU, não publicar um número de referência. Com GPU, `--limite 0` mede os 60
+pares todos.
+
 A divisão treino/held-out **baralha com semente** antes de cortar: o exporter
 grava as linhas agrupadas por fonte, por isso cortar as últimas N daria um
 held-out só de subsídios (e um `--max-pairs` pequeno treinaria só contratos).
@@ -113,43 +133,130 @@ held-out só de subsídios (e um `--max-pairs` pequeno treinaria só contratos).
 |---|---|---|
 | `GET` | `/llm/modelo` | Ficha: adaptador presente, metadados do treino, curva e fontes. Público. |
 | `GET` | `/llm/modelo/metricas` | Pontos de `metrics.jsonl`. Público. |
-| `POST` | `/llm/modelo/chat` | Resposta do adaptador a um documento. Exige sessão (custa CPU). |
-| `POST` | `/llm/modelo/avaliar` | Corre a avaliação e guarda o resultado no índice. Exige sessão. |
+| `GET` | `/llm/modelo/matriz` | Matriz 24×7 com a magnitude real de cada actualização LoRA. Público. |
+| `GET` | `/llm/modelo/matriz/{camada}/{modulo}` | Recorte das matrizes A e B daquela camada/projecção. Público. |
+| `GET` | `/llm/modelo/ligacoes` | Proveniência: pares por fonte → dataset → treino → adaptador. Público. |
+| `POST` | `/llm/modelo/chat` | Resposta com memória, skills, RAG, traço de raciocínio e verificação. Exige sessão. |
+| `POST` | `/llm/modelo/avaliar` | Corre a avaliação base vs adaptador e guarda o resultado. Exige sessão. |
 | `GET` | `/llm/modelo/avaliacoes` | Histórico de avaliações (Elasticsearch). Público. |
+| `GET/POST` | `/llm/modelo/memoria` | Lista/guarda memórias e skills aprendidas. Escrita exige sessão. |
+| `DELETE` | `/llm/modelo/memoria/{id}` | Apaga memória ou skill. Exige sessão. |
+| `GET` | `/llm/modelo/skills` | Catálogo das skills executáveis (nome, descrição, gatilhos). Público. |
+| `GET/POST` | `/llm/modelo/prompts` | Prompts de sistema (predefinidos + guardados). Escrita exige sessão. |
+| `GET/POST` | `/llm/modelo/rag` | Estado do corpus RAG / indexar a partir dos índices. Escrita exige sessão. |
+| `GET` | `/llm/modelo/rag/pesquisa` | Pesquisa BM25 no corpus RAG. Público. |
+| `GET/POST` | `/llm/modelo/feedback` | Estatísticas / avaliar uma resposta (👍👎 + correção). Escrita exige sessão. |
+| `GET/POST` | `/llm/modelo/retreinar` | Estado da adaptação incremental / arrancá-la. Exige sessão. |
 
-Implementação: [api/llm_contratos_routes.py](../api/llm_contratos_routes.py) e
-[api/llm_contratos_service.py](../api/llm_contratos_service.py). O prompt é
-definido **uma vez** em [inference/contratos_lora.py](../inference/contratos_lora.py)
-e usado pelo treino, pela avaliação e pela API — três moldes diferentes
-transformariam um modelo bom em respostas más.
+Implementação: [api/llm_contratos_routes.py](../api/llm_contratos_routes.py),
+[api/llm_contratos_service.py](../api/llm_contratos_service.py),
+[api/llm_contratos_agente.py](../api/llm_contratos_agente.py) (memória, skills,
+prompts, RAG, feedback, raciocínio) e
+[api/llm_contratos_treino.py](../api/llm_contratos_treino.py) (adaptação
+incremental). O prompt é definido **uma vez** em
+[inference/contratos_lora.py](../inference/contratos_lora.py) e usado pelo
+treino, pela avaliação e pela API — três moldes diferentes transformariam um
+modelo bom em respostas más.
+
+## 5.1 O agente à volta do modelo
+
+O adaptador sabe o formato; não sabe o que não lhe foi ensinado nem guarda nada
+entre pedidos. A camada `llm_contratos_agente` resolve isso sem treinar nada:
+
+| Peça | Índice | Para que serve |
+|---|---|---|
+| **Memória** | `finance_llm_memoria` (`memoria`) | Factos ensinados pelo utilizador («Chaves = NIF …»), recuperados por BM25 + gatilhos e injectados no prompt. |
+| **Skills aprendidas** | `finance_llm_memoria` (`skill`) | Instrução + exemplo guardado pelo utilizador: entra como few-shot e como par de treino. |
+| **Skills executáveis** | — (código) | `procurar_contratos`, `ficha_entidade`, `subsidios`, `contagem`: consultam o Elasticsearch antes de o modelo falar. |
+| **Prompts** | `finance_llm_prompts` | Perfis de sistema (descrever / auditar / cidadão) editáveis. |
+| **RAG** | `finance_llm_rag_chunks` | Pedaços de contratos, entidades e subsídios; a resposta cita-os. |
+| **Feedback** | `finance_llm_feedback` | 👍/👎 e correções; as correções são pares de treino. |
+
+**Raciocínio** (`service.responder`) é um ciclo explícito, todo devolvido na
+resposta como `passos` (a interface desenha-o em árvore):
+
+```
+pergunta → skills (consulta ES) → memória → evidências RAG → documento
+        → geração (com probabilidade por token) → verificação dos números
+```
+
+A verificação compara os números da resposta com os do contexto: um valor que
+não esteja lá é devolvido em `verificacao.inventados` e a interface avisa. Foi
+esta verificação que apanhou, durante os testes, o bug de normalização em que
+`20806.2` era lido como 208 062 (corrigido em `inference/contratos_eval.py`).
+
+## 5.2 Auto-aprendizagem (retreinar com o que o utilizador corrigiu)
+
+```
+feedback (👎 + correção)  ─┐
+skills com exemplo        ─┴─▶ data/final/iqos_adaptacao.jsonl ──▶ 12 passos de LoRA
+                                                                  (sobre o adaptador actual)
+                                                                        │
+                                    backup .bak-<data> ◀────────────────┤
+                                    metricas_adaptacao.jsonl ◀──────────┤
+                                    finance_llm_model_runs ◀────────────┘
+```
+
+Regras: mínimo **3 pares** (uma correção sozinha move o modelo numa direção e
+estraga o formato), **uma adaptação de cada vez**, **backup antes de escrever**
+e **perda antes/depois** registada. Na demonstração: 4 pares, 12 passos, perda
+0,9458 → 0,1185 (Δ −0,83) em 155 s, e a resposta seguinte já saía no formato
+corrigido.
+
+## 5.3 Diagramas da interface
+
+| Diagrama | O que mostra | De onde vêm os números |
+|---|---|---|
+| Grafo do modelo | tokens → embedding → 24 camadas → lm head → texto, com partículas no sentido do forward (e do backward quando há treino) | normas reais do adaptador; clicar numa camada abre a matriz |
+| Matriz de pesos | 24 × 7 (q,k,v,o,gate,up,down) com ‖A‖·‖B‖ de cada actualização | `adapter_model.safetensors` |
+| Detalhe da matriz | recorte real de A (16×d) e B (d×16), verde/rosa por sinal | idem, via `/matriz/{camada}/{modulo}` |
+| Ligações | 3 índices → dataset → treino → adaptador, com a largura dos pares | linhas do dataset usado no treino |
+| Árvore do raciocínio | pedido → skills → memória → evidências → documento → geração → verificação | resposta do `/chat` |
+| Fita de tokens | probabilidade de cada token gerado (verde = convicto, âmbar/rosa = a adivinhar) | `output_scores` do `generate` |
+
+Tudo em SVG/CSS: as animações são declarativas e param com
+`prefers-reduced-motion`.
 
 ## 6. Índices do Elasticsearch
 
-Criados pela primeira escrita (mapeamento em `llm_contratos_service.MAPPINGS`):
+Criados pela primeira escrita (mapeamentos em `llm_contratos_service.MAPPINGS` e
+`llm_contratos_agente.MAPPINGS`):
 
 | Índice | Documento |
 |---|---|
-| `finance_llm_model_runs` | Uma corrida de treino: modelo base, adaptador, pares, passos, perda final, segundos, fontes. |
+| `finance_llm_model_runs` | Uma corrida de treino (ou adaptação incremental): modelo base, adaptador, pares, passos, perda final, segundos, fontes. |
 | `finance_llm_model_evals` | Uma avaliação: conjunto, métricas base/treinado, deltas, fidelidade numérica e três amostras geradas. |
+| `finance_llm_memoria` | Memórias (`memoria`) e skills aprendidas (`skill`) com gatilhos, usos e datas. |
+| `finance_llm_prompts` | Prompts de sistema guardados pelo utilizador. |
+| `finance_llm_rag_chunks` | Pedaços de contratos/entidades/subsídios para o RAG (BM25). |
+| `finance_llm_feedback` | Avaliações das respostas, correções e marca de «já usado no treino». |
 
 O histórico vive no Elasticsearch (e não só em `eval.json`) porque é o que
 sobrevive a uma recriação do contentor.
 
-## 7. Página `/modelo/contratos`
+## 7. Páginas `/modelo/contratos` e `/modelo/playground`
 
-Mostra o **que se está a passar no treino**, com diagramas animados:
+A página do modelo mostra o **que se está a passar no treino**, com diagramas
+animados:
 
 - **Pipeline** — índices → exportador → dataset → LoRA → adaptador → avaliação,
   com fluxo animado enquanto há treino a correr e cada nó aceso quando a fase já
   produziu algo;
+- **Grafo do modelo** — 24 camadas com a LoRA colada, partículas no forward e no
+  backward, clique para abrir os pesos;
+- **Matriz de pesos** — 24×7 com valores reais e recorte de A/B;
+- **Ligações** — 3 índices → dataset → treino → adaptador com a espessura dos pares;
 - **Curva de perda** — desenha-se à medida que chegam pontos (actualiza a cada
   8 s enquanto o treino está em curso), com perplexidade, tokens e velocidade;
 - **Ciclo de um passo** — lote → forward → perda (só nos tokens da resposta) →
   backward → update;
-- **Mapa da LoRA** — 24 camadas × 7 projecções, com o gradiente a percorrer;
-- **Avaliação** — base vs adaptador (perplexidade e exatidão), fidelidade
-  numérica e histórico;
-- **Perguntar ao modelo** — o adaptador a responder a um contrato real.
+- **Avaliação** — base vs adaptador, fidelidade numérica e histórico;
+- **Chat** — com árvore do raciocínio, fita de tokens, 👍/👎 com correção,
+  «guardar como skill» e o botão de retreinar.
+
+O **playground** (`/modelo/playground`) é o sítio para experimentar: prompt de
+sistema editável (e guardável), perfis da plataforma, temperatura e tokens, com
+o mesmo traço e a mesma verificação.
 
 A animação é CSS (`chat-ui/src/modeloContratos.css`) e respeita
 `prefers-reduced-motion`: um `setInterval` a 60 fps roubaria tempo ao treino, que
@@ -158,10 +265,19 @@ está a correr na mesma máquina.
 ## 8. Limitações honestas
 
 - **CPU**: o dataset inteiro (807 pares) é ~3 h por época; a corrida de
-  demonstração treinou 120 pares. Com GPU, `--max-pairs 0` e mais épocas.
+  demonstração treinou 120 pares (e depois 200 na retoma). Com GPU,
+  `--max-pairs 0` e mais épocas.
 - **0,5 B parâmetros**: aprende o formato e o vocabulário dos contratos, não
-  raciocina como um 7 B. Não substitui o RAG (`rag/`) nem os modelos de
-  fornecedor — complementa-os nos casos em que o formato é fixo.
-- **Fidelidade**: a métrica de números existe precisamente porque um modelo
-  pequeno pode trocar valores. Qualquer resposta do adaptador deve ser lida como
-  rascunho, não como fonte de verdade — a fonte é o índice.
+  raciocina como um 7 B. O «raciocínio» aqui é um **ciclo orquestrado** (skills
+  + RAG + verificação), não cadeia de pensamento do próprio modelo.
+- **Fidelidade**: a verificação de números existe precisamente porque um modelo
+  pequeno troca valores — e apanhou casos reais durante os testes. Qualquer
+  resposta do adaptador deve ser lida como rascunho, não como fonte de verdade:
+  a fonte é o índice.
+- **Auto-aprendizagem**: 12 passos sobre 3-4 pares mudam o estilo, não o
+  conhecimento. Para conhecimento novo, use memória/skills (que entram no
+  prompt) ou um novo treino grande. Cada adaptação deixa backup — reverter é
+  copiar o `.bak-<data>` por cima do `adapter_model.safetensors`.
+- **RAG por BM25**: sem embeddings, a recuperação é lexical. Um contrato descrito
+  com outras palavras pode não aparecer; para isso existe a skill
+  `procurar_contratos`, que usa a pesquisa do próprio índice.
