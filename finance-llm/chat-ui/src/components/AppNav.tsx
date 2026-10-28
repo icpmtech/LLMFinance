@@ -77,6 +77,7 @@ export type AppView =
   | "modelo-contratos"
   | "modelo-playground"
   | "modelo-chat"
+  | "modelo-retreino"
   | "vortal"
   | "osint"
   | "reports"
@@ -235,8 +236,10 @@ const APP_MATCH: Record<string, AppView[]> = {
   arquivo: [],
   social: ["social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
-  "modelo-contratos": ["modelo-playground", "modelo-chat"],
-  "modelo-playground": ["modelo-contratos", "modelo-chat"],
+  "modelo-contratos": ["modelo-playground", "modelo-chat", "modelo-retreino"],
+  "modelo-playground": ["modelo-contratos", "modelo-chat", "modelo-retreino"],
+  "modelo-chat": ["modelo-contratos", "modelo-retreino"],
+  "modelo-retreino": ["modelo-contratos", "modelo-chat"],
   world: ["world-rede"],
   esg: [],
   "eu-taxonomy": [],

@@ -107,6 +107,12 @@ PROMPTS_PREDEFINIDOS: List[Dict[str, str]] = [
     {
         "id": "descrever",
         "nome": "Descrever documento",
+        # A instrução viaja com o perfil: o prompt de sistema sozinho não chega.
+        # O modelo foi afinado com estas três instruções (ver
+        # `training/export_es_dataset.py::_build_contrato_pt_variantes`); enviar
+        # «Descreve este contrato» com o perfil «auditar» dava-lhe sinais
+        # contrários e a resposta saía a descrever.
+        "instrucao": "Descreve este contrato público português.",
         "texto": (
             "Assistente do IQ OS para contratos públicos, empresas e subsídios portugueses. "
             "Descreves o documento em 2-3 frases, só com os dados recebidos e as evidências. "
@@ -116,6 +122,7 @@ PROMPTS_PREDEFINIDOS: List[Dict[str, str]] = [
     {
         "id": "auditar",
         "nome": "Auditar contrato",
+        "instrucao": "Audita este contrato e aponta o que deve ser verificado.",
         "texto": (
             "Auditor de contratação pública. Identificas riscos objetivos (ajuste direto, valor "
             "elevado, prazo, concentração de fornecedor) usando apenas os dados e as evidências. "
@@ -125,6 +132,7 @@ PROMPTS_PREDEFINIDOS: List[Dict[str, str]] = [
     {
         "id": "cidadao",
         "nome": "Responder a cidadão",
+        "instrucao": "Resume este contrato numa frase, para um cidadão.",
         "texto": (
             "Explicas contratos públicos a quem não é especialista: português simples, sem jargão, "
             "uma frase de contexto e os números que interessam. Nunca inventas valores."

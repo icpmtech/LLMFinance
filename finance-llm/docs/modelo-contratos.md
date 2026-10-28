@@ -58,8 +58,35 @@ dá **~3 horas por época** no dataset inteiro. É por isso que o treino aceita
 - O `--tokenizer`/`--max-tokens` medem cada par com o tokenizer **do modelo que
   vai ser treinado** e deixam de fora o que não cabe — um par cortado ensinaria
   uma resposta a meio.
-- Resultado nesta corrida: 807 pares (245 contratos, 300 entidades, 262
-  subsídios).
+- Resultado nesta corrida: 1 128 pares (566 de contratos — descrição, resumo para
+  cidadão e auditoria —, 300 entidades, 262 subsídios).
+
+### Regra que o exportador tem de respeitar
+
+**Todos os campos que a resposta cita têm de estar no pedido.** Durante muito
+tempo não estavam: `_build_contrato_pt` escrevia no *output*
+`publicado a {dataPublicacao} e com regime {regime}` e `CPV principal é {cpv}`,
+mas o *input* só levava contrato, adjudicantes, tipo, procedimento, preço e
+descrição. O modelo aprendeu exactamente o que lhe foi ensinado: inventar. Com
+um contrato sem data, respondia «publicado a 2021-08-26» e «regime
+Código dos Contratos Públicos (DL 18/2008)» — dois factos que não existiam em
+lado nenhum do pedido. Data, regime e CPV passaram a ir no pedido (contratos PT,
+ES e FR) e há um teste (`test_contrato_pt_pede_todos_os_campos_que_a_resposta_cita`)
+que falha se a regra for quebrada outra vez.
+
+### Três instruções, não uma
+
+O modelo só tinha visto «Descreve este contrato público português.». A página
+oferece três perfis (descrever, auditar, responder a cidadão): ao pedir
+«auditar», a resposta saía a descrever — e a repetir-se («o CPV principal
+principal é»). Cada contrato português gera agora **três pares** com o mesmo
+pedido e respostas diferentes (`_build_contrato_pt_variantes`), e a instrução
+viaja com o perfil na API (`PROMPTS_PREDEFINIDOS[*].instrucao`) para que o
+prompt de sistema e a instrução não se contradigam.
+
+O objecto e a descrição ficam limitados a 240 caracteres (`TEXTO_CAMPO_MAX`):
+uma descrição de 4 000 caracteres custa 8× mais tempo de treino (a atenção é
+quadrática) sem ensinar nada que uma resposta de 2-3 frases use.
 
 ## 3. Passo 2 — treinar (com pausa e retoma)
 
@@ -146,7 +173,11 @@ held-out só de subsídios (e um `--max-pairs` pequeno treinaria só contratos).
 | `GET/POST` | `/llm/modelo/rag` | Estado do corpus RAG / indexar a partir dos índices. Escrita exige sessão. |
 | `GET` | `/llm/modelo/rag/pesquisa` | Pesquisa BM25 no corpus RAG. Público. |
 | `GET/POST` | `/llm/modelo/feedback` | Estatísticas / avaliar uma resposta (👍👎 + correção). Escrita exige sessão. |
-| `GET/POST` | `/llm/modelo/retreinar` | Estado da adaptação incremental / arrancá-la. Exige sessão. |
+| `GET/POST` | `/llm/modelo/retreinar` | Estado da adaptação incremental / arrancá-la (`passos`, `lr`, `reutilizar_existentes`). Arrancar exige sessão. |
+| `POST` | `/llm/modelo/retreinar/parar` | Pede a paragem cooperativa da adaptação em curso. Exige sessão. |
+| `GET` | `/llm/modelo/retreinar/historico` | Últimas entradas de `metricas_adaptacao.jsonl`. Público. |
+| `GET` | `/llm/modelo/versoes` | Backups `.bak-<data>` do adaptador (nome, tamanho, data). Público. |
+| `POST` | `/llm/modelo/versoes/reverter` | Repõe o adaptador a partir de um backup (guardando o estado atual). Exige sessão. |
 
 Implementação: [api/llm_contratos_routes.py](../api/llm_contratos_routes.py),
 [api/llm_contratos_service.py](../api/llm_contratos_service.py),
@@ -203,6 +234,15 @@ e **perda antes/depois** registada. Na demonstração: 4 pares, 12 passos, perda
 0,9458 → 0,1185 (Δ −0,83) em 155 s, e a resposta seguinte já saía no formato
 corrigido.
 
+A interface (`/modelo/retreino`, e o bloco «auto-aprendizagem» do painel do
+chat) expõe o ciclo todo sem tocar em ficheiros: escolher **passos** e
+**learning rate**, **reutilizar pares já treinados** (quando `por_utilizar` é 0
+e não se quer esperar por feedback novo), **parar** a meio, **reverter** para
+qualquer `.bak-<data>`, ver o **histórico** de adaptações e disparar
+**reindexação do RAG** e **avaliação**. A paragem é cooperativa: o ciclo termina
+no passo seguinte; se ainda não houve nenhum passo, o adaptador fica intacto e o
+resultado regista `estado: "parado"`.
+
 ## 5.3 Diagramas da interface
 
 | Diagrama | O que mostra | De onde vêm os números |
@@ -234,7 +274,7 @@ Criados pela primeira escrita (mapeamentos em `llm_contratos_service.MAPPINGS` e
 O histórico vive no Elasticsearch (e não só em `eval.json`) porque é o que
 sobrevive a uma recriação do contentor.
 
-## 7. Páginas `/modelo/contratos` e `/modelo/playground`
+## 7. Páginas `/modelo/contratos`, `/modelo/chat`, `/modelo/playground` e `/modelo/retreino`
 
 A página do modelo mostra o **que se está a passar no treino**, com diagramas
 animados:
@@ -257,6 +297,17 @@ animados:
 O **playground** (`/modelo/playground`) é o sítio para experimentar: prompt de
 sistema editável (e guardável), perfis da plataforma, temperatura e tokens, com
 o mesmo traço e a mesma verificação.
+
+O **chat** (`/modelo/chat`) é a conversa em ecrã inteiro, ao estilo ChatGPT:
+histórico na `sessionStorage`, exemplos rápidos, upload/paste de documento,
+relatório da conversa, painel lateral com memórias, skills e o bloco de
+auto-aprendizagem.
+
+O **retreino** (`/modelo/retreino`) é o painel de auto-aprendizagem completo:
+estado e progresso da adaptação, formulário com passos e learning rate,
+reutilizar pares já treinados, parar, versões guardadas com reverção, histórico
+de adaptações, reindexação do corpus RAG e avaliação. O mesmo controlo aparece
+resumido no painel do chat e no cartão «chat do modelo» da página do modelo.
 
 A animação é CSS (`chat-ui/src/modeloContratos.css`) e respeita
 `prefers-reduced-motion`: um `setInterval` a 60 fps roubaria tempo ao treino, que

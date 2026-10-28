@@ -120,6 +120,19 @@ class RagRequest(BaseModel):
 class RetreinarRequest(BaseModel):
     passos: int = Field(12, ge=1, le=40)
     lr: float = Field(5e-5, gt=0, le=1e-3)
+    reutilizar_existentes: bool = Field(
+        False,
+        description="Contar também pares já usados numa adaptação anterior (repetir o treino).",
+    )
+
+
+class ReverterRequest(BaseModel):
+    versao: str = Field(
+        ...,
+        min_length=10,
+        max_length=120,
+        description="Nome do ficheiro de backup, ex.: `adapter_model.safetensors.bak-20261027-233744`.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -353,15 +366,53 @@ def retreinar(req: RetreinarRequest, session: Session) -> Dict[str, Any]:  # noq
     """Arranca a adaptação LoRA em segundo plano (a rota responde já).
 
     Só corre com pelo menos 3 pares (correções ou skills com exemplo); é esse o
-    mínimo que evita mover o modelo por causa de uma frase.
+    mínimo que evita mover o modelo por causa de uma frase. Com
+    `reutilizar_existentes=true` também conta pares já usados numa adaptação
+    anterior — útil para repetir o treino sem esperar por feedback novo.
     """
-    pares = agente.pares_de_feedback(limite=200, apenas_novos=True)
+    apenas_novos = not req.reutilizar_existentes
+    pares = agente.pares_de_feedback(limite=200, apenas_novos=apenas_novos)
     if len(pares) < treino.MIN_PARES:
         raise HTTPException(
             status_code=409,
             detail=(
-                f"só há {len(pares)} pares novos com correção (mínimo {treino.MIN_PARES}); "
-                "dê feedback com correção antes de retreinar"
+                f"só há {len(pares)} pares {'novos ' if apenas_novos else ''}com correção "
+                f"(mínimo {treino.MIN_PARES}); dê feedback com correção antes de retreinar"
             ),
         )
-    return treino.adaptar_em_segundo_plano(passos=req.passos, lr=req.lr)
+    return treino.adaptar_em_segundo_plano(
+        passos=req.passos, lr=req.lr, apenas_novos=apenas_novos
+    )
+
+
+@router.post("/retreinar/parar", summary="Parar a adaptação em curso")
+def parar_retreino(session: Session) -> Dict[str, Any]:  # noqa: ARG001
+    """Pede a paragem cooperativa: o ciclo termina no passo seguinte e, se já
+    houve passos, guarda o que aprendeu (com backup do estado anterior)."""
+    return treino.pedir_paragem()
+
+
+@router.get("/retreinar/historico", summary="Histórico de adaptações")
+def historico_retreino(
+    limite: int = Query(20, ge=1, le=200),
+) -> Dict[str, Any]:
+    registos = treino.historico_adaptacoes(limite=limite)
+    return {"total": len(registos), "registos": registos}
+
+
+@router.get("/versoes", summary="Versões guardadas do adaptador")
+def versoes_adaptador() -> Dict[str, Any]:
+    versoes = treino.listar_versoes()
+    return {
+        "total": len(versoes),
+        "versoes": versoes,
+        "atual": treino.estado_adaptacao().get("versoes", 0),
+    }
+
+
+@router.post("/versoes/reverter", summary="Reverter o adaptador para uma versão guardada")
+def reverter_adaptador(req: ReverterRequest, session: Session) -> Dict[str, Any]:  # noqa: ARG001
+    try:
+        return treino.reverter_para(req.versao)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

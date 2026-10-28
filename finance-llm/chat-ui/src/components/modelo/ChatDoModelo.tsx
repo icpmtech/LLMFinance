@@ -10,7 +10,6 @@ import {
   Brain,
   Briefcase,
   Building2,
-  CheckCheck,
   Database,
   FileBarChart,
   FileUp,
@@ -32,18 +31,14 @@ import {
   Wrench,
 } from "lucide-react";
 import ArvoreDoRaciocinio from "./ArvoreDoRaciocinio";
+import PainelDeRetreino from "./PainelDeRetreino";
 import {
   enviarFeedback,
-  getEstadoFeedback,
-  getEstadoRetreino,
   getPrompts,
   getSkills,
   guardarMemoria,
   listarMemorias,
-  pedirRetreino,
   perguntarAoModelo,
-  type EstadoFeedback,
-  type EstadoRetreino,
   type ItemMemoria,
   type PromptSistema,
   type RespostaModelo,
@@ -51,6 +46,8 @@ import {
 } from "../../llmModeloApi";
 
 const CHAVE_STORAGE = "chat_modelo_contratos_historico";
+/** Evento para o painel de auto-aprendizagem reler os contadores de feedback. */
+const EVENTO_ATUALIZAR_RETREINO = "iqos:retreino-atualizar";
 
 const EXEMPLOS: { icone: React.ElementType; titulo: string; instrucao: string; dados: string }[] = [
   {
@@ -191,8 +188,6 @@ export default function ChatDoModelo({
   const [promptId, setPromptId] = useState<string>("descrever");
   const [skills, setSkills] = useState<SkillExecutavel[]>([]);
   const [memorias, setMemorias] = useState<ItemMemoria[]>([]);
-  const [feedback, setFeedback] = useState<EstadoFeedback | null>(null);
-  const [retreino, setRetreino] = useState<EstadoRetreino | null>(null);
   const [raf, setRaf] = useState({ rag: true, memoria: true, skills: true, raciocinio: true });
   const [correcao, setCorrecao] = useState<Record<number, string>>({});
   const [novaMemoria, setNovaMemoria] = useState({ titulo: "", instrucao: "", resposta: "", tipo: "skill" as "skill" | "memoria" });
@@ -202,18 +197,14 @@ export default function ChatDoModelo({
   const [mostrarOpcoes, setMostrarOpcoes] = useState<number | null>(null);
 
   const carregarPainel = useCallback(async () => {
-    const [listaPrompts, listaSkills, listaMemorias, estadoFeedback, estadoRetreino] = await Promise.all([
+    const [listaPrompts, listaSkills, listaMemorias] = await Promise.all([
       getPrompts().catch(() => ({ prompts: [], total: 0 })),
       getSkills().catch(() => ({ skills: [], total: 0 })),
       listarMemorias().catch(() => ({ itens: [], total: 0 })),
-      getEstadoFeedback().catch(() => null),
-      getEstadoRetreino().catch(() => null),
     ]);
     setPrompts(listaPrompts.prompts);
     setSkills(listaSkills.skills);
     setMemorias(listaMemorias.itens);
-    setFeedback(estadoFeedback);
-    setRetreino(estadoRetreino);
   }, []);
 
   useEffect(() => {
@@ -337,17 +328,35 @@ export default function ChatDoModelo({
         try {
           const obj = JSON.parse(texto);
           setDados(JSON.stringify(obj, null, 2));
-          setInstrucao((antes) => (antes.trim() ? antes : "Descreve este documento."));
+          setInstrucao((antes) => (antes.trim() ? antes : "Descreve este contrato p?blico portugu?s."));
         } catch {
           setDados(texto);
         }
       } else {
         setDados(texto);
-        setInstrucao((antes) => (antes.trim() ? antes : "Descreve este documento."));
+        setInstrucao((antes) => (antes.trim() ? antes : "Descreve este contrato p?blico portugu?s."));
       }
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : "Ficheiro inválido");
     }
+  };
+
+  /**
+   * Escolher um perfil troca também a instrução.
+   *
+   * O prompt de sistema diz «audita», mas a instrução continuava a ser
+   * «Descreve este contrato público português.» — o modelo recebia dois pedidos
+   * contrários e obedecia ao que tinha decorado. Cada perfil traz a instrução
+   * com que foi treinado; só a substituímos se o utilizador não escreveu nada
+   * de seu (ou se ainda estava na instrução de outro perfil).
+   */
+  const escolherPerfil = (novoId: string) => {
+    setPromptId(novoId);
+    const perfil = prompts.find((p) => p.id === novoId);
+    const padrao = perfil?.instrucao?.trim();
+    if (!padrao) return;
+    const dasPerfis = new Set(prompts.map((p) => p.instrucao?.trim()).filter(Boolean));
+    setInstrucao((antes) => (!antes.trim() || dasPerfis.has(antes.trim()) ? padrao : antes));
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -379,10 +388,10 @@ export default function ChatDoModelo({
       setMensagens((antes) =>
         antes.map((m) => (m.id === mensagem.id ? { ...m, avaliada: nota > 0 ? "boa" : "ma" } : m)),
       );
-      setFeedback((antes) => (antes ? { ...antes, total: antes.total + 1 } : antes));
-      if (resultado.pares_de_treino) {
-        setFeedback((antes) => (antes ? { ...antes, por_utilizar: resultado.pares_de_treino } : antes));
-      }
+      // O painel de auto-aprendizagem mostra os contadores de feedback: avisá-lo
+      // para reler em vez de duplicar o estado aqui.
+      window.dispatchEvent(new CustomEvent(EVENTO_ATUALIZAR_RETREINO));
+      void resultado;
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : "Feedback não guardado");
     }
@@ -421,24 +430,6 @@ export default function ChatDoModelo({
       setErro(falha instanceof Error ? falha.message : "Memória não guardada");
     }
   };
-
-  const retreinar = async () => {
-    try {
-      await pedirRetreino({ passos: 12 });
-      setRetreino((antes) => (antes ? { ...antes, a_correr: true, passo: 0, passos: 12 } : antes));
-    } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : "Não foi possível retreinar");
-    }
-  };
-
-  useEffect(() => {
-    if (!retreino?.a_correr) return;
-    const timer = window.setInterval(async () => {
-      const estado = await getEstadoRetreino().catch(() => null);
-      if (estado) setRetreino(estado);
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [retreino?.a_correr]);
 
   const alternar = (chave: keyof typeof raf) => setRaf((antes) => ({ ...antes, [chave]: !antes[chave] }));
 
@@ -728,7 +719,7 @@ export default function ChatDoModelo({
                   {mostrarSeletorPrompt && (
                     <select
                       value={promptId}
-                      onChange={(e) => setPromptId(e.target.value)}
+                      onChange={(e) => escolherPerfil(e.target.value)}
                       className="rounded-lg border border-border bg-muted/40 px-2 py-1 text-[11px] outline-none focus:border-primary"
                     >
                       <option value="">Prompt por omissão</option>
@@ -831,42 +822,7 @@ export default function ChatDoModelo({
               </button>
             </div>
 
-            <div className="mt-5 rounded-xl border border-border bg-card/60 p-3">
-              <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <CheckCheck size={12} /> auto-aprendizagem
-                </span>
-                {retreino?.a_correr && <span className="text-primary">a treinar…</span>}
-              </div>
-              <div className="mb-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                <span>feedback: {feedback?.total ?? 0}</span>
-                <span>corrigidos: {feedback?.corrigidos ?? 0}</span>
-                <span>pares novos: {feedback?.por_utilizar ?? 0}</span>
-                <span>nota média: {feedback?.nota_media ?? "—"}</span>
-              </div>
-              {retreino?.a_correr && (
-                <div className="mb-2">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${retreino.passos ? (retreino.passo / retreino.passos) * 100 : 0}%` }} />
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    passo {retreino.passo}/{retreino.passos} · perda {retreino.perda ?? "—"}
-                  </p>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => void retreinar()}
-                disabled={retreino?.a_correr || (feedback?.por_utilizar ?? 0) < 3}
-                className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-primary/40 px-2 py-1.5 text-[11px] text-primary disabled:opacity-40"
-              >
-                {retreino?.a_correr ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                retreinar
-              </button>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-                12 passos de LoRA com backup e perda antes/depois.
-              </p>
-            </div>
+            <PainelDeRetreino variante="painel" className="mt-5" />
           </aside>
         )}
       </div>

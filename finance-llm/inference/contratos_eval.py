@@ -102,6 +102,28 @@ def numeric_fidelity(predicao: str, gabarito: str) -> Optional[float]:
     return sum(1 for v in alvo if v in obtidos) / len(alvo)
 
 
+def numeric_grounding(predicao: str, dados: str) -> Optional[Dict[str, Any]]:
+    """Números que a resposta cita e que **não estão no pedido** (invenção).
+
+    `numeric_fidelity` mede se os números do gabarito aparecem; não diz nada
+    sobre números a mais. E o defeito que este projeto teve foi exactamente um
+    número a mais: com um contrato sem data, a resposta dizia «publicado a
+    2021-08-26». Aqui conta-se ao contrário — de todos os números que o modelo
+    escreveu, quantos existem no documento. É a métrica que falha quando ele
+    inventa.
+    """
+    citados = numeric_tokens(predicao)
+    if not citados:
+        return None
+    fonte = set(numeric_tokens(dados))
+    inventados = [valor for valor in citados if valor not in fonte]
+    return {
+        "citados": len(citados),
+        "inventados": inventados,
+        "taxa": round(len(inventados) / len(citados), 4),
+    }
+
+
 def load_pairs(path: Path | str = DATA_FILE) -> List[Dict[str, Any]]:
     """Lê o JSONL Alpaca exportado do Elasticsearch."""
     rows: List[Dict[str, Any]] = []
@@ -180,6 +202,7 @@ def score_model(
         amostras = []
         for row in pares[:gerar]:
             texto = _gerar(model, tokenizer, row)
+            ancoragem = numeric_grounding(texto, row.get("input", ""))
             amostras.append(
                 {
                     "instrucao": row.get("instruction", ""),
@@ -188,14 +211,19 @@ def score_model(
                     "gerado": texto,
                     "f1": round(token_f1(texto, row.get("output", "")), 4),
                     "numeros": numeric_fidelity(texto, row.get("output", "")),
+                    "ancoragem": ancoragem,
                 }
             )
         f1s = [a["f1"] for a in amostras]
         nums = [a["numeros"] for a in amostras if a["numeros"] is not None]
+        taxas = [a["ancoragem"]["taxa"] for a in amostras if a.get("ancoragem")]
         resultado["geracao"] = {
             "amostras": amostras,
             "f1_medio": round(statistics.mean(f1s), 4) if f1s else 0.0,
             "fidelidade_numerica": round(statistics.mean(nums), 4) if nums else None,
+            # 1,0 = todos os números da resposta estão no documento; 0,0 = todos
+            # foram inventados. É a métrica que apanha a data/regime inventados.
+            "ancoragem_numerica": round(statistics.mean(taxas), 4) if taxas else None,
         }
     if etiqueta:
         resultado["modelo"] = etiqueta

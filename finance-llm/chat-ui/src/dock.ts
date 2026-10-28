@@ -58,6 +58,7 @@ import {
   Play,
   Plus,
   ReceiptText,
+  RefreshCw,
   Rss,
   Scale,
   Scan,
@@ -1099,6 +1100,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: MessageSquare,
     gradient: "from-violet-200 via-fuchsia-400 to-rose-500",
     accent: "236,72,153",
+  },
+  {
+    id: "modelo-retreino",
+    label: "Retreino do modelo",
+    hint: "Auto-aprendizagem: adaptar, parar, reverter versões e reindexar os índices",
+    icon: RefreshCw,
+    gradient: "from-amber-200 via-orange-400 to-rose-600",
+    accent: "251,146,60",
   },
   {
     id: "elastic",

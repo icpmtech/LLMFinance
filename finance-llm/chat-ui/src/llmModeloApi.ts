@@ -139,6 +139,8 @@ export type PromptSistema = {
   id: string;
   nome: string;
   texto: string;
+  /** Instrução que o perfil espera (o modelo foi treinado com estas frases). */
+  instrucao?: string;
   predefinido?: boolean;
 };
 
@@ -168,11 +170,15 @@ export type EstadoRetreino = {
   erro: string | null;
   /** Quantos backups do adaptador existem (um por adaptação). */
   versoes?: number;
+  /** `true` enquanto o utilizador pediu paragem e o ciclo ainda não terminou. */
+  paragem_pedida?: boolean;
   feedback?: EstadoFeedback;
   ultimo_resultado?: {
     estado: string;
     pares?: number;
     passos?: number;
+    passos_pedidos?: number;
+    interrompido?: boolean;
     perda_antes?: number;
     perda_depois?: number;
     delta?: number;
@@ -318,10 +324,55 @@ export function getEstadoRetreino(): Promise<EstadoRetreino> {
   return pedir<EstadoRetreino>("/llm/modelo/retreinar");
 }
 
-export function pedirRetreino(payload: { passos?: number; lr?: number } = {}) {
+export function pedirRetreino(
+  payload: { passos?: number; lr?: number; reutilizar_existentes?: boolean } = {},
+) {
   return pedir<{ estado: string; passos?: number; ja_estava_a_correr?: boolean }>("/llm/modelo/retreinar", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function pararRetreino() {
+  return pedir<{ ok: boolean; estado?: string; motivo?: string }>("/llm/modelo/retreinar/parar", {
+    method: "POST",
+  });
+}
+
+export type RegistoAdaptacao = {
+  concluido_em?: string;
+  estado?: string;
+  pares?: number;
+  passos?: number;
+  perda_antes?: number | null;
+  perda_depois?: number | null;
+  delta?: number | null;
+  versao?: string;
+};
+
+export function getHistoricoRetreino(limite = 20) {
+  return pedir<{ total: number; registos: RegistoAdaptacao[] }>(
+    `/llm/modelo/retreinar/historico?limite=${limite}`,
+  );
+}
+
+export type VersaoAdaptador = { nome: string; bytes: number; criado_em: string };
+
+export function getVersoesAdaptador() {
+  return pedir<{ total: number; versoes: VersaoAdaptador[]; atual: number }>(
+    "/llm/modelo/versoes",
+  );
+}
+
+export function reverterAdaptador(versao: string) {
+  return pedir<{
+    estado: string;
+    versao: string;
+    backup_do_estado_anterior?: string;
+    concluido_em?: string;
+  }>("/llm/modelo/versoes/reverter", {
+    method: "POST",
+    body: JSON.stringify({ versao }),
   });
 }
 

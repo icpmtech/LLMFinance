@@ -103,6 +103,7 @@ import ModeloContratosPage from "./pages/ModeloContratosPage";
 import ModeloPlaygroundPage from "./pages/ModeloPlaygroundPage";
 // Chat dedicado do modelo de contratos: experiência conversacional de ecrã completo.
 import ChatModeloPage from "./pages/ChatModeloPage";
+import ModeloRetreinoPage from "./pages/ModeloRetreinoPage";
 import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -246,6 +247,7 @@ type AppView =
   | "modelo-contratos"
   | "modelo-playground"
   | "modelo-chat"
+  | "modelo-retreino"
   | "market"
   | "vortal"
   | "osint"
@@ -501,6 +503,7 @@ function pathForView(
   if (view === "modelo-contratos") return "/modelo/contratos";
   if (view === "modelo-playground") return "/modelo/playground";
   if (view === "modelo-chat") return "/modelo/chat";
+  if (view === "modelo-retreino") return "/modelo/retreino";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -781,6 +784,8 @@ export default function App() {
     if (path === "/modelo/playground" || path.startsWith("/modelo/playground/")) return "modelo-playground";
     // Chat dedicado do modelo de contratos.
     if (path === "/modelo/chat" || path.startsWith("/modelo/chat/")) return "modelo-chat";
+    // Auto-aprendizagem: retreino, versões guardadas e histórico de adaptações.
+    if (path === "/modelo/retreino" || path.startsWith("/modelo/retreino/")) return "modelo-retreino";
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
     // Vista de mercado: os tickers da plataforma agrupados por país.
     if (path === "/market" || path.startsWith("/market/")) return "market";
@@ -946,6 +951,8 @@ export default function App() {
       else if (path === "/modelo/playground" || path.startsWith("/modelo/playground/")) next = "modelo-playground";
       // Chat dedicado do modelo de contratos.
       else if (path === "/modelo/chat" || path.startsWith("/modelo/chat/")) next = "modelo-chat";
+      // Auto-aprendizagem: retreino, versões guardadas e histórico de adaptações.
+      else if (path === "/modelo/retreino" || path.startsWith("/modelo/retreino/")) next = "modelo-retreino";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
       else if (path === "/market" || path.startsWith("/market/")) next = "market";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
@@ -1872,6 +1879,8 @@ export default function App() {
     if (target === "modelo-playground") return <ModeloPlaygroundPage />;
     // Chat dedicado do modelo: experiência conversacional em ecrã completo.
     if (target === "modelo-chat") return <ChatModeloPage />;
+    // Auto-aprendizagem do modelo: retreino, paragem, versões e histórico.
+    if (target === "modelo-retreino") return <ModeloRetreinoPage />;
     // Vista de mercado: os tickers da plataforma agrupados por país, cada um
     // ligado à sua ficha (`/tickers/<símbolo>`).
     if (target === "market")

@@ -57,7 +57,7 @@ import re
 import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -188,14 +188,39 @@ class Recipe:
     index: str
     instruction: str
     includes: Tuple[str, ...]
-    build: Callable[[Dict[str, Any], int], Optional[Tuple[str, str, Dict[str, Any]]]]
+    #: Devolve um par (`prompt`, `completion`, `metadata`) ou, para documentos que
+    #: servem várias instruções, uma lista de `(instruction, prompt, completion,
+    #: metadata)`. Ver `_build_contrato_pt_variantes`.
+    build: Callable[
+        [Dict[str, Any], int],
+        Union[
+            Optional[Tuple[str, str, Dict[str, Any]]],
+            Optional[List[Tuple[str, Dict[str, Any], str, Dict[str, Any]]]],
+        ],
+    ]
     query: Dict[str, Any] = field(default_factory=lambda: {"match_all": {}})
 
 
+#: Teto do objecto e da descrição que entram no par. A resposta tem 2-3 frases:
+#: colar 4 000 caracteres de descrição custa ~27× mais tempo de treino (a atenção
+#: é quadrática: 5× mais tokens ≈ 27× mais contas) sem ensinar nada que a
+#: resposta use. Medido nesta CPU: 271 tokens/par = 148 s por par; 120 tokens/par
+#: = ~30 s.
+TEXTO_CAMPO_MAX = 90
+
+
 def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, str, Dict[str, Any]]]:
-    """Espelha ``collectors/contratos.py::build_training_corpus`` (mesma redação)."""
+    """Espelha ``collectors/contratos.py::build_training_corpus`` (mesma redação).
+
+    Todos os campos citados na resposta têm de estar no pedido. Faltavam aqui a
+    data de publicação, o regime e o CPV — que a resposta já usava — e o modelo
+    aprendeu a **inventá-los**: em 245 de 245 exemplos o *output* citava uma data
+    e um regime que o *input* não tinha, e o modelo reproduzia essa invenção com
+    outra data qualquer (verificado: «publicado a 2021-08-26» para um contrato
+    sem data). Com os campos no pedido, a resposta fica ancorada no documento.
+    """
     idcontrato = _clean(doc.get("idcontrato"))
-    objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), max_chars)
+    objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), TEXTO_CAMPO_MAX)
     if not idcontrato or not objecto:
         return None
     adjudicante = _listed(doc.get("adjudicantes"), fallback="não identificado")
@@ -204,30 +229,113 @@ def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
     procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
     preco_raw = doc.get("precoContratual")
     preco = _money(preco_raw)
-    descricao = _truncate(_clean(doc.get("descContrato")), max_chars)
+    descricao = _truncate(_clean(doc.get("descContrato")), TEXTO_CAMPO_MAX)
     data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
     regime = _clean(doc.get("regime")) or "não especificado"
     cpv = _cpv_label(doc.get("cpv"))
 
     prompt = (
         f"Contrato {idcontrato} - {objecto}\n"
-        f"Adjudicante: {adjudicante}\n"
-        f"Adjudicatário: {adjudicatario}\n"
-        f"Tipo: {tipo}\n"
-        f"Procedimento: {procedimento}\n"
-        f"Preço contratual: {preco_raw}\n"
-        f"Descrição: {descricao}"
+        f"Adjudicante: {adjudicante} | Adjudicatário: {adjudicatario}\n"
+        f"Procedimento: {procedimento} | Tipo: {tipo}\n"
+        f"Preço contratual: {preco_raw} | Data de publicação: {data}\n"
+        f"Regime: {regime} | CPV principal: {cpv}"
+        # A descrição só entra quando diz algo para além do objecto: repetir a
+        # mesma frase custa tokens (e atenção) sem dar informação nova.
+        + (f"\nDescrição: {descricao}" if descricao and descricao not in objecto else "")
     )
     completion = (
-        f"Este contrato, publicado a {data} e com regime {regime}, envolve {objecto} "
-        f"entre {adjudicante} e {adjudicatario}. O valor contratual foi {preco} e o "
-        f"CPV principal é {cpv}."
+        f"Este contrato, publicado a {data} e com regime {regime}, liga {adjudicante} "
+        f"a {adjudicatario} por {preco}, para {objecto}. CPV: {cpv}."
     )
     return (
         _truncate(prompt, max_chars) if max_chars else prompt,
         completion,
         {"idcontrato": idcontrato, "ano": doc.get("Ano"), "tipoContrato": doc.get("tipoContrato")},
     )
+
+
+#: Valor a partir do qual um ajuste direto deixa de caber no limite legal
+#: (art. 22.º do CCP para bens e serviços). Só serve para sinalizar, não decide.
+LIMITE_AJUSTE_DIRETO = 75_000.0
+
+
+def _valor_numerico(bruto: Any) -> Optional[float]:
+    try:
+        return float(str(bruto).replace(" ", "").replace(",", ".").replace("€", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _sinais_de_risco(procedimento: str, preco_raw: Any, adjudicatarios: str) -> str:
+    """Sinais objetivos a partir do que está no documento — sem inferir mais nada.
+
+    Serve a instrução «auditar»: a resposta só pode apontar o que o pedido
+    permite verificar. Um modelo de 0,5 B não faz auditoria; pode, isso sim,
+    destacar os factos que um auditor olharia primeiro.
+    """
+    sinais: List[str] = []
+    texto = procedimento.lower()
+    valor = _valor_numerico(preco_raw)
+    if "ajuste" in texto and valor is not None and valor > LIMITE_AJUSTE_DIRETO:
+        sinais.append(
+            f"ajuste direto de {valor:,.2f} € acima do limite legal de "
+            f"{LIMITE_AJUSTE_DIRETO:,.2f} €"
+        )
+    elif "ajuste" in texto:
+        sinais.append("ajuste direto: confirmar fundamento e convites")
+    elif "concurso" in texto:
+        sinais.append("procedimento concorrencial")
+    if "não identificado" not in adjudicatarios and "," not in adjudicatarios:
+        sinais.append("adjudicatário único")
+    return "; ".join(sinais)
+
+
+def _build_contrato_pt_variantes(
+    doc: Dict[str, Any], max_chars: int
+) -> Optional[List[Tuple[str, Dict[str, Any], str, Dict[str, Any]]]]:
+    """O mesmo contrato com as três instruções que a interface oferece.
+
+    O modelo só tinha visto «Descreve este contrato público português.»; quando
+    a página pedia «auditar» ou «responder a cidadão», respondia com a descrição
+    decorada (e repetia-se: «o CPV principal principal»). Três instruções sobre o
+    mesmo documento ensinam que a instrução muda a resposta — mantendo tudo
+    ancorado no pedido.
+
+    Devolve pares ``(instruction, prompt, completion, metadata)``; ver
+    :func:`export_many`, que aceita este formato além do par único.
+    """
+    base = _build_contrato_pt(doc, max_chars)
+    if base is None:
+        return None
+    prompt, completion, metadata = base
+
+    idcontrato = _clean(doc.get("idcontrato"))
+    objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), TEXTO_CAMPO_MAX)
+    adjudicante = _listed(doc.get("adjudicantes"), fallback="não identificado")
+    adjudicatario = _listed(doc.get("adjudicatarios"), fallback="não identificado")
+    procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
+    preco = _money(doc.get("precoContratual"))
+    data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
+    cpv = _cpv_label(doc.get("cpv"))
+
+    cidadao = (
+        f"{adjudicante} contratou «{objecto}» a {adjudicatario} por {preco}. "
+        f"O procedimento foi {procedimento} e o contrato foi publicado a {data}."
+    )
+    sinais = _sinais_de_risco(procedimento, doc.get("precoContratual"), adjudicatario)
+    auditoria = (
+        f"A verificar neste contrato: procedimento {procedimento}, valor {preco}, "
+        f"adjudicatário {adjudicatario}. "
+        + (f"Sinal de risco: {sinais}. " if sinais else "")
+        + "O documento não tem dados sobre prazo, garantias ou subcontratação. "
+        f"Confirma o enquadramento do procedimento e o CPV {cpv}?"
+    )
+    return [
+        ("Descreve este contrato público português.", prompt, completion, metadata),
+        ("Resume este contrato numa frase, para um cidadão.", prompt, cidadao, metadata),
+        ("Audita este contrato e aponta o que deve ser verificado.", prompt, auditoria, metadata),
+    ]
 
 
 def _build_contrato_es(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, str, Dict[str, Any]]]:
@@ -253,6 +361,8 @@ def _build_contrato_es(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
         f"Tipo: {tipo}\n"
         f"Procedimento: {procedimiento}\n"
         f"Valor adjudicado: {importe}\n"
+        f"Data de publicação: {fecha}\n"
+        f"CPV principal: {_cpv_label(doc.get('cpv'), 'es')}\n"
         f"Local: {localidad}"
     )
     completion = (
@@ -289,6 +399,8 @@ def _build_contrato_fr(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
         f"Natureza: {_clean(doc.get('nature')) or 'não especificada'}\n"
         f"Procedimento: {procedimento}\n"
         f"Montante: {montante}\n"
+        f"Data de publicação: {data}\n"
+        f"CPV principal: {_cpv_label(doc.get('cpv'), 'fr')}\n"
         f"Local: {local}"
     )
     completion = (
@@ -419,7 +531,7 @@ RECIPES: Dict[str, Recipe] = {
             "tipoContrato", "tipoprocedimento", "precoContratual", "cpv", "dataPublicacao",
             "regime", "Ano",
         ),
-        build=_build_contrato_pt,
+        build=_build_contrato_pt_variantes,
     ),
     "contratos-es": Recipe(
         index=CONTRATOS_ES_INDEX,
@@ -553,7 +665,13 @@ class Source:
     index: str
     instruction: str
     includes: Tuple[str, ...]
-    builder: Callable[[Dict[str, Any], int], Optional[Tuple[str, str, Dict[str, Any]]]]
+    builder: Callable[
+        [Dict[str, Any], int],
+        Union[
+            Optional[Tuple[str, str, Dict[str, Any]]],
+            Optional[List[Tuple[str, Dict[str, Any], str, Dict[str, Any]]]],
+        ],
+    ]
     query: Optional[Dict[str, Any]] = None
     label: str = ""
 
@@ -714,12 +832,15 @@ def export_many(
                     if built is None:
                         contagens["skipped"] += 1
                     else:
-                        prompt, completion, metadata = built
-                        if count_tokens and max_tokens and count_tokens(prompt) + count_tokens(completion) > max_tokens:
-                            contagens["dropped"] += 1
-                        else:
+                        # Um documento pode servir várias instruções: a receita
+                        # devolve uma lista de pares em vez de um só.
+                        pares = built if isinstance(built, list) else [(source.instruction, *built)]
+                        for instruction, prompt, completion, metadata in pares:
+                            if count_tokens and max_tokens and count_tokens(prompt) + count_tokens(completion) > max_tokens:
+                                contagens["dropped"] += 1
+                                continue
                             record = {
-                                "instruction": source.instruction,
+                                "instruction": instruction,
                                 "input": prompt,
                                 "output": completion,
                                 "metadata": {**metadata, "index": source.index, "fonte": source.nome()},

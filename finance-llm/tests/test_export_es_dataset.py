@@ -118,6 +118,67 @@ def test_max_chars_corta_o_prompt_e_a_descricao() -> None:
     assert prompt.endswith("…")
 
 
+def test_contrato_pt_pede_todos_os_campos_que_a_resposta_cita() -> None:
+    """Data, regime e CPV apareciam na resposta mas não no pedido.
+
+    Isso ensinou o modelo a inventá-los: com um documento sem data, respondia
+    «publicado a 2021-08-26» e «regime DL 18/2008». O teste fixa a regra: cada
+    valor citado no *output* tem de existir no *input*.
+    """
+    prompt, completion, _ = exporter._build_contrato_pt(DOC_PT, exporter.DEFAULT_MAX_CHARS)
+
+    assert "Data de publicação: 2025-11-21" in prompt
+    assert "Regime: Código dos Contratos Públicos" in prompt
+    assert "CPV principal: Serviços de mesa e de restauração" in prompt
+    assert "publicado a 2025-11-21" in completion
+    assert "regime Código dos Contratos Públicos" in completion
+
+
+def test_contrato_pt_sem_data_nao_inventa_data() -> None:
+    """Sem ``dataPublicacao`` o pedido diz «data desconhecida» e a resposta também."""
+    documento = {**DOC_PT, "dataPublicacao": None, "regime": ""}
+    prompt, completion, _ = exporter._build_contrato_pt(documento, exporter.DEFAULT_MAX_CHARS)
+
+    assert "Data de publicação: data desconhecida" in prompt
+    assert "Regime: não especificado" in prompt
+    assert "data desconhecida" in completion
+
+
+def test_variantes_cobrem_as_tres_instrucoes_da_interface() -> None:
+    """A página oferece descrever/auditar/cidadão; o treino só tinha descrever."""
+    pares = exporter._build_contrato_pt_variantes(DOC_PT, exporter.DEFAULT_MAX_CHARS)
+
+    assert pares is not None
+    instrucoes = [instrucao for instrucao, *_ in pares]
+    assert instrucoes == [
+        "Descreve este contrato público português.",
+        "Resume este contrato numa frase, para um cidadão.",
+        "Audita este contrato e aponta o que deve ser verificado.",
+    ]
+    # O mesmo documento, três respostas diferentes — e todas ancoradas no pedido.
+    assert len({completion for _, _, completion, _ in pares}) == 3
+    for _, prompt, completion, _ in pares:
+        assert prompt == pares[0][1]
+        assert "Quinta do Príncipe" in completion
+        assert "62 568,00 €" in completion
+
+
+def test_variantes_descartam_o_documento_sem_campos_suficientes() -> None:
+    assert exporter._build_contrato_pt_variantes({**DOC_PT, "idcontrato": ""}, exporter.DEFAULT_MAX_CHARS) is None
+
+
+def test_sinais_de_risco_so_apontam_o_que_o_documento_permite() -> None:
+    """Acima do limite do ajuste direto é sinal; abaixo, só um lembrete."""
+    alto = exporter._sinais_de_risco("Ajuste Direto Regime Geral", 120000.0, "Obra Lda")
+    baixo = exporter._sinais_de_risco("Ajuste Direto Regime Geral", 15430.75, "Obra Lda")
+
+    assert "acima do limite legal" in alto
+    assert "acima do limite legal" not in baixo
+    assert "adjudicatário único" in alto
+    assert "adjudicatário único" not in exporter._sinais_de_risco("Concurso público", 1.0, "A, B")
+
+
+
 # ------------------------------------------------------------------- outros índices
 def test_contrato_fr_usa_o_siret_quando_nao_ha_nome() -> None:
     documento = {

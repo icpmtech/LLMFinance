@@ -45,9 +45,12 @@ _estado: Dict[str, Any] = {
     "pares": 0,
     "erro": None,
     "ultimo_resultado": None,
+    "paragem_pedida": False,
 }
 _estado_lock = threading.Lock()
 _treino_lock = threading.Lock()
+#: Sinaliza à thread de treino que deve parar no próximo passo.
+_parar = threading.Event()
 
 
 def estado_adaptacao() -> Dict[str, Any]:
@@ -98,6 +101,130 @@ def _versoes_guardadas() -> int:
         return 0
 
 
+def listar_versoes() -> List[Dict[str, Any]]:
+    """Backups do adaptador, do mais recente para o mais antigo.
+
+    Cada adaptação copia o `adapter_model.safetensors` anterior para
+    `.bak-<data>` antes de escrever. Esta lista é o que permite à interface
+    oferecer «reverter» sem o utilizador ter de mexer em ficheiros.
+    """
+    from inference.contratos_lora import DEFAULT_ADAPTER_DIR
+
+    try:
+        ficheiros = list(DEFAULT_ADAPTER_DIR.glob("adapter_model.safetensors.bak-*"))
+    except OSError:
+        return []
+    versoes: List[Dict[str, Any]] = []
+    for caminho in ficheiros:
+        try:
+            estado = caminho.stat()
+        except OSError:
+            continue
+        # `copy2` preserva a data do ficheiro copiado, por isso a data do backup
+        # tem de vir do nome (`.bak-AAAAMMDD-HHMMSS`), não do mtime.
+        carimbo = caminho.name.rsplit(".bak-", 1)[-1].replace("-", " ")
+        criado_em = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(estado.st_mtime))
+        chave_ordem = estado.st_mtime
+        try:
+            momento = time.mktime(time.strptime(carimbo, "%Y%m%d %H%M%S"))
+            criado_em = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(momento))
+            chave_ordem = momento
+        except ValueError:
+            pass
+        versoes.append(
+            {
+                "nome": caminho.name,
+                "bytes": estado.st_size,
+                "criado_em": criado_em,
+                "_mtime": chave_ordem,
+            }
+        )
+    versoes.sort(key=lambda v: v["_mtime"], reverse=True)
+    for versao in versoes:
+        versao.pop("_mtime", None)
+    return versoes
+
+
+def reverter_para(nome: str) -> Dict[str, Any]:
+    """Repõe o adaptador a partir de um backup (`adapter_model.safetensors.bak-*`).
+
+    Antes de repor, guarda o estado atual noutro backup — reverter também é
+    reversível. O `nome` é validado contra a lista real de ficheiros para não
+    aceitar caminhos arbitrários.
+    """
+    from inference.contratos_lora import DEFAULT_ADAPTER_DIR
+
+    with _estado_lock:
+        if _estado["a_correr"]:
+            raise ValueError("há uma adaptação a correr; espere que termine antes de reverter")
+    if not nome or "/" in nome or "\\" in nome or not nome.startswith("adapter_model.safetensors.bak-"):
+        raise ValueError("nome de versão inválido")
+    origem = DEFAULT_ADAPTER_DIR / nome
+    if not origem.is_file():
+        raise ValueError(f"versão não encontrada: {nome}")
+    destino = DEFAULT_ADAPTER_DIR / "adapter_model.safetensors"
+
+    carimbo = time.strftime("%Y%m%d-%H%M%S")
+    seguranca = Path(str(destino) + f".bak-{carimbo}")
+    try:
+        if destino.exists():
+            shutil.copy2(destino, seguranca)
+    except OSError as exc:  # pragma: no cover - depende do disco
+        logger.warning("Backup de segurança antes de reverter falhou: %s", exc)
+
+    try:
+        shutil.copy2(origem, destino)
+    except OSError as exc:
+        raise ValueError(f"não foi possível repor {nome}: {exc}") from exc
+
+    from inference import contratos_lora
+
+    contratos_lora.limpar_cache()
+
+    resultado = {
+        "estado": "revertido",
+        "versao": nome,
+        "backup_do_estado_anterior": seguranca.name,
+        "concluido_em": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    try:
+        with (DEFAULT_ADAPTER_DIR / "metricas_adaptacao.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "concluido_em": resultado["concluido_em"],
+                        "estado": "revertido",
+                        "versao": nome,
+                        "pares": 0,
+                        "passos": 0,
+                        "perda_antes": None,
+                        "perda_depois": None,
+                        "delta": None,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except OSError:
+        pass
+    return resultado
+
+
+def historico_adaptacoes(limite: int = 20) -> List[Dict[str, Any]]:
+    """Histórico de adaptações (mais recente primeiro), lido do JSONL."""
+    return list(reversed(_ler_historico()))[: max(1, limite)]
+
+
+def pedir_paragem() -> Dict[str, Any]:
+    """Pede à adaptação em curso que pare no próximo passo (cooperativo)."""
+    with _estado_lock:
+        if not _estado["a_correr"]:
+            return {"ok": False, "motivo": "não há adaptação a correr", **_estado}
+        _estado["paragem_pedida"] = True
+    _parar.set()
+    return {"ok": True, "estado": "a_parar"}
+
+
 def _escrever_pares(pares: List[Dict[str, Any]]) -> Path:
     """Grava os pares de adaptação (um ficheiro só, reescrito de cada vez)."""
     DATA_FICHEIRO.parent.mkdir(parents=True, exist_ok=True)
@@ -134,12 +261,13 @@ def adaptar(
     max_length: int = 512,
     pares_minimos: int = MIN_PARES,
     marcar_utilizado: bool = True,
+    apenas_novos: bool = True,
 ) -> Dict[str, Any]:
     """Dá `passos` actualizações sobre o adaptador, usando o feedback guardado."""
     from api import llm_contratos_agente as agente
 
     inicio = time.time()
-    pares = agente.pares_de_feedback(limite=200, apenas_novos=True)
+    pares = agente.pares_de_feedback(limite=200, apenas_novos=apenas_novos)
     if len(pares) < pares_minimos:
         return {
             "estado": "sem_dados",
@@ -185,7 +313,12 @@ def adaptar(
 
     perda_antes = perda_media()
     historico: List[Dict[str, Any]] = []
+    interrompido = False
     for passo in range(1, passos + 1):
+        if _parar.is_set():
+            interrompido = True
+            logger.info("Adaptação interrompida a pedido do utilizador no passo %s", passo - 1)
+            break
         ids, labels = exemplos[(passo - 1) % len(exemplos)]
         saida = modelo(input_ids=ids, labels=labels)
         saida.loss.backward()
@@ -195,6 +328,15 @@ def adaptar(
         historico.append({"passo": passo, "perda": perda})
         with _estado_lock:
             _estado.update({"passo": passo, "perda": perda})
+
+    passos_feitos = len(historico)
+    if passos_feitos == 0:
+        return {
+            "estado": "parado",
+            "mensagem": "adaptação parada antes do primeiro passo; adaptador intacto",
+            "pares": len(exemplos),
+            "passos": 0,
+        }
 
     perda_depois = perda_media()
 
@@ -210,9 +352,11 @@ def adaptar(
     modelo.save_pretrained(str(DEFAULT_ADAPTER_DIR))
 
     resultado = {
-        "estado": "concluido",
+        "estado": "parado" if interrompido else "concluido",
         "pares": len(exemplos),
-        "passos": passos,
+        "passos": passos_feitos,
+        "passos_pedidos": passos,
+        "interrompido": interrompido,
         "lr": lr,
         "perda_antes": perda_antes,
         "perda_depois": perda_depois,
@@ -226,7 +370,7 @@ def adaptar(
 
     try:
         with (DEFAULT_ADAPTER_DIR / "metricas_adaptacao.jsonl").open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps({k: resultado[k] for k in ("concluido_em", "pares", "passos", "perda_antes", "perda_depois", "delta")}, ensure_ascii=False) + "\n")
+            fh.write(json.dumps({k: resultado[k] for k in ("concluido_em", "estado", "pares", "passos", "perda_antes", "perda_depois", "delta")}, ensure_ascii=False) + "\n")
     except OSError:
         pass
 
@@ -260,19 +404,31 @@ def adaptar(
     return resultado
 
 
-def adaptar_em_segundo_plano(passos: int = 12, lr: float = 5e-5) -> Dict[str, Any]:
+def adaptar_em_segundo_plano(
+    passos: int = 12, lr: float = 5e-5, apenas_novos: bool = True
+) -> Dict[str, Any]:
     """Arranca a adaptação numa thread (a rota responde já, a página vai vendo)."""
     with _estado_lock:
         if _estado["a_correr"]:
             return {"estado": "a_correr", "ja_estava_a_correr": True, **_estado}
+        _parar.clear()
         _estado.update(
-            {"a_correr": True, "passo": 0, "passos": passos, "perda": None, "erro": None, "iniciado": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            {
+                "a_correr": True,
+                "passo": 0,
+                "passos": passos,
+                "perda": None,
+                "erro": None,
+                "iniciado": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "concluido": None,
+                "paragem_pedida": False,
+            }
         )
 
     def _correr() -> None:
         with _treino_lock:
             try:
-                resultado = adaptar(passos=passos, lr=lr)
+                resultado = adaptar(passos=passos, lr=lr, apenas_novos=apenas_novos)
                 with _estado_lock:
                     _estado.update({"ultimo_resultado": resultado, "concluido": time.strftime("%Y-%m-%dT%H:%M:%S")})
             except Exception as exc:  # pragma: no cover - protege a thread
@@ -282,6 +438,8 @@ def adaptar_em_segundo_plano(passos: int = 12, lr: float = 5e-5) -> Dict[str, An
             finally:
                 with _estado_lock:
                     _estado["a_correr"] = False
+                    _estado["paragem_pedida"] = False
+                _parar.clear()
 
     threading.Thread(target=_correr, name="llm-adaptacao", daemon=True).start()
     return {"estado": "iniciado", "passos": passos}

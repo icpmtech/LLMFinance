@@ -201,7 +201,13 @@ def answer(
             do_sample=temperature > 0,
             temperature=temperature if temperature > 0 else 1.0,
             top_p=0.9,
-            repetition_penalty=1.05,
+            # 1,05 não travava a degeneração de um 0,5 B: a resposta repetia
+            # «o CPV principal principal é» e emendava um segundo CPV inventado.
+            # 1,15 é o valor habitual neste tamanho; e o corte de 3-gramas impede
+            # a repetição literal sem tocar em frases legítimas como
+            # «Código dos Contratos Públicos (DL 18/2008)».
+            repetition_penalty=1.15,
+            no_repeat_ngram_size=3,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
             output_scores=devolver_tokens,

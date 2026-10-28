@@ -732,19 +732,34 @@ export default function ModeloContratosPage() {
                 <Brain size={14} className="text-primary" />
                 chat do modelo · memória, skills, RAG e raciocínio
               </span>
-              <a
-                href="/modelo/playground"
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.history.pushState({}, "", "/modelo/playground");
-                  window.dispatchEvent(new PopStateEvent("popstate"));
-                }}
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <FlaskConical size={11} />
-                abrir no playground
-                <ExternalLink size={10} />
-              </a>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href="/modelo/retreino"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/modelo/retreino");
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <RefreshCw size={11} />
+                  auto-aprendizagem
+                  <ExternalLink size={10} />
+                </a>
+                <a
+                  href="/modelo/playground"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/modelo/playground");
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <FlaskConical size={11} />
+                  abrir no playground
+                  <ExternalLink size={10} />
+                </a>
+              </div>
             </div>
             <ChatDoModelo />
           </section>

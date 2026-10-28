@@ -142,6 +142,32 @@ def test_fidelidade_numerica_detecta_valor_trocado() -> None:
     assert avaliacao.numeric_fidelity("sem números", "também sem números") is None
 
 
+def test_ancoragem_apanha_data_inventada() -> None:
+    """O defeito real: contrato sem data, resposta com data.
+
+    `numeric_fidelity` não via isto — a data não estava no gabarito, logo não era
+    medida. A ancoragem mede ao contrário: números escritos que não estão no
+    pedido.
+    """
+    pedido = "Contrato 900001 - reagentes\nPreço contratual: 15430.75"
+    inventada = (
+        "Este contrato, publicado a 2021-08-26 e com regime CCP (DL 18/2008), "
+        "tem o valor de 15 430,75 €."
+    )
+    ancorada = "Este contrato tem o valor de 15 430,75 €."
+
+    resultado = avaliacao.numeric_grounding(inventada, pedido)
+    assert resultado is not None
+    assert "2021.00" in resultado["inventados"]
+    assert "18.00" in resultado["inventados"]
+    assert "2008.00" in resultado["inventados"]
+    assert resultado["taxa"] > 0
+
+    assert avaliacao.numeric_grounding(ancorada, pedido)["inventados"] == []
+    assert avaliacao.numeric_grounding(ancorada, pedido)["taxa"] == 0.0
+    assert avaliacao.numeric_grounding("sem números", pedido) is None
+
+
 # ---------------------------------------------------------------------------
 # Serviço e índice
 # ---------------------------------------------------------------------------
