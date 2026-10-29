@@ -227,9 +227,15 @@ def responder(
         memoria_ids = construido["memoria_ids"]
         passos = [p.como_dict() for p in construido["passos"]]
 
+    # O documento já vai dentro do contexto, no bloco `[DADOS DO PEDIDO]`.
+    # Passá-lo outra vez duplicava-o no prompt e a resposta misturava os dois
+    # sítios — visto no chat: um contrato de Condeixa-a-Nova saiu com o montante
+    # de um subsídio da Segurança Social que estava nas evidências.
+    dados_para_o_modelo = "" if "[DADOS DO PEDIDO]" in contexto else dados
+
     gerado = contratos_lora.answer(
         instrucao,
-        dados,
+        dados_para_o_modelo,
         sistema=texto_prompt or None,
         contexto=contexto or None,
         max_new_tokens=max_new_tokens,

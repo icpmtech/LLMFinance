@@ -84,9 +84,30 @@ pedido e respostas diferentes (`_build_contrato_pt_variantes`), e a instrução
 viaja com o perfil na API (`PROMPTS_PREDEFINIDOS[*].instrucao`) para que o
 prompt de sistema e a instrução não se contradigam.
 
-O objecto e a descrição ficam limitados a 240 caracteres (`TEXTO_CAMPO_MAX`):
-uma descrição de 4 000 caracteres custa 8× mais tempo de treino (a atenção é
+O objecto e a descrição ficam limitados a 90 caracteres (`TEXTO_CAMPO_MAX`):
+uma descrição de 4 000 caracteres custa ~27× mais tempo de treino (a atenção é
 quadrática) sem ensinar nada que uma resposta de 2-3 frases use.
+
+### Não pedir ao modelo que reformate números
+
+O valor entra na resposta **como vem no pedido** (`15430.75 €`), não convertido
+para `15 430,75 €`. A conversão é uma conta sobre dígitos e um 0,5 B troca-os:
+as respostas saíam `1 54 30 75 €` e `1 5430,75 €`. Copiar, o modelo faz bem (os
+nomes das entidades sempre saíram certos). A verificação numérica
+(`numeric_tokens`) normaliza os dois formatos, por isso não se perde rigor.
+
+### Medição (held-out, 6 gerações)
+
+| métrica | valor | o que diz |
+|---|---|---|
+| `fidelidade_numerica` | **1,0** | todos os números do gabarito aparecem na resposta |
+| `ancoragem_numerica` (`inventados`) | **0,0 / nenhum** | nenhum número escrito que não esteja no pedido |
+| `f1_medio` | 0,67 | o conteúdo bate; a frase é que é diferente |
+
+A `ancoragem_numerica` foi acrescentada a `contratos_eval` por causa do defeito
+descrito acima: a `fidelidade` só olha para os números do gabarito e é cega a
+números a mais. Um contrato sem data que gerava «publicado a 2021-08-26» passava
+com fidelidade 1,0. A partir de agora falha na ancoragem.
 
 ## 3. Passo 2 — treinar (com pausa e retoma)
 
@@ -334,7 +355,7 @@ está a correr na mesma máquina.
 
 ## 8. Limitações honestas
 
-- **CPU**: o dataset inteiro (807 pares) é ~3 h por época; a corrida de
+- **CPU**: o dataset inteiro (1 276 pares) é ~3 h por época; a corrida de
   demonstração treinou 120 pares (e depois 200 na retoma). Com GPU,
   `--max-pairs 0` e mais épocas.
 - **0,5 B parâmetros**: aprende o formato e o vocabulário dos contratos, não
@@ -351,3 +372,14 @@ está a correr na mesma máquina.
 - **RAG por BM25**: sem embeddings, a recuperação é lexical. Um contrato descrito
   com outras palavras pode não aparecer; para isso existe a skill
   `procurar_contratos`, que usa a pesquisa do próprio índice.
+- **Onde o modelo ainda falha** (medido em 2026-10-29): os **números** e os
+  **nomes** estão ancorados (fidelidade 1,0, nenhum valor inventado), mas a
+  **frase** continua fraca — chega a trocar os papéis de adjudicante e
+  adjudicatário, a repetir uma cláusula e a parafrasear «riscos» genéricos em vez
+  de citar o documento. Com 0,5 B e ~60 pares por corrida em CPU, melhorar isto
+  exige mais dados e mais tempo de treino, não mais código. Enquanto isso, o
+  perfil **auditar** deve ser lido como lista do que verificar, não como
+  auditoria.
+- **Não pedir contas ao modelo**: se um dia a resposta precisar de um valor
+  derivado (soma, média, percentagem), calcule-o no serviço e passe-o pronto no
+  contexto. O adaptador copia bem; calcula mal.

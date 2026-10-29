@@ -233,6 +233,12 @@ def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
     data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
     regime = _clean(doc.get("regime")) or "não especificado"
     cpv = _cpv_label(doc.get("cpv"))
+    # O valor entra na resposta **como vem no pedido**, e não reformatado para
+    # «15 430,75 €»: reformatar obriga o modelo a mexer nos dígitos e um 0,5 B
+    # troca-os («1 54 30 75 €», «1 5430,75 €»). Copiar é o que ele faz bem — os
+    # nomes das entidades saem sempre certos. A verificação numérica da API
+    # normaliza os dois formatos, por isso a leitura não perde nada.
+    preco_texto = f"{preco_raw} €" if preco_raw not in (None, "") else preco
 
     prompt = (
         f"Contrato {idcontrato} - {objecto}\n"
@@ -253,7 +259,7 @@ def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
     )
     completion = (
         f"Este contrato, publicado a {data} e com regime {regime}, liga {adjudicante} "
-        f"a {adjudicatario} por {preco}, para {objecto}. CPV: {cpv}."
+        f"a {adjudicatario} por {preco_texto}, para {objecto}. CPV: {cpv}."
     )
     return (
         _truncate(prompt, max_chars) if max_chars else prompt,
@@ -322,12 +328,13 @@ def _build_contrato_pt_variantes(
     adjudicante = _listed(doc.get("adjudicantes"), fallback="não identificado")
     adjudicatario = _listed(doc.get("adjudicatarios"), fallback="não identificado")
     procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
-    preco = _money(doc.get("precoContratual"))
+    preco_raw = doc.get("precoContratual")
+    preco_texto = f"{preco_raw} €" if preco_raw not in (None, "") else _money(preco_raw)
     data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
     cpv = _cpv_label(doc.get("cpv"))
 
     cidadao = (
-        f"{adjudicante} contratou «{objecto}» a {adjudicatario} por {preco}. "
+        f"{adjudicante} contratou «{objecto}» a {adjudicatario} por {preco_texto}. "
         f"O procedimento foi {procedimento} e o contrato foi publicado a {data}."
     )
     sinais = _sinais_de_risco(procedimento, doc.get("precoContratual"), adjudicatario)
@@ -335,7 +342,7 @@ def _build_contrato_pt_variantes(
     # depois o modelo enche as lacunas com valores inventados quando o documento
     # não encaixa. Duas frases ancoradas generalizam melhor que cinco decoradas.
     auditoria = (
-        f"Procedimento {procedimento}, valor {preco}, adjudicatário {adjudicatario}."
+        f"Procedimento {procedimento}, valor {preco_texto}, adjudicatário {adjudicatario}."
         + (f" Sinal de risco: {sinais}." if sinais else " Sem sinais de risco nos dados.")
         + f" Confirmar o enquadramento e o CPV {cpv}."
     )

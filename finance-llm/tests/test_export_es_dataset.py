@@ -90,7 +90,7 @@ def test_contrato_pt_gera_o_par_completo() -> None:
     assert "Adjudicante: Município de Chaves" in prompt
     assert "Adjudicatário: Quinta do Príncipe" in prompt
     assert "Preço contratual: 62568.0" in prompt
-    assert "62 568,00 €" in completion
+    assert "62568.0 €" in completion
     assert "Serviços de mesa e de restauração" in completion
     assert metadata == {"idcontrato": "11970012", "ano": 2025, "tipoContrato": ["Aquisição de serviços"]}
 
@@ -160,7 +160,7 @@ def test_variantes_cobrem_as_tres_instrucoes_da_interface() -> None:
     for _, prompt, completion, _ in pares:
         assert prompt == pares[0][1]
         assert "Quinta do Príncipe" in completion
-        assert "62 568,00 €" in completion
+        assert "62568.0 €" in completion
 
 
 def test_variantes_descartam_o_documento_sem_campos_suficientes() -> None:

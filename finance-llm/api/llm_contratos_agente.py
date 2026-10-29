@@ -887,6 +887,26 @@ class Passo:
         return {"fase": self.fase, "titulo": self.titulo, "detalhe": self.detalhe, "dados": self.dados}
 
 
+def _pergunta_aberta(pergunta: str) -> bool:
+    """A instrução é uma pergunta (precisa de ir além do documento)?
+
+    «Descreve este contrato» descreve-se com o documento à frente; «quanto
+    custou o contrato X?» precisa de ir buscar o contrato. Sem esta distinção, o
+    RAG injectava pedaços de outros documentos e o modelo de 0,5 B misturava-os:
+    um contrato de Condeixa-a-Nova saía com o montante de um subsídio e com o
+    adjudicatário de um contrato de arquivo (visto no chat).
+    """
+    texto = (pergunta or "").strip().lower()
+    if not texto:
+        return False
+    if "?" in texto:
+        return True
+    return any(
+        palavra in texto.split()
+        for palavra in ("quanto", "quem", "qual", "quais", "quantos", "quantas", "onde", "quando")
+    )
+
+
 def construir_contexto(
     *,
     pergunta: str,
@@ -938,7 +958,13 @@ def construir_contexto(
             passos.append(Passo("memoria", f"{len(memorias)} memórias relevantes", "\n".join(linhas)[:500]))
 
     if usar_rag:
-        chunks = recuperar_rag(pergunta or dados, k=k_rag)
+        # Pesquisar com o **documento**, não com a instrução. «Descreve este
+        # contrato público português» não tem termos de contrato nenhum: o BM25
+        # devolvia o que calhava (num teste real, um contrato de Condeixa-a-Nova
+        # veio com o montante de um subsídio da Segurança Social colado à
+        # resposta). O início do documento é o que identifica o objeto.
+        consulta_rag = (dados.strip()[:400] or pergunta).strip()
+        chunks = recuperar_rag(consulta_rag, k=k_rag)
         if chunks:
             evidencias = [
                 {
