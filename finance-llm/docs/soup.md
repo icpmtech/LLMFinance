@@ -624,7 +624,39 @@ Escolha as perguntas **fora** do conjunto de treino (exporte com um
 `--max-records` maior e use as linhas que sobraram) — perguntar o que já está no
 treino só mostra memorização.
 
-## 7. Notas
+## 7. Motor Soup na página de retreino
+
+A partir de `/modelo/retreino` o Soup deixou de ser só linha de comandos: o
+separador **motor** tem duas opções — `incremental (CPU)`, o loop da plataforma,
+e `Soup (CLI)`. O segundo lê os YAMLs de `training/soup/` e mostra, por config, o
+modelo base, o dataset, o número de pares e a pasta de saída.
+
+O que acontece de cada vez:
+
+| Ação | O que corre | Onde |
+|------|-------------|------|
+| listar configs | `training/soup/*.yaml` lidos pela API | `api/llm_contratos_soup.py` |
+| **validar config** | `soup train -c <yaml> --dry-run` | processo filho da API |
+| **treinar com Soup** | `soup train -y --config <yaml>` | subprocesso, morto por **parar** |
+
+O progresso vem da própria saída do CLI (`step N/M`, `loss=…`), linha a linha,
+para o mesmo painel que já mostra a adaptação incremental; o canal em direto
+(`/llm/modelo/retreinar/ws`) transporta também `soup.passo` e `soup.a_correr`.
+
+Duas notas que a interface assume por si:
+
+- **A imagem do backend traz `soup-cli` sem o extra `[train]`.** Chega para
+  listar e validar; para treinar, o painel mostra o comando do contentor
+  (`docker compose --profile train run --rm soup train -y --config …`). Instalar
+  o extra no backend traria `trl`/`accelerate` e podia subir o `transformers` —
+  exactamente o que o `Dockerfile.backend.incremental` evita.
+- **Um treino de cada vez.** Lançar o Soup com a adaptação incremental a correr
+  (ou o contrário) é recusado: os dois querem o mesmo CPU e a mesma RAM.
+
+Os YAMLs entram na imagem do backend apesar de `training/` estar no
+`.dockerignore` — o `!training/soup` do ficheiro mantém só essa pasta (alguns KB).
+
+## 8. Notas
 
 - O dataset exportado (`data/final/*.jsonl`) e os modelos (`model/soup-*`) estão
   no `.gitignore` — são artefactos de dados, geram-se outra vez com os comandos

@@ -386,6 +386,8 @@ export type EstadoAoVivo = {
   pares: number;
   agora_ts?: number;
   externo?: ProgressoExterno;
+  /** Motor Soup (subprocesso `soup train`), quando há uma corrida. */
+  soup?: Omit<EstadoSoup, "log" | "pontos">;
   ultimo_resultado?: EstadoRetreino["ultimo_resultado"];
 };
 
@@ -418,6 +420,72 @@ export function getVersoesAdaptador() {
   return pedir<{ total: number; versoes: VersaoAdaptador[]; atual: number }>(
     "/llm/modelo/versoes",
   );
+}
+
+/* ------------------------------------------------------- motor Soup (CLI) */
+
+/** Config YAML de `training/soup/` com o essencial já lido pelo backend. */
+export type ConfigSoup = {
+  nome: string;
+  caminho: string;
+  base: string | null;
+  dataset: string | null;
+  dataset_existe: boolean;
+  pares: number | null;
+  saida: string | null;
+  tarefa: string;
+  epocas: number | null;
+  lr: number | null;
+  lora_r: number | null;
+  quantizacao: string | null;
+};
+
+/** Estado da corrida do Soup (subprocesso `soup train`). */
+export type EstadoSoup = {
+  a_correr: boolean;
+  config: string | null;
+  /** `ocioso` | `a_preparar` | `a_treinar` | `concluido` | `parado` | `erro` */
+  fase: string;
+  passo: number;
+  passos: number;
+  perda: number | null;
+  iniciado: string | null;
+  concluido: string | null;
+  erro: string | null;
+  codigo_saida: number | null;
+  saida: string | null;
+  log: string[];
+  pontos: { passo: number; perda: number }[];
+  disponivel: boolean;
+  /** `soup train` pode mesmo treinar aqui (extra `[train]` instalado). */
+  treino_disponivel: boolean;
+  versao: string | null;
+  comando_contentor: string;
+  agora_ts?: number;
+};
+
+export function getEstadoSoup(): Promise<{ estado: EstadoSoup; configs: ConfigSoup[] }> {
+  return pedir("/llm/modelo/soup");
+}
+
+export function validarConfigSoup(config: string) {
+  return pedir<{ ok: boolean; mensagem: string; codigo_saida?: number }>("/llm/modelo/soup/validar", {
+    method: "POST",
+    body: JSON.stringify({ config }),
+  });
+}
+
+export function treinarComSoup(config: string, validarPrimeiro = true) {
+  return pedir<{ ok: boolean; estado: string; config: string; comando: string }>("/llm/modelo/soup/treinar", {
+    method: "POST",
+    body: JSON.stringify({ config, validar_primeiro: validarPrimeiro }),
+  });
+}
+
+export function pararSoup() {
+  return pedir<{ ok: boolean; estado?: string; motivo?: string }>("/llm/modelo/soup/parar", {
+    method: "POST",
+  });
 }
 
 export function reverterAdaptador(versao: string) {

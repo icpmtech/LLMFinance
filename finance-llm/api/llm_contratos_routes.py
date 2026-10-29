@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from api import llm_contratos_agente as agente
 from api import llm_contratos_service as service
+from api import llm_contratos_soup as soup
 from api import llm_contratos_treino as treino
 from api.auth_routes import CurrentSession, require_session, session_from_token
 
@@ -412,6 +413,54 @@ def versoes_adaptador() -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Motor Soup (`soup-cli`): alternativa de uma só tacada ao loop incremental.
+# ---------------------------------------------------------------------------
+
+
+class SoupTreinarRequest(BaseModel):
+    config: str = Field(..., min_length=1, max_length=200, description="Nome do YAML em training/soup/")
+    validar_primeiro: bool = Field(True, description="Correr `soup train --dry-run` antes de treinar")
+
+
+@router.get("/soup", summary="Motor Soup: configs disponíveis e estado da corrida")
+def estado_soup() -> Dict[str, Any]:
+    """Leitura pública: o mesmo padrão da ficha do modelo.
+
+    Devolve o retrato da corrida (fase, passo, perda, últimas linhas) **e** os
+    configs de `training/soup/`, com o modelo base, o dataset e o número de
+    pares — é o que a página de retreino mostra antes de lançar seja o que for.
+    """
+    return {"estado": soup.instantaneo(), "configs": soup.configs()}
+
+
+@router.post("/soup/validar", summary="Validar um config do Soup sem treinar")
+def validar_soup(req: SoupTreinarRequest, session: Session) -> Dict[str, Any]:  # noqa: ARG001
+    return soup.validar(req.config)
+
+
+@router.post("/soup/treinar", summary="Treinar com o Soup (subprocesso)")
+def treinar_soup(req: SoupTreinarRequest, session: Session) -> Dict[str, Any]:  # noqa: ARG001
+    """Lança `soup train -y --config <yaml>` e responde já.
+
+    O subprocesso corre fora do processo da API: pode ser parado sem derrubar o
+    servidor, e o progresso é lido linha a linha para o painel.
+    """
+    if req.validar_primeiro:
+        veredicto = soup.validar(req.config)
+        if not veredicto.get("ok"):
+            raise HTTPException(status_code=409, detail=veredicto.get("mensagem") or "config inválido")
+    resultado = soup.iniciar(req.config)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=409, detail=resultado.get("erro") or "não foi possível arrancar o Soup")
+    return resultado
+
+
+@router.post("/soup/parar", summary="Parar o treino do Soup")
+def parar_soup(session: Session) -> Dict[str, Any]:  # noqa: ARG001
+    return soup.parar()
+
+
 @router.websocket("/retreinar/ws")
 async def ws_retreino(websocket: WebSocket, token: Optional[str] = Query(None)) -> None:
     """Fluxo do retreino em direto: fases, passo, perda e tokens.
@@ -434,7 +483,9 @@ async def ws_retreino(websocket: WebSocket, token: Optional[str] = Query(None)) 
     try:
         while True:
             estado = await run_in_threadpool(treino.instantaneo)
+            estado["soup"] = await run_in_threadpool(soup.resumo)
             externo = estado.get("externo") or {}
+            motor_soup = estado.get("soup") or {}
             assinatura = repr(
                 (
                     estado.get("a_correr"),
@@ -450,6 +501,10 @@ async def ws_retreino(websocket: WebSocket, token: Optional[str] = Query(None)) 
                     # no fim.
                     externo.get("passo"),
                     externo.get("a_correr"),
+                    # O motor Soup também é um subprocesso: idem.
+                    motor_soup.get("passo"),
+                    motor_soup.get("a_correr"),
+                    motor_soup.get("fase"),
                 )
             )
             if assinatura != ultimo:

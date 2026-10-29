@@ -23,6 +23,7 @@ import {
   Square,
 } from "lucide-react";
 import RetreinoAoVivo from "./RetreinoAoVivo";
+import PainelDoSoup from "./PainelDoSoup";
 import {
   correrAvaliacao,
   getEstadoRag,
@@ -72,6 +73,8 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
   const [passos, setPassos] = useState(12);
   const [lr, setLr] = useState(0.00005);
   const [reutilizar, setReutilizar] = useState(false);
+  // Motor: o loop incremental da plataforma (predefinido) ou o CLI do Soup.
+  const [motor, setMotor] = useState<"interno" | "soup">("interno");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const [documentosRag, setDocumentosRag] = useState<number | null>(null);
@@ -211,6 +214,35 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
 
   return (
     <div className={`${completo ? "space-y-4" : ""} ${className}`}>
+      {completo && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">motor</span>
+          {(
+            [
+              { id: "interno", rotulo: "incremental (CPU)" },
+              { id: "soup", rotulo: "Soup (CLI)" },
+            ] as const
+          ).map((opcao) => (
+            <button
+              key={opcao.id}
+              type="button"
+              onClick={() => setMotor(opcao.id)}
+              className={[
+                "rounded-lg border px-2.5 py-1 text-[11px] transition",
+                motor === opcao.id
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+              ].join(" ")}
+            >
+              {opcao.rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {motor === "soup" && completo ? (
+        <PainelDoSoup />
+      ) : (
       <div className={cartao}>
         <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
           <span className="flex items-center gap-1">
@@ -370,8 +402,9 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
           </a>
         )}
       </div>
+      )}
 
-      {(completo || aCorrer) && (
+      {(completo || aCorrer) && motor === "interno" && (
         <RetreinoAoVivo aCorrer={aCorrer} className={completo ? "mt-1" : "mt-3"} autoLigar />
       )}
 

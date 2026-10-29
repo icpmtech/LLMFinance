@@ -112,7 +112,7 @@ export default function ModeloRetreinoPage() {
     let socket: WebSocket;
     try {
       socket = new WebSocket(url);
-    } catch (falha) {
+    } catch {
       return;
     }
     socketRef.current = socket;

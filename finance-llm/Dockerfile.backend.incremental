@@ -53,6 +53,14 @@ COPY . .
 # (localmente não se via: o compose monta `./chat-ui`, que lá tem o `dist`).
 COPY _frontend_dist /app/chat-ui/dist
 
+# O CLI do Soup (instalação **leve**: sem o extra `[train]`) é o que a página de
+# retreino usa para listar e validar os configs de `training/soup/`
+# (`api/llm_contratos_soup.py`). O treino a sério corre no serviço `soup`
+# (`docker compose --profile train`), que traz o `[train]`; instalar aqui o
+# extra traria `trl`/`accelerate` e podia subir o `transformers`, que é
+# exactamente o que este ficheiro existe para não fazer.
+RUN pip install --no-cache-dir soup-cli
+
 # Dependências que o incremental tem de acrescentar à parte. São poucas e leves:
 # o `requirements.txt` já as traz, mas uma build a frio resolveria também
 # `pandas`/`transformers`/`numpy` **sem versões fixas** e mudaria o ambiente que

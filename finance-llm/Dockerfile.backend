@@ -32,6 +32,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # (e chega a um clone) é esta linha.
 RUN pip install --no-cache-dir piper-tts
 
+# CLI do Soup, instalação **leve** (sem `[train]`): a página de retreino lista e
+# valida os configs de `training/soup/` a partir da API. O treino a sério corre
+# no serviço `soup` (perfil `train`), que traz o extra completo.
+RUN pip install --no-cache-dir soup-cli
+
 # Voz local do Jarvis (Piper, pt-PT): o `.onnx` fica **na imagem**, para a
 # síntese funcionar sem rede e sem depender da `edge-tts` (que devolve 403 a
 # partir de vários hosts). Não se usa o `python -m piper.download_voices` de

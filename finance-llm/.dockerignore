@@ -25,6 +25,12 @@ Thumbs.db
 data
 model
 training
+# …mas os configs do Soup (`training/soup/*.yaml`, alguns KB) entram: é deles
+# que a página de retreino lê o modelo base, o dataset e o número de pares, e é
+# com eles que a API valida (`soup train --dry-run`). O resto do `training/`
+# (scripts, `__pycache__`) continua de fora.
+!training/soup
+!training/soup/**
 kronos_upstream
 logs
 .pytest_cache
