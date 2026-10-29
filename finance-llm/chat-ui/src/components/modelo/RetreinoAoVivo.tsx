@@ -53,8 +53,23 @@ const formatarSegundos = (total: number) => {
 const formatarPerda = (valor?: number | null) =>
   typeof valor === "number" ? valor.toFixed(4) : "—";
 
+const formatarData = (valor?: string | null) => {
+  if (!valor) return "—";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return valor;
+  return data.toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" });
+};
+
 /** Gráfico de linha da perda por passo, com área e eixo Y anotado. */
-function GraficoDePerda({ pontos, altura = 132 }: { pontos: PassoAoVivo[]; altura?: number }) {
+function GraficoDePerda({
+  pontos,
+  altura = 132,
+  vazio = "sem passos registados ainda",
+}: {
+  pontos: PassoAoVivo[];
+  altura?: number;
+  vazio?: string;
+}) {
   const largura = 640;
   const margem = { topo: 10, direita: 8, fundo: 16, esquerda: 34 };
 
@@ -81,10 +96,10 @@ function GraficoDePerda({ pontos, altura = 132 }: { pontos: PassoAoVivo[]; altur
   if (!geometria) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border border-dashed border-border/70 text-[11px] text-muted-foreground"
+        className="flex items-center justify-center rounded-lg border border-dashed border-border/70 px-2 text-center text-[11px] text-muted-foreground"
         style={{ height: altura }}
       >
-        sem passos registados ainda
+        {vazio}
       </div>
     );
   }
@@ -231,7 +246,9 @@ export default function RetreinoAoVivo({ aCorrer = false, className = "", autoLi
 
   useEffect(() => {
     montadoRef.current = true;
-    if (autoLigar && aCorrer) ligar();
+    // Ligar mesmo sem treino a correr: o retrato traz a última adaptação, e é
+    // isso que impede o painel de abrir vazio depois de um restart.
+    if (autoLigar) ligar();
     return () => {
       montadoRef.current = false;
       fecharRef.current = true;
@@ -245,6 +262,8 @@ export default function RetreinoAoVivo({ aCorrer = false, className = "", autoLi
   const faseAtual = estado?.fase ?? (aCorrer ? "a_preparar" : "ocioso");
   const indiceFase = ORDEM.indexOf(faseAtual);
   const aCorrerAgora = Boolean(estado?.a_correr ?? aCorrer);
+  // Há uma adaptação anterior para mostrar (em memória ou lida do histórico).
+  const concluido = Boolean(estado?.ultimo_resultado) || (!aCorrerAgora && historico.length > 0);
 
   const decorrido = useMemo(() => {
     if (!estado?.iniciado_ts || !estado?.agora_ts) return null;
@@ -265,7 +284,7 @@ export default function RetreinoAoVivo({ aCorrer = false, className = "", autoLi
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
           <Activity size={12} className={aCorrerAgora ? "text-primary" : undefined} />
-          processo em direto
+          {aCorrerAgora || !concluido ? "processo em direto" : "última adaptação"}
         </span>
         <div className="flex items-center gap-2">
           <span
@@ -345,25 +364,50 @@ export default function RetreinoAoVivo({ aCorrer = false, className = "", autoLi
         </div>
       )}
 
-      <GraficoDePerda pontos={historico} />
+      {/* Parado: o mesmo resumo do último ciclo, para o painel não ficar vazio
+          quando a página abre depois de um treino já concluído. */}
+      {!aCorrerAgora && concluido && (
+        <div className="mb-2 flex flex-wrap justify-between gap-x-3 text-[10px] text-muted-foreground">
+          <span>
+            última: passo {estado?.passo ?? 0}/{estado?.passos ?? 0}
+          </span>
+          <span>perda final {formatarPerda(estado?.perda_depois ?? estado?.perda)}</span>
+          {estado?.tokens ? <span>{estado.tokens} tokens</span> : null}
+          <span>{estado?.iniciado ? formatarData(estado.iniciado) : "sem data"}</span>
+        </div>
+      )}
 
-      {externo?.a_correr && (
+      <GraficoDePerda
+        pontos={historico}
+        vazio={
+          concluido
+            ? "esta adaptação não guardou a curva passo a passo (registos anteriores); a perda antes/depois está abaixo"
+            : undefined
+        }
+      />
+
+      {externo?.disponivel && externo.pontos?.length ? (
         <div className="mt-2 rounded-lg border border-border/60 bg-background/60 p-2">
           <p className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <Cpu size={10} /> treino completo (script)
             </span>
-            <span>passo {externo.passo}</span>
+            <span>
+              passo {externo.passo}
+              {externo.total ? `/${externo.total}` : ""}
+              {externo.a_correr ? " · a correr" : " · parado"}
+            </span>
           </p>
           <GraficoDePerda
             altura={84}
             pontos={externo.pontos.map((p) => ({ passo: p.step, perda: p.perda }))}
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            a correr fora da API · actualizado {externo.atualizado_em ?? "—"}
+            {externo.a_correr ? "a correr fora da API" : "corrida fora da API"} · actualizado{" "}
+            {externo.atualizado_em ?? "—"}
           </p>
         </div>
-      )}
+      ) : null}
 
       <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
         <div className="rounded-lg border border-border/60 bg-background/60 px-2 py-1">

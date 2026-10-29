@@ -10,7 +10,7 @@
  * sincronizadas com o WebSocket `/llm/modelo/retreinar/ws`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Layers, Sparkles } from "lucide-react";
+import { Brain, Database, Layers, Sparkles } from "lucide-react";
 import PainelDeRetreino from "../components/modelo/PainelDeRetreino";
 import GrafoDoModelo from "../components/modelo/GrafoDoModelo";
 import MatrizDePesos from "../components/modelo/MatrizDePesos";
@@ -25,6 +25,36 @@ import {
   type MatrizAdaptador,
   type ModeloEstado,
 } from "../llmModeloApi";
+
+const formatarNumero = (valor?: number | null, casas = 3) =>
+  typeof valor === "number" && Number.isFinite(valor) ? valor.toFixed(casas) : "—";
+
+const formatarDuracao = (segundos?: number | null) => {
+  if (!segundos || segundos <= 0) return "—";
+  const total = Math.round(segundos);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h} h ${m} min`;
+  if (m) return `${m} min ${s} s`;
+  return `${s} s`;
+};
+
+function Estatistica({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card/60 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{rotulo}</p>
+      <p className="mt-0.5 truncate text-[13px] font-medium tabular-nums text-foreground" title={valor}>
+        {valor}
+      </p>
+      {nota && (
+        <p className="truncate text-[10px] text-muted-foreground" title={nota}>
+          {nota}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function ModeloRetreinoPage() {
   const [modelo, setModelo] = useState<ModeloEstado | null>(null);
@@ -132,12 +162,14 @@ export default function ModeloRetreinoPage() {
   }, [ligarWs]);
 
   const aCorrer = useMemo(
-    () =>
-      Boolean(aoVivo?.a_correr) ||
-      (modelo?.treino?.treino?.passos ?? 0) > 0 ||
-      (modelo?.metricas?.pontos ?? 0) > 0,
-    [aoVivo, modelo],
+    () => Boolean(aoVivo?.a_correr) || Boolean(aoVivo?.externo?.a_correr),
+    [aoVivo],
   );
+
+  const treino = modelo?.treino?.treino;
+  const passosFeitos = treino?.passos ?? 0;
+  const passosPlaneados = treino?.passos_planeados ?? 0;
+  const tokensTreino = treino?.tokens ?? modelo?.metricas?.tokens ?? 0;
 
   return (
     <div className="w-full bg-background">
@@ -166,6 +198,55 @@ export default function ModeloRetreinoPage() {
         </div>
 
         <PainelDeRetreino variante="pagina" />
+
+        <section className="mt-5 rounded-2xl border border-border bg-card/40 p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+            <Database size={14} className="text-primary" />
+            dados e treino
+          </div>
+          {!modelo ? (
+            <p className="text-[11px] text-muted-foreground">Sem ficha do modelo — verifique a API.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <Estatistica
+                rotulo="modelo base"
+                valor={modelo.modelo_base ?? "—"}
+                nota={modelo.adaptador_disponivel ? "adaptador carregado" : "sem adaptador"}
+              />
+              <Estatistica
+                rotulo="pares no dataset"
+                valor={String(modelo.treino?.dados?.pares_treino ?? ligacoes?.dataset.pares ?? "—")}
+                nota={`held-out ${modelo.treino?.dados?.pares_holdout ?? ligacoes?.dataset.pares_holdout ?? "—"}`}
+              />
+              <Estatistica
+                rotulo="passos do treino"
+                valor={passosPlaneados ? `${passosFeitos}/${passosPlaneados}` : String(passosFeitos)}
+                nota={`${treino?.epocas ?? "—"} épocas · lr ${treino?.lr ?? "—"}`}
+              />
+              <Estatistica
+                rotulo="perda final"
+                valor={formatarNumero(treino?.perda_final)}
+                nota={`perplexidade ${formatarNumero(modelo.metricas?.ultima_perplexidade)}`}
+              />
+              <Estatistica
+                rotulo="tokens vistos"
+                valor={tokensTreino ? tokensTreino.toLocaleString("pt-PT") : "—"}
+                nota={`${modelo.metricas?.pontos ?? 0} pontos na curva`}
+              />
+              <Estatistica
+                rotulo="tempo de treino"
+                valor={formatarDuracao(treino?.segundos)}
+                nota={treino?.concluido_em ? `fim: ${treino.concluido_em}` : "sem fim registado"}
+              />
+            </div>
+          )}
+          {(modelo?.treino?.dados?.fontes?.length ?? 0) > 0 && (
+            <p className="mt-2 text-[10.5px] text-muted-foreground">
+              fontes: {modelo?.treino?.dados?.fontes?.join(" · ")} · dataset{" "}
+              {modelo?.treino?.dados?.ficheiro ?? modelo?.fonte_dados?.ficheiro ?? "—"}
+            </p>
+          )}
+        </section>
 
         <section className="mt-5 rounded-2xl border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">

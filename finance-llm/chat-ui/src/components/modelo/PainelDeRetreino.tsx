@@ -59,6 +59,10 @@ const formatarBytes = (bytes: number) => {
 const formatarPerda = (valor?: number | null) =>
   typeof valor === "number" ? valor.toFixed(4) : "—";
 
+/** A nota média vem a -1 quando ninguém avaliou: mostrar um número ali seria mentira. */
+const formatarNota = (valor?: number | null) =>
+  typeof valor === "number" && Number.isFinite(valor) && valor >= 0 ? valor.toFixed(1) : "—";
+
 export default function PainelDeRetreino({ variante = "painel", className = "" }: Props) {
   const completo = variante === "pagina";
 
@@ -230,7 +234,7 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
           <span>feedback: {estado?.feedback?.total ?? 0}</span>
           <span>corrigidos: {estado?.feedback?.corrigidos ?? 0}</span>
           <span>pares novos: {paresNovos}</span>
-          <span>nota média: {estado?.feedback?.nota_media ?? "—"}</span>
+          <span>nota média: {formatarNota(estado?.feedback?.nota_media)}</span>
         </div>
 
         {aCorrer && (
@@ -368,7 +372,7 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
       </div>
 
       {(completo || aCorrer) && (
-        <RetreinoAoVivo aCorrer={aCorrer} className={completo ? "mt-1" : "mt-3"} autoLigar={aCorrer} />
+        <RetreinoAoVivo aCorrer={aCorrer} className={completo ? "mt-1" : "mt-3"} autoLigar />
       )}
 
       {completo && (

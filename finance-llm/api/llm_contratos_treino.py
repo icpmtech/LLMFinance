@@ -121,17 +121,80 @@ def progresso_externo(limite: int = 160) -> Dict[str, Any]:
     }
 
 
+#: Cache da última linha de `metricas_adaptacao.jsonl`. O WebSocket pede um
+#: retrato a cada 400 ms: só se relê o ficheiro quando o `mtime` muda.
+_ultimo_cache: Dict[str, Any] = {"mtime": None, "registo": None}
+
+
+def _ultimo_registo() -> Optional[Dict[str, Any]]:
+    """Última adaptação registada em `metricas_adaptacao.jsonl` (com cache)."""
+    from inference.contratos_lora import DEFAULT_ADAPTER_DIR
+
+    ficheiro = DEFAULT_ADAPTER_DIR / "metricas_adaptacao.jsonl"
+    try:
+        info = ficheiro.stat()
+    except OSError:
+        _ultimo_cache.update({"mtime": None, "registo": None})
+        return None
+    if _ultimo_cache["mtime"] != info.st_mtime:
+        ultimo: Optional[Dict[str, Any]] = None
+        try:
+            with ficheiro.open("r", encoding="utf-8") as fh:
+                for linha in fh:
+                    linha = linha.strip()
+                    if not linha:
+                        continue
+                    try:
+                        ultimo = json.loads(linha)
+                    except ValueError:
+                        continue
+        except OSError:  # pragma: no cover - depende do disco
+            return _ultimo_cache["registo"]
+        _ultimo_cache.update({"mtime": info.st_mtime, "registo": ultimo})
+    return _ultimo_cache["registo"]
+
+
 def instantaneo() -> Dict[str, Any]:
     """Retrato leve do estado, para o WebSocket (sem varrer o disco).
 
     `estado_adaptacao()` conta os ficheiros `.bak-*`, o que é aceitável num
-    pedido HTTP mas não a cada 400 ms; o WebSocket usa esta versão. O único
-    acesso a disco é um `stat` ao `metrics.jsonl`, para mostrar também o treino
-    completo que corre fora deste processo.
+    pedido HTTP mas não a cada 400 ms; o WebSocket usa esta versão. Os acessos a
+    disco são dois `stat`: o `metrics.jsonl` (treino completo, que corre fora
+    deste processo) e o `metricas_adaptacao.jsonl`.
+
+    O estado em memória nasce vazio em cada arranque do processo. Sem este
+    recuo, o painel «processo em direto» abria com travessões depois de um
+    restart mesmo havendo adaptações concluídas — o histórico mostrava-as e o
+    gráfico não. Parado, o retrato passa a trazer a última adaptação: perda
+    antes/depois, curva passo a passo e contagem de passos.
     """
     with _estado_lock:
         estado = dict(_estado)
         estado["historico"] = list(_estado.get("historico") or [])
+
+    if not estado.get("a_correr"):
+        registo = _ultimo_registo()
+        if registo:
+            if not estado.get("ultimo_resultado"):
+                estado["ultimo_resultado"] = registo
+            if not estado["historico"] and registo.get("historico"):
+                estado["historico"] = list(registo["historico"])
+            for campo in ("perda_antes", "perda_depois"):
+                if estado.get(campo) is None and registo.get(campo) is not None:
+                    estado[campo] = registo[campo]
+            if not estado.get("passo"):
+                estado["passo"] = int(registo.get("passos") or 0)
+            if not estado.get("passos"):
+                estado["passos"] = int(registo.get("passos_pedidos") or registo.get("passos") or 0)
+            if not estado.get("tokens") and estado["historico"]:
+                estado["tokens"] = int(estado["historico"][-1].get("tokens") or 0)
+            if estado.get("fase") == "ocioso":
+                # Registos antigos não tinham `estado`: se há passos, concluiu.
+                desfecho = registo.get("estado") or ("concluido" if registo.get("passos") else "ocioso")
+                estado["fase"] = desfecho if desfecho in FASES + ("parado", "erro") else "concluido"
+            if not estado.get("iniciado"):
+                estado["iniciado"] = registo.get("concluido_em")
+
     estado["externo"] = progresso_externo()
     estado["agora_ts"] = time.time()
     return estado
@@ -476,8 +539,32 @@ def adaptar(
 
     try:
         with (DEFAULT_ADAPTER_DIR / "metricas_adaptacao.jsonl").open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps({k: resultado[k] for k in ("concluido_em", "estado", "pares", "passos", "perda_antes", "perda_depois", "delta")}, ensure_ascii=False) + "\n")
-    except OSError:
+            fh.write(
+                json.dumps(
+                    {
+                        k: resultado[k]
+                        for k in (
+                            "concluido_em",
+                            "estado",
+                            "pares",
+                            "passos",
+                            "passos_pedidos",
+                            "perda_antes",
+                            "perda_depois",
+                            "delta",
+                            "lr",
+                            "segundos",
+                            "backup",
+                            # A curva passo a passo fica em disco: depois de um
+                            # restart o painel ao vivo reconstrói-a daqui.
+                            "historico",
+                        )
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except OSError:  # pragma: no cover - depende do disco
         pass
 
     if marcar_utilizado:
