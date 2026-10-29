@@ -227,11 +227,14 @@ def require_module(module_id: str):
     return _check
 
 
-def require_session(
-    authorization: Annotated[Optional[str], Header()] = None,
-) -> CurrentSession:
-    """Valida o token e a sessão; usado por todos os endpoints protegidos."""
-    token = _bearer_token(authorization)
+def session_from_token(token: Optional[str]) -> CurrentSession:
+    """Valida um token já extraído (o WebSocket não pode enviar cabeçalhos).
+
+    O browser não deixa definir `Authorization` no handshake de um WebSocket, por
+    isso `/llm/modelo/retreinar/ws` recebe o token na query. A validação é a
+    mesma de `require_session` — sessão existente, conta ativa e trial válido —
+    para o canal aberto não dar mais acesso do que o pedido HTTP equivalente.
+    """
     if not token:
         raise HTTPException(status_code=401, detail="Sessão em falta. Inicie sessão para continuar.")
     payload = auth.read_token(token)
@@ -251,6 +254,16 @@ def require_session(
         session_id=session_id,
         token=token,
     )
+
+
+def require_session(
+    authorization: Annotated[Optional[str], Header()] = None,
+) -> CurrentSession:
+    """Valida o token e a sessão; usado por todos os endpoints protegidos."""
+    token = _bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Sessão em falta. Inicie sessão para continuar.")
+    return session_from_token(token)
 
 
 def _client_info(request: Request) -> Dict[str, str]:

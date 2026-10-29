@@ -46,11 +46,95 @@ _estado: Dict[str, Any] = {
     "erro": None,
     "ultimo_resultado": None,
     "paragem_pedida": False,
+    # Campos que a interface mostra em direto (WebSocket `/llm/modelo/retreinar/ws`).
+    # `fase` diz em que etapa do processo está; `historico` é a curva de perda
+    # passo a passo, para o gráfico poder ser desenhado desde o início mesmo que
+    # a página abra a meio.
+    "fase": "ocioso",
+    "atividade": "",
+    "tokens": 0,
+    "historico": [],
+    "perda_antes": None,
+    "perda_depois": None,
+    "iniciado_ts": None,
+    "lr": None,
 }
 _estado_lock = threading.Lock()
 _treino_lock = threading.Lock()
 #: Sinaliza à thread de treino que deve parar no próximo passo.
 _parar = threading.Event()
+
+#: Ordem das fases, para a interface desenhar o fluxo e saber o que já passou.
+FASES = ("a_preparar", "a_treinar", "a_avaliar", "a_guardar", "concluido")
+
+
+def _atualizar(**campos: Any) -> None:
+    with _estado_lock:
+        _estado.update(campos)
+
+
+#: Cache do `metrics.jsonl` externo (treino completo, corrido à mão). Guarda os
+#: pontos e a data do ficheiro; só relê quando o ficheiro muda.
+_metricas_cache: Dict[str, Any] = {"mtime": None, "pontos": [], "total": 0}
+
+
+def progresso_externo(limite: int = 160) -> Dict[str, Any]:
+    """Progresso do **treino completo** (`training/train_lora_contratos.py`).
+
+    Esse treino corre à mão, fora deste processo, e não passa pelo `_estado` — a
+    interface via-o só pela curva de perda, com 8 s de atraso e sem saber se
+    ainda está vivo. O sinal de vida é o `mtime` do `metrics.jsonl`, que o script
+    reescreve a cada `--log-every`; se ficou recente, está a correr.
+    """
+    from inference.contratos_lora import DEFAULT_ADAPTER_DIR
+
+    caminho = DEFAULT_ADAPTER_DIR / "metrics.jsonl"
+    try:
+        info = caminho.stat()
+    except OSError:
+        return {"disponivel": False, "a_correr": False, "pontos": [], "passo": 0}
+
+    if _metricas_cache["mtime"] != info.st_mtime:
+        pontos: List[Dict[str, Any]] = []
+        try:
+            with caminho.open("r", encoding="utf-8") as fh:
+                for linha in fh:
+                    linha = linha.strip()
+                    if not linha:
+                        continue
+                    try:
+                        pontos.append(json.loads(linha))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            return {"disponivel": False, "a_correr": False, "pontos": [], "passo": 0}
+        _metricas_cache.update({"mtime": info.st_mtime, "pontos": pontos[-limite:], "total": len(pontos)})
+
+    pontos = _metricas_cache["pontos"]
+    return {
+        "disponivel": True,
+        "a_correr": (time.time() - info.st_mtime) < 180,
+        "pontos": pontos,
+        "passo": (pontos[-1].get("step") if pontos else 0) or 0,
+        "total": _metricas_cache["total"],
+        "atualizado_em": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(info.st_mtime)),
+    }
+
+
+def instantaneo() -> Dict[str, Any]:
+    """Retrato leve do estado, para o WebSocket (sem varrer o disco).
+
+    `estado_adaptacao()` conta os ficheiros `.bak-*`, o que é aceitável num
+    pedido HTTP mas não a cada 400 ms; o WebSocket usa esta versão. O único
+    acesso a disco é um `stat` ao `metrics.jsonl`, para mostrar também o treino
+    completo que corre fora deste processo.
+    """
+    with _estado_lock:
+        estado = dict(_estado)
+        estado["historico"] = list(_estado.get("historico") or [])
+    estado["externo"] = progresso_externo()
+    estado["agora_ts"] = time.time()
+    return estado
 
 
 def estado_adaptacao() -> Dict[str, Any]:
@@ -60,8 +144,7 @@ def estado_adaptacao() -> Dict[str, Any]:
     em `metricas_adaptacao.jsonl`, ao lado do adaptador, e é de lá que se lê o
     último resultado depois de um restart.
     """
-    with _estado_lock:
-        estado = dict(_estado)
+    estado = instantaneo()
     if not estado.get("ultimo_resultado"):
         historico = _ler_historico()
         if historico:
@@ -267,8 +350,10 @@ def adaptar(
     from api import llm_contratos_agente as agente
 
     inicio = time.time()
+    _atualizar(fase="a_preparar", atividade="A recolher os pares com correção", lr=lr)
     pares = agente.pares_de_feedback(limite=200, apenas_novos=apenas_novos)
     if len(pares) < pares_minimos:
+        _atualizar(fase="ocioso", atividade="")
         return {
             "estado": "sem_dados",
             "mensagem": f"só há {len(pares)} pares com resposta corrigida (mínimo {pares_minimos})",
@@ -276,6 +361,7 @@ def adaptar(
         }
 
     ficheiro = _escrever_pares(pares)
+    _atualizar(pares=len(pares), atividade=f"{len(pares)} pares escritos em {DATA_FICHEIRO.name}")
 
     import torch
     from peft import PeftModel
@@ -284,18 +370,22 @@ def adaptar(
     from inference.contratos_lora import DEFAULT_ADAPTER_DIR, DEFAULT_BASE_MODEL, adapter_available
 
     if not adapter_available(DEFAULT_ADAPTER_DIR):
+        _atualizar(fase="ocioso", atividade="")
         return {"estado": "sem_adaptador", "mensagem": "não há adaptador treinado para adaptar"}
 
     torch.set_num_threads(int(__import__("os").environ.get("LLMFINANCE_CPU_THREADS", "8")))
+    _atualizar(atividade="A carregar o tokenizer e o modelo base (Qwen 0.5B)")
     tokenizer = AutoTokenizer.from_pretrained(DEFAULT_BASE_MODEL)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     exemplos = [e for e in (_encode(tokenizer, p, max_length) for p in pares) if e]
     if not exemplos:
+        _atualizar(fase="ocioso", atividade="")
         return {"estado": "sem_dados", "mensagem": "nenhum par cabe na janela do modelo", "pares": len(pares)}
 
     passos = max(1, min(int(passos), MAX_PASSOS))
+    _atualizar(passos=passos, atividade="A carregar o modelo base e o adaptador LoRA")
     modelo_base = AutoModelForCausalLM.from_pretrained(DEFAULT_BASE_MODEL, dtype=torch.float32)
     modelo = PeftModel.from_pretrained(modelo_base, str(DEFAULT_ADAPTER_DIR), is_trainable=True)
     modelo.train()
@@ -311,8 +401,12 @@ def adaptar(
         modelo.train()
         return round(total / max(1, n), 4)
 
+    _atualizar(fase="a_avaliar", atividade="A medir a perda de partida nos pares")
     perda_antes = perda_media()
+    _atualizar(perda_antes=perda_antes, fase="a_treinar", atividade="A treinar")
+
     historico: List[Dict[str, Any]] = []
+    tokens_acumulados = 0
     interrompido = False
     for passo in range(1, passos + 1):
         if _parar.is_set():
@@ -325,9 +419,19 @@ def adaptar(
         optimizer.step()
         optimizer.zero_grad()
         perda = round(float(saida.loss.detach()), 4)
-        historico.append({"passo": passo, "perda": perda})
+        tokens_acumulados += int(ids.shape[-1])
+        historico.append(
+            {
+                "passo": passo,
+                "perda": perda,
+                "tokens": tokens_acumulados,
+                "segundos": round(time.time() - inicio, 1),
+            }
+        )
         with _estado_lock:
-            _estado.update({"passo": passo, "perda": perda})
+            _estado.update(
+                {"passo": passo, "perda": perda, "tokens": tokens_acumulados, "historico": list(historico)}
+            )
 
     passos_feitos = len(historico)
     if passos_feitos == 0:
@@ -338,7 +442,9 @@ def adaptar(
             "passos": 0,
         }
 
+    _atualizar(fase="a_avaliar", atividade="A medir a perda final")
     perda_depois = perda_media()
+    _atualizar(perda_depois=perda_depois, fase="a_guardar", atividade="A guardar o adaptador (com backup)")
 
     carimbo = time.strftime("%Y%m%d-%H%M%S")
     backup = Path(str(DEFAULT_ADAPTER_DIR / "adapter_model.safetensors") + f".bak-{carimbo}")
@@ -422,6 +528,14 @@ def adaptar_em_segundo_plano(
                 "iniciado": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "concluido": None,
                 "paragem_pedida": False,
+                "fase": "a_preparar",
+                "atividade": "A preparar a adaptação",
+                "tokens": 0,
+                "historico": [],
+                "perda_antes": None,
+                "perda_depois": None,
+                "iniciado_ts": time.time(),
+                "lr": lr,
             }
         )
 
@@ -430,11 +544,18 @@ def adaptar_em_segundo_plano(
             try:
                 resultado = adaptar(passos=passos, lr=lr, apenas_novos=apenas_novos)
                 with _estado_lock:
-                    _estado.update({"ultimo_resultado": resultado, "concluido": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                    _estado.update(
+                        {
+                            "ultimo_resultado": resultado,
+                            "concluido": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            "fase": "concluido" if resultado.get("estado") == "concluido" else str(resultado.get("estado")),
+                            "atividade": resultado.get("mensagem") or "Adaptação terminada",
+                        }
+                    )
             except Exception as exc:  # pragma: no cover - protege a thread
                 logger.exception("Adaptação incremental falhou")
                 with _estado_lock:
-                    _estado.update({"erro": str(exc)})
+                    _estado.update({"erro": str(exc), "fase": "erro", "atividade": f"Falhou: {exc}"})
             finally:
                 with _estado_lock:
                     _estado["a_correr"] = False

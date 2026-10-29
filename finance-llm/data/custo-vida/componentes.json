@@ -1,0 +1,4488 @@
+{
+ "recolhido_em": "2026-10-29T00:22:02+00:00",
+ "limites": {
+  "agua": {
+   "label": "Água, saneamento e resíduos",
+   "motivo": "A ERSAR publica o encargo mensal por concelho (10 m³/mês) apenas numa consulta interativa e em PDF por entidade gestora; o único ficheiro aberto da ERSAR no dados.gov.pt (RASARP) é de indicadores, não de tarifas. A tarifa é fixada por entidade gestora, não pelo município."
+  },
+  "transportes": {
+   "label": "Transportes",
+   "motivo": "Os passes são fixados por autoridade de transporte (AML, AMP, CIM) e não existe tabela nacional por concelho; os tarifários publicados são imagens ou páginas dinâmicas, sem preço em formato reutilizável."
+  },
+  "alimentacao": {
+   "label": "Alimentação, saúde e educação",
+   "motivo": "Não existe série de preços por município: o INE publica preços no máximo por NUTS II e o cabaz da DECO é nacional. Entra no orçamento familiar, mas não distingue territórios."
+  }
+ },
+ "imi": {
+  "fonte": "Autoridade Tributária e Aduaneira, reproduzido por flatin.pt (dados.gov.pt)",
+  "url": "https://flatin.pt/api/v1/imi/rates.csv",
+  "licenca": "CC BY 4.0",
+  "ano": 2025,
+  "concelhos": 308,
+  "sem_taxa_unica": 8,
+  "por_concelho": {
+   "angra do heroismo": {
+    "concelho": "Angra do Heroísmo",
+    "concelho_publicado": "ANGRA DO HEROISMO",
+    "codigo": "1901",
+    "distrito": "Angra do Heroísmo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "calheta (acores)": {
+    "concelho": "Calheta (Açores)",
+    "concelho_publicado": "CALHETA (AÇORES)",
+    "codigo": "1902",
+    "distrito": "Angra do Heroísmo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa cruz da graciosa": {
+    "concelho": "Santa Cruz da Graciosa",
+    "concelho_publicado": "SANTA CRUZ DA GRACIOSA",
+    "codigo": "1903",
+    "distrito": "Angra do Heroísmo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "velas": {
+    "concelho": "Velas",
+    "concelho_publicado": "VELAS",
+    "codigo": "1904",
+    "distrito": "Angra do Heroísmo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "praia da vitoria": {
+    "concelho": "Praia da Vitória",
+    "concelho_publicado": "VILA PRAIA DA VITORIA",
+    "codigo": "1905",
+    "distrito": "Angra do Heroísmo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "agueda": {
+    "concelho": "Águeda",
+    "concelho_publicado": "AGUEDA",
+    "codigo": "0101",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "albergaria-a-velha": {
+    "concelho": "Albergaria-a-Velha",
+    "concelho_publicado": "ALBERGARIA-A-VELHA",
+    "codigo": "0102",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "anadia": {
+    "concelho": "Anadia",
+    "concelho_publicado": "ANADIA",
+    "codigo": "0103",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arouca": {
+    "concelho": "Arouca",
+    "concelho_publicado": "AROUCA",
+    "codigo": "0104",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "aveiro": {
+    "concelho": "Aveiro",
+    "concelho_publicado": "AVEIRO",
+    "codigo": "0105",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castelo de paiva": {
+    "concelho": "Castelo de Paiva",
+    "concelho_publicado": "CASTELO DE PAIVA",
+    "codigo": "0106",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "espinho": {
+    "concelho": "Espinho",
+    "concelho_publicado": "ESPINHO",
+    "codigo": "0107",
+    "distrito": "Aveiro",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "estarreja": {
+    "concelho": "Estarreja",
+    "concelho_publicado": "ESTARREJA",
+    "codigo": "0108",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ilhavo": {
+    "concelho": "Ílhavo",
+    "concelho_publicado": "ILHAVO",
+    "codigo": "0110",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mealhada": {
+    "concelho": "Mealhada",
+    "concelho_publicado": "MEALHADA",
+    "codigo": "0111",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "murtosa": {
+    "concelho": "Murtosa",
+    "concelho_publicado": "MURTOSA",
+    "codigo": "0112",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.32,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "oliveira de azemeis": {
+    "concelho": "Oliveira de Azeméis",
+    "concelho_publicado": "OLIVEIRA DE AZEMEIS",
+    "codigo": "0113",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "oliveira do bairro": {
+    "concelho": "Oliveira do Bairro",
+    "concelho_publicado": "OLIVEIRA DO BAIRRO",
+    "codigo": "0114",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ovar": {
+    "concelho": "Ovar",
+    "concelho_publicado": "OVAR",
+    "codigo": "0115",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao joao da madeira": {
+    "concelho": "São João da Madeira",
+    "concelho_publicado": "S. JOÃO DA MADEIRA",
+    "codigo": "0116",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa maria da feira": {
+    "concelho": "Santa Maria da Feira",
+    "concelho_publicado": "SANTA MARIA DA FEIRA",
+    "codigo": "0109",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.365,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sever do vouga": {
+    "concelho": "Sever do Vouga",
+    "concelho_publicado": "SEVER DO VOUGA",
+    "codigo": "0117",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vagos": {
+    "concelho": "Vagos",
+    "concelho_publicado": "VAGOS",
+    "codigo": "0118",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.4,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vale de cambra": {
+    "concelho": "Vale de Cambra",
+    "concelho_publicado": "VALE DE CAMBRA",
+    "codigo": "0119",
+    "distrito": "Aveiro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "aljustrel": {
+    "concelho": "Aljustrel",
+    "concelho_publicado": "ALJUSTREL",
+    "codigo": "0201",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "almodovar": {
+    "concelho": "Almodôvar",
+    "concelho_publicado": "ALMODOVAR",
+    "codigo": "0202",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alvito": {
+    "concelho": "Alvito",
+    "concelho_publicado": "ALVITO",
+    "codigo": "0203",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "barrancos": {
+    "concelho": "Barrancos",
+    "concelho_publicado": "BARRANCOS",
+    "codigo": "0204",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "beja": {
+    "concelho": "Beja",
+    "concelho_publicado": "BEJA",
+    "codigo": "0205",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castro verde": {
+    "concelho": "Castro Verde",
+    "concelho_publicado": "CASTRO VERDE",
+    "codigo": "0206",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cuba": {
+    "concelho": "Cuba",
+    "concelho_publicado": "CUBA",
+    "codigo": "0207",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ferreira do alentejo": {
+    "concelho": "Ferreira do Alentejo",
+    "concelho_publicado": "FERREIRA DO ALENTEJO",
+    "codigo": "0208",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mertola": {
+    "concelho": "Mértola",
+    "concelho_publicado": "MERTOLA",
+    "codigo": "0209",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "moura": {
+    "concelho": "Moura",
+    "concelho_publicado": "MOURA",
+    "codigo": "0210",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "odemira": {
+    "concelho": "Odemira",
+    "concelho_publicado": "ODEMIRA",
+    "codigo": "0211",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ourique": {
+    "concelho": "Ourique",
+    "concelho_publicado": "OURIQUE",
+    "codigo": "0212",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "serpa": {
+    "concelho": "Serpa",
+    "concelho_publicado": "SERPA",
+    "codigo": "0213",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vidigueira": {
+    "concelho": "Vidigueira",
+    "concelho_publicado": "VIDIGUEIRA",
+    "codigo": "0214",
+    "distrito": "Beja",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "amares": {
+    "concelho": "Amares",
+    "concelho_publicado": "AMARES",
+    "codigo": "0301",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "barcelos": {
+    "concelho": "Barcelos",
+    "concelho_publicado": "BARCELOS",
+    "codigo": "0302",
+    "distrito": "Braga",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "braga": {
+    "concelho": "Braga",
+    "concelho_publicado": "BRAGA",
+    "codigo": "0303",
+    "distrito": "Braga",
+    "urbana_pct": 0.32,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cabeceiras de basto": {
+    "concelho": "Cabeceiras de Basto",
+    "concelho_publicado": "CABECEIRAS DE BASTO",
+    "codigo": "0304",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "celorico de basto": {
+    "concelho": "Celorico de Basto",
+    "concelho_publicado": "CELORICO DE BASTO",
+    "codigo": "0305",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "esposende": {
+    "concelho": "Esposende",
+    "concelho_publicado": "ESPOSENDE",
+    "codigo": "0306",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "fafe": {
+    "concelho": "Fafe",
+    "concelho_publicado": "FAFE",
+    "codigo": "0307",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "guimaraes": {
+    "concelho": "Guimarães",
+    "concelho_publicado": "GUIMARÃES",
+    "codigo": "0308",
+    "distrito": "Braga",
+    "urbana_pct": 0.31,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "povoa de lanhoso": {
+    "concelho": "Póvoa de Lanhoso",
+    "concelho_publicado": "POVOA DE LANHOSO",
+    "codigo": "0309",
+    "distrito": "Braga",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "terras de bouro": {
+    "concelho": "Terras de Bouro",
+    "concelho_publicado": "TERRAS DE BOURO",
+    "codigo": "0310",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vieira do minho": {
+    "concelho": "Vieira do Minho",
+    "concelho_publicado": "VIEIRA DO MINHO",
+    "codigo": "0311",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de famalicao": {
+    "concelho": "Vila Nova de Famalicão",
+    "concelho_publicado": "VILA NOVA DE FAMALICÃO",
+    "codigo": "0312",
+    "distrito": "Braga",
+    "urbana_pct": 0.335,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila verde": {
+    "concelho": "Vila Verde",
+    "concelho_publicado": "VILA VERDE",
+    "codigo": "0313",
+    "distrito": "Braga",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vizela": {
+    "concelho": "Vizela",
+    "concelho_publicado": "VIZELA",
+    "codigo": "0314",
+    "distrito": "Braga",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alfandega da fe": {
+    "concelho": "Alfândega da Fé",
+    "concelho_publicado": "ALFANDEGA DA FE",
+    "codigo": "0401",
+    "distrito": "Bragança",
+    "urbana_pct": 0.38,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "braganca": {
+    "concelho": "Bragança",
+    "concelho_publicado": "BRAGANÇA",
+    "codigo": "0402",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "carrazeda de ansiaes": {
+    "concelho": "Carrazeda de Ansiães",
+    "concelho_publicado": "CARRAZEDA DE ANSIÃES",
+    "codigo": "0403",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "freixo de espada a cinta": {
+    "concelho": "Freixo de Espada à Cinta",
+    "concelho_publicado": "FREIXO DE ESPADA A CINTA",
+    "codigo": "0404",
+    "distrito": "Bragança",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "macedo de cavaleiros": {
+    "concelho": "Macedo de Cavaleiros",
+    "concelho_publicado": "MACEDO DE CAVALEIROS",
+    "codigo": "0405",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "miranda do douro": {
+    "concelho": "Miranda do Douro",
+    "concelho_publicado": "MIRANDA DO DOURO",
+    "codigo": "0406",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mirandela": {
+    "concelho": "Mirandela",
+    "concelho_publicado": "MIRANDELA",
+    "codigo": "0407",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mogadouro": {
+    "concelho": "Mogadouro",
+    "concelho_publicado": "MOGADOURO",
+    "codigo": "0408",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "torre de moncorvo": {
+    "concelho": "Torre de Moncorvo",
+    "concelho_publicado": "TORRE DE MONCORVO",
+    "codigo": "0409",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila flor": {
+    "concelho": "Vila Flor",
+    "concelho_publicado": "VILA FLOR",
+    "codigo": "0410",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vimioso": {
+    "concelho": "Vimioso",
+    "concelho_publicado": "VIMIOSO",
+    "codigo": "0411",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vinhais": {
+    "concelho": "Vinhais",
+    "concelho_publicado": "VINHAIS",
+    "codigo": "0412",
+    "distrito": "Bragança",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "belmonte": {
+    "concelho": "Belmonte",
+    "concelho_publicado": "BELMONTE",
+    "codigo": "0501",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castelo branco": {
+    "concelho": "Castelo Branco",
+    "concelho_publicado": "CASTELO BRANCO",
+    "codigo": "0502",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "covilha": {
+    "concelho": "Covilhã",
+    "concelho_publicado": "COVILHÃ",
+    "codigo": "0503",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "fundao": {
+    "concelho": "Fundão",
+    "concelho_publicado": "FUNDÃO",
+    "codigo": "0504",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.38,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "idanha-a-nova": {
+    "concelho": "Idanha-a-Nova",
+    "concelho_publicado": "IDANHA-A-NOVA",
+    "codigo": "0505",
+    "distrito": "Castelo Branco",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "oleiros": {
+    "concelho": "Oleiros",
+    "concelho_publicado": "OLEIROS",
+    "codigo": "0506",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penamacor": {
+    "concelho": "Penamacor",
+    "concelho_publicado": "PENAMACOR",
+    "codigo": "0507",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "proenca-a-nova": {
+    "concelho": "Proença-a-Nova",
+    "concelho_publicado": "PROENÇA-A-NOVA",
+    "codigo": "0508",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "serta": {
+    "concelho": "Sertã",
+    "concelho_publicado": "SERTÃ",
+    "codigo": "0509",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila de rei": {
+    "concelho": "Vila de Rei",
+    "concelho_publicado": "VILA DE REI",
+    "codigo": "0510",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila velha de rodao": {
+    "concelho": "Vila Velha de Ródão",
+    "concelho_publicado": "VILA VELHA DE RODÃO",
+    "codigo": "0511",
+    "distrito": "Castelo Branco",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arganil": {
+    "concelho": "Arganil",
+    "concelho_publicado": "ARGANIL",
+    "codigo": "0601",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cantanhede": {
+    "concelho": "Cantanhede",
+    "concelho_publicado": "CANTANHEDE",
+    "codigo": "0602",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.38,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "coimbra": {
+    "concelho": "Coimbra",
+    "concelho_publicado": "COIMBRA",
+    "codigo": "0603",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "condeixa-a-nova": {
+    "concelho": "Condeixa-a-Nova",
+    "concelho_publicado": "CONDEIXA-A-NOVA",
+    "codigo": "0604",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "figueira da foz": {
+    "concelho": "Figueira da Foz",
+    "concelho_publicado": "FIGUEIRA DA FOZ",
+    "codigo": "0605",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.4,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "gois": {
+    "concelho": "Góis",
+    "concelho_publicado": "GOIS",
+    "codigo": "0606",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lousa": {
+    "concelho": "Lousã",
+    "concelho_publicado": "LOUSÃ",
+    "codigo": "0607",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.38,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mira": {
+    "concelho": "Mira",
+    "concelho_publicado": "MIRA",
+    "codigo": "0608",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "miranda do corvo": {
+    "concelho": "Miranda do Corvo",
+    "concelho_publicado": "MIRANDA DO CORVO",
+    "codigo": "0609",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "montemor-o-velho": {
+    "concelho": "Montemor-o-Velho",
+    "concelho_publicado": "MONTEMOR-O-VELHO",
+    "codigo": "0610",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "oliveira do hospital": {
+    "concelho": "Oliveira do Hospital",
+    "concelho_publicado": "OLIVEIRA DO HOSPITAL",
+    "codigo": "0611",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.31,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "pampilhosa da serra": {
+    "concelho": "Pampilhosa da Serra",
+    "concelho_publicado": "PAMPILHOSA DA SERRA",
+    "codigo": "0612",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penacova": {
+    "concelho": "Penacova",
+    "concelho_publicado": "PENACOVA",
+    "codigo": "0613",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penela": {
+    "concelho": "Penela",
+    "concelho_publicado": "PENELA",
+    "codigo": "0614",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.375,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "soure": {
+    "concelho": "Soure",
+    "concelho_publicado": "SOURE",
+    "codigo": "0615",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tabua": {
+    "concelho": "Tábua",
+    "concelho_publicado": "TABUA",
+    "codigo": "0616",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de poiares": {
+    "concelho": "Vila Nova de Poiares",
+    "concelho_publicado": "VILA NOVA DE POIARES",
+    "codigo": "0617",
+    "distrito": "Coimbra",
+    "urbana_pct": 0.39,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alandroal": {
+    "concelho": "Alandroal",
+    "concelho_publicado": "ALANDROAL",
+    "codigo": "0701",
+    "distrito": "Évora",
+    "urbana_pct": 0.42,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arraiolos": {
+    "concelho": "Arraiolos",
+    "concelho_publicado": "ARRAIOLOS",
+    "codigo": "0702",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "borba": {
+    "concelho": "Borba",
+    "concelho_publicado": "BORBA",
+    "codigo": "0703",
+    "distrito": "Évora",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "estremoz": {
+    "concelho": "Estremoz",
+    "concelho_publicado": "ESTREMOZ",
+    "codigo": "0704",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "evora": {
+    "concelho": "Évora",
+    "concelho_publicado": "EVORA",
+    "codigo": "0705",
+    "distrito": "Évora",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "montemor-o-novo": {
+    "concelho": "Montemor-o-Novo",
+    "concelho_publicado": "MONTEMOR-O-NOVO",
+    "codigo": "0706",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mora": {
+    "concelho": "Mora",
+    "concelho_publicado": "MORA",
+    "codigo": "0707",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mourao": {
+    "concelho": "Mourão",
+    "concelho_publicado": "MOURÃO",
+    "codigo": "0708",
+    "distrito": "Évora",
+    "urbana_pct": 0.325,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "portel": {
+    "concelho": "Portel",
+    "concelho_publicado": "PORTEL",
+    "codigo": "0709",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "redondo": {
+    "concelho": "Redondo",
+    "concelho_publicado": "REDONDO",
+    "codigo": "0710",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "reguengos de monsaraz": {
+    "concelho": "Reguengos de Monsaraz",
+    "concelho_publicado": "REGUENGOS DE MONSARAZ",
+    "codigo": "0711",
+    "distrito": "Évora",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vendas novas": {
+    "concelho": "Vendas Novas",
+    "concelho_publicado": "VENDAS NOVAS",
+    "codigo": "0712",
+    "distrito": "Évora",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "viana do alentejo": {
+    "concelho": "Viana do Alentejo",
+    "concelho_publicado": "VIANA DO ALENTEJO",
+    "codigo": "0713",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila vicosa": {
+    "concelho": "Vila Viçosa",
+    "concelho_publicado": "VILA VIÇOSA",
+    "codigo": "0714",
+    "distrito": "Évora",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "albufeira": {
+    "concelho": "Albufeira",
+    "concelho_publicado": "ALBUFEIRA",
+    "codigo": "0801",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alcoutim": {
+    "concelho": "Alcoutim",
+    "concelho_publicado": "ALCOUTIM",
+    "codigo": "0802",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "aljezur": {
+    "concelho": "Aljezur",
+    "concelho_publicado": "ALJEZUR",
+    "codigo": "0803",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castro marim": {
+    "concelho": "Castro Marim",
+    "concelho_publicado": "CASTRO MARIM",
+    "codigo": "0804",
+    "distrito": "Faro",
+    "urbana_pct": 0.39,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "faro": {
+    "concelho": "Faro",
+    "concelho_publicado": "FARO",
+    "codigo": "0805",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lagoa (algarve)": {
+    "concelho": "Lagoa (Algarve)",
+    "concelho_publicado": "LAGOA (ALGARVE)",
+    "codigo": "0806",
+    "distrito": "Faro",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lagos": {
+    "concelho": "Lagos",
+    "concelho_publicado": "LAGOS",
+    "codigo": "0807",
+    "distrito": "Faro",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "loule": {
+    "concelho": "Loulé",
+    "concelho_publicado": "LOULE",
+    "codigo": "0808",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "monchique": {
+    "concelho": "Monchique",
+    "concelho_publicado": "MONCHIQUE",
+    "codigo": "0809",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "olhao": {
+    "concelho": "Olhão",
+    "concelho_publicado": "OLHÃO",
+    "codigo": "0810",
+    "distrito": "Faro",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "portimao": {
+    "concelho": "Portimão",
+    "concelho_publicado": "PORTIMÃO",
+    "codigo": "0811",
+    "distrito": "Faro",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao bras de alportel": {
+    "concelho": "São Brás de Alportel",
+    "concelho_publicado": "S. BRAS DE ALPORTEL",
+    "codigo": "0812",
+    "distrito": "Faro",
+    "urbana_pct": 0.41,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "silves": {
+    "concelho": "Silves",
+    "concelho_publicado": "SILVES",
+    "codigo": "0813",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tavira": {
+    "concelho": "Tavira",
+    "concelho_publicado": "TAVIRA",
+    "codigo": "0814",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila do bispo": {
+    "concelho": "Vila do Bispo",
+    "concelho_publicado": "VILA DO BISPO",
+    "codigo": "0815",
+    "distrito": "Faro",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila real de santo antonio": {
+    "concelho": "Vila Real de Santo António",
+    "concelho_publicado": "VILA REAL DE SANTO ANTONIO",
+    "codigo": "0816",
+    "distrito": "Faro",
+    "urbana_pct": 0.45,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "calheta (madeira)": {
+    "concelho": "Calheta (Madeira)",
+    "concelho_publicado": "CALHETA (MADEIRA)",
+    "codigo": "2201",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "camara de lobos": {
+    "concelho": "Câmara de Lobos",
+    "concelho_publicado": "CAMARA DE LOBOS",
+    "codigo": "2202",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "funchal": {
+    "concelho": "Funchal",
+    "concelho_publicado": "FUNCHAL",
+    "codigo": "2203",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "machico": {
+    "concelho": "Machico",
+    "concelho_publicado": "MACHICO",
+    "codigo": "2204",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ponta do sol": {
+    "concelho": "Ponta do Sol",
+    "concelho_publicado": "PONTA DO SOL",
+    "codigo": "2205",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "porto moniz": {
+    "concelho": "Porto Moniz",
+    "concelho_publicado": "PORTO MONIZ",
+    "codigo": "2206",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "porto santo": {
+    "concelho": "Porto Santo",
+    "concelho_publicado": "PORTO SANTO",
+    "codigo": "2207",
+    "distrito": "Funchal",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "ribeira brava": {
+    "concelho": "Ribeira Brava",
+    "concelho_publicado": "RIBEIRA BRAVA",
+    "codigo": "2208",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao vicente": {
+    "concelho": "São Vicente",
+    "concelho_publicado": "S. VICENTE",
+    "codigo": "2211",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa cruz": {
+    "concelho": "Santa Cruz",
+    "concelho_publicado": "SANTA CRUZ",
+    "codigo": "2209",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santana": {
+    "concelho": "Santana",
+    "concelho_publicado": "SANTANA",
+    "codigo": "2210",
+    "distrito": "Funchal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "aguiar da beira": {
+    "concelho": "Aguiar da Beira",
+    "concelho_publicado": "AGUIAR DA BEIRA",
+    "codigo": "0901",
+    "distrito": "Guarda",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "almeida": {
+    "concelho": "Almeida",
+    "concelho_publicado": "ALMEIDA",
+    "codigo": "0902",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "celorico da beira": {
+    "concelho": "Celorico da Beira",
+    "concelho_publicado": "CELORICO DA BEIRA",
+    "codigo": "0903",
+    "distrito": "Guarda",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "figueira de castelo rodrigo": {
+    "concelho": "Figueira de Castelo Rodrigo",
+    "concelho_publicado": "FIGUEIRA DE CASTELO RODRIGO",
+    "codigo": "0904",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "fornos de algodres": {
+    "concelho": "Fornos de Algodres",
+    "concelho_publicado": "FORNOS DE ALGODRES",
+    "codigo": "0905",
+    "distrito": "Guarda",
+    "urbana_pct": 0.41,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "gouveia": {
+    "concelho": "Gouveia",
+    "concelho_publicado": "GOUVEIA",
+    "codigo": "0906",
+    "distrito": "Guarda",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "guarda": {
+    "concelho": "Guarda",
+    "concelho_publicado": "GUARDA",
+    "codigo": "0907",
+    "distrito": "Guarda",
+    "urbana_pct": 0.375,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "manteigas": {
+    "concelho": "Manteigas",
+    "concelho_publicado": "MANTEIGAS",
+    "codigo": "0908",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "meda": {
+    "concelho": "Mêda",
+    "concelho_publicado": "MEDA",
+    "codigo": "0909",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "pinhel": {
+    "concelho": "Pinhel",
+    "concelho_publicado": "PINHEL",
+    "codigo": "0910",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sabugal": {
+    "concelho": "Sabugal",
+    "concelho_publicado": "SABUGAL",
+    "codigo": "0911",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "seia": {
+    "concelho": "Seia",
+    "concelho_publicado": "SEIA",
+    "codigo": "0912",
+    "distrito": "Guarda",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "trancoso": {
+    "concelho": "Trancoso",
+    "concelho_publicado": "TRANCOSO",
+    "codigo": "0913",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de foz coa": {
+    "concelho": "Vila Nova de Foz Côa",
+    "concelho_publicado": "VILA NOVA DE FOZ COA",
+    "codigo": "0914",
+    "distrito": "Guarda",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "corvo": {
+    "concelho": "Corvo",
+    "concelho_publicado": "CORVO",
+    "codigo": "2001",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "horta": {
+    "concelho": "Horta",
+    "concelho_publicado": "HORTA",
+    "codigo": "2002",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lajes das flores": {
+    "concelho": "Lajes das Flores",
+    "concelho_publicado": "LAJES DAS FLORES",
+    "codigo": "2003",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lajes do pico": {
+    "concelho": "Lajes do Pico",
+    "concelho_publicado": "LAJES DO PICO",
+    "codigo": "2004",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "madalena": {
+    "concelho": "Madalena",
+    "concelho_publicado": "MADALENA",
+    "codigo": "2005",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao roque do pico": {
+    "concelho": "São Roque do Pico",
+    "concelho_publicado": "S. ROQUE DO PICO",
+    "codigo": "2007",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa cruz das flores": {
+    "concelho": "Santa Cruz das Flores",
+    "concelho_publicado": "SANTA CRUZ DAS FLORES",
+    "codigo": "2006",
+    "distrito": "Horta",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alcobaca": {
+    "concelho": "Alcobaça",
+    "concelho_publicado": "ALCOBAÇA",
+    "codigo": "1001",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alvaiazere": {
+    "concelho": "Alvaiázere",
+    "concelho_publicado": "ALVAIAZERE",
+    "codigo": "1002",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ansiao": {
+    "concelho": "Ansião",
+    "concelho_publicado": "ANSIÃO",
+    "codigo": "1003",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "batalha": {
+    "concelho": "Batalha",
+    "concelho_publicado": "BATALHA",
+    "codigo": "1004",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "bombarral": {
+    "concelho": "Bombarral",
+    "concelho_publicado": "BOMBARRAL",
+    "codigo": "1005",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "caldas da rainha": {
+    "concelho": "Caldas da Rainha",
+    "concelho_publicado": "CALDAS DA RAINHA",
+    "codigo": "1006",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castanheira de pera": {
+    "concelho": "Castanheira de Pera",
+    "concelho_publicado": "CASTANHEIRA DE PERA",
+    "codigo": "1007",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "figueiro dos vinhos": {
+    "concelho": "Figueiró dos Vinhos",
+    "concelho_publicado": "FIGUEIRO DOS VINHOS",
+    "codigo": "1008",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "leiria": {
+    "concelho": "Leiria",
+    "concelho_publicado": "LEIRIA",
+    "codigo": "1009",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "marinha grande": {
+    "concelho": "Marinha Grande",
+    "concelho_publicado": "MARINHA GRANDE",
+    "codigo": "1010",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "nazare": {
+    "concelho": "Nazaré",
+    "concelho_publicado": "NAZARE",
+    "codigo": "1011",
+    "distrito": "Leiria",
+    "urbana_pct": 0.45,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "obidos": {
+    "concelho": "Óbidos",
+    "concelho_publicado": "OBIDOS",
+    "codigo": "1012",
+    "distrito": "Leiria",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "pedrogao grande": {
+    "concelho": "Pedrógão Grande",
+    "concelho_publicado": "PEDROGÃO GRANDE",
+    "codigo": "1013",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "peniche": {
+    "concelho": "Peniche",
+    "concelho_publicado": "PENICHE",
+    "codigo": "1014",
+    "distrito": "Leiria",
+    "urbana_pct": 0.305,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "pombal": {
+    "concelho": "Pombal",
+    "concelho_publicado": "POMBAL",
+    "codigo": "1015",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "porto de mos": {
+    "concelho": "Porto de Mós",
+    "concelho_publicado": "PORTO DE MOS",
+    "codigo": "1016",
+    "distrito": "Leiria",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alenquer": {
+    "concelho": "Alenquer",
+    "concelho_publicado": "ALENQUER",
+    "codigo": "1101",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "amadora": {
+    "concelho": "Amadora",
+    "concelho_publicado": "AMADORA",
+    "codigo": "1115",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arruda dos vinhos": {
+    "concelho": "Arruda dos Vinhos",
+    "concelho_publicado": "ARRUDA DOS VINHOS",
+    "codigo": "1102",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "azambuja": {
+    "concelho": "Azambuja",
+    "concelho_publicado": "AZAMBUJA",
+    "codigo": "1103",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cadaval": {
+    "concelho": "Cadaval",
+    "concelho_publicado": "CADAVAL",
+    "codigo": "1104",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cascais": {
+    "concelho": "Cascais",
+    "concelho_publicado": "CASCAIS",
+    "codigo": "1105",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lisboa": {
+    "concelho": "Lisboa",
+    "concelho_publicado": "LISBOA",
+    "codigo": "1106",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "loures": {
+    "concelho": "Loures",
+    "concelho_publicado": "LOURES",
+    "codigo": "1107",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.361,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lourinha": {
+    "concelho": "Lourinhã",
+    "concelho_publicado": "LOURINHÃ",
+    "codigo": "1108",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mafra": {
+    "concelho": "Mafra",
+    "concelho_publicado": "MAFRA",
+    "codigo": "1109",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.425,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "odivelas": {
+    "concelho": "Odivelas",
+    "concelho_publicado": "ODIVELAS",
+    "codigo": "1116",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "oeiras": {
+    "concelho": "Oeiras",
+    "concelho_publicado": "OEIRAS",
+    "codigo": "1110",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.45,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sintra": {
+    "concelho": "Sintra",
+    "concelho_publicado": "SINTRA",
+    "codigo": "1111",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sobral de monte agraco": {
+    "concelho": "Sobral de Monte Agraço",
+    "concelho_publicado": "SOBRAL DE MONTE AGRAÇO",
+    "codigo": "1112",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "torres vedras": {
+    "concelho": "Torres Vedras",
+    "concelho_publicado": "TORRES VEDRAS",
+    "codigo": "1113",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila franca de xira": {
+    "concelho": "Vila Franca de Xira",
+    "concelho_publicado": "VILA FRANCA DE XIRA",
+    "codigo": "1114",
+    "distrito": "Lisboa",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lagoa (acores)": {
+    "concelho": "Lagoa (Açores)",
+    "concelho_publicado": "LAGOA (AÇORES)",
+    "codigo": "2101",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "nordeste": {
+    "concelho": "Nordeste",
+    "concelho_publicado": "NORDESTE",
+    "codigo": "2102",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.425,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ponta delgada": {
+    "concelho": "Ponta Delgada",
+    "concelho_publicado": "PONTA DELGADA",
+    "codigo": "2103",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "povoacao": {
+    "concelho": "Povoação",
+    "concelho_publicado": "POVOAÇÃO",
+    "codigo": "2104",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ribeira grande": {
+    "concelho": "Ribeira Grande",
+    "concelho_publicado": "RIBEIRA GRANDE",
+    "codigo": "2105",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila do porto": {
+    "concelho": "Vila do Porto",
+    "concelho_publicado": "VILA DO PORTO",
+    "codigo": "2107",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila franca do campo": {
+    "concelho": "Vila Franca do Campo",
+    "concelho_publicado": "VILA FRANCA DO CAMPO",
+    "codigo": "2106",
+    "distrito": "Ponta Delgada",
+    "urbana_pct": 0.425,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alter do chao": {
+    "concelho": "Alter do Chão",
+    "concelho_publicado": "ALTER DO CHÃO",
+    "codigo": "1201",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arronches": {
+    "concelho": "Arronches",
+    "concelho_publicado": "ARRONCHES",
+    "codigo": "1202",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "avis": {
+    "concelho": "Avis",
+    "concelho_publicado": "AVIS",
+    "codigo": "1203",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "campo maior": {
+    "concelho": "Campo Maior",
+    "concelho_publicado": "CAMPO MAIOR",
+    "codigo": "1204",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castelo de vide": {
+    "concelho": "Castelo de Vide",
+    "concelho_publicado": "CASTELO DE VIDE",
+    "codigo": "1205",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "crato": {
+    "concelho": "Crato",
+    "concelho_publicado": "CRATO",
+    "codigo": "1206",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "elvas": {
+    "concelho": "Elvas",
+    "concelho_publicado": "ELVAS",
+    "codigo": "1207",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "fronteira": {
+    "concelho": "Fronteira",
+    "concelho_publicado": "FRONTEIRA",
+    "codigo": "1208",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "gaviao": {
+    "concelho": "Gavião",
+    "concelho_publicado": "GAVIÃO",
+    "codigo": "1209",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "marvao": {
+    "concelho": "Marvão",
+    "concelho_publicado": "MARVÃO",
+    "codigo": "1210",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "monforte": {
+    "concelho": "Monforte",
+    "concelho_publicado": "MONFORTE",
+    "codigo": "1211",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "nisa": {
+    "concelho": "Nisa",
+    "concelho_publicado": "NISA",
+    "codigo": "1212",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ponte de sor": {
+    "concelho": "Ponte de Sor",
+    "concelho_publicado": "PONTE DE SOR",
+    "codigo": "1213",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "portalegre": {
+    "concelho": "Portalegre",
+    "concelho_publicado": "PORTALEGRE",
+    "codigo": "1214",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sousel": {
+    "concelho": "Sousel",
+    "concelho_publicado": "SOUSEL",
+    "codigo": "1215",
+    "distrito": "Portalegre",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "amarante": {
+    "concelho": "Amarante",
+    "concelho_publicado": "AMARANTE",
+    "codigo": "1301",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "baiao": {
+    "concelho": "Baião",
+    "concelho_publicado": "BAIÃO",
+    "codigo": "1302",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "felgueiras": {
+    "concelho": "Felgueiras",
+    "concelho_publicado": "FELGUEIRAS",
+    "codigo": "1303",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "gondomar": {
+    "concelho": "Gondomar",
+    "concelho_publicado": "GONDOMAR",
+    "codigo": "1304",
+    "distrito": "Porto",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "lousada": {
+    "concelho": "Lousada",
+    "concelho_publicado": "LOUSADA",
+    "codigo": "1305",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "maia": {
+    "concelho": "Maia",
+    "concelho_publicado": "MAIA",
+    "codigo": "1306",
+    "distrito": "Porto",
+    "urbana_pct": 0.345,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "marco de canaveses": {
+    "concelho": "Marco de Canaveses",
+    "concelho_publicado": "MARCO DE CANAVESES",
+    "codigo": "1307",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "matosinhos": {
+    "concelho": "Matosinhos",
+    "concelho_publicado": "MATOSINHOS",
+    "codigo": "1308",
+    "distrito": "Porto",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "pacos de ferreira": {
+    "concelho": "Paços de Ferreira",
+    "concelho_publicado": "PAÇOS DE FERREIRA",
+    "codigo": "1309",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "paredes": {
+    "concelho": "Paredes",
+    "concelho_publicado": "PAREDES",
+    "codigo": "1310",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penafiel": {
+    "concelho": "Penafiel",
+    "concelho_publicado": "PENAFIEL",
+    "codigo": "1311",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "porto": {
+    "concelho": "Porto",
+    "concelho_publicado": "PORTO",
+    "codigo": "1312",
+    "distrito": "Porto",
+    "urbana_pct": 0.324,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "povoa de varzim": {
+    "concelho": "Póvoa de Varzim",
+    "concelho_publicado": "POVOA DE VARZIM",
+    "codigo": "1313",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santo tirso": {
+    "concelho": "Santo Tirso",
+    "concelho_publicado": "SANTO TIRSO",
+    "codigo": "1314",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "trofa": {
+    "concelho": "Trofa",
+    "concelho_publicado": "TROFA",
+    "codigo": "1318",
+    "distrito": "Porto",
+    "urbana_pct": 0.39,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "valongo": {
+    "concelho": "Valongo",
+    "concelho_publicado": "VALONGO",
+    "codigo": "1315",
+    "distrito": "Porto",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila do conde": {
+    "concelho": "Vila do Conde",
+    "concelho_publicado": "VILA DO CONDE",
+    "codigo": "1316",
+    "distrito": "Porto",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de gaia": {
+    "concelho": "Vila Nova de Gaia",
+    "concelho_publicado": "VILA NOVA DE GAIA",
+    "codigo": "1317",
+    "distrito": "Porto",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "abrantes": {
+    "concelho": "Abrantes",
+    "concelho_publicado": "ABRANTES",
+    "codigo": "1401",
+    "distrito": "Santarém",
+    "urbana_pct": 0.4,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alcanena": {
+    "concelho": "Alcanena",
+    "concelho_publicado": "ALCANENA",
+    "codigo": "1402",
+    "distrito": "Santarém",
+    "urbana_pct": 0.365,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "almeirim": {
+    "concelho": "Almeirim",
+    "concelho_publicado": "ALMEIRIM",
+    "codigo": "1403",
+    "distrito": "Santarém",
+    "urbana_pct": 0.375,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alpiarca": {
+    "concelho": "Alpiarça",
+    "concelho_publicado": "ALPIARÇA",
+    "codigo": "1404",
+    "distrito": "Santarém",
+    "urbana_pct": 0.36,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "benavente": {
+    "concelho": "Benavente",
+    "concelho_publicado": "BENAVENTE",
+    "codigo": "1405",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cartaxo": {
+    "concelho": "Cartaxo",
+    "concelho_publicado": "CARTAXO",
+    "codigo": "1406",
+    "distrito": "Santarém",
+    "urbana_pct": 0.45,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "chamusca": {
+    "concelho": "Chamusca",
+    "concelho_publicado": "CHAMUSCA",
+    "codigo": "1407",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "constancia": {
+    "concelho": "Constância",
+    "concelho_publicado": "CONSTANCIA",
+    "codigo": "1408",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "coruche": {
+    "concelho": "Coruche",
+    "concelho_publicado": "CORUCHE",
+    "codigo": "1409",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "entroncamento": {
+    "concelho": "Entroncamento",
+    "concelho_publicado": "ENTRONCAMENTO",
+    "codigo": "1410",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ferreira do zezere": {
+    "concelho": "Ferreira do Zêzere",
+    "concelho_publicado": "FERREIRA DO ZEZERE",
+    "codigo": "1411",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "golega": {
+    "concelho": "Golegã",
+    "concelho_publicado": "GOLEGÃ",
+    "codigo": "1412",
+    "distrito": "Santarém",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "macao": {
+    "concelho": "Mação",
+    "concelho_publicado": "MAÇÃO",
+    "codigo": "1413",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ourem": {
+    "concelho": "Ourém",
+    "concelho_publicado": "OUREM",
+    "codigo": "1421",
+    "distrito": "Santarém",
+    "urbana_pct": 0.325,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "rio maior": {
+    "concelho": "Rio Maior",
+    "concelho_publicado": "RIO MAIOR",
+    "codigo": "1414",
+    "distrito": "Santarém",
+    "urbana_pct": 0.38,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "salvaterra de magos": {
+    "concelho": "Salvaterra de Magos",
+    "concelho_publicado": "SALVATERRA DE MAGOS",
+    "codigo": "1415",
+    "distrito": "Santarém",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santarem": {
+    "concelho": "Santarém",
+    "concelho_publicado": "SANTAREM",
+    "codigo": "1416",
+    "distrito": "Santarém",
+    "urbana_pct": 0.367,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sardoal": {
+    "concelho": "Sardoal",
+    "concelho_publicado": "SARDOAL",
+    "codigo": "1417",
+    "distrito": "Santarém",
+    "urbana_pct": 0.325,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tomar": {
+    "concelho": "Tomar",
+    "concelho_publicado": "TOMAR",
+    "codigo": "1418",
+    "distrito": "Santarém",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "torres novas": {
+    "concelho": "Torres Novas",
+    "concelho_publicado": "TORRES NOVAS",
+    "codigo": "1419",
+    "distrito": "Santarém",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova da barquinha": {
+    "concelho": "Vila Nova da Barquinha",
+    "concelho_publicado": "VILA NOVA DA BARQUINHA",
+    "codigo": "1420",
+    "distrito": "Santarém",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alcacer do sal": {
+    "concelho": "Alcácer do Sal",
+    "concelho_publicado": "ALCACER DO SAL",
+    "codigo": "1501",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alcochete": {
+    "concelho": "Alcochete",
+    "concelho_publicado": "ALCOCHETE",
+    "codigo": "1502",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "almada": {
+    "concelho": "Almada",
+    "concelho_publicado": "ALMADA",
+    "codigo": "1503",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "barreiro": {
+    "concelho": "Barreiro",
+    "concelho_publicado": "BARREIRO",
+    "codigo": "1504",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "grandola": {
+    "concelho": "Grândola",
+    "concelho_publicado": "GRANDOLA",
+    "codigo": "1505",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "moita": {
+    "concelho": "Moita",
+    "concelho_publicado": "MOITA",
+    "codigo": "1506",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.365,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "montijo": {
+    "concelho": "Montijo",
+    "concelho_publicado": "MONTIJO",
+    "codigo": "1507",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.31,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "palmela": {
+    "concelho": "Palmela",
+    "concelho_publicado": "PALMELA",
+    "codigo": "1508",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santiago do cacem": {
+    "concelho": "Santiago do Cacém",
+    "concelho_publicado": "SANTIAGO DO CACEM",
+    "codigo": "1509",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "seixal": {
+    "concelho": "Seixal",
+    "concelho_publicado": "SEIXAL",
+    "codigo": "1510",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.325,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sesimbra": {
+    "concelho": "Sesimbra",
+    "concelho_publicado": "SESIMBRA",
+    "codigo": "1511",
+    "distrito": "Setúbal",
+    "urbana_pct": null,
+    "rural_pct": null,
+    "ano": 2025
+   },
+   "setubal": {
+    "concelho": "Setúbal",
+    "concelho_publicado": "SETUBAL",
+    "codigo": "1512",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sines": {
+    "concelho": "Sines",
+    "concelho_publicado": "SINES",
+    "codigo": "1513",
+    "distrito": "Setúbal",
+    "urbana_pct": 0.33,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "arcos de valdevez": {
+    "concelho": "Arcos de Valdevez",
+    "concelho_publicado": "ARCOS DE VALDEVEZ",
+    "codigo": "1601",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "caminha": {
+    "concelho": "Caminha",
+    "concelho_publicado": "CAMINHA",
+    "codigo": "1602",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.39,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "melgaco": {
+    "concelho": "Melgaço",
+    "concelho_publicado": "MELGAÇO",
+    "codigo": "1603",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.32,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "moncao": {
+    "concelho": "Monção",
+    "concelho_publicado": "MONÇÃO",
+    "codigo": "1604",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "paredes de coura": {
+    "concelho": "Paredes de Coura",
+    "concelho_publicado": "PAREDES DE COURA",
+    "codigo": "1605",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ponte da barca": {
+    "concelho": "Ponte da Barca",
+    "concelho_publicado": "PONTE DA BARCA",
+    "codigo": "1606",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.34,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ponte de lima": {
+    "concelho": "Ponte de Lima",
+    "concelho_publicado": "PONTE DE LIMA",
+    "codigo": "1607",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.32,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "valenca": {
+    "concelho": "Valença",
+    "concelho_publicado": "VALENÇA",
+    "codigo": "1608",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "viana do castelo": {
+    "concelho": "Viana do Castelo",
+    "concelho_publicado": "VIANA DO CASTELO",
+    "codigo": "1609",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.35,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de cerveira": {
+    "concelho": "Vila Nova de Cerveira",
+    "concelho_publicado": "VILA NOVA DE CERVEIRA",
+    "codigo": "1610",
+    "distrito": "Viana do Castelo",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "alijo": {
+    "concelho": "Alijó",
+    "concelho_publicado": "ALIJO",
+    "codigo": "1701",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.32,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "boticas": {
+    "concelho": "Boticas",
+    "concelho_publicado": "BOTICAS",
+    "codigo": "1702",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "chaves": {
+    "concelho": "Chaves",
+    "concelho_publicado": "CHAVES",
+    "codigo": "1703",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mesao frio": {
+    "concelho": "Mesão Frio",
+    "concelho_publicado": "MESÃO FRIO",
+    "codigo": "1704",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.4,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mondim de basto": {
+    "concelho": "Mondim de Basto",
+    "concelho_publicado": "MONDIM DE BASTO",
+    "codigo": "1705",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "montalegre": {
+    "concelho": "Montalegre",
+    "concelho_publicado": "MONTALEGRE",
+    "codigo": "1706",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "murca": {
+    "concelho": "Murça",
+    "concelho_publicado": "MURÇA",
+    "codigo": "1707",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "peso da regua": {
+    "concelho": "Peso da Régua",
+    "concelho_publicado": "PESO DA REGUA",
+    "codigo": "1708",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.37,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "ribeira de pena": {
+    "concelho": "Ribeira de Pena",
+    "concelho_publicado": "RIBEIRA DE PENA",
+    "codigo": "1709",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sabrosa": {
+    "concelho": "Sabrosa",
+    "concelho_publicado": "SABROSA",
+    "codigo": "1710",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa marta de penaguiao": {
+    "concelho": "Santa Marta de Penaguião",
+    "concelho_publicado": "SANTA MARTA DE PENAGUIÃO",
+    "codigo": "1711",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "valpacos": {
+    "concelho": "Valpaços",
+    "concelho_publicado": "VALPAÇOS",
+    "codigo": "1712",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila pouca de aguiar": {
+    "concelho": "Vila Pouca de Aguiar",
+    "concelho_publicado": "VILA POUCA DE AGUIAR",
+    "codigo": "1713",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila real": {
+    "concelho": "Vila Real",
+    "concelho_publicado": "VILA REAL",
+    "codigo": "1714",
+    "distrito": "Vila Real",
+    "urbana_pct": 0.385,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "armamar": {
+    "concelho": "Armamar",
+    "concelho_publicado": "ARMAMAR",
+    "codigo": "1801",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "carregal do sal": {
+    "concelho": "Carregal do Sal",
+    "concelho_publicado": "CARREGAL DO SAL",
+    "codigo": "1802",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "castro daire": {
+    "concelho": "Castro Daire",
+    "concelho_publicado": "CASTRO DAIRE",
+    "codigo": "1803",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "cinfaes": {
+    "concelho": "Cinfães",
+    "concelho_publicado": "CINFÃES",
+    "codigo": "1804",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "lamego": {
+    "concelho": "Lamego",
+    "concelho_publicado": "LAMEGO",
+    "codigo": "1805",
+    "distrito": "Viseu",
+    "urbana_pct": 0.365,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mangualde": {
+    "concelho": "Mangualde",
+    "concelho_publicado": "MANGUALDE",
+    "codigo": "1806",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "moimenta da beira": {
+    "concelho": "Moimenta da Beira",
+    "concelho_publicado": "MOIMENTA DA BEIRA",
+    "codigo": "1807",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "mortagua": {
+    "concelho": "Mortágua",
+    "concelho_publicado": "MORTAGUA",
+    "codigo": "1808",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "nelas": {
+    "concelho": "Nelas",
+    "concelho_publicado": "NELAS",
+    "codigo": "1809",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "oliveira de frades": {
+    "concelho": "Oliveira de Frades",
+    "concelho_publicado": "OLIVEIRA DE FRADES",
+    "codigo": "1810",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penalva do castelo": {
+    "concelho": "Penalva do Castelo",
+    "concelho_publicado": "PENALVA DO CASTELO",
+    "codigo": "1811",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "penedono": {
+    "concelho": "Penedono",
+    "concelho_publicado": "PENEDONO",
+    "codigo": "1812",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "resende": {
+    "concelho": "Resende",
+    "concelho_publicado": "RESENDE",
+    "codigo": "1813",
+    "distrito": "Viseu",
+    "urbana_pct": 0.375,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao joao da pesqueira": {
+    "concelho": "São João da Pesqueira",
+    "concelho_publicado": "S. JOÃO DA PESQUEIRA",
+    "codigo": "1815",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sao pedro do sul": {
+    "concelho": "São Pedro do Sul",
+    "concelho_publicado": "S. PEDRO DO SUL",
+    "codigo": "1816",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "santa comba dao": {
+    "concelho": "Santa Comba Dão",
+    "concelho_publicado": "SANTA COMBA DÃO",
+    "codigo": "1814",
+    "distrito": "Viseu",
+    "urbana_pct": 0.39,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "satao": {
+    "concelho": "Sátão",
+    "concelho_publicado": "SATÃO",
+    "codigo": "1817",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "sernancelhe": {
+    "concelho": "Sernancelhe",
+    "concelho_publicado": "SERNANCELHE",
+    "codigo": "1818",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tabuaco": {
+    "concelho": "Tabuaço",
+    "concelho_publicado": "TABUAÇO",
+    "codigo": "1819",
+    "distrito": "Viseu",
+    "urbana_pct": 0.4,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tarouca": {
+    "concelho": "Tarouca",
+    "concelho_publicado": "TAROUCA",
+    "codigo": "1820",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "tondela": {
+    "concelho": "Tondela",
+    "concelho_publicado": "TONDELA",
+    "codigo": "1821",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vila nova de paiva": {
+    "concelho": "Vila Nova de Paiva",
+    "concelho_publicado": "VILA NOVA DE PAIVA",
+    "codigo": "1822",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "viseu": {
+    "concelho": "Viseu",
+    "concelho_publicado": "VISEU",
+    "codigo": "1823",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   },
+   "vouzela": {
+    "concelho": "Vouzela",
+    "concelho_publicado": "VOUZELA",
+    "codigo": "1824",
+    "distrito": "Viseu",
+    "urbana_pct": 0.3,
+    "rural_pct": 0.8,
+    "ano": 2025
+   }
+  }
+ },
+ "gasoleo": {
+  "fonte": "DGEG — preços de combustíveis comunicados pelos postos",
+  "url": "https://precoscombustiveis.dgeg.gov.pt/api/PrecoComb/PesquisarPostos",
+  "leitura": "2026-10-29",
+  "postos": 2982,
+  "concelhos": 277,
+  "por_concelho": {
+   "almeida": {
+    "concelho": "Almeida",
+    "preco_l": 2.2705,
+    "postos": 8,
+    "distrito": "Guarda"
+   },
+   "ourem": {
+    "concelho": "Ourém",
+    "preco_l": 2.296,
+    "postos": 29,
+    "distrito": "Santarém"
+   },
+   "alcobaca": {
+    "concelho": "Alcobaça",
+    "preco_l": 2.257,
+    "postos": 31,
+    "distrito": "Leiria"
+   },
+   "marinha grande": {
+    "concelho": "Marinha Grande",
+    "preco_l": 2.259,
+    "postos": 14,
+    "distrito": "Leiria"
+   },
+   "agueda": {
+    "concelho": "Águeda",
+    "preco_l": 2.272,
+    "postos": 21,
+    "distrito": "Aveiro"
+   },
+   "penafiel": {
+    "concelho": "Penafiel",
+    "preco_l": 2.242,
+    "postos": 23,
+    "distrito": "Porto"
+   },
+   "cadaval": {
+    "concelho": "Cadaval",
+    "preco_l": 2.229,
+    "postos": 6,
+    "distrito": "Lisboa"
+   },
+   "vila real de santo antonio": {
+    "concelho": "Vila Real de Santo António",
+    "preco_l": 2.269,
+    "postos": 9,
+    "distrito": "Faro"
+   },
+   "estarreja": {
+    "concelho": "Estarreja",
+    "preco_l": 2.264,
+    "postos": 12,
+    "distrito": "Aveiro"
+   },
+   "abrantes": {
+    "concelho": "Abrantes",
+    "preco_l": 2.272,
+    "postos": 16,
+    "distrito": "Santarém"
+   },
+   "anadia": {
+    "concelho": "Anadia",
+    "preco_l": 2.3005,
+    "postos": 10,
+    "distrito": "Aveiro"
+   },
+   "olhao": {
+    "concelho": "Olhão",
+    "preco_l": 2.277,
+    "postos": 12,
+    "distrito": "Faro"
+   },
+   "oliveira do bairro": {
+    "concelho": "Oliveira do Bairro",
+    "preco_l": 2.267,
+    "postos": 13,
+    "distrito": "Aveiro"
+   },
+   "marco de canaveses": {
+    "concelho": "Marco de Canaveses",
+    "preco_l": 2.2865,
+    "postos": 16,
+    "distrito": "Porto"
+   },
+   "ilhavo": {
+    "concelho": "Ílhavo",
+    "preco_l": 2.089,
+    "postos": 5,
+    "distrito": "Aveiro"
+   },
+   "loures": {
+    "concelho": "Loures",
+    "preco_l": 2.274,
+    "postos": 38,
+    "distrito": "Lisboa"
+   },
+   "guimaraes": {
+    "concelho": "Guimarães",
+    "preco_l": 2.259,
+    "postos": 39,
+    "distrito": "Braga"
+   },
+   "miranda do douro": {
+    "concelho": "Miranda do Douro",
+    "preco_l": 2.297,
+    "postos": 7,
+    "distrito": "Bragança"
+   },
+   "braga": {
+    "concelho": "Braga",
+    "preco_l": 2.2655,
+    "postos": 50,
+    "distrito": "Braga"
+   },
+   "montijo": {
+    "concelho": "Montijo",
+    "preco_l": 2.274,
+    "postos": 19,
+    "distrito": "Setúbal"
+   },
+   "belmonte": {
+    "concelho": "Belmonte",
+    "preco_l": 2.267,
+    "postos": 5,
+    "distrito": "Castelo Branco"
+   },
+   "vila franca de xira": {
+    "concelho": "Vila Franca de Xira",
+    "preco_l": 2.299,
+    "postos": 20,
+    "distrito": "Lisboa"
+   },
+   "guarda": {
+    "concelho": "Guarda",
+    "preco_l": 2.2705,
+    "postos": 22,
+    "distrito": "Guarda"
+   },
+   "lagos": {
+    "concelho": "Lagos",
+    "preco_l": 2.274,
+    "postos": 12,
+    "distrito": "Faro"
+   },
+   "portimao": {
+    "concelho": "Portimão",
+    "preco_l": 2.2915,
+    "postos": 16,
+    "distrito": "Faro"
+   },
+   "macedo de cavaleiros": {
+    "concelho": "Macedo de Cavaleiros",
+    "preco_l": 2.301,
+    "postos": 7,
+    "distrito": "Bragança"
+   },
+   "castelo branco": {
+    "concelho": "Castelo Branco",
+    "preco_l": 2.239,
+    "postos": 18,
+    "distrito": "Castelo Branco"
+   },
+   "covilha": {
+    "concelho": "Covilhã",
+    "preco_l": 2.27,
+    "postos": 13,
+    "distrito": "Castelo Branco"
+   },
+   "matosinhos": {
+    "concelho": "Matosinhos",
+    "preco_l": 2.299,
+    "postos": 39,
+    "distrito": "Porto"
+   },
+   "vila nova de famalicao": {
+    "concelho": "Vila Nova de Famalicão",
+    "preco_l": 2.257,
+    "postos": 45,
+    "distrito": "Braga"
+   },
+   "santo tirso": {
+    "concelho": "Santo Tirso",
+    "preco_l": 2.2535,
+    "postos": 18,
+    "distrito": "Porto"
+   },
+   "moncao": {
+    "concelho": "Monção",
+    "preco_l": 2.209,
+    "postos": 5,
+    "distrito": "Viana do Castelo"
+   },
+   "viseu": {
+    "concelho": "Viseu",
+    "preco_l": 2.259,
+    "postos": 36,
+    "distrito": "Viseu"
+   },
+   "proenca-a-nova": {
+    "concelho": "Proença-a-Nova",
+    "preco_l": 2.2665,
+    "postos": 6,
+    "distrito": "Castelo Branco"
+   },
+   "trofa": {
+    "concelho": "Trofa",
+    "preco_l": 2.2805,
+    "postos": 16,
+    "distrito": "Porto"
+   },
+   "vila nova de gaia": {
+    "concelho": "Vila Nova de Gaia",
+    "preco_l": 2.269,
+    "postos": 58,
+    "distrito": "Porto"
+   },
+   "serta": {
+    "concelho": "Sertã",
+    "preco_l": 2.262,
+    "postos": 8,
+    "distrito": "Castelo Branco"
+   },
+   "figueiro dos vinhos": {
+    "concelho": "Figueiró dos Vinhos",
+    "preco_l": 2.181,
+    "postos": 4,
+    "distrito": "Leiria"
+   },
+   "mirandela": {
+    "concelho": "Mirandela",
+    "preco_l": 2.277,
+    "postos": 14,
+    "distrito": "Bragança"
+   },
+   "felgueiras": {
+    "concelho": "Felgueiras",
+    "preco_l": 2.267,
+    "postos": 18,
+    "distrito": "Porto"
+   },
+   "leiria": {
+    "concelho": "Leiria",
+    "preco_l": 2.277,
+    "postos": 57,
+    "distrito": "Leiria"
+   },
+   "aveiro": {
+    "concelho": "Aveiro",
+    "preco_l": 2.268,
+    "postos": 24,
+    "distrito": "Aveiro"
+   },
+   "fundao": {
+    "concelho": "Fundão",
+    "preco_l": 2.279,
+    "postos": 13,
+    "distrito": "Castelo Branco"
+   },
+   "alpiarca": {
+    "concelho": "Alpiarça",
+    "preco_l": 2.299,
+    "postos": 5,
+    "distrito": "Santarém"
+   },
+   "montemor-o-velho": {
+    "concelho": "Montemor-o-Velho",
+    "preco_l": 2.277,
+    "postos": 10,
+    "distrito": "Coimbra"
+   },
+   "chamusca": {
+    "concelho": "Chamusca",
+    "preco_l": 2.221,
+    "postos": 7,
+    "distrito": "Santarém"
+   },
+   "caldas da rainha": {
+    "concelho": "Caldas da Rainha",
+    "preco_l": 2.277,
+    "postos": 16,
+    "distrito": "Leiria"
+   },
+   "obidos": {
+    "concelho": "Óbidos",
+    "preco_l": 2.284,
+    "postos": 5,
+    "distrito": "Leiria"
+   },
+   "estremoz": {
+    "concelho": "Estremoz",
+    "preco_l": 2.314,
+    "postos": 10,
+    "distrito": "Évora"
+   },
+   "idanha-a-nova": {
+    "concelho": "Idanha-a-Nova",
+    "preco_l": 2.3115,
+    "postos": 6,
+    "distrito": "Castelo Branco"
+   },
+   "lousada": {
+    "concelho": "Lousada",
+    "preco_l": 2.268,
+    "postos": 16,
+    "distrito": "Porto"
+   },
+   "mafra": {
+    "concelho": "Mafra",
+    "preco_l": 2.263,
+    "postos": 20,
+    "distrito": "Lisboa"
+   },
+   "sintra": {
+    "concelho": "Sintra",
+    "preco_l": 2.297,
+    "postos": 47,
+    "distrito": "Lisboa"
+   },
+   "santa maria da feira": {
+    "concelho": "Santa Maria da Feira",
+    "preco_l": 2.259,
+    "postos": 37,
+    "distrito": "Aveiro"
+   },
+   "amarante": {
+    "concelho": "Amarante",
+    "preco_l": 2.269,
+    "postos": 17,
+    "distrito": "Porto"
+   },
+   "oliveira de azemeis": {
+    "concelho": "Oliveira de Azeméis",
+    "preco_l": 2.269,
+    "postos": 25,
+    "distrito": "Aveiro"
+   },
+   "gouveia": {
+    "concelho": "Gouveia",
+    "preco_l": 2.279,
+    "postos": 7,
+    "distrito": "Guarda"
+   },
+   "albergaria-a-velha": {
+    "concelho": "Albergaria-a-Velha",
+    "preco_l": 2.2455,
+    "postos": 12,
+    "distrito": "Aveiro"
+   },
+   "vale de cambra": {
+    "concelho": "Vale de Cambra",
+    "preco_l": 2.2115,
+    "postos": 2,
+    "distrito": "Aveiro"
+   },
+   "ansiao": {
+    "concelho": "Ansião",
+    "preco_l": 2.2755,
+    "postos": 10,
+    "distrito": "Leiria"
+   },
+   "pombal": {
+    "concelho": "Pombal",
+    "preco_l": 2.287,
+    "postos": 34,
+    "distrito": "Leiria"
+   },
+   "alcochete": {
+    "concelho": "Alcochete",
+    "preco_l": 2.3155,
+    "postos": 8,
+    "distrito": "Setúbal"
+   },
+   "vila flor": {
+    "concelho": "Vila Flor",
+    "preco_l": 2.31,
+    "postos": 4,
+    "distrito": "Bragança"
+   },
+   "ponte de sor": {
+    "concelho": "Ponte de Sor",
+    "preco_l": 2.303,
+    "postos": 10,
+    "distrito": "Portalegre"
+   },
+   "mealhada": {
+    "concelho": "Mealhada",
+    "preco_l": 2.299,
+    "postos": 9,
+    "distrito": "Aveiro"
+   },
+   "cantanhede": {
+    "concelho": "Cantanhede",
+    "preco_l": 2.264,
+    "postos": 21,
+    "distrito": "Coimbra"
+   },
+   "santarem": {
+    "concelho": "Santarém",
+    "preco_l": 2.267,
+    "postos": 30,
+    "distrito": "Santarém"
+   },
+   "fafe": {
+    "concelho": "Fafe",
+    "preco_l": 2.297,
+    "postos": 13,
+    "distrito": "Braga"
+   },
+   "golega": {
+    "concelho": "Golegã",
+    "preco_l": 2.149,
+    "postos": 2,
+    "distrito": "Santarém"
+   },
+   "paredes": {
+    "concelho": "Paredes",
+    "preco_l": 2.249,
+    "postos": 29,
+    "distrito": "Porto"
+   },
+   "arouca": {
+    "concelho": "Arouca",
+    "preco_l": 2.274,
+    "postos": 9,
+    "distrito": "Aveiro"
+   },
+   "barreiro": {
+    "concelho": "Barreiro",
+    "preco_l": 2.249,
+    "postos": 13,
+    "distrito": "Setúbal"
+   },
+   "sao pedro do sul": {
+    "concelho": "São Pedro do Sul",
+    "preco_l": 2.263,
+    "postos": 8,
+    "distrito": "Viseu"
+   },
+   "maia": {
+    "concelho": "Maia",
+    "preco_l": 2.279,
+    "postos": 31,
+    "distrito": "Porto"
+   },
+   "odivelas": {
+    "concelho": "Odivelas",
+    "preco_l": 2.297,
+    "postos": 14,
+    "distrito": "Lisboa"
+   },
+   "pacos de ferreira": {
+    "concelho": "Paços de Ferreira",
+    "preco_l": 2.269,
+    "postos": 20,
+    "distrito": "Porto"
+   },
+   "sever do vouga": {
+    "concelho": "Sever do Vouga",
+    "preco_l": 2.2895,
+    "postos": 10,
+    "distrito": "Aveiro"
+   },
+   "vizela": {
+    "concelho": "Vizela",
+    "preco_l": 2.254,
+    "postos": 8,
+    "distrito": "Braga"
+   },
+   "valpacos": {
+    "concelho": "Valpaços",
+    "preco_l": 2.2905,
+    "postos": 8,
+    "distrito": "Vila Real"
+   },
+   "povoa de varzim": {
+    "concelho": "Póvoa de Varzim",
+    "preco_l": 2.314,
+    "postos": 18,
+    "distrito": "Porto"
+   },
+   "cartaxo": {
+    "concelho": "Cartaxo",
+    "preco_l": 2.2715,
+    "postos": 12,
+    "distrito": "Santarém"
+   },
+   "almeirim": {
+    "concelho": "Almeirim",
+    "preco_l": 2.234,
+    "postos": 13,
+    "distrito": "Santarém"
+   },
+   "borba": {
+    "concelho": "Borba",
+    "preco_l": 2.317,
+    "postos": 3,
+    "distrito": "Évora"
+   },
+   "carregal do sal": {
+    "concelho": "Carregal do Sal",
+    "preco_l": 2.267,
+    "postos": 5,
+    "distrito": "Viseu"
+   },
+   "coruche": {
+    "concelho": "Coruche",
+    "preco_l": 2.2765,
+    "postos": 12,
+    "distrito": "Santarém"
+   },
+   "moita": {
+    "concelho": "Moita",
+    "preco_l": 2.2065,
+    "postos": 10,
+    "distrito": "Setúbal"
+   },
+   "rio maior": {
+    "concelho": "Rio Maior",
+    "preco_l": 2.272,
+    "postos": 15,
+    "distrito": "Santarém"
+   },
+   "sesimbra": {
+    "concelho": "Sesimbra",
+    "preco_l": 2.257,
+    "postos": 8,
+    "distrito": "Setúbal"
+   },
+   "peso da regua": {
+    "concelho": "Peso da Régua",
+    "preco_l": 2.314,
+    "postos": 6,
+    "distrito": "Vila Real"
+   },
+   "mangualde": {
+    "concelho": "Mangualde",
+    "preco_l": 2.274,
+    "postos": 9,
+    "distrito": "Viseu"
+   },
+   "porto de mos": {
+    "concelho": "Porto de Mós",
+    "preco_l": 2.201,
+    "postos": 13,
+    "distrito": "Leiria"
+   },
+   "vila verde": {
+    "concelho": "Vila Verde",
+    "preco_l": 2.223,
+    "postos": 14,
+    "distrito": "Braga"
+   },
+   "tondela": {
+    "concelho": "Tondela",
+    "preco_l": 2.274,
+    "postos": 13,
+    "distrito": "Viseu"
+   },
+   "torres novas": {
+    "concelho": "Torres Novas",
+    "preco_l": 2.267,
+    "postos": 11,
+    "distrito": "Santarém"
+   },
+   "alenquer": {
+    "concelho": "Alenquer",
+    "preco_l": 2.2715,
+    "postos": 14,
+    "distrito": "Lisboa"
+   },
+   "barcelos": {
+    "concelho": "Barcelos",
+    "preco_l": 2.267,
+    "postos": 41,
+    "distrito": "Braga"
+   },
+   "palmela": {
+    "concelho": "Palmela",
+    "preco_l": 2.284,
+    "postos": 25,
+    "distrito": "Setúbal"
+   },
+   "aljustrel": {
+    "concelho": "Aljustrel",
+    "preco_l": 2.2765,
+    "postos": 8,
+    "distrito": "Beja"
+   },
+   "miranda do corvo": {
+    "concelho": "Miranda do Corvo",
+    "preco_l": 2.284,
+    "postos": 5,
+    "distrito": "Coimbra"
+   },
+   "lousa": {
+    "concelho": "Lousã",
+    "preco_l": 2.297,
+    "postos": 4,
+    "distrito": "Coimbra"
+   },
+   "condeixa-a-nova": {
+    "concelho": "Condeixa-a-Nova",
+    "preco_l": 2.234,
+    "postos": 5,
+    "distrito": "Coimbra"
+   },
+   "soure": {
+    "concelho": "Soure",
+    "preco_l": 2.264,
+    "postos": 5,
+    "distrito": "Coimbra"
+   },
+   "coimbra": {
+    "concelho": "Coimbra",
+    "preco_l": 2.287,
+    "postos": 26,
+    "distrito": "Coimbra"
+   },
+   "mira": {
+    "concelho": "Mira",
+    "preco_l": 2.262,
+    "postos": 7,
+    "distrito": "Coimbra"
+   },
+   "ferreira do zezere": {
+    "concelho": "Ferreira do Zêzere",
+    "preco_l": 2.2615,
+    "postos": 4,
+    "distrito": "Santarém"
+   },
+   "murtosa": {
+    "concelho": "Murtosa",
+    "preco_l": 2.199,
+    "postos": 3,
+    "distrito": "Aveiro"
+   },
+   "vila do conde": {
+    "concelho": "Vila do Conde",
+    "preco_l": 2.269,
+    "postos": 21,
+    "distrito": "Porto"
+   },
+   "cascais": {
+    "concelho": "Cascais",
+    "preco_l": 2.314,
+    "postos": 35,
+    "distrito": "Lisboa"
+   },
+   "nelas": {
+    "concelho": "Nelas",
+    "preco_l": 2.214,
+    "postos": 7,
+    "distrito": "Viseu"
+   },
+   "castro daire": {
+    "concelho": "Castro Daire",
+    "preco_l": 2.297,
+    "postos": 6,
+    "distrito": "Viseu"
+   },
+   "arruda dos vinhos": {
+    "concelho": "Arruda dos Vinhos",
+    "preco_l": 2.309,
+    "postos": 5,
+    "distrito": "Lisboa"
+   },
+   "elvas": {
+    "concelho": "Elvas",
+    "preco_l": 2.259,
+    "postos": 5,
+    "distrito": "Portalegre"
+   },
+   "ribeira de pena": {
+    "concelho": "Ribeira de Pena",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Vila Real"
+   },
+   "satao": {
+    "concelho": "Sátão",
+    "preco_l": 2.195,
+    "postos": 7,
+    "distrito": "Viseu"
+   },
+   "vila nova de foz coa": {
+    "concelho": "Vila Nova de Foz Côa",
+    "preco_l": 2.2905,
+    "postos": 6,
+    "distrito": "Guarda"
+   },
+   "torre de moncorvo": {
+    "concelho": "Torre de Moncorvo",
+    "preco_l": 2.2895,
+    "postos": 6,
+    "distrito": "Bragança"
+   },
+   "batalha": {
+    "concelho": "Batalha",
+    "preco_l": 2.3075,
+    "postos": 8,
+    "distrito": "Leiria"
+   },
+   "tomar": {
+    "concelho": "Tomar",
+    "preco_l": 2.289,
+    "postos": 14,
+    "distrito": "Santarém"
+   },
+   "valongo": {
+    "concelho": "Valongo",
+    "preco_l": 2.269,
+    "postos": 25,
+    "distrito": "Porto"
+   },
+   "esposende": {
+    "concelho": "Esposende",
+    "preco_l": 2.294,
+    "postos": 12,
+    "distrito": "Braga"
+   },
+   "ovar": {
+    "concelho": "Ovar",
+    "preco_l": 2.2665,
+    "postos": 18,
+    "distrito": "Aveiro"
+   },
+   "porto": {
+    "concelho": "Porto",
+    "preco_l": 2.284,
+    "postos": 34,
+    "distrito": "Porto"
+   },
+   "povoa de lanhoso": {
+    "concelho": "Póvoa de Lanhoso",
+    "preco_l": 2.274,
+    "postos": 11,
+    "distrito": "Braga"
+   },
+   "figueira da foz": {
+    "concelho": "Figueira da Foz",
+    "preco_l": 2.284,
+    "postos": 25,
+    "distrito": "Coimbra"
+   },
+   "vila nova da barquinha": {
+    "concelho": "Vila Nova da Barquinha",
+    "preco_l": 2.1935,
+    "postos": 2,
+    "distrito": "Santarém"
+   },
+   "vila do bispo": {
+    "concelho": "Vila do Bispo",
+    "preco_l": 2.2445,
+    "postos": 6,
+    "distrito": "Faro"
+   },
+   "mondim de basto": {
+    "concelho": "Mondim de Basto",
+    "preco_l": 2.344,
+    "postos": 5,
+    "distrito": "Vila Real"
+   },
+   "arganil": {
+    "concelho": "Arganil",
+    "preco_l": 2.234,
+    "postos": 5,
+    "distrito": "Coimbra"
+   },
+   "santiago do cacem": {
+    "concelho": "Santiago do Cacém",
+    "preco_l": 2.3015,
+    "postos": 14,
+    "distrito": "Setúbal"
+   },
+   "bombarral": {
+    "concelho": "Bombarral",
+    "preco_l": 2.214,
+    "postos": 5,
+    "distrito": "Leiria"
+   },
+   "amadora": {
+    "concelho": "Amadora",
+    "preco_l": 2.309,
+    "postos": 13,
+    "distrito": "Lisboa"
+   },
+   "gondomar": {
+    "concelho": "Gondomar",
+    "preco_l": 2.289,
+    "postos": 21,
+    "distrito": "Porto"
+   },
+   "viana do castelo": {
+    "concelho": "Viana do Castelo",
+    "preco_l": 2.274,
+    "postos": 27,
+    "distrito": "Viana do Castelo"
+   },
+   "sobral de monte agraco": {
+    "concelho": "Sobral de Monte Agraço",
+    "preco_l": 2.244,
+    "postos": 4,
+    "distrito": "Lisboa"
+   },
+   "mortagua": {
+    "concelho": "Mortágua",
+    "preco_l": 2.288,
+    "postos": 4,
+    "distrito": "Viseu"
+   },
+   "amares": {
+    "concelho": "Amares",
+    "preco_l": 2.267,
+    "postos": 5,
+    "distrito": "Braga"
+   },
+   "vila real": {
+    "concelho": "Vila Real",
+    "preco_l": 2.264,
+    "postos": 21,
+    "distrito": "Vila Real"
+   },
+   "montalegre": {
+    "concelho": "Montalegre",
+    "preco_l": 2.294,
+    "postos": 5,
+    "distrito": "Vila Real"
+   },
+   "alijo": {
+    "concelho": "Alijó",
+    "preco_l": 2.253,
+    "postos": 6,
+    "distrito": "Vila Real"
+   },
+   "oliveira de frades": {
+    "concelho": "Oliveira de Frades",
+    "preco_l": 2.245,
+    "postos": 9,
+    "distrito": "Viseu"
+   },
+   "santa comba dao": {
+    "concelho": "Santa Comba Dão",
+    "preco_l": 2.234,
+    "postos": 7,
+    "distrito": "Viseu"
+   },
+   "vagos": {
+    "concelho": "Vagos",
+    "preco_l": 2.274,
+    "postos": 11,
+    "distrito": "Aveiro"
+   },
+   "entroncamento": {
+    "concelho": "Entroncamento",
+    "preco_l": 2.304,
+    "postos": 3,
+    "distrito": "Santarém"
+   },
+   "alcanena": {
+    "concelho": "Alcanena",
+    "preco_l": 2.1615,
+    "postos": 4,
+    "distrito": "Santarém"
+   },
+   "faro": {
+    "concelho": "Faro",
+    "preco_l": 2.263,
+    "postos": 18,
+    "distrito": "Faro"
+   },
+   "ferreira do alentejo": {
+    "concelho": "Ferreira do Alentejo",
+    "preco_l": 2.219,
+    "postos": 6,
+    "distrito": "Beja"
+   },
+   "torres vedras": {
+    "concelho": "Torres Vedras",
+    "preco_l": 2.269,
+    "postos": 33,
+    "distrito": "Lisboa"
+   },
+   "castelo de paiva": {
+    "concelho": "Castelo de Paiva",
+    "preco_l": 2.234,
+    "postos": 5,
+    "distrito": "Aveiro"
+   },
+   "seixal": {
+    "concelho": "Seixal",
+    "preco_l": 2.2915,
+    "postos": 24,
+    "distrito": "Setúbal"
+   },
+   "oeiras": {
+    "concelho": "Oeiras",
+    "preco_l": 2.319,
+    "postos": 24,
+    "distrito": "Lisboa"
+   },
+   "almada": {
+    "concelho": "Almada",
+    "preco_l": 2.297,
+    "postos": 16,
+    "distrito": "Setúbal"
+   },
+   "silves": {
+    "concelho": "Silves",
+    "preco_l": 2.2765,
+    "postos": 24,
+    "distrito": "Faro"
+   },
+   "celorico da beira": {
+    "concelho": "Celorico da Beira",
+    "preco_l": 2.2805,
+    "postos": 8,
+    "distrito": "Guarda"
+   },
+   "meda": {
+    "concelho": "Meda",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Guarda"
+   },
+   "albufeira": {
+    "concelho": "Albufeira",
+    "preco_l": 2.269,
+    "postos": 19,
+    "distrito": "Faro"
+   },
+   "sao joao da pesqueira": {
+    "concelho": "São João da Pesqueira",
+    "preco_l": 2.267,
+    "postos": 5,
+    "distrito": "Viseu"
+   },
+   "figueira de castelo rodrigo": {
+    "concelho": "Figueira de Castelo Rodrigo",
+    "preco_l": 2.2355,
+    "postos": 4,
+    "distrito": "Guarda"
+   },
+   "trancoso": {
+    "concelho": "Trancoso",
+    "preco_l": 2.278,
+    "postos": 6,
+    "distrito": "Guarda"
+   },
+   "azambuja": {
+    "concelho": "Azambuja",
+    "preco_l": 2.314,
+    "postos": 16,
+    "distrito": "Lisboa"
+   },
+   "tabua": {
+    "concelho": "Tábua",
+    "preco_l": 2.2665,
+    "postos": 6,
+    "distrito": "Coimbra"
+   },
+   "cinfaes": {
+    "concelho": "Cinfães",
+    "preco_l": 2.257,
+    "postos": 7,
+    "distrito": "Viseu"
+   },
+   "baiao": {
+    "concelho": "Baião",
+    "preco_l": 2.293,
+    "postos": 4,
+    "distrito": "Porto"
+   },
+   "arcos de valdevez": {
+    "concelho": "Arcos de Valdevez",
+    "preco_l": 2.2495,
+    "postos": 6,
+    "distrito": "Viana do Castelo"
+   },
+   "vila pouca de aguiar": {
+    "concelho": "Vila Pouca de Aguiar",
+    "preco_l": 2.297,
+    "postos": 9,
+    "distrito": "Vila Real"
+   },
+   "benavente": {
+    "concelho": "Benavente",
+    "preco_l": 2.297,
+    "postos": 13,
+    "distrito": "Santarém"
+   },
+   "cabeceiras de basto": {
+    "concelho": "Cabeceiras de Basto",
+    "preco_l": 2.279,
+    "postos": 7,
+    "distrito": "Braga"
+   },
+   "sines": {
+    "concelho": "Sines",
+    "preco_l": 2.2945,
+    "postos": 6,
+    "distrito": "Setúbal"
+   },
+   "monchique": {
+    "concelho": "Monchique",
+    "preco_l": 2.309,
+    "postos": 4,
+    "distrito": "Faro"
+   },
+   "beja": {
+    "concelho": "Beja",
+    "preco_l": 2.294,
+    "postos": 14,
+    "distrito": "Beja"
+   },
+   "caminha": {
+    "concelho": "Caminha",
+    "preco_l": 2.268,
+    "postos": 6,
+    "distrito": "Viana do Castelo"
+   },
+   "alter do chao": {
+    "concelho": "Alter do Chão",
+    "preco_l": 2.208,
+    "postos": 2,
+    "distrito": "Portalegre"
+   },
+   "sao bras de alportel": {
+    "concelho": "São Brás de Alportel",
+    "preco_l": 2.277,
+    "postos": 4,
+    "distrito": "Faro"
+   },
+   "salvaterra de magos": {
+    "concelho": "Salvaterra de Magos",
+    "preco_l": 2.279,
+    "postos": 13,
+    "distrito": "Santarém"
+   },
+   "sao joao da madeira": {
+    "concelho": "São João da Madeira",
+    "preco_l": 2.274,
+    "postos": 6,
+    "distrito": "Aveiro"
+   },
+   "cuba": {
+    "concelho": "Cuba",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Beja"
+   },
+   "evora": {
+    "concelho": "Évora",
+    "preco_l": 2.297,
+    "postos": 13,
+    "distrito": "Évora"
+   },
+   "ponte de lima": {
+    "concelho": "Ponte de Lima",
+    "preco_l": 2.308,
+    "postos": 12,
+    "distrito": "Viana do Castelo"
+   },
+   "lisboa": {
+    "concelho": "Lisboa",
+    "preco_l": 2.319,
+    "postos": 61,
+    "distrito": "Lisboa"
+   },
+   "vila vicosa": {
+    "concelho": "Vila Viçosa",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Évora"
+   },
+   "redondo": {
+    "concelho": "Redondo",
+    "preco_l": 2.267,
+    "postos": 3,
+    "distrito": "Évora"
+   },
+   "odemira": {
+    "concelho": "Odemira",
+    "preco_l": 2.284,
+    "postos": 13,
+    "distrito": "Beja"
+   },
+   "vendas novas": {
+    "concelho": "Vendas Novas",
+    "preco_l": 2.274,
+    "postos": 7,
+    "distrito": "Évora"
+   },
+   "lourinha": {
+    "concelho": "Lourinhã",
+    "preco_l": 2.264,
+    "postos": 10,
+    "distrito": "Lisboa"
+   },
+   "lagoa": {
+    "concelho": "Lagoa",
+    "preco_l": 2.289,
+    "postos": 9,
+    "distrito": "Faro"
+   },
+   "penela": {
+    "concelho": "Penela",
+    "preco_l": 2.214,
+    "postos": 3,
+    "distrito": "Coimbra"
+   },
+   "portalegre": {
+    "concelho": "Portalegre",
+    "preco_l": 2.294,
+    "postos": 9,
+    "distrito": "Portalegre"
+   },
+   "peniche": {
+    "concelho": "Peniche",
+    "preco_l": 2.282,
+    "postos": 6,
+    "distrito": "Leiria"
+   },
+   "vidigueira": {
+    "concelho": "Vidigueira",
+    "preco_l": 2.219,
+    "postos": 3,
+    "distrito": "Beja"
+   },
+   "ourique": {
+    "concelho": "Ourique",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Beja"
+   },
+   "setubal": {
+    "concelho": "Setúbal",
+    "preco_l": 2.284,
+    "postos": 20,
+    "distrito": "Setúbal"
+   },
+   "alcacer do sal": {
+    "concelho": "Alcácer do Sal",
+    "preco_l": 2.302,
+    "postos": 8,
+    "distrito": "Setúbal"
+   },
+   "arraiolos": {
+    "concelho": "Arraiolos",
+    "preco_l": 2.26,
+    "postos": 4,
+    "distrito": "Évora"
+   },
+   "moura": {
+    "concelho": "Moura",
+    "preco_l": 2.284,
+    "postos": 9,
+    "distrito": "Beja"
+   },
+   "castro verde": {
+    "concelho": "Castro Verde",
+    "preco_l": 2.278,
+    "postos": 6,
+    "distrito": "Beja"
+   },
+   "portel": {
+    "concelho": "Portel",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Évora"
+   },
+   "pinhel": {
+    "concelho": "Pinhel",
+    "preco_l": 2.219,
+    "postos": 5,
+    "distrito": "Guarda"
+   },
+   "aguiar da beira": {
+    "concelho": "Aguiar da Beira",
+    "preco_l": 2.2865,
+    "postos": 6,
+    "distrito": "Guarda"
+   },
+   "tavira": {
+    "concelho": "Tavira",
+    "preco_l": 2.2755,
+    "postos": 12,
+    "distrito": "Faro"
+   },
+   "seia": {
+    "concelho": "Seia",
+    "preco_l": 2.314,
+    "postos": 9,
+    "distrito": "Guarda"
+   },
+   "viana do alentejo": {
+    "concelho": "Viana do Alentejo",
+    "preco_l": 2.217,
+    "postos": 5,
+    "distrito": "Évora"
+   },
+   "mora": {
+    "concelho": "Mora",
+    "preco_l": 2.246,
+    "postos": 4,
+    "distrito": "Évora"
+   },
+   "reguengos de monsaraz": {
+    "concelho": "Reguengos de Monsaraz",
+    "preco_l": 2.229,
+    "postos": 2,
+    "distrito": "Évora"
+   },
+   "carrazeda de ansiaes": {
+    "concelho": "Carrazeda de Ansiães",
+    "preco_l": 2.231,
+    "postos": 4,
+    "distrito": "Bragança"
+   },
+   "ponte da barca": {
+    "concelho": "Ponte da Barca",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Viana do Castelo"
+   },
+   "penacova": {
+    "concelho": "Penacova",
+    "preco_l": 2.296,
+    "postos": 7,
+    "distrito": "Coimbra"
+   },
+   "penamacor": {
+    "concelho": "Penamacor",
+    "preco_l": 2.249,
+    "postos": 3,
+    "distrito": "Castelo Branco"
+   },
+   "montemor-o-novo": {
+    "concelho": "Montemor-o-Novo",
+    "preco_l": 2.314,
+    "postos": 15,
+    "distrito": "Évora"
+   },
+   "chaves": {
+    "concelho": "Chaves",
+    "preco_l": 2.257,
+    "postos": 8,
+    "distrito": "Vila Real"
+   },
+   "celorico de basto": {
+    "concelho": "Celorico de Basto",
+    "preco_l": 2.3055,
+    "postos": 6,
+    "distrito": "Braga"
+   },
+   "alvaiazere": {
+    "concelho": "Alvaiázere",
+    "preco_l": 2.234,
+    "postos": 5,
+    "distrito": "Leiria"
+   },
+   "moimenta da beira": {
+    "concelho": "Moimenta da Beira",
+    "preco_l": 2.2265,
+    "postos": 6,
+    "distrito": "Viseu"
+   },
+   "serpa": {
+    "concelho": "Serpa",
+    "preco_l": 2.317,
+    "postos": 7,
+    "distrito": "Beja"
+   },
+   "vouzela": {
+    "concelho": "Vouzela",
+    "preco_l": 2.2865,
+    "postos": 6,
+    "distrito": "Viseu"
+   },
+   "loule": {
+    "concelho": "Loulé",
+    "preco_l": 2.309,
+    "postos": 26,
+    "distrito": "Faro"
+   },
+   "braganca": {
+    "concelho": "Bragança",
+    "preco_l": 2.314,
+    "postos": 12,
+    "distrito": "Bragança"
+   },
+   "espinho": {
+    "concelho": "Espinho",
+    "preco_l": 2.289,
+    "postos": 5,
+    "distrito": "Aveiro"
+   },
+   "sernancelhe": {
+    "concelho": "Sernancelhe",
+    "preco_l": 2.25,
+    "postos": 3,
+    "distrito": "Viseu"
+   },
+   "fornos de algodres": {
+    "concelho": "Fornos de Algodres",
+    "preco_l": 2.272,
+    "postos": 3,
+    "distrito": "Guarda"
+   },
+   "vila nova de paiva": {
+    "concelho": "Vila Nova de Paiva",
+    "preco_l": 2.2345,
+    "postos": 2,
+    "distrito": "Viseu"
+   },
+   "avis": {
+    "concelho": "Avis",
+    "preco_l": 2.234,
+    "postos": 3,
+    "distrito": "Portalegre"
+   },
+   "armamar": {
+    "concelho": "Armamar",
+    "preco_l": 2.267,
+    "postos": 3,
+    "distrito": "Viseu"
+   },
+   "paredes de coura": {
+    "concelho": "Paredes de Coura",
+    "preco_l": 2.264,
+    "postos": 3,
+    "distrito": "Viana do Castelo"
+   },
+   "sabugal": {
+    "concelho": "Sabugal",
+    "preco_l": 2.269,
+    "postos": 7,
+    "distrito": "Guarda"
+   },
+   "mogadouro": {
+    "concelho": "Mogadouro",
+    "preco_l": 2.2855,
+    "postos": 8,
+    "distrito": "Bragança"
+   },
+   "aljezur": {
+    "concelho": "Aljezur",
+    "preco_l": 2.2715,
+    "postos": 4,
+    "distrito": "Faro"
+   },
+   "penedono": {
+    "concelho": "Penedono",
+    "preco_l": 2.268,
+    "postos": 2,
+    "distrito": "Viseu"
+   },
+   "lamego": {
+    "concelho": "Lamego",
+    "preco_l": 2.304,
+    "postos": 4,
+    "distrito": "Viseu"
+   },
+   "alfandega da fe": {
+    "concelho": "Alfândega da Fé",
+    "preco_l": 2.249,
+    "postos": 3,
+    "distrito": "Bragança"
+   },
+   "fronteira": {
+    "concelho": "Fronteira",
+    "preco_l": 2.259,
+    "postos": 3,
+    "distrito": "Portalegre"
+   },
+   "sousel": {
+    "concelho": "Sousel",
+    "preco_l": 2.289,
+    "postos": 5,
+    "distrito": "Portalegre"
+   },
+   "monforte": {
+    "concelho": "Monforte",
+    "preco_l": 2.241,
+    "postos": 1,
+    "distrito": "Portalegre"
+   },
+   "macao": {
+    "concelho": "Mação",
+    "preco_l": 2.2795,
+    "postos": 4,
+    "distrito": "Santarém"
+   },
+   "nisa": {
+    "concelho": "Nisa",
+    "preco_l": 2.2765,
+    "postos": 2,
+    "distrito": "Portalegre"
+   },
+   "freixo de espada a cinta": {
+    "concelho": "Freixo de Espada à Cinta",
+    "preco_l": 2.275,
+    "postos": 2,
+    "distrito": "Bragança"
+   },
+   "valenca": {
+    "concelho": "Valença",
+    "preco_l": 2.267,
+    "postos": 4,
+    "distrito": "Viana do Castelo"
+   },
+   "vinhais": {
+    "concelho": "Vinhais",
+    "preco_l": 2.283,
+    "postos": 5,
+    "distrito": "Bragança"
+   },
+   "vieira do minho": {
+    "concelho": "Vieira do Minho",
+    "preco_l": 2.344,
+    "postos": 3,
+    "distrito": "Braga"
+   },
+   "oliveira do hospital": {
+    "concelho": "Oliveira do Hospital",
+    "preco_l": 2.298,
+    "postos": 8,
+    "distrito": "Coimbra"
+   },
+   "mourao": {
+    "concelho": "Mourão",
+    "preco_l": 2.257,
+    "postos": 1,
+    "distrito": "Évora"
+   },
+   "pampilhosa da serra": {
+    "concelho": "Pampilhosa da Serra",
+    "preco_l": 2.301,
+    "postos": 3,
+    "distrito": "Coimbra"
+   },
+   "constancia": {
+    "concelho": "Constância",
+    "preco_l": 2.2725,
+    "postos": 2,
+    "distrito": "Santarém"
+   },
+   "vila velha de rodao": {
+    "concelho": "Vila Velha de Ródão",
+    "preco_l": 2.3155,
+    "postos": 4,
+    "distrito": "Castelo Branco"
+   },
+   "murca": {
+    "concelho": "Murça",
+    "preco_l": 2.314,
+    "postos": 3,
+    "distrito": "Vila Real"
+   },
+   "castro marim": {
+    "concelho": "Castro Marim",
+    "preco_l": 2.264,
+    "postos": 1,
+    "distrito": "Faro"
+   },
+   "alcoutim": {
+    "concelho": "Alcoutim",
+    "preco_l": 2.295,
+    "postos": 2,
+    "distrito": "Faro"
+   },
+   "nazare": {
+    "concelho": "Nazaré",
+    "preco_l": 2.269,
+    "postos": 3,
+    "distrito": "Leiria"
+   },
+   "pedrogao grande": {
+    "concelho": "Pedrógão Grande",
+    "preco_l": 2.283,
+    "postos": 4,
+    "distrito": "Leiria"
+   },
+   "melgaco": {
+    "concelho": "Melgaço",
+    "preco_l": 2.284,
+    "postos": 3,
+    "distrito": "Viana do Castelo"
+   },
+   "gois": {
+    "concelho": "Góis",
+    "preco_l": 2.317,
+    "postos": 4,
+    "distrito": "Coimbra"
+   },
+   "sardoal": {
+    "concelho": "Sardoal",
+    "preco_l": 2.272,
+    "postos": 1,
+    "distrito": "Santarém"
+   },
+   "crato": {
+    "concelho": "Crato",
+    "preco_l": 2.284,
+    "postos": 3,
+    "distrito": "Portalegre"
+   },
+   "vila nova de cerveira": {
+    "concelho": "Vila Nova de Cerveira",
+    "preco_l": 2.283,
+    "postos": 4,
+    "distrito": "Viana do Castelo"
+   },
+   "almodovar": {
+    "concelho": "Almodôvar",
+    "preco_l": 2.292,
+    "postos": 5,
+    "distrito": "Beja"
+   },
+   "terras de bouro": {
+    "concelho": "Terras de Bouro",
+    "preco_l": 2.2905,
+    "postos": 2,
+    "distrito": "Braga"
+   },
+   "boticas": {
+    "concelho": "Boticas",
+    "preco_l": 2.297,
+    "postos": 3,
+    "distrito": "Vila Real"
+   },
+   "vimioso": {
+    "concelho": "Vimioso",
+    "preco_l": 2.301,
+    "postos": 5,
+    "distrito": "Bragança"
+   },
+   "sabrosa": {
+    "concelho": "Sabrosa",
+    "preco_l": 2.299,
+    "postos": 4,
+    "distrito": "Vila Real"
+   },
+   "oleiros": {
+    "concelho": "Oleiros",
+    "preco_l": 2.301,
+    "postos": 3,
+    "distrito": "Castelo Branco"
+   },
+   "mesao frio": {
+    "concelho": "Mesão Frio",
+    "preco_l": 2.294,
+    "postos": 1,
+    "distrito": "Vila Real"
+   },
+   "grandola": {
+    "concelho": "Grândola",
+    "preco_l": 2.3365,
+    "postos": 10,
+    "distrito": "Setúbal"
+   },
+   "vila nova de poiares": {
+    "concelho": "Vila Nova de Poiares",
+    "preco_l": 2.296,
+    "postos": 3,
+    "distrito": "Coimbra"
+   },
+   "gaviao": {
+    "concelho": "Gavião",
+    "preco_l": 2.297,
+    "postos": 1,
+    "distrito": "Portalegre"
+   },
+   "castelo de vide": {
+    "concelho": "Castelo de Vide",
+    "preco_l": 2.297,
+    "postos": 1,
+    "distrito": "Portalegre"
+   },
+   "campo maior": {
+    "concelho": "Campo Maior",
+    "preco_l": 2.297,
+    "postos": 1,
+    "distrito": "Portalegre"
+   },
+   "santa marta de penaguiao": {
+    "concelho": "Santa Marta de Penaguião",
+    "preco_l": 2.3065,
+    "postos": 2,
+    "distrito": "Vila Real"
+   },
+   "resende": {
+    "concelho": "Resende",
+    "preco_l": 2.3205,
+    "postos": 4,
+    "distrito": "Viseu"
+   },
+   "castanheira de pera": {
+    "concelho": "Castanheira de Pêra",
+    "preco_l": 2.3015,
+    "postos": 2,
+    "distrito": "Leiria"
+   },
+   "tabuaco": {
+    "concelho": "Tabuaço",
+    "preco_l": 2.304,
+    "postos": 1,
+    "distrito": "Viseu"
+   },
+   "arronches": {
+    "concelho": "Arronches",
+    "preco_l": 2.307,
+    "postos": 1,
+    "distrito": "Portalegre"
+   },
+   "vila de rei": {
+    "concelho": "Vila de Rei",
+    "preco_l": 2.307,
+    "postos": 1,
+    "distrito": "Castelo Branco"
+   },
+   "mertola": {
+    "concelho": "Mértola",
+    "preco_l": 2.318,
+    "postos": 2,
+    "distrito": "Beja"
+   },
+   "tarouca": {
+    "concelho": "Tarouca",
+    "preco_l": 2.3255,
+    "postos": 2,
+    "distrito": "Viseu"
+   },
+   "alvito": {
+    "concelho": "Alvito",
+    "preco_l": 2.314,
+    "postos": 1,
+    "distrito": "Beja"
+   },
+   "alandroal": {
+    "concelho": "Alandroal",
+    "preco_l": 2.3215,
+    "postos": 2,
+    "distrito": "Évora"
+   },
+   "manteigas": {
+    "concelho": "Manteigas",
+    "preco_l": 2.317,
+    "postos": 2,
+    "distrito": "Guarda"
+   },
+   "penalva do castelo": {
+    "concelho": "Penalva do Castelo",
+    "preco_l": 2.319,
+    "postos": 1,
+    "distrito": "Viseu"
+   },
+   "marvao": {
+    "concelho": "Marvão",
+    "preco_l": 2.349,
+    "postos": 1,
+    "distrito": "Portalegre"
+   }
+  }
+ },
+ "erse": {
+  "eletricidade": {
+   "potencia_kva": 3.45,
+   "termo_fixo_dia": 0.1917,
+   "energia_kwh": 0.1711,
+   "fonte": "ERSE — tarifas transitórias de venda a clientes finais (BTN, Portugal continental)",
+   "url": "https://www.erse.pt/media/wbxljhas/s_tarifas_net_outubro-2026.xlsx",
+   "nota": "Preço da energia e das redes, sem impostos. Igual em todos os concelhos."
+  },
+  "gas": {
+   "escalao": 1,
+   "termo_fixo_dia": 0.0839,
+   "energia_kwh": 0.0638,
+   "fonte": "ERSE — tarifa transitória de venda a clientes finais de gás natural",
+   "url": "https://www.erse.pt/media/efbcnpic/s_tarifas_net.xlsx",
+   "nota": "Escalão 1 (até 220 m³/ano). Igual em todos os concelhos."
+  }
+ }
+}

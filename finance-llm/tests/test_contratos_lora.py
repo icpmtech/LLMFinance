@@ -453,5 +453,82 @@ def test_rotas_do_agente_estao_registadas() -> None:
         "/llm/modelo/rag",
         "/llm/modelo/feedback",
         "/llm/modelo/retreinar",
+        "/llm/modelo/retreinar/historico",
+        "/llm/modelo/retreinar/parar",
+        "/llm/modelo/versoes",
+        "/llm/modelo/versoes/reverter",
     ):
         assert esperado in caminhos, f"rota em falta: {esperado}"
+
+    # O WebSocket não entra no OpenAPI: procura-se na árvore de rotas do router.
+    from api import llm_contratos_routes as rotas
+
+    websockets = {r.path for r in rotas.router.routes if r.__class__.__name__ == "APIWebSocketRoute"}
+    assert "/llm/modelo/retreinar/ws" in websockets
+
+
+def test_instantaneo_do_treino_nao_varre_o_disco(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O WebSocket pede um retrato a cada 400 ms: não pode contar backups."""
+    from api import llm_contratos_treino as treino
+
+    def _explodir() -> int:  # pragma: no cover - só falha se for chamado
+        raise AssertionError("instantaneo() não deve contar versões guardadas")
+
+    monkeypatch.setattr(treino, "_versoes_guardadas", _explodir)
+    estado = treino.instantaneo()
+
+    assert isinstance(estado["historico"], list)
+    assert "fase" in estado and "atividade" in estado
+    assert estado["agora_ts"] > 0
+
+
+def test_ws_do_retreino_recusa_sem_token() -> None:
+    """Sem token o canal fecha antes de aceitar (1008), não fica a escutar."""
+    from starlette.websockets import WebSocketDisconnect
+
+    cliente, _ = _cliente()
+    with pytest.raises(WebSocketDisconnect) as falha:
+        with cliente.websocket_connect("/llm/modelo/retreinar/ws"):
+            pass
+    assert falha.value.code == 1008
+    assert "Sessão em falta" in (falha.value.reason or "")
+
+
+def test_ws_do_retreino_entrega_o_estado_com_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Com sessão válida o canal aceita e envia logo o retrato do estado."""
+    from api import llm_contratos_treino as treino
+    from api import llm_contratos_routes as rotas
+
+    monkeypatch.setattr(
+        rotas,
+        "session_from_token",
+        lambda token: type("S", (), {"session_id": "s1", "token": token})(),
+    )
+    monkeypatch.setattr(
+        treino,
+        "instantaneo",
+        lambda: {
+            "a_correr": True,
+            "passo": 3,
+            "passos": 12,
+            "perda": 0.31,
+            "tokens": 2955,
+            "fase": "a_treinar",
+            "atividade": "A treinar",
+            "historico": [{"passo": 1, "perda": 1.0}, {"passo": 3, "perda": 0.31}],
+            "perda_antes": 1.2,
+            "perda_depois": None,
+            "erro": None,
+            "paragem_pedida": False,
+            "agora_ts": 1.0,
+        },
+    )
+
+    cliente, _ = _cliente()
+    with cliente.websocket_connect("/llm/modelo/retreinar/ws?token=abc") as ws:
+        dados = ws.receive_json()
+
+    assert dados["tipo"] == "estado"
+    assert dados["passo"] == 3
+    assert dados["fase"] == "a_treinar"
+    assert len(dados["historico"]) == 2

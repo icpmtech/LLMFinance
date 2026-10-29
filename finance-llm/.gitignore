@@ -111,3 +111,12 @@ data/remuneracoes-ap/pdf/
 # (	ests/test_es_split.py). É a fotografia do ficheiro **antes** da divisão,
 # pequena e só muda quando a API muda de propósito.
 !tests/data/es_api_manifest.json
+
+# Custo de vida por concelho: a base publicada (308 concelhos com renda, gasóleo,
+# população e despesa) e o instantâneo dos componentes recolhidos (IMI, preços da
+# DGEG, tarifas da ERSE). Ficam versionados, apesar do `*.json` acima, para o
+# módulo funcionar depois de um clone sem depender de rede; os ficheiros de
+# tarifas da ERSE (`*.xlsx`, ~600 kB) são re-descarregáveis e ficam só em disco.
+!data/custo-vida/base_concelhos.json
+!data/custo-vida/componentes.json
+data/custo-vida/erse/

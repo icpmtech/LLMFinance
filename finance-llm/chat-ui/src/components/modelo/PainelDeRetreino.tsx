@@ -22,6 +22,7 @@ import {
   Sparkles,
   Square,
 } from "lucide-react";
+import RetreinoAoVivo from "./RetreinoAoVivo";
 import {
   correrAvaliacao,
   getEstadoRag,
@@ -365,6 +366,10 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
           </a>
         )}
       </div>
+
+      {(completo || aCorrer) && (
+        <RetreinoAoVivo aCorrer={aCorrer} className={completo ? "mt-1" : "mt-3"} autoLigar={aCorrer} />
+      )}
 
       {completo && (
         <>

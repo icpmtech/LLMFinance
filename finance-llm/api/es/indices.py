@@ -318,6 +318,15 @@ MUNICIPIOS_DESPESAS_INDEX = "finance_municipios_despesas"
 
 
 
+# Custo de vida por concelho. Um documento por **concelho** (308) com os
+# componentes do orçamento mensal — renda mediana (INE), gasóleo do concelho
+# (DGEG), IMI (AT) e as tarifas nacionais de eletricidade e gás (ERSE) — mais o
+# índice de custo de vida (100 = mediana nacional). Alimentado pela recolha em
+# `collectors/custo_vida.py` e pela construção em `api/custo_vida_service.py`.
+CUSTO_VIDA_INDEX = "finance_custo_vida"
+
+
+
 # Executivos municipais: membros das câmaras municipais dos 308 concelhos
 # (presidente, vice-presidentes, vereadores). Documento por pessoa × concelho ×
 # cargo — os nomes e os partidos vêm do Mapa Oficial da CNE e os pelouros, a
@@ -1349,6 +1358,18 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     SEC_RECOLHAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    CUSTO_VIDA_INDEX: {
+        # Nomes de concelhos escritos com acentos (Évora, Bragança, Loulé).
         "analysis": {
             "analyzer": {
                 "world_folding": {

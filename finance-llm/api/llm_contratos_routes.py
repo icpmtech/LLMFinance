@@ -14,17 +14,19 @@ resposta, escrever memória/skills, dar feedback ou retreinar exige sessão.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from api import llm_contratos_agente as agente
 from api import llm_contratos_service as service
 from api import llm_contratos_treino as treino
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, require_session, session_from_token
 
 logger = logging.getLogger(__name__)
 
@@ -408,6 +410,60 @@ def versoes_adaptador() -> Dict[str, Any]:
         "versoes": versoes,
         "atual": treino.estado_adaptacao().get("versoes", 0),
     }
+
+
+@router.websocket("/retreinar/ws")
+async def ws_retreino(websocket: WebSocket, token: Optional[str] = Query(None)) -> None:
+    """Fluxo do retreino em direto: fases, passo, perda e tokens.
+
+    O browser não deixa pôr `Authorization` no handshake, por isso o token vem na
+    query (`?token=…`) e é validado como em qualquer pedido protegido. O canal
+    envia o retrato completo a cada mudança (não deltas) e um `ping` a cada 15 s
+    para o proxy não fechar uma ligação parada; a interface reconstrói tudo a
+    partir do último retrato, incluindo a curva de perda desde o passo 1.
+    """
+    try:
+        session_from_token(token)
+    except HTTPException as exc:
+        await websocket.close(code=1008, reason=str(exc.detail))
+        return
+
+    await websocket.accept()
+    ultimo: Optional[str] = None
+    ultimo_envio = time.monotonic()
+    try:
+        while True:
+            estado = await run_in_threadpool(treino.instantaneo)
+            externo = estado.get("externo") or {}
+            assinatura = repr(
+                (
+                    estado.get("a_correr"),
+                    estado.get("passo"),
+                    estado.get("fase"),
+                    estado.get("perda"),
+                    estado.get("tokens"),
+                    estado.get("erro"),
+                    estado.get("paragem_pedida"),
+                    len(estado.get("historico") or ()),
+                    # O treino completo corre fora deste processo: o passo dele
+                    # também tem de acordar o canal, senão a curva só aparecia
+                    # no fim.
+                    externo.get("passo"),
+                    externo.get("a_correr"),
+                )
+            )
+            if assinatura != ultimo:
+                await websocket.send_json({"tipo": "estado", **estado})
+                ultimo = assinatura
+                ultimo_envio = time.monotonic()
+            elif time.monotonic() - ultimo_envio > 15:
+                await websocket.send_json({"tipo": "ping", "agora_ts": time.time()})
+                ultimo_envio = time.monotonic()
+            await asyncio.sleep(0.4)
+    except WebSocketDisconnect:
+        return
+    except RuntimeError:  # pragma: no cover - ligação fechada a meio de um envio
+        return
 
 
 @router.post("/versoes/reverter", summary="Reverter o adaptador para uma versão guardada")

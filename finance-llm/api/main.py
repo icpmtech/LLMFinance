@@ -328,6 +328,10 @@ from api.people_routes import router as people_router
 from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
 from api.municipios_routes import router as municipios_router
+# Custo de vida por concelho: renda (INE), gasóleo (DGEG), IMI (AT) e as tarifas
+# nacionais de energia (ERSE) num orçamento mensal, com índice de custo de vida
+# (100 = mediana do país); indexado em `finance_custo_vida`.
+from api.custo_vida_routes import router as custo_vida_router
 from api.municipio_pessoas_routes import router as municipio_pessoas_router
 from api.municipios_contactos_routes import router as municipios_contactos_router
 from api.freguesias_contactos_routes import router as freguesias_contactos_router
@@ -984,6 +988,7 @@ app.include_router(people_router)
 app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
 app.include_router(municipios_router)
+app.include_router(custo_vida_router)
 app.include_router(municipio_pessoas_router)
 app.include_router(municipios_contactos_router)
 app.include_router(freguesias_contactos_router)

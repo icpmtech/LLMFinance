@@ -365,6 +365,7 @@ from api.es.indices import (  # noqa: F401
     CONTRATOS_ES_INDEX,
     CONTRATOS_FR_INDEX,
     CONTRIBUINTES_INDEX,
+    CUSTO_VIDA_INDEX,
     CRM_INDEX,
     CRM_RBAC_INDEX,
     DEVEDORES_INDEX,
@@ -496,6 +497,16 @@ from api.es.municipios import (  # noqa: F401
     search_municipios_despesas,
     search_vereadores,
     vereadores_status,
+)
+
+# --- custo de vida (6 nomes, em api/es/custo_vida.py)
+from api.es.custo_vida import (  # noqa: F401
+    ORDENACOES as CUSTO_VIDA_ORDENACOES,
+    indexar as index_custo_vida_bulk,
+    listar as listar_custo_vida,
+    obter as obter_custo_vida,
+    status as custo_vida_status,
+    total as custo_vida_total,
 )
 
 # --- pessoas (31 nomes, em api/es/pessoas.py)

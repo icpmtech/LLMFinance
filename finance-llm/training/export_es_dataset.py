@@ -236,12 +236,19 @@ def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
 
     prompt = (
         f"Contrato {idcontrato} - {objecto}\n"
-        f"Adjudicante: {adjudicante} | Adjudicatário: {adjudicatario}\n"
-        f"Procedimento: {procedimento} | Tipo: {tipo}\n"
-        f"Preço contratual: {preco_raw} | Data de publicação: {data}\n"
-        f"Regime: {regime} | CPV principal: {cpv}"
+        f"Adjudicante: {adjudicante}\n"
+        f"Adjudicatário: {adjudicatario}\n"
+        f"Tipo: {tipo}\n"
+        f"Procedimento: {procedimento}\n"
+        f"Preço contratual: {preco_raw}\n"
+        f"Data de publicação: {data}\n"
+        f"Regime: {regime}\n"
+        f"CPV principal: {cpv}"
         # A descrição só entra quando diz algo para além do objecto: repetir a
         # mesma frase custa tokens (e atenção) sem dar informação nova.
+        # Um campo por linha (e não «A | B») porque com separadores o modelo
+        # copiava pedaços do pedido para dentro da frase («num procedimento
+        # «Concurso publico | Tipo: Aquisicao de bens moveis»»).
         + (f"\nDescrição: {descricao}" if descricao and descricao not in objecto else "")
     )
     completion = (

@@ -178,6 +178,7 @@ held-out só de subsídios (e um `--max-pairs` pequeno treinaria só contratos).
 | `GET` | `/llm/modelo/retreinar/historico` | Últimas entradas de `metricas_adaptacao.jsonl`. Público. |
 | `GET` | `/llm/modelo/versoes` | Backups `.bak-<data>` do adaptador (nome, tamanho, data). Público. |
 | `POST` | `/llm/modelo/versoes/reverter` | Repõe o adaptador a partir de um backup (guardando o estado atual). Exige sessão. |
+| `WS` | `/llm/modelo/retreinar/ws` | Retreino em direto: fase, passo, perda, tokens e a curva desde o passo 1. Token na query (`?token=…`), porque o browser não deixa enviar `Authorization` no handshake. |
 
 Implementação: [api/llm_contratos_routes.py](../api/llm_contratos_routes.py),
 [api/llm_contratos_service.py](../api/llm_contratos_service.py),
@@ -308,6 +309,24 @@ estado e progresso da adaptação, formulário com passos e learning rate,
 reutilizar pares já treinados, parar, versões guardadas com reverção, histórico
 de adaptações, reindexação do corpus RAG e avaliação. O mesmo controlo aparece
 resumido no painel do chat e no cartão «chat do modelo» da página do modelo.
+
+Dentro do painel, o bloco **«processo em direto»** liga-se por WebSocket a
+`/llm/modelo/retreinar/ws` e mostra o que está a acontecer enquanto acontece:
+
+- as **quatro fases** do processo (pares e modelo → passos LoRA → perda
+  antes/depois → guardar com backup), com a fase atual acesa e as concluídas
+  marcadas;
+- a **curva de perda** desenhada passo a passo (SVG), com a perda inicial, a
+  atual e a variação;
+- contagem de passos, tokens, tempo decorrido e previsão do que falta;
+- um **registo** das transições, para se ver o que já passou;
+- quando o treino completo (`training/train_lora_contratos.py`) está a correr
+  **fora** da API, uma segunda curva lê o `metrics.jsonl` e assinala-a como
+  «treino completo (script)» — o sinal de vida é o `mtime` desse ficheiro.
+
+O canal envia o retrato completo a cada mudança (não deltas), por isso abrir a
+página a meio do treino reconstrói a curva desde o passo 1; e há `ping` a cada
+15 s para o proxy não fechar uma ligação parada.
 
 A animação é CSS (`chat-ui/src/modeloContratos.css`) e respeita
 `prefers-reduced-motion`: um `setInterval` a 60 fps roubaria tempo ao treino, que

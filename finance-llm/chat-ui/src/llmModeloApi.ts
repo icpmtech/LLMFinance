@@ -350,6 +350,62 @@ export type RegistoAdaptacao = {
   versao?: string;
 };
 
+/** Um passo da adaptação em curso, para o gráfico de perda ao vivo. */
+export type PassoAoVivo = { passo: number; perda: number; tokens?: number; segundos?: number };
+
+/** Progresso do treino completo (CLI), que corre fora do processo da API. */
+export type ProgressoExterno = {
+  disponivel: boolean;
+  a_correr: boolean;
+  pontos: { step: number; perda: number; perplexidade?: number; tokens?: number; segundos?: number }[];
+  passo: number;
+  total?: number;
+  atualizado_em?: string;
+};
+
+/** Retrato enviado pelo WebSocket `/llm/modelo/retreinar/ws`. */
+export type EstadoAoVivo = {
+  tipo?: "estado" | "ping";
+  a_correr: boolean;
+  passo: number;
+  passos: number;
+  perda: number | null;
+  tokens: number;
+  erro: string | null;
+  paragem_pedida?: boolean;
+  /** `a_preparar` | `a_treinar` | `a_avaliar` | `a_guardar` | `concluido` | … */
+  fase: string;
+  atividade: string;
+  historico: PassoAoVivo[];
+  perda_antes: number | null;
+  perda_depois: number | null;
+  iniciado: string | null;
+  iniciado_ts: number | null;
+  concluido: string | null;
+  lr: number | null;
+  pares: number;
+  agora_ts?: number;
+  externo?: ProgressoExterno;
+  ultimo_resultado?: EstadoRetreino["ultimo_resultado"];
+};
+
+/**
+ * URL do WebSocket do retreino.
+ *
+ * O `WebSocket` do browser não aceita o cabeçalho `Authorization`, por isso o
+ * token vai na query (validado no servidor como qualquer pedido protegido). O
+ * caminho é relativo ao `API_BASE` para funcionar atrás do proxy `/api`.
+ */
+export function urlRetreinoAoVivo(): string {
+  const base = API_BASE.replace(/\/$/, "");
+  const caminho = `${base}/llm/modelo/retreinar/ws`;
+  const absoluto = new URL(caminho, window.location.origin);
+  absoluto.protocol = absoluto.protocol === "https:" ? "wss:" : "ws:";
+  const token = getToken();
+  if (token) absoluto.searchParams.set("token", token);
+  return absoluto.toString();
+}
+
 export function getHistoricoRetreino(limite = 20) {
   return pedir<{ total: number; registos: RegistoAdaptacao[] }>(
     `/llm/modelo/retreinar/historico?limite=${limite}`,
