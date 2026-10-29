@@ -9,7 +9,7 @@ from typing import Annotated, Any, Dict, List, Optional, Sequence
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
-from api.auth_routes import CurrentSession, optional_session
+from api.auth_routes import CurrentSession, optional_session, require_session
 from api.models import (
     RagChatRequest,
     RagChatResponse,
@@ -34,6 +34,16 @@ from rag.storage.document_store import DocumentEntry
 router = APIRouter(prefix="/rag", tags=["rag"])
 
 Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
+RequiredSession = Annotated[CurrentSession, Depends(require_session)]
+
+
+def _safe_upload_filename(filename: str) -> str:
+    """Devolve um nome de ficheiro seguro, sempre dentro de UPLOADS_DIR."""
+    safe = Path(filename).name
+    if not safe or safe in (".", "..") or not safe.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Nome de ficheiro inválido.")
+    return safe
+
 
 # System prompt do RAG: a resposta é escrita **só** com o contexto recuperado dos
 # documentos (quando o pedido escolhe um fornecedor de IA cloud).
@@ -114,6 +124,7 @@ def _cloud_backend(session: Optional[CurrentSession], backend: Optional[str]) ->
 async def upload_pdf(
     file: UploadFile = File(...),
     converter: str = Query("auto", pattern="^(auto|markitdown|pymupdf)$"),
+    session: RequiredSession = None,
 ):
     """Recebe um PDF, converte para Markdown, cria chunks e indexa no vector store.
 
@@ -121,10 +132,14 @@ async def upload_pdf(
         file: ficheiro PDF a ingerir.
         converter: conversor a usar. `auto` tenta markitdown primeiro e recai para PyMuPDF.
     """
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Apenas ficheiros PDF são aceites.")
 
-    pdf_path = UPLOADS_DIR / file.filename
+    safe_name = _safe_upload_filename(file.filename)
+    pdf_path = UPLOADS_DIR / safe_name
+    pdf_path = pdf_path.resolve()
+    if not str(pdf_path).startswith(str(UPLOADS_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Caminho de destino inválido.")
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
     content = await file.read()
     pdf_path.write_bytes(content)

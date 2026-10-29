@@ -156,6 +156,79 @@ html[data-glass="off"] {
   text-underline-offset: 2px;
 }
 
+/* Animações do módulo de modelo (pipeline, grafo, matriz, curva de perda).
+   Declarativas em CSS para serem tratadas pelo compositor e não roubarem
+   tempo de CPU ao treino que corre na mesma máquina. */
+@keyframes mc-fluxo {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes mc-pulso {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes mc-halo {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.55; }
+}
+@keyframes mc-gradiente {
+  0%, 100% { opacity: 0.18; }
+  45% { opacity: 1; }
+}
+@keyframes mc-brilho {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(320%); }
+}
+@keyframes mc-ciclo {
+  to { transform: rotate(360deg); }
+}
+@keyframes mc-desenhar {
+  from { stroke-dashoffset: var(--mc-tamanho, 2000); }
+  to { stroke-dashoffset: 0; }
+}
+
+.mc-fluxo {
+  stroke-dasharray: 6 6;
+  animation: mc-fluxo 1.1s linear infinite;
+}
+.mc-pulso {
+  animation: mc-pulso 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+.mc-halo {
+  animation: mc-halo 2.8s ease-in-out infinite;
+}
+.mc-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: mc-brilho 1.8s ease-in-out infinite;
+}
+.mc-ciclo {
+  animation: mc-ciclo 6s linear infinite;
+  transform-origin: center;
+}
+.mc-curva {
+  animation: mc-desenhar 1.2s ease-out both;
+}
+.mc-celula {
+  animation: mc-gradiente 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-fluxo,
+  .mc-pulso,
+  .mc-halo,
+  .mc-brilho::after,
+  .mc-ciclo,
+  .mc-curva,
+  .mc-celula {
+    animation: none;
+  }
+}
+
 /* Premium data visualization utilities */
 .glass-card {
   background: rgba(22, 24, 29, 0.72);

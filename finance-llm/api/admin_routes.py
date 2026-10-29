@@ -35,10 +35,12 @@ from __future__ import annotations
 import logging
 import os
 import platform
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from concurrent.futures import ThreadPoolExecutor
 
 from api import auth_service as auth
 from api import billing_service as billing
@@ -125,35 +127,41 @@ class UserMfaPayload(BaseModel):
 
 
 # -------------------------------------------------------------------- visão geral
+_INDEX_SUMMARY_NAMES = [
+    AUTH_USERS_INDEX,
+    AUTH_SESSIONS_INDEX,
+    EVENTS_INDEX,
+    CRM_INDEX,
+    CONTRACTS_INDEX,
+    ENTITIES_INDEX,
+    TRADEMARKS_INDEX,
+    FIRMAS_INDEX,
+]
+
+
+def _single_index_summary(args: Tuple[Any, str]) -> Dict[str, Any]:
+    client, name = args
+    entry: Dict[str, Any] = {"index": name, "exists": False, "documents": 0, "size": "—"}
+    try:
+        if not client.indices.exists(index=name):
+            return entry
+        entry["exists"] = True
+        count = client.count(index=name).get("count", 0)
+        entry["documents"] = int(count)
+        stats = client.indices.stats(index=name, metric="store")
+        store = stats.get("_all", {}).get("total", {}).get("store", {}).get("size_in_bytes")
+        if isinstance(store, (int, float)):
+            entry["size"] = f"{store / (1024 * 1024):.1f} MB"
+    except Exception as error:
+        entry["error"] = str(error)
+    return entry
+
+
 def _index_summary(client: Any) -> List[Dict[str, Any]]:
-    names = [
-        AUTH_USERS_INDEX,
-        AUTH_SESSIONS_INDEX,
-        EVENTS_INDEX,
-        CRM_INDEX,
-        CONTRACTS_INDEX,
-        ENTITIES_INDEX,
-        TRADEMARKS_INDEX,
-        FIRMAS_INDEX,
-    ]
-    summary: List[Dict[str, Any]] = []
-    for name in names:
-        entry: Dict[str, Any] = {"index": name, "exists": False, "documents": 0, "size": "—"}
-        try:
-            if not client.indices.exists(index=name):
-                summary.append(entry)
-                continue
-            entry["exists"] = True
-            count = client.count(index=name).get("count", 0)
-            entry["documents"] = int(count)
-            stats = client.indices.stats(index=name, metric="store")
-            store = stats.get("_all", {}).get("total", {}).get("store", {}).get("size_in_bytes")
-            if isinstance(store, (int, float)):
-                entry["size"] = f"{store / (1024 * 1024):.1f} MB"
-        except Exception as error:
-            entry["error"] = str(error)
-        summary.append(entry)
-    return summary
+    """Resumo dos índices principais, recolhido em paralelo."""
+    with ThreadPoolExecutor(max_workers=min(8, len(_INDEX_SUMMARY_NAMES))) as pool:
+        results = list(pool.map(_single_index_summary, [(client, name) for name in _INDEX_SUMMARY_NAMES]))
+    return results
 
 
 def _elastic_info() -> Dict[str, Any]:
@@ -187,17 +195,14 @@ def admin_overview(session: AdminSession) -> Dict[str, Any]:
     except Exception as error:
         logger.debug("stats de contas indisponível: %s", error)
 
-    users: List[Dict[str, Any]] = []
+    role_status_counts = {"by_role": {}, "by_status": {}}
     try:
-        users = auth.list_users(limit=500)
+        role_status_counts = auth.user_role_status_counts()
     except Exception as error:
-        logger.debug("listagem de contas indisponível: %s", error)
+        logger.debug("contagens por papel/estado indisponíveis: %s", error)
 
-    roles: Dict[str, int] = {}
-    statuses: Dict[str, int] = {}
-    for user in users:
-        roles[str(user.get("role") or "member")] = roles.get(str(user.get("role") or "member"), 0) + 1
-        statuses[str(user.get("status") or "active")] = statuses.get(str(user.get("status") or "active"), 0) + 1
+    roles = role_status_counts["by_role"]
+    statuses = role_status_counts["by_status"]
 
     return {
         "api": {

@@ -1286,6 +1286,18 @@ export default function AdminPage() {
     if (isAdmin) void loadOverview();
   }, [isAdmin, loadOverview]);
 
+  // Só monta uma tab quando o utilizador a abre pela primeira vez; depois
+  // mantém-na montada (mas escondida) para que voltar a ela seja instantâneo.
+  const [renderedTabs, setRenderedTabs] = useState<Set<Tab>>(new Set(["overview"]));
+  useEffect(() => {
+    setRenderedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, [tab]);
+
   if (!isAdmin) {
     return (
       <div className="finder-shell flex flex-col items-center justify-center gap-2 bg-background p-8 text-center text-foreground" data-in-window={windowMode || undefined}>
@@ -1365,19 +1377,67 @@ export default function AdminPage() {
         </p>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-        {tab === "overview" && <OverviewTab overview={overview} onError={setError} />}
-        {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
-        {tab === "support" && <AdminSupportPanel onError={setError} />}
-        {tab === "payments" && <PaymentsTab onError={setError} />}
-      {tab === "reports" && <AdminReportsTab onError={setError} />}
-        {tab === "base-impic" && <AdminBaseImpicTab onError={setError} />}
-        {tab === "platform" && <AdminPlatformTab onError={setError} />}
-        {tab === "security" && <AdminSecurityTab onError={setError} />}
-        {tab === "events" && <EventsTab onError={setError} />}
-        {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
-        {tab === "keys" && <AdminServiceKeysTab onError={setError} />}
-        {tab === "logs" && <LogsTab onError={setError} />}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+        {renderedTabs.has("overview") && (
+          <div className={tab === "overview" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <OverviewTab overview={overview} onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("users") && (
+          <div className={tab === "users" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <UsersTab onError={setError} currentUserId={user?.id} />
+          </div>
+        )}
+        {renderedTabs.has("support") && (
+          <div className={tab === "support" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminSupportPanel onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("payments") && (
+          <div className={tab === "payments" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <PaymentsTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("reports") && (
+          <div className={tab === "reports" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminReportsTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("base-impic") && (
+          <div className={tab === "base-impic" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminBaseImpicTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("platform") && (
+          <div className={tab === "platform" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminPlatformTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("security") && (
+          <div className={tab === "security" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminSecurityTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("events") && (
+          <div className={tab === "events" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <EventsTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("sidebar") && (
+          <div className={tab === "sidebar" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminSidebarAccessTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("keys") && (
+          <div className={tab === "keys" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <AdminServiceKeysTab onError={setError} />
+          </div>
+        )}
+        {renderedTabs.has("logs") && (
+          <div className={tab === "logs" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+            <LogsTab onError={setError} />
+          </div>
+        )}
       </div>
 
       <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/8 px-3 py-1 text-[10.5px] text-muted-foreground">

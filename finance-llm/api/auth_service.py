@@ -860,3 +860,26 @@ def stats() -> Dict[str, Any]:
     except Exception:
         raise AuthError("Não foi possível ler as estatísticas.", status_code=502, code="es_error")
     return {"users": users, "active_sessions": sessions}
+
+
+def user_role_status_counts() -> Dict[str, Dict[str, int]]:
+    """Contagens de contas por papel e estado via agregações Elasticsearch."""
+    es = _client()
+    try:
+        resp = es.search(
+            index=AUTH_USERS_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "by_role": {"terms": {"field": "role", "missing": "member", "size": 16}},
+                    "by_status": {"terms": {"field": "status", "missing": "active", "size": 16}},
+                },
+            },
+        )
+    except Exception:
+        return {"by_role": {}, "by_status": {}}
+
+    def buckets(key: str) -> Dict[str, int]:
+        return {bucket["key"]: bucket["doc_count"] for bucket in resp.get("aggregations", {}).get(key, {}).get("buckets", [])}
+
+    return {"by_role": buckets("by_role"), "by_status": buckets("by_status")}
