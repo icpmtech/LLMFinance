@@ -4,6 +4,8 @@ Módulo do pacote :mod:`api.es` — ver `api/elasticsearch_client.py`,
 que continua a expor a API pública (os coletores/serviços importam de lá).
 """
 import logging
+import threading
+import time
 from typing import Any, Dict, Optional
 
 from elasticsearch import Elasticsearch
@@ -13,12 +15,16 @@ from api.es.support_mappings import SUPPORT_INDEX_MAPPINGS
 
 logger = logging.getLogger(__name__)
 
+# Cache TTL para `ensure_indices`.  Os índices raramente mudam, mas a função
+# era chamada uma vez por pedido e gastava 700-900 ms a verificar 56 mappings.
+_ENSURE_INDICES_TTL_SECONDS = 120.0
+_ensure_indices_cache: Dict[str, Any] = {"last_run": 0.0, "result": False}
+_ensure_indices_lock = threading.Lock()
 
 
 
-def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
+def _ensure_indices_impl(client: Elasticsearch) -> bool:
     """Cria/atualiza os índices necessários, caso ainda não existam."""
-    client = es or get_es_client()
     if not client:
         return False
 
@@ -3648,6 +3654,26 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 logger.debug("put_mapping ignorado para %s: %s", name, exc)
     return True
 
+
+def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
+    """Cria/atualiza os índices necessários, caso ainda não existam.
+
+    A operação é cacheada por ``_ENSURE_INDICES_TTL_SECONDS`` para evitar que
+    cada pedido pague o custo de verificar todos os mappings.
+    """
+    global _ensure_indices_cache  # noqa: PLW0603
+
+    client = es or get_es_client()
+    if not client:
+        return False
+
+    with _ensure_indices_lock:
+        now = time.time()
+        if now - _ensure_indices_cache["last_run"] < _ENSURE_INDICES_TTL_SECONDS:
+            return _ensure_indices_cache["result"]
+        result = _ensure_indices_impl(client)
+        _ensure_indices_cache = {"last_run": now, "result": result}
+        return result
 
 
 

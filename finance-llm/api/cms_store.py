@@ -1807,6 +1807,36 @@ def media_file(item_id: str) -> Tuple[Path, str]:
     return path, str(doc.get("mime") or "application/octet-stream")
 
 
+_DANGEROUS_MEDIA_MIMES = frozenset({
+    "text/html",
+    "text/javascript",
+    "application/javascript",
+    "application/ecmascript",
+    "application/x-javascript",
+    "application/xhtml+xml",
+    "text/xml",
+    "application/xml",
+})
+
+
+def _normalize_media_mime(mime: str, filename: str) -> str:
+    """Resolve o MIME a partir do mime explícito ou extensão; rejeita tipos perigosos."""
+    candidate = mime.strip().lower() if mime else ""
+    if not candidate or candidate not in MIME_EXT:
+        candidate = EXT_MIME.get(Path(filename).suffix.lower(), "application/octet-stream")
+    if candidate in _DANGEROUS_MEDIA_MIMES:
+        raise ValueError(f"Tipo MIME não permitido para media: {candidate}")
+    return candidate
+
+
+def _safe_media_filename(filename: str) -> str:
+    """Nome de ficheiro seguro para media (sem path traversal)."""
+    safe = Path(filename).name
+    if not safe or safe in (".", ".."):
+        raise ValueError("Nome de ficheiro inválido.")
+    return safe
+
+
 def save_media(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
     """Guarda um ficheiro (imagem, PDF, …) enviado em base64 ou por URL externo."""
     store = _load()
@@ -1830,8 +1860,13 @@ def save_media(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
             raise ValueError(f"Conteúdo base64 inválido: {exc}") from exc
         if len(blob) > MAX_MEDIA_BYTES:
             raise ValueError(f"Ficheiro demasiado grande (máximo {MAX_MEDIA_BYTES // (1024 * 1024)} MB).")
-        filename = str(payload.get("filename") or existing.get("filename") if existing else payload.get("filename") or "ficheiro")
-        mime = str(payload.get("mime") or (existing or {}).get("mime") or EXT_MIME.get(Path(filename).suffix.lower(), ""))
+        filename = _safe_media_filename(
+            str(payload.get("filename") or existing.get("filename") if existing else payload.get("filename") or "ficheiro")
+        )
+        mime = _normalize_media_mime(
+            str(payload.get("mime") or (existing or {}).get("mime") or ""),
+            filename,
+        )
         extension = MIME_EXT.get(mime) or Path(filename).suffix.lower() or ".bin"
         media_id = (existing or {}).get("id") or _new_id("med")
         MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1849,11 +1884,16 @@ def save_media(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
             }
         )
     elif external_url:
+        safe_url_filename = _safe_media_filename(Path(external_url.split("?")[0]).name or external_url)
+        external_mime = _normalize_media_mime(
+            str(payload.get("mime") or ""),
+            safe_url_filename,
+        )
         doc.update(
             {
                 "id": (existing or {}).get("id") or _new_id("med"),
-                "filename": Path(external_url.split("?")[0]).name or external_url,
-                "mime": str(payload.get("mime") or "image/*"),
+                "filename": safe_url_filename,
+                "mime": external_mime,
                 "extension": "",
                 "size": 0,
                 "storage": "externo",

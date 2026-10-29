@@ -22,10 +22,11 @@ import logging
 import os
 import platform
 import socket
+import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Optional
+from typing import Any, Deque, Dict, Iterable, List, Optional, Tuple
 
 from api.elasticsearch_client import EVENTS_INDEX, ROOT, ensure_indices, get_es_client
 
@@ -47,6 +48,14 @@ _host = socket.gethostname()
 _pid = os.getpid()
 
 TEXT_LOG_EXTENSIONS = (".log", ".err", ".out", ".jsonl", ".txt")
+
+# Cache simples de curta duração para operações de administração que são
+# intrinsecamente lentas (listar ficheiros em disco, agregar eventos).  Os
+# valores são (timestamp, dados).  TTL em segundos.
+_LOG_FILES_CACHE: Tuple[float, List[Dict[str, Any]]] = (0.0, [])
+_LOG_FILES_TTL_SECONDS = 15.0
+_EVENT_STATS_CACHE: Dict[int, Tuple[float, Dict[str, Any]]] = {}
+_EVENT_STATS_TTL_SECONDS = 10.0
 
 
 # ------------------------------------------------------------------ utilidades
@@ -407,6 +416,11 @@ def _search_elasticsearch(
 def event_stats(hours: int = 24) -> Dict[str, Any]:
     """Contagens por nível/origem nas últimas `hours` horas (ES ou memória)."""
     hours = max(1, min(int(hours or 24), 24 * 30))
+    now = time.time()
+    cached = _EVENT_STATS_CACHE.get(hours)
+    if cached and now - cached[0] < _EVENT_STATS_TTL_SECONDS:
+        return cached[1]
+
     since = _iso(_now() - timedelta(hours=hours))
     client = get_es_client()
     if client:
@@ -444,6 +458,8 @@ def event_stats(hours: int = 24) -> Dict[str, Any]:
                 "top_paths": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("top_paths", {}).get("buckets", [])],
                 "backend": "elasticsearch",
             }
+            _EVENT_STATS_CACHE[hours] = (time.time(), result)
+            return result
         except Exception as error:
             logger.debug("Estatísticas de eventos falharam no Elasticsearch: %s", error)
 
@@ -459,7 +475,7 @@ def event_stats(hours: int = 24) -> Dict[str, Any]:
         by_hour[hour] = by_hour.get(hour, 0) + 1
         if item.get("path"):
             top_paths[str(item["path"])] = top_paths.get(str(item["path"]), 0) + 1
-    return {
+    result = {
         "hours": hours,
         "total": len(items),
         "by_level": [{"key": k, "count": v} for k, v in sorted(by_level.items(), key=lambda kv: -kv[1])],
@@ -468,11 +484,23 @@ def event_stats(hours: int = 24) -> Dict[str, Any]:
         "top_paths": [{"key": k, "count": v} for k, v in sorted(top_paths.items(), key=lambda kv: -kv[1])[:10]],
         "backend": "memoria",
     }
+    _EVENT_STATS_CACHE[hours] = (time.time(), result)
+    return result
 
 
 # ------------------------------------------------------------- ficheiros de log
 def list_log_files() -> List[Dict[str, Any]]:
-    """Ficheiros de log disponíveis (nome, tamanho e data de modificação)."""
+    """Ficheiros de log disponíveis (nome, tamanho e data de modificação).
+
+    A pasta `logs/` pode ter centenas de ficheiros; faz-se cache de 15 s para
+    não bloquear o painel de administração em cada carregamento.
+    """
+    global _LOG_FILES_CACHE  # noqa: PLW0603
+    now = time.time()
+    cached_at, cached = _LOG_FILES_CACHE
+    if now - cached_at < _LOG_FILES_TTL_SECONDS:
+        return cached
+
     files: List[Dict[str, Any]] = []
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -489,6 +517,8 @@ def list_log_files() -> List[Dict[str, Any]]:
             )
     except Exception as error:
         logger.debug("Não foi possível listar %s: %s", LOG_DIR, error)
+
+    _LOG_FILES_CACHE = (now, files)
     return files
 
 

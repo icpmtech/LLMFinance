@@ -230,7 +230,7 @@ def hashlib_sha256(data: bytes) -> str:
 
 
 @router.get("/documents", response_model=RagDocumentsResponse)
-def list_documents():
+def list_documents(session: RequiredSession = None):
     """Lista os documentos PDF/Markdown disponíveis para o RAG."""
     engine = get_rag_engine()
     docs = engine.document_store.list()
@@ -253,7 +253,7 @@ def list_documents():
 
 
 @router.get("/documents/{doc_id}", response_model=RagDocument)
-def get_document(doc_id: str):
+def get_document(doc_id: str, session: RequiredSession = None):
     """Devolve os detalhes de um documento indexado."""
     engine = get_rag_engine()
     entry = engine.document_store.get(doc_id)
@@ -273,7 +273,7 @@ def get_document(doc_id: str):
 
 
 @router.get("/documents/{doc_id}/history")
-def document_history(doc_id: str):
+def document_history(doc_id: str, session: RequiredSession = None):
     """Devolve o histórico de ações (upload, ingest, update, reprocess, delete) de um documento."""
     engine = get_rag_engine()
     entry = engine.document_store.get(doc_id)
@@ -284,7 +284,7 @@ def document_history(doc_id: str):
 
 
 @router.patch("/documents/{doc_id}", response_model=RagDocument)
-def update_document(doc_id: str, payload: RagDocumentUpdate):
+def update_document(doc_id: str, payload: RagDocumentUpdate, session: RequiredSession = None):
     """Edita o título de um documento indexado."""
     engine = get_rag_engine()
     updated = engine.document_store.update(doc_id, payload.title)
@@ -308,6 +308,7 @@ def update_document(doc_id: str, payload: RagDocumentUpdate):
 async def reprocess_document(
     doc_id: str,
     converter: str = Query("auto", pattern="^(auto|markitdown|pymupdf)$"),
+    session: RequiredSession = None,
 ):
     """Reprocessa um documento já carregado, regenerando Markdown, chunks e embeddings."""
     engine = get_rag_engine()
@@ -315,7 +316,9 @@ async def reprocess_document(
     if not entry:
         raise HTTPException(status_code=404, detail="Documento não encontrado.")
 
-    pdf_path = UPLOADS_DIR / entry.filename
+    pdf_path = (UPLOADS_DIR / entry.filename).resolve()
+    if not str(pdf_path).startswith(str(UPLOADS_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Caminho do ficheiro original inválido.")
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="Ficheiro PDF original não encontrado.")
 
@@ -342,7 +345,7 @@ async def reprocess_document(
 
 
 @router.delete("/documents/{doc_id}")
-def delete_document(doc_id: str):
+def delete_document(doc_id: str, session: RequiredSession = None):
     """Remove um documento, os seus chunks e os seus embeddings."""
     engine = get_rag_engine()
     engine.vector_store.delete_by_doc_id(doc_id)
@@ -642,7 +645,11 @@ def _build_document_graph(doc_id: str, top_k: int = 5):
 
 
 @router.get("/documents/{doc_id}/graph", response_model=RagDocumentGraphResponse)
-async def get_document_graph(doc_id: str, top_k: int = Query(5, ge=1, le=20)):
+async def get_document_graph(
+    doc_id: str,
+    top_k: int = Query(5, ge=1, le=20),
+    session: RequiredSession = None,
+):
     """Devolve um grafo de chunks do documento ligados por similaridade (async, cache)."""
     engine = get_rag_engine()
     entry = engine.document_store.get(doc_id)

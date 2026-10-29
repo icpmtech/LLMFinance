@@ -257,7 +257,14 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 from api.rag_routes import router as rag_router
 from api.permissions_routes import router as permissions_router
-from api.auth_routes import router as auth_router, optional_session, CurrentSession
+from api.auth_routes import (
+    router as auth_router,
+    optional_session,
+    CurrentSession,
+    require_session,
+)
+
+ImportSession = Annotated[CurrentSession, Depends(require_session)]
 from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
@@ -739,9 +746,18 @@ async def _erro_do_fornecedor_de_ia(request: Request, exc: CloudError) -> Respon
     return JSONResponse({"detail": str(exc)}, status_code=502)
 
 
+def _cors_allowed_origins() -> List[str]:
+    """Origens CORS permitidas: sem `*` quando credentials está ativo."""
+    env_value = (os.environ.get("CORS_ALLOWED_ORIGINS") or "http://localhost:4180").strip()
+    if env_value == "*":
+        # `*` com credenciais é rejeitado pelos browsers; usamos o domínio local por omissão.
+        return ["http://localhost:4180"]
+    return [origin.strip() for origin in env_value.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -3872,7 +3888,7 @@ def import_preview(
 
 
 @app.post("/import/ingest", response_model=ImportIngestResponse)
-def import_ingest(req: ImportIngestRequest):
+def import_ingest(req: ImportIngestRequest, session: ImportSession = None):
     """Indexa as linhas pré-visualizadas (contratos no ES; entidades em ficheiro JSONL)."""
     try:
         res = ingest_rows(

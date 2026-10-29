@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import threading
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,11 @@ from elasticsearch import Elasticsearch
 
 logger = logging.getLogger(__name__)
 
+# Cliente Elasticsearch reutilizável.  Criar um cliente novo em cada pedido
+# elimina o connection pooling e adiciona latência desnecessária a todas as
+# operações ES.
+_es_client: Optional[Elasticsearch] = None
+_es_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -119,15 +125,53 @@ def _get_es_url() -> str:
 
 
 
-def get_es_client(request_timeout: int = 30) -> Optional[Elasticsearch]:
-    """Devolve cliente Elasticsearch ou None se não estiver disponível."""
+def _create_es_client(request_timeout: int = 30) -> Optional[Elasticsearch]:
+    """Cria e valida um cliente Elasticsearch com connection pooling."""
     try:
-        es = Elasticsearch([_get_es_url()], request_timeout=request_timeout)
+        es = Elasticsearch(
+            [_get_es_url()],
+            request_timeout=request_timeout,
+            retry_on_timeout=True,
+            connections_per_node=25,
+        )
         if not es.ping():
             return None
         return es
     except Exception:
         return None
+
+
+def get_es_client(request_timeout: int = 30) -> Optional[Elasticsearch]:
+    """Devolve cliente Elasticsearch ou None se não estiver disponível.
+
+    O cliente é mantido em memória para reaproveitar ligações HTTP ao
+    Elasticsearch; isto reduz drasticamente a latência em pedidos sucessivos.
+    Se o servidor mudar de URL ou se o cliente actual falhar, cria-se um novo.
+    """
+    global _es_client  # noqa: PLW0603
+
+    with _es_lock:
+        if _es_client is not None:
+            try:
+                if _es_client.ping():
+                    return _es_client
+            except Exception:
+                pass
+            _es_client = None
+        _es_client = _create_es_client(request_timeout=request_timeout)
+        return _es_client
+
+
+def reset_es_client() -> None:
+    """Fecha o cliente partilhado (útil em testes ou após mudança de configuração)."""
+    global _es_client  # noqa: PLW0603
+    with _es_lock:
+        if _es_client is not None:
+            try:
+                _es_client.close()
+            except Exception:
+                pass
+            _es_client = None
 
 
 

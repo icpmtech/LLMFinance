@@ -35,14 +35,18 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import threading
+import time
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 from api import auth_service as auth
+from api.auth_service import _now_iso
 from api import billing_service as billing
 from api import events_service as events
 from api import mfa_service as mfa
@@ -186,9 +190,15 @@ def _elastic_info() -> Dict[str, Any]:
         return {"available": False, "error": str(error)}
 
 
-@router.get("/overview")
-def admin_overview(session: AdminSession) -> Dict[str, Any]:
-    """Estado geral da solução, para o painel inicial da administração."""
+# Cache curto para a resposta completa da overview, que é consultada frequentemente
+# no painel de administração e cujos dados não precisam de ser atualizados em tempo real.
+_ADMIN_OVERVIEW_CACHE: Dict[str, Any] = {"at": 0.0, "data": {}}
+_ADMIN_OVERVIEW_TTL_SECONDS = 15.0
+_ADMIN_OVERVIEW_LOCK = threading.Lock()
+
+
+def _admin_overview_data() -> Dict[str, Any]:
+    """Monta o payload de /admin/overview; chamado dentro do cache."""
     account_stats = {"users": 0, "active_sessions": 0}
     try:
         account_stats = auth.stats()
@@ -219,7 +229,22 @@ def admin_overview(session: AdminSession) -> Dict[str, Any]:
         },
         "events": events.event_stats(hours=24),
         "logs": events.list_log_files(),
+        "_cached_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+
+@router.get("/overview")
+def admin_overview(session: AdminSession) -> Dict[str, Any]:
+    """Estado geral da solução, para o painel inicial da administração."""
+    global _ADMIN_OVERVIEW_CACHE  # noqa: PLW0603
+
+    with _ADMIN_OVERVIEW_LOCK:
+        now = time.time()
+        if now - _ADMIN_OVERVIEW_CACHE["at"] < _ADMIN_OVERVIEW_TTL_SECONDS:
+            return _ADMIN_OVERVIEW_CACHE["data"]
+        data = _admin_overview_data()
+        _ADMIN_OVERVIEW_CACHE = {"at": now, "data": data}
+        return data
 
 
 # -------------------------------------------------------------------- contas
@@ -261,7 +286,7 @@ def admin_users(
                 index=AUTH_SESSIONS_INDEX,
                 body={
                     "size": 0,
-                    "query": {"term": {"revoked": False}},
+                    "query": {"bool": {"filter": [{"term": {"revoked": False}}, {"range": {"expires_at": {"gt": _now_iso()}}}]}},
                     "aggs": {"by_user": {"terms": {"field": "user_id", "size": 1000}}},
                 },
             )
