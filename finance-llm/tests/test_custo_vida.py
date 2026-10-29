@@ -154,6 +154,13 @@ def test_escolher_nao_da_o_preco_da_madeira_aos_acores() -> None:
     assert servico._escolher(candidatos, "Região Autónoma dos Açores", "Calheta (R.A.A.)") is None
 
 
+def test_regiao_nao_confunde_sao_joao_da_madeira_com_a_madeira() -> None:
+    assert servico._regiao("São João da Madeira", "Aveiro") == ""
+    assert servico._regiao("Calheta (R.A.M.)", "") == "madeira"
+    assert servico._regiao("Lagoa (R.A.A.)", "") == "acores"
+    assert servico._regiao("", "Região Autónoma dos Açores") == "acores"
+
+
 def test_chave_nome_tolera_grafias() -> None:
     assert servico._chave_nome("Vila da Praia da Vitória") == servico._chave_nome("Praia da Vitória")
     assert servico._chave_nome("Bragança") == servico._chave_nome("Braganca")

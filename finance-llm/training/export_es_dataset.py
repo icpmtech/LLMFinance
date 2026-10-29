@@ -331,12 +331,13 @@ def _build_contrato_pt_variantes(
         f"O procedimento foi {procedimento} e o contrato foi publicado a {data}."
     )
     sinais = _sinais_de_risco(procedimento, doc.get("precoContratual"), adjudicatario)
+    # Curta de propósito: um molde longo e formulaico é decorado (perda 0,002) e
+    # depois o modelo enche as lacunas com valores inventados quando o documento
+    # não encaixa. Duas frases ancoradas generalizam melhor que cinco decoradas.
     auditoria = (
-        f"A verificar neste contrato: procedimento {procedimento}, valor {preco}, "
-        f"adjudicatário {adjudicatario}. "
-        + (f"Sinal de risco: {sinais}. " if sinais else "")
-        + "O documento não tem dados sobre prazo, garantias ou subcontratação. "
-        f"Confirma o enquadramento do procedimento e o CPV {cpv}?"
+        f"Procedimento {procedimento}, valor {preco}, adjudicatário {adjudicatario}."
+        + (f" Sinal de risco: {sinais}." if sinais else " Sem sinais de risco nos dados.")
+        + f" Confirmar o enquadramento e o CPV {cpv}."
     )
     return [
         ("Descreve este contrato público português.", prompt, completion, metadata),

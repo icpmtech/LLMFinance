@@ -187,23 +187,25 @@ def _indice_por_nome(bloco: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
 
 
 def _regiao(nome: str, distrito: str) -> str:
-    """«acores»/«madeira»/"" a partir do distrito ou da marca no próprio nome."""
-    alvo = _fold(f"{distrito or ''} {nome or ''}")
-    if "acores" in alvo or "r.a.a" in alvo:
+    """«acores»/«madeira»/"" — do distrito ou da marca entre parênteses no nome.
+
+    Só conta o parêntese («Calheta (R.A.A.)»), não o nome do concelho: há um
+    «São João da Madeira» no distrito de Aveiro, e procurar «madeira» no nome
+    dava-lhe a região errada.
+    """
+    alvo = _fold(distrito or "")
+    if "acores" in alvo:
         return "acores"
-    if "madeira" in alvo or "r.a.m" in alvo:
+    if "madeira" in alvo:
         return "madeira"
+    marca = re.search(r"\(([^)]*)\)", str(nome or ""))
+    if marca:
+        dentro = _fold(marca.group(1))
+        if "acores" in dentro or "r.a.a" in dentro:
+            return "acores"
+        if "madeira" in dentro or "r.a.m" in dentro:
+            return "madeira"
     return ""
-
-
-def _distrito_do_continente(distrito: Any) -> bool:
-    """Verdadeiro se o distrito for um dos 18 do continente (não Açores/Madeira)."""
-    from api.es.geo import PT_DISTRICTS
-
-    alvo = _fold(distrito)
-    if not alvo:
-        return False
-    return any(_fold(nome) == alvo for nome in PT_DISTRICTS if not nome.startswith("Região"))
 
 
 def _regiao_do_distrito(distrito: Any) -> str:

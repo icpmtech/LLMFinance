@@ -34,6 +34,7 @@ import json
 import math
 import os
 import random
+import shutil
 import signal
 import sys
 import time
@@ -186,6 +187,22 @@ def main() -> int:
     estado_anterior: Dict[str, Any] = {}
     if args.resume and state_path.exists():
         estado_anterior = torch.load(state_path, map_location="cpu", weights_only=False)
+
+    # Um treino novo começa com um LoRA **de raiz** e substitui o adaptador que
+    # lá está. Sem esta cópia, uma corrida pior apagava a anterior e não havia
+    # como voltar atrás — a página oferecia «reverter» mas não havia versão para
+    # onde reverter. Só na primeira gravação (não a cada checkpoint) e só quando
+    # não é retoma: retomar continua o mesmo adaptador.
+    if not estado_anterior:
+        atual = out_dir / "adapter_model.safetensors"
+        if atual.exists():
+            carimbo = time.strftime("%Y%m%d-%H%M%S")
+            anterior = Path(str(atual) + f".bak-{carimbo}")
+            try:
+                shutil.copy2(atual, anterior)
+                print(f"[BACKUP] adaptador anterior em {anterior.name}", flush=True)
+            except OSError as exc:  # pragma: no cover - depende do disco
+                print(f"[AVISO] não consegui salvaguardar o adaptador anterior: {exc}", flush=True)
 
     model = AutoModelForCausalLM.from_pretrained(args.base_model, dtype=torch.float32)
     if estado_anterior:
