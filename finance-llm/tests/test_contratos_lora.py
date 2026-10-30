@@ -371,6 +371,23 @@ def test_escolher_skills_por_gatilho() -> None:
     assert agente.escolher_skills("bom dia") == []
 
 
+def test_escolher_skills_prioriza_pesquisa_agregada_para_ranking() -> None:
+    pergunta = "Quais empresas adjudicatárias têm o maior valor total em contratos?"
+    assert agente.escolher_skills(pergunta) == ["ranking_empresas"]
+
+
+def test_escolher_skills_nao_confunde_valor_total_de_empresa_com_ranking() -> None:
+    pergunta = "Qual é o valor total da empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS?"
+    assert agente.escolher_skills(pergunta) == ["ficha_entidade"]
+
+
+def test_escolher_skills_conta_contratos_pela_ficha_da_empresa() -> None:
+    assert agente.escolher_skills("Quantos contratos tem a Claranet?") == [
+        "ficha_entidade",
+        "procurar_contratos",
+    ]
+
+
 def test_skill_de_contagem_pesquisa_com_termos_uteis(monkeypatch: pytest.MonkeyPatch) -> None:
     capturado: Dict[str, object] = {}
 
@@ -387,6 +404,124 @@ def test_skill_de_contagem_pesquisa_com_termos_uteis(monkeypatch: pytest.MonkeyP
     assert resultado["total"] == 42
     assert capturado["q"] == "municipio chaves"
     assert capturado["strict"] is True
+
+
+def test_limpar_nome_entidade_remove_a_pergunta_que_envolve_a_empresa() -> None:
+    pergunta = (
+        "Quem é a empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS "
+        "e quantos contratos tem como adjudicatária?"
+    )
+    assert agente.limpar_nome_entidade(pergunta) == "oliveira & pires - saneamento e limpezas"
+    assert agente.limpar_nome_entidade(
+        "Quantos contratos tem a empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS?"
+    ) == "oliveira & pires - saneamento e limpezas"
+
+
+def test_skill_de_contratos_filtra_pelo_nome_da_empresa(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado: Dict[str, object] = {}
+
+    def _falsa_search_contracts(**kwargs):
+        capturado.update(kwargs)
+        return {"total": 2, "items": []}
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "api.es.contratos",
+        type("M", (), {"search_contracts": staticmethod(_falsa_search_contracts)}),
+    )
+    pergunta = (
+        "Quem é a empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS "
+        "e quantos contratos tem como adjudicatária?"
+    )
+    agente.executar_skill("procurar_contratos", pergunta)
+    assert capturado["entity"] == "oliveira & pires - saneamento e limpezas"
+    assert capturado["q"] is None
+
+
+def test_skill_de_contratos_pesquisa_por_nif(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado: Dict[str, object] = {}
+
+    def _falsa_search_contracts(**kwargs):
+        capturado.update(kwargs)
+        return {"total": 3, "items": []}
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "api.es.contratos",
+        type("M", (), {"search_contracts": staticmethod(_falsa_search_contracts)}),
+    )
+    agente.executar_skill("procurar_contratos", "Contratos da empresa com NIF 506782100")
+    assert capturado["nif"] == "506782100"
+    assert capturado["q"] is None
+
+
+def test_skill_de_ficha_entidade_usa_lookup_exato_por_nif(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado: Dict[str, str] = {}
+    empresa = {
+        "nif": "506782100",
+        "name": "Município de Chaves",
+        "contracts_total": 3,
+        "total_value": 120.0,
+        "adjudicante": {"contracts_count": 2, "total_value": 100.0},
+        "adjudicatario": {"contracts_count": 1, "total_value": 20.0},
+    }
+
+    def _falso_lookup(nif: str):
+        capturado["nif"] = nif
+        return empresa
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "api.es.entidades",
+        type(
+            "M",
+            (),
+            {
+                "get_company_by_nif": staticmethod(_falso_lookup),
+                "search_companies": staticmethod(lambda **_k: {"items": []}),
+            },
+        ),
+    )
+    resultado = agente._skill_entidade(nif="506782100")
+    assert capturado["nif"] == "506782100"
+    assert resultado["nome"] == "Município de Chaves"
+    assert resultado["adjudicatario"]["contracts_count"] == 1
+
+
+def test_skill_ranking_devolve_dados_agregados(monkeypatch: pytest.MonkeyPatch) -> None:
+    resumo = {
+        "unique_adjudicatarios": 42,
+        "top_entities": [
+            {
+                "name": "Empresa A",
+                "nif": "501234567",
+                "adjudicatario": {
+                    "contracts_count": 7,
+                    "total_value": 900.0,
+                    "first_year": 2022,
+                    "last_year": 2025,
+                },
+            }
+        ],
+    }
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "api.es.entidades",
+        type("M", (), {"get_entity_role_summary": staticmethod(lambda **_k: resumo)}),
+    )
+    resultado = agente._skill_ranking_empresas(limite=1, ano=2025)
+    assert resultado["ano_filtrado"] == 2025
+    assert resultado["total_entidades"] == 42
+    assert resultado["empresas"] == [
+        {
+            "nome": "Empresa A",
+            "nif": "501234567",
+            "contratos": 7,
+            "valor_total": 900.0,
+            "primeiro_ano": 2022,
+            "ultimo_ano": 2025,
+        }
+    ]
 
 
 def test_resumo_de_contrato_aceita_parte_em_dict() -> None:
@@ -408,6 +543,59 @@ def test_verificacao_apanha_numeros_inventados() -> None:
     assert resultado["inventados"] == ["99999.00"]
     assert resultado["confianca"] == 0.5
     assert "sem suporte" in resultado["motivo"]
+
+
+def test_responder_substitui_numeros_nao_sustentados_pelos_dados_da_ficha(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    skills = [
+        {
+            "nome": "ficha_entidade",
+            "resultado": {
+                "encontrado": True,
+                "nome": "OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS",
+                "contratos": 47,
+                "valor_total": 3577999.56,
+            },
+        }
+    ]
+    monkeypatch.setattr(service.contratos_lora, "resolver_adaptador", lambda _adaptador: tmp_path)
+    monkeypatch.setattr(
+        service.contratos_lora,
+        "answer",
+        lambda *_args, **_kwargs: {
+            "resposta": "A empresa tem 47 contratos e o valor total é 99999999,00 €.",
+            "modelo": "qwen",
+            "adaptador": None,
+            "prompt_tokens": 20,
+            "tokens_gerados": 12,
+            "tokens": [{"token": "99999999", "id": 1, "probabilidade": 0.9}],
+            "confianca_media": 0.9,
+        },
+    )
+    monkeypatch.setattr(agente, "resolver_prompt", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(
+        agente,
+        "construir_contexto",
+        lambda **_kwargs: {
+            "contexto": '[SKILL ficha_entidade] {"contratos": 47, "valor_total": 3577999.56}',
+            "passos": [],
+            "evidencias": [],
+            "skills": skills,
+            "memoria_ids": [],
+        },
+    )
+
+    resposta = service.responder(instrucao="Quantos contratos e qual o valor total desta empresa?")
+
+    assert resposta["resposta"] == (
+        "OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS: tem 47 contratos públicos registados, "
+        "com valor total adjudicado de 3 577 999,56 €."
+    )
+    assert resposta["verificacao"]["inventados"] == []
+    assert resposta["tokens"] == []
+    assert resposta["confianca_media"] is None
+    assert any(passo["fase"] == "resposta_estruturada" for passo in resposta["passos"])
 
 
 def test_guardar_memoria_exige_titulo(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -453,6 +641,51 @@ def test_com_documento_o_corpus_nao_e_consultado(monkeypatch: pytest.MonkeyPatch
     assert chamadas == ["que contratos existem sobre limpeza?"]
 
 
+def test_pergunta_de_empresa_ignora_memoria_e_rag_de_outra_entidade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pergunta = (
+        "Quem é a empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS "
+        "e quantos contratos tem como adjudicatária?"
+    )
+    memorias = [
+        {
+            "id": "chaves",
+            "tipo": "memoria",
+            "titulo": "Município de Chaves é o NIF 506782100",
+            "instrucao": "",
+            "dados": "",
+            "resposta": "",
+        },
+        {
+            "id": "oliveira",
+            "tipo": "memoria",
+            "titulo": "Empresa OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS",
+            "instrucao": "",
+            "dados": "",
+            "resposta": "",
+        },
+    ]
+    chunks = [
+        {"fonte": "contratos", "titulo": "Entidade Filipa Dias Pires", "texto": "Contrato de terceiros."},
+        {
+            "fonte": "contratos",
+            "titulo": "OLIVEIRA & PIRES - SANEAMENTO E LIMPEZAS",
+            "texto": "Contrato da empresa pedida.",
+        },
+    ]
+    monkeypatch.setattr(agente, "recuperar_memorias", lambda *_a, **_k: memorias)
+    monkeypatch.setattr(agente, "recuperar_rag", lambda *_a, **_k: chunks)
+    monkeypatch.setattr(agente, "escolher_skills", lambda *_a, **_k: [])
+
+    construido = agente.construir_contexto(pergunta=pergunta)
+
+    assert construido["memoria_ids"] == ["oliveira"]
+    assert [item["texto"] for item in construido["evidencias"]] == ["Contrato da empresa pedida."]
+    assert "Chaves" not in construido["contexto"]
+    assert "Filipa" not in construido["contexto"]
+
+
 def test_memoria_de_outro_municipio_nao_entra_na_descricao(monkeypatch: pytest.MonkeyPatch) -> None:
     """Uma memÃ³ria sobre Chaves colava-se a um contrato de Condeixa-a-Nova."""
     chaves = {"id": "m1", "tipo": "memoria", "titulo": "MunicÃ­pio de Chaves Ã© o NIF 506782100", "instrucao": "CÃ¢mara de Chaves", "dados": ""}
@@ -491,6 +724,21 @@ def test_prompt_predefinido_e_resolvido() -> None:
     texto = agente.resolver_prompt("auditar", None)
     assert texto and "Auditor" in texto
     assert agente.resolver_prompt(None, "  sistema escrito  ") == "sistema escrito"
+
+
+def test_prompt_consultar_responde_com_base_em_evidencias() -> None:
+    texto = agente.resolver_prompt("consultar", None)
+    assert "evidências" in texto
+    assert "não encontraste dados" in texto
+    assert "Não inventes" in texto
+
+
+def test_prompt_consultar_empresas_prioriza_ficha_e_nao_contagem_textual() -> None:
+    prompt = next(p for p in agente.PROMPTS_PREDEFINIDOS if p["id"] == "consultar_empresas")
+    assert prompt["nome"] == "Consultar empresas"
+    assert agente.resolver_prompt("consultar_empresas", None) == prompt["texto"]
+    assert "ficha estruturada" in prompt["texto"]
+    assert "contagem de contratos da empresa" in prompt["texto"]
 
 
 def test_retreino_recusa_sem_pares(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -638,4 +886,3 @@ def test_guarda_numerica_sem_numero_em_curso_nao_bloqueia() -> None:
     scores = torch.zeros(1, 20)
     saida = guarda(torch.tensor([[999]]), scores)  # token que nao e digito
     assert not torch.isinf(saida).any()
-

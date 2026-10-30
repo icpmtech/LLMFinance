@@ -11,8 +11,10 @@ import {
   Briefcase,
   Building2,
   Database,
+  ExternalLink,
   FileBarChart,
   FileUp,
+  FileText,
   Gavel,
   HandCoins,
   History,
@@ -102,8 +104,6 @@ Prazo de execução: 60 dias`,
   },
 ];
 
-const DADOS_EXEMPLO = EXEMPLOS[0].dados;
-
 type Mensagem = {
   id: number;
   papel: "utilizador" | "modelo";
@@ -113,6 +113,66 @@ type Mensagem = {
   dados?: string;
   avaliada?: "boa" | "ma";
 };
+
+type FichaEmpresaChat = {
+  nome: string;
+  nif: string;
+  contratos: number | null;
+  valorTotal: number | null;
+  adjudicante: { contratos: number | null; valor: number | null } | null;
+  adjudicatario: { contratos: number | null; valor: number | null } | null;
+};
+
+function registo(valor: unknown): Record<string, unknown> | null {
+  if (valor === null || typeof valor !== "object" || Array.isArray(valor)) return null;
+  return Object.fromEntries(Object.entries(valor));
+}
+
+function numeroFicha(valor: unknown): number | null {
+  if (typeof valor !== "number" && typeof valor !== "string") return null;
+  if (typeof valor === "string" && !valor.trim()) return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function lerPapelEmpresa(valor: unknown): FichaEmpresaChat["adjudicante"] {
+  const papel = registo(valor);
+  if (!papel) return null;
+  return {
+    contratos: numeroFicha(papel.contracts_count),
+    valor: numeroFicha(papel.total_value),
+  };
+}
+
+function fichaEmpresaDaResposta(resposta?: RespostaModelo): FichaEmpresaChat | null {
+  const passo = resposta?.passos.find(
+    (item) => item.fase === "skill" && item.titulo.includes("ficha_entidade"),
+  );
+  const resultado = registo(passo?.dados.resultado);
+  if (!resultado || resultado.encontrado !== true) return null;
+  const nome = typeof resultado.nome === "string" ? resultado.nome.trim() : "";
+  const nif = typeof resultado.nif === "string" ? resultado.nif.trim() : "";
+  if (!nome && !nif) return null;
+
+  return {
+    nome: nome || "Empresa",
+    nif,
+    contratos: numeroFicha(resultado.contratos),
+    valorTotal: numeroFicha(resultado.valor_total),
+    adjudicante: lerPapelEmpresa(resultado.adjudicante),
+    adjudicatario: lerPapelEmpresa(resultado.adjudicatario),
+  };
+}
+
+function formatarContagem(valor: number | null): string {
+  return valor === null ? "—" : valor.toLocaleString("pt-PT");
+}
+
+function formatarValorEmpresa(valor: number | null): string {
+  return valor === null
+    ? "—"
+    : valor.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
+}
 
 function guardarHistorico(lista: Mensagem[]) {
   try {
@@ -182,14 +242,14 @@ export default function ChatDoModelo({
   void _alturaMinima;
   void _mostrarExemplos;
   const [mensagens, setMensagens] = useState<Mensagem[]>(() => carregarHistorico());
-  const [instrucao, setInstrucao] = useState("Descreve este contrato público português.");
-  const [dados, setDados] = useState(DADOS_EXEMPLO);
+  const [instrucao, setInstrucao] = useState("");
+  const [dados, setDados] = useState("");
   const [aEnviar, setAEnviar] = useState(false);
   const [aGerarRelatorio, setAGerarRelatorio] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const ficheiroRef = useRef<HTMLInputElement | null>(null);
   const [prompts, setPrompts] = useState<PromptSistema[]>([]);
-  const [promptId, setPromptId] = useState<string>("descrever");
+  const [promptId, setPromptId] = useState<string>("consultar");
   const [skills, setSkills] = useState<SkillExecutavel[]>([]);
   const [memorias, setMemorias] = useState<ItemMemoria[]>([]);
   const [raf, setRaf] = useState({ rag: true, memoria: true, skills: true, raciocinio: true });
@@ -590,6 +650,101 @@ export default function ChatDoModelo({
                     <div className="rounded-2xl rounded-tl-md border border-border bg-card/60 p-4 shadow-sm">
                       <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">{mensagem.texto}</p>
                     </div>
+
+                    {(() => {
+                      const empresa = fichaEmpresaDaResposta(mensagem.resposta);
+                      if (!empresa) return null;
+                      const hrefFicha = /^\d{9}$/.test(empresa.nif)
+                        ? `/companies/${encodeURIComponent(empresa.nif)}`
+                        : "/companies/search";
+
+                      return (
+                        <section
+                          aria-label={`Detalhes da empresa ${empresa.nome}`}
+                          className="overflow-hidden rounded-xl border border-border bg-card/60 shadow-sm"
+                        >
+                          <div className="flex items-start gap-3 border-b border-border/70 px-4 py-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                              <Building2 size={17} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-sm font-semibold text-foreground">{empresa.nome}</h3>
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {empresa.nif ? `NIF ${empresa.nif}` : "Ficha de empresa"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Contratos</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">
+                                {formatarContagem(empresa.contratos)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor total</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">
+                                {formatarValorEmpresa(empresa.valorTotal)}
+                              </p>
+                            </div>
+                            {empresa.adjudicante && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  Como adjudicante
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                  {formatarContagem(empresa.adjudicante.contratos)} contratos
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {formatarValorEmpresa(empresa.adjudicante.valor)}
+                                </p>
+                              </div>
+                            )}
+                            {empresa.adjudicatario && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  Como adjudicatária
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                  {formatarContagem(empresa.adjudicatario.contratos)} contratos
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {formatarValorEmpresa(empresa.adjudicatario.valor)}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 border-t border-border/70 px-4 py-3">
+                            <a
+                              href={hrefFicha}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15"
+                            >
+                              <Building2 size={12} />
+                              Ficha da empresa
+                              <ExternalLink size={11} />
+                            </a>
+                            <a
+                              href="/contracts/search"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-foreground hover:bg-muted"
+                            >
+                              <FileText size={12} />
+                              Pesquisar contratos
+                              <ExternalLink size={11} />
+                            </a>
+                            <a
+                              href="/contracts/dashboard"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-foreground hover:bg-muted"
+                            >
+                              <FileBarChart size={12} />
+                              Dashboard de contratos
+                              <ExternalLink size={11} />
+                            </a>
+                          </div>
+                        </section>
+                      );
+                    })()}
 
                     <div className="flex flex-wrap items-center gap-2">
                       {mensagem.resposta && (

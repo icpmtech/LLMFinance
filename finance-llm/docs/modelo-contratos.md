@@ -220,8 +220,8 @@ entre pedidos. A camada `llm_contratos_agente` resolve isso sem treinar nada:
 |---|---|---|
 | **Memória** | `finance_llm_memoria` (`memoria`) | Factos ensinados pelo utilizador («Chaves = NIF …»), recuperados por BM25 + gatilhos e injectados no prompt. |
 | **Skills aprendidas** | `finance_llm_memoria` (`skill`) | Instrução + exemplo guardado pelo utilizador: entra como few-shot e como par de treino. |
-| **Skills executáveis** | — (código) | `procurar_contratos`, `ficha_entidade`, `subsidios`, `contagem`: consultam o Elasticsearch antes de o modelo falar. |
-| **Prompts** | `finance_llm_prompts` | Perfis de sistema (descrever / auditar / cidadão) editáveis. |
+| **Skills executáveis** | — (código) | `procurar_contratos`, `ficha_entidade`, `ranking_empresas`, `subsidios`, `contagem`: consultam o Elasticsearch antes de o modelo falar. |
+| **Prompts** | `finance_llm_prompts` | Perfis de sistema (consultar / descrever / auditar / cidadão) editáveis. |
 | **RAG** | `finance_llm_rag_chunks` | Pedaços de contratos, entidades e subsídios; a resposta cita-os. |
 | **Feedback** | `finance_llm_feedback` | 👍/👎 e correções; as correções são pares de treino. |
 
@@ -237,6 +237,55 @@ A verificação compara os números da resposta com os do contexto: um valor que
 não esteja lá é devolvido em `verificacao.inventados` e a interface avisa. Foi
 esta verificação que apanhou, durante os testes, o bug de normalização em que
 `20806.2` era lido como 208 062 (corrigido em `inference/contratos_eval.py`).
+
+Uma pergunta com nome ou NIF explícito consulta a ficha da empresa e os seus
+contratos; por NIF, a pesquisa usa correspondência exata. Pedidos de ranking
+usam a agregação de adjudicatários por valor contratual, não uma resposta
+estimada pelo modelo. Memória e RAG são filtrados pelas âncoras da entidade para
+não misturar factos de empresas diferentes. O chat começa sem documento de
+demonstração anexado e usa o perfil **consultar**; os exemplos só entram quando
+seleccionados.
+
+O seletor também disponibiliza o perfil **Consultar empresas**, orientado para
+fichas e identificadores empresariais. Para contagens por nome, a ficha
+estruturada é a fonte de referência; uma pesquisa textual genérica pode contar
+menções em contratos de terceiros e não deve ser apresentada como contagem da
+empresa.
+
+Se a resposta gerada apresentar números que a verificação não consegue confirmar
+e existir uma ficha estruturada da empresa, o serviço substitui-a por um resumo
+dos valores e da contagem devolvidos pela ficha. O traço identifica essa
+substituição; os pesos de tokens do rascunho rejeitado não são apresentados como
+se pertencessem à resposta final.
+
+### Todas as empresas no fine-tuning
+
+É tecnicamente possível exportar todos os registos do índice `finance_entities`
+e usá-los como exemplos de treino. O exportador aceita `--max-records 0` para
+ler todos os documentos:
+
+```powershell
+python training\export_es_dataset.py --dataset empresas --max-records 0 --seed 42 `
+    --tokenizer Qwen/Qwen2.5-0.5B-Instruct --max-tokens 512 `
+    --out data/final/iqos_empresas_qwen.jsonl
+```
+
+O treino atual limita-se por omissão a 150 pares; para usar o ficheiro exportado,
+seria necessário aumentar `--max-pairs` e reservar um conjunto held-out adequado:
+
+```powershell
+python training\train_lora_contratos.py --data data/final/iqos_empresas_qwen.jsonl `
+    --max-pairs 70000 --holdout 1000 --epochs 1 --max-length 512
+```
+
+Confirma primeiro a contagem exportada e o espaço em disco; `--max-pairs` limita
+os pares de treino, não o número de exemplos reservados para avaliação.
+Não recomendamos ensinar os 70 mil factos empresariais aos pesos: nomes, totais e
+contagens mudam, são difíceis de memorizar fielmente e o modelo pode misturar
+registos ou reproduzir números desatualizados. A arquitetura já consulta o índice
+em tempo real. O fine-tuning é mais útil para ensinar o formato de resposta e o
+uso correto das ferramentas; uma exportação completa deve ser medida e avaliada
+antes de iniciar um treino potencialmente longo, sobretudo na CPU.
 
 ## 5.2 Auto-aprendizagem (retreinar com o que o utilizador corrigiu)
 
@@ -326,6 +375,22 @@ texto sem sentido.
 | `/modelo/playground` | o mesmo modelo com prompt de sistema, temperatura e tokens à vista |
 | `soup chat --model out` | o adaptador treinado pelo Soup, fora da plataforma |
 | `python training/soup/eval_holdout.py` | F1/números gerados num ficheiro de perguntas próprias |
+
+### Um modelo de 0,5 B não se contém sozinho: três guardas
+
+O modelo inventava datas e valores quando o documento não os trazia. Três
+defesas, por ordem de custo:
+
+| Guarda | O que faz | Onde |
+|---|---|---|
+| **Guarda numérica** | na geração, os tokens que formariam um número ausente do documento ficam proibidos (`logits` a −∞) | `inference/contratos_lora.py::GuardaNumerica` |
+| **Dropout de campos** | parte dos pares de treino sai sem data/regime/CPV **no pedido e na resposta**, para o modelo aprender a calar o que falta | `training/export_es_dataset.py --dropout 0.35` |
+| **Verificação** | compara os números da resposta com o contexto e diz quantos não têm suporte | `api/llm_contratos_agente.py::verificar_resposta` |
+
+A guarda é determinística: com `20806.2` no documento, `20806.2` pode ser
+escrito; `208 062,20` ou `19/07/2019` não — o `prefixo` deixa de casar e o token
+é bloqueado. Desliga-se com `LLMFINANCE_GUARDA_NUMERICA=0` (útil para comparar
+comportamentos).
 
 ## 6. Índices do Elasticsearch
 

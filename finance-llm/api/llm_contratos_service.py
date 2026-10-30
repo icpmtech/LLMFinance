@@ -19,6 +19,7 @@ import re
 import threading
 import time
 import uuid
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -183,6 +184,49 @@ def chat(instrucao: str, dados: str, max_new_tokens: int = 160, temperatura: flo
     )
 
 
+def _resposta_factual_empresa(skills: List[Dict[str, Any]]) -> Optional[str]:
+    """Monta uma resposta curta a partir da ficha quando o modelo erra números."""
+    ficha = next(
+        (
+            skill.get("resultado")
+            for skill in skills
+            if skill.get("nome") == "ficha_entidade" and isinstance(skill.get("resultado"), dict)
+        ),
+        None,
+    )
+    if not ficha or ficha.get("encontrado") is not True:
+        return None
+
+    nome = str(ficha.get("nome") or "").strip()
+    if not nome:
+        return None
+
+    partes = []
+    contratos = ficha.get("contratos")
+    if contratos is not None and not isinstance(contratos, bool):
+        try:
+            contagem = Decimal(str(contratos))
+            if contagem.is_finite() and contagem >= 0 and contagem == contagem.to_integral_value():
+                partes.append(f"tem {int(contagem)} contratos públicos registados")
+        except (InvalidOperation, TypeError, ValueError):
+            pass
+
+    valor_total = ficha.get("valor_total")
+    if valor_total is not None and not isinstance(valor_total, bool):
+        try:
+            valor = Decimal(str(valor_total))
+            if valor.is_finite():
+                valor = valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                formatado = f"{valor:,.2f}".replace(",", " ").replace(".", ",")
+                partes.append(f"valor total adjudicado de {formatado} €")
+        except (InvalidOperation, TypeError, ValueError):
+            pass
+
+    if not partes:
+        return None
+    return f"{nome}: " + ", com ".join(partes) + "."
+
+
 def responder(
     *,
     instrucao: str,
@@ -258,7 +302,30 @@ def responder(
         }
     )
 
-    verificacao = agente.verificar_resposta(gerado["resposta"], f"{contexto}\n{dados}")
+    resposta = gerado["resposta"]
+    tokens = gerado.get("tokens") or []
+    confianca_media = gerado.get("confianca_media")
+    verificacao = agente.verificar_resposta(resposta, f"{contexto}\n{dados}")
+    if verificacao["inventados"]:
+        resposta_factual = _resposta_factual_empresa(skills_usadas)
+        if resposta_factual:
+            resposta = resposta_factual
+            tokens = []
+            confianca_media = None
+            passos[-1]["titulo"] = "Rascunho do modelo revisto"
+            passos[-1]["detalhe"] = (
+                f"{gerado['tokens_gerados']} tokens · substituído após a verificação numérica"
+            )
+            passos[-1]["dados"] = {"rascunho_rejeitado": True}
+            passos.append(
+                {
+                    "fase": "resposta_estruturada",
+                    "titulo": "Resposta baseada na ficha da empresa",
+                    "detalhe": "Valores selecionados diretamente da ficha estruturada.",
+                }
+            )
+            verificacao = agente.verificar_resposta(resposta, f"{contexto}\n{dados}")
+
     passos.append(
         {
             "fase": "verificacao",
@@ -272,14 +339,14 @@ def responder(
         agente.marcar_uso(memoria_ids)
 
     return {
-        "resposta": gerado["resposta"],
+        "resposta": resposta,
         "modelo": gerado["modelo"],
         "adaptador": gerado["adaptador"],
         "adaptador_escolhido": pasta_adaptador.name,
         "prompt_tokens": gerado["prompt_tokens"],
         "tokens_gerados": gerado["tokens_gerados"],
-        "tokens": gerado.get("tokens") or [],
-        "confianca_media": gerado.get("confianca_media"),
+        "tokens": tokens,
+        "confianca_media": confianca_media,
         "verificacao": verificacao,
         "passos": passos,
         "evidencias": evidencias,

@@ -305,12 +305,20 @@ class GuardaNumerica:
 
     def __init__(self, tokenizer, contexto: str, extra: str = ""):
         self.mapa = ids_numericos(tokenizer)
-        self.permitidos = _permitidos(contexto, extra) or {"0"}
+        # Conjunto vazio = «não há números no documento»: nenhum número pode ser
+        # escrito. É o comportamento certo para «Empresa Claranet» sem ficha —
+        # o modelo respondia com «R$ 500.000,00 em 2018» inventados.
+        self.permitidos = _permitidos(contexto, extra)
         self.ativos = set(self.mapa)
         self._ultimo: Optional[int] = None
 
     def __call__(self, input_ids, scores):
         import torch
+
+        if not self.permitidos:
+            scores = scores.clone()
+            scores[:, list(self.ativos)] = -float("inf")
+            return scores
 
         ultimo = int(input_ids[0, -1]) if input_ids.shape[-1] else None
         buffer = ""
@@ -373,7 +381,9 @@ def answer(
     if guarda_numerica is None:
         guarda_numerica = os.environ.get("LLMFINANCE_GUARDA_NUMERICA", "1") != "0"
     guardas = []
-    if guarda_numerica and (data or contexto):
+    if guarda_numerica:
+        # Sempre — com ou sem documento: sem contexto, nenhum número é
+        # permitido, e é isso que impede a resposta de inventar valores.
         guardas.append(GuardaNumerica(tokenizer, contexto or "", data or ""))
 
     with torch.no_grad():

@@ -105,6 +105,32 @@ MAPPINGS: Dict[str, Dict[str, Any]] = {
 #: editar/criar outros em `finance_llm_prompts` sem tocar no código.
 PROMPTS_PREDEFINIDOS: List[Dict[str, str]] = [
     {
+        "id": "consultar",
+        "nome": "Consultar empresas e contratos",
+        "instrucao": "Responde à pergunta sobre empresas e contratos públicos portugueses.",
+        "texto": (
+            "Assistente do IQ OS para contratos públicos e empresas portuguesas. "
+            "Responde diretamente à pergunta usando apenas as evidências das skills, "
+            "RAG, memória e documento fornecidos. Se nenhuma fonte sustentar a resposta, "
+            "diz que não encontraste dados. Não inventes empresas, NIF, contratos, valores "
+            "nem períodos; indica o período apenas quando constar das evidências."
+        ),
+    },
+    {
+        "id": "consultar_empresas",
+        "nome": "Consultar empresas",
+        "instrucao": "Pesquisa esta empresa pelo nome ou NIF e responde com os dados do cadastro.",
+        "texto": (
+            "Assistente de pesquisa de empresas no cadastro do IQ OS. Para uma empresa identificada "
+            "por nome ou NIF, usa a ficha estruturada e responde com o nome registado, NIF, país, "
+            "número de contratos e valores que a ficha disponibilizar. Distingue contratos como "
+            "adjudicante e adjudicatário quando esses dados existirem. Não uses correspondências "
+            "textuais amplas como contagem de contratos da empresa, não mistures empresas com nomes "
+            "parecidos e não inventes dados. Se não houver correspondência inequívoca, pede o NIF "
+            "ou diz que não encontraste uma ficha correspondente."
+        ),
+    },
+    {
         "id": "descrever",
         "nome": "Descrever documento",
         # A instrução viaja com o perfil: o prompt de sistema sozinho não chega.
@@ -393,37 +419,140 @@ def termos_uteis(pergunta: str) -> str:
     return " ".join(p for p in palavras if _sem_acentos(p) not in PALAVRAS_VAZIAS)
 
 
-def _skill_contratos(termo: str = "", entidade: str = "", limite: int = 4) -> Dict[str, Any]:
+#: Palavras que envolvem o nome de uma empresa na pergunta mas não fazem parte
+#: dele. Retiram-se do início, repetidamente («a empresa», «ficha da empresa»).
+_LIXO_NOME = (
+    "quantos contratos tem a empresa", "quantos contratos tem a", "quantos contratos tem",
+    "quantas contratos tem a empresa", "quantas contratos tem a", "quantas contratos tem",
+    "quais contratos tem a empresa", "quais contratos tem a", "que contratos tem a empresa",
+    "que contratos tem a", "lista os contratos da empresa", "mostra os contratos da empresa",
+    "quem e", "quem sao", "o que e", "o que sao", "ficha da", "ficha de", "ficha do",
+    "ficha", "dados da", "dados de", "dados do", "informacoes sobre", "informacao sobre",
+    "informacoes da", "informacoes de", "empresa", "entidade", "fornecedor",
+    "adjudicatario", "adjudicataria", "sobre", "a", "o", "as", "os", "da", "de", "do",
+)
+
+_FIM_PERGUNTA_ENTIDADE = (
+    " e quantos contratos",
+    " e quantas vezes",
+    " e quantas empresas",
+    " e qual",
+    " e quais",
+    " como adjudicatario",
+    " como adjudicataria",
+    " como fornecedor",
+)
+
+
+def limpar_nome_entidade(texto: str) -> str:
+    """Tira da pergunta o que não é nome de empresa («Empresa Claranet» → «claranet»)."""
+    limpo = _sem_acentos(texto or "").strip(" ?.!:;,\"'")
+    mexeu = True
+    while mexeu:
+        mexeu = False
+        for lixo in sorted(_LIXO_NOME, key=len, reverse=True):
+            if limpo.startswith(lixo + " "):
+                limpo = limpo[len(lixo) + 1 :].strip()
+                mexeu = True
+                break
+    for marcador in _FIM_PERGUNTA_ENTIDADE:
+        posicao = limpo.find(marcador)
+        if posicao >= 0:
+            limpo = limpo[:posicao]
+            break
+    # Pontuação no meio («claranet, s.a.») atrapalha o `match`; fica o essencial.
+    return limpo.strip(" ?.!:;,\"'")
+
+
+def _skill_contratos(
+    termo: str = "",
+    entidade: str = "",
+    nif: str = "",
+    limite: int = 4,
+) -> Dict[str, Any]:
     """Contratos que casam com um termo ou pertencem a uma entidade."""
     from api.es.contratos import search_contracts
 
     termo = termos_uteis(termo) or termo
-    resposta = search_contracts(q=termo or None, entity=entidade or None, size=limite, strict=True)
+    resposta = search_contracts(
+        q=termo or None,
+        entity=entidade or None,
+        nif=nif or None,
+        size=limite,
+        strict=True,
+    )
+    if resposta.get("error"):
+        return {"erro": resposta["error"], "total": 0, "itens": []}
     itens = [_resumo_contrato(i) for i in (resposta.get("items") or [])[:limite]]
     return {"total": resposta.get("total"), "itens": itens}
 
 
 def _skill_entidade(nome: str = "", nif: str = "") -> Dict[str, Any]:
-    """Ficha resumida de uma entidade do cadastro."""
-    from api.es.entidades import search_companies
+    """Ficha resumida de uma entidade do cadastro.
+
+    A pergunta traz quase sempre lixo à volta do nome («Empresa Claranet»,
+    «quem é a Claranet?»); sem o tirar, a pesquisa fazia `match` da frase toda e
+    devolvia zero resultados — e o modelo, sem ficha, inventava um contrato.
+    """
+    from api.es.entidades import get_company_by_nif, search_companies
 
     if nif:
-        resposta = search_companies(nif=nif, size=1)
+        empresa = get_company_by_nif(nif)
+        if empresa.get("error"):
+            return {"erro": empresa["error"], "nif_pesquisado": nif}
+        if not empresa.get("contracts_total"):
+            return {"encontrado": False, "nif_pesquisado": nif}
     else:
-        resposta = search_companies(q=nome, size=1)
-    itens = resposta.get("items") or []
-    if not itens:
-        return {"encontrado": False}
-    e = itens[0]
+        nome_limpo = limpar_nome_entidade(nome)
+        if not nome_limpo:
+            return {"encontrado": False, "nome_pesquisado": ""}
+        resposta = search_companies(q=nome_limpo, size=1)
+        if resposta.get("error"):
+            return {"erro": resposta["error"], "nome_pesquisado": nome_limpo}
+        itens = resposta.get("items") or []
+        if not itens:
+            return {"encontrado": False, "nome_pesquisado": nome_limpo}
+        empresa = itens[0]
+
     return {
         "encontrado": True,
-        "nif": e.get("nif"),
-        "nome": e.get("name"),
-        "contratos": e.get("contracts_total"),
-        "valor_total": e.get("total_value"),
-        "adjudicante": e.get("adjudicante"),
-        "adjudicatario": e.get("adjudicatario"),
-        "cae": e.get("cae_principal"),
+        "nif": empresa.get("nif"),
+        "nome": empresa.get("name"),
+        "contratos": empresa.get("contracts_total"),
+        "valor_total": empresa.get("total_value"),
+        "adjudicante": empresa.get("adjudicante"),
+        "adjudicatario": empresa.get("adjudicatario"),
+        "cae": empresa.get("cae_principal"),
+    }
+
+
+def _skill_ranking_empresas(limite: int = 5, ano: Optional[int] = None) -> Dict[str, Any]:
+    """Top de adjudicatários por valor contratual, calculado no índice."""
+    from api.es.entidades import get_entity_role_summary
+
+    resumo = get_entity_role_summary(role="adjudicatario", year=ano, top_n=limite)
+    if resumo.get("error"):
+        return {"erro": resumo["error"], "papel": "adjudicatario", "empresas": []}
+
+    empresas = []
+    for item in resumo.get("top_entities") or []:
+        papel = item.get("adjudicatario") or {}
+        empresas.append(
+            {
+                "nome": item.get("name"),
+                "nif": item.get("nif"),
+                "contratos": papel.get("contracts_count"),
+                "valor_total": papel.get("total_value"),
+                "primeiro_ano": papel.get("first_year"),
+                "ultimo_ano": papel.get("last_year"),
+            }
+        )
+    return {
+        "papel": "adjudicatario",
+        "ano_filtrado": ano,
+        "total_entidades": resumo.get("unique_adjudicatarios"),
+        "empresas": empresas,
+        "encontrado": bool(empresas),
     }
 
 
@@ -484,6 +613,12 @@ SKILLS: Dict[str, Skill] = {
         gatilhos=("entidade", "empresa", "nif", "fornecedor", "adjudicatario", "quem"),
         executar=_skill_entidade,
     ),
+    "ranking_empresas": Skill(
+        nome="ranking_empresas",
+        descricao="Ordena adjudicatários pelo valor total dos contratos e devolve NIF, contagem e anos.",
+        gatilhos=("ranking", "top empresas", "maior valor", "mais adjudicado"),
+        executar=_skill_ranking_empresas,
+    ),
     "subsidios": Skill(
         nome="subsidios",
         descricao="Procura subsídios de um beneficiário e soma os montantes.",
@@ -525,6 +660,25 @@ def escolher_skills(pergunta: str, maximo: int = 2) -> List[str]:
     porque é que uma skill correu (aparece no traço da resposta).
     """
     texto = _sem_acentos(pergunta)
+    tem_nif = bool(re.search(r"\b\d{9}\b", pergunta or ""))
+    tem_ancora = bool(_ancoras(pergunta)) or bool(re.search(r"\b[A-Z]{3,}\b", pergunta or ""))
+    pedido_entidade = any(
+        termo in texto for termo in ("empresa", "entidade", "fornecedor", "adjudicatario", "adjudicataria", "nif", "quem")
+    )
+    pedido_contagem_entidade = (
+        any(termo in texto for termo in ("contrato", "contratos"))
+        and any(termo in texto for termo in ("quantos", "quantas", "numero", "total"))
+    )
+    if (tem_nif or (tem_ancora and (pedido_entidade or pedido_contagem_entidade))):
+        selecionadas = ["ficha_entidade"]
+        if any(termo in texto for termo in ("contrato", "contratos")):
+            selecionadas.append("procurar_contratos")
+        return selecionadas[:maximo]
+
+    intencoes_ranking = ("ranking", "top empresas", "maior valor", "mais adjudicado")
+    if any(intencao in texto for intencao in intencoes_ranking):
+        return ["ranking_empresas"][:maximo]
+
     pontuacao: List[Tuple[int, str]] = []
     for skill in SKILLS.values():
         acertos = sum(1 for g in skill.gatilhos if _sem_acentos(g) in texto)
@@ -541,11 +695,22 @@ def executar_skill(nome: str, pergunta: str) -> Dict[str, Any]:
         return {"erro": f"skill desconhecida: {nome}"}
     nif = re.search(r"\b(\d{9})\b", pergunta or "")
     if nome == "ficha_entidade":
-        return skill.executar(nif=nif.group(1) if nif else "", nome="" if nif else (pergunta or "")[:120])
+        return skill.executar(
+            nif=nif.group(1) if nif else "",
+            nome="" if nif else limpar_nome_entidade(pergunta or "")[:120],
+        )
     if nome == "subsidios":
         return skill.executar(beneficiario=(pergunta or "")[:120])
     if nome == "contagem":
         return skill.executar(termo=(pergunta or "")[:120])
+    if nome == "procurar_contratos":
+        if nif:
+            return skill.executar(nif=nif.group(1), limite=4)
+        if _ancoras(pergunta):
+            return skill.executar(entidade=limpar_nome_entidade(pergunta), limite=4)
+    if nome == "ranking_empresas":
+        ano = re.search(r"\b((?:19|20)\d{2})\b", pergunta or "")
+        return skill.executar(limite=5, ano=int(ano.group(1)) if ano else None)
     return skill.executar(termo=(pergunta or "")[:120], limite=4)
 
 
@@ -922,6 +1087,8 @@ _PALAVRAS_GENERICAS = frozenset(
     adjudicante adjudicatário adjudicatario procedimento ajuste direto regime
     geral aquisição aquisicao obra obras entidade entidades nif data ano
     descreve descrever descreva este esta esse essa para por com que qual
+    quem quais quantos quantas mostra mostrar lista listar empresa empresas fornecedor fornecedores portugal portuguesa
+    portuguesas adjudicataria adjudicatarias
     """.split()
 )
 
@@ -1000,20 +1167,24 @@ def construir_contexto(
 
     if usar_memoria:
         memorias = recuperar_memorias(f"{pergunta}\n{dados[:400]}", k=k_memoria)
-        if memorias and tem_documento:
-            # Uma memória sobre outro município entrava na descrição do
-            # contrato («Município de Chaves, NIF 506782100…» numa adjudicação
-            # de Condeixa-a-Nova): o modelo de 0,5 B copia o que lhe dão. Só
-            # ficam as memórias que partilham uma âncora concreta com o
-            # documento (NIF ou nome próprio), não o vocabulário genérico.
-            alvo = _ancoras(dados)
+        if memorias:
+            # Um modelo pequeno copia factos recuperados mesmo quando são de
+            # outra entidade. Com documento, ancorar ao documento; numa pergunta
+            # sobre empresa, ancorar ao nome/NIF pedido. Em perguntas genéricas,
+            # não injectar memórias de entidades sem relação.
+            alvo = _ancoras(dados if tem_documento else pergunta)
             relevantes = [m for m in memorias if _ancoras(_texto_da_memoria(m)) & alvo]
+            if not alvo and not tem_documento:
+                relevantes = [
+                    m for m in relevantes
+                    if m.get("tipo") == "skill" and not _ancoras(_texto_da_memoria(m))
+                ]
             if len(relevantes) != len(memorias):
                 passos.append(
                     Passo(
                         "memoria",
                         f"{len(memorias) - len(relevantes)} memórias ignoradas",
-                        "sem NIF nem nome próprio em comum com o documento",
+                        "sem NIF nem nome próprio em comum com o pedido",
                     )
                 )
             memorias = relevantes
@@ -1027,7 +1198,17 @@ def construir_contexto(
             partes.append("[MEMÓRIA]\n" + "\n".join(linhas))
             passos.append(Passo("memoria", f"{len(memorias)} memórias relevantes", "\n".join(linhas)[:500]))
 
-    if usar_rag and not tem_documento:
+    ranking_estruturado = any(skill["nome"] == "ranking_empresas" for skill in skills_usadas)
+    if usar_rag and not tem_documento and ranking_estruturado:
+        passos.append(
+            Passo(
+                "rag",
+                "RAG não consultado",
+                "o ranking agregado de empresas é a fonte estruturada desta resposta",
+            )
+        )
+
+    if usar_rag and not tem_documento and not ranking_estruturado:
         # Pesquisar com o **documento**, não com a instrução. «Descreve este
         # contrato público português» não tem termos de contrato nenhum: o BM25
         # devolvia o que calhava (num teste real, um contrato de Condeixa-a-Nova
@@ -1035,6 +1216,22 @@ def construir_contexto(
         # resposta). O início do documento é o que identifica o objeto.
         consulta_rag = (dados.strip()[:400] or pergunta).strip()
         chunks = recuperar_rag(consulta_rag, k=k_rag)
+        alvo = _ancoras(pergunta)
+        if chunks and alvo:
+            minimo_ancoras = min(2, len(alvo))
+            relevantes = [
+                c for c in chunks
+                if len(_ancoras(f"{c.get('titulo') or ''} {c.get('texto') or ''}") & alvo) >= minimo_ancoras
+            ]
+            if len(relevantes) != len(chunks):
+                passos.append(
+                    Passo(
+                        "rag",
+                        f"{len(chunks) - len(relevantes)} evidências ignoradas",
+                        "sem correspondência suficiente com a entidade pedida",
+                    )
+                )
+            chunks = relevantes
         if chunks:
             evidencias = [
                 {
