@@ -78,7 +78,12 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const [documentosRag, setDocumentosRag] = useState<number | null>(null);
-  const [avaliacao, setAvaliacao] = useState<{ f1: number; amostras: number } | null>(null);
+  const [avaliacao, setAvaliacao] = useState<{
+    f1: number;
+    amostras: number;
+    perplexidadeBase?: number | null;
+    perplexidadeTreinado?: number | null;
+  } | null>(null);
   const montado = useRef(true);
 
   useEffect(() => {
@@ -195,9 +200,20 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
   const avaliar = () =>
     executar("avaliar", async () => {
       const resposta = await correrAvaliacao({ limite: 40, gerar: 4 });
-      const f1 = resposta.f1_medio ?? 0;
-      setAvaliacao({ f1, amostras: resposta.amostras?.length ?? 0 });
-      return `Avaliação concluída: F1 ${f1.toFixed(3)} em ${resposta.amostras?.length ?? 0} amostras.`;
+      // O F1 e as amostras vivem dentro de `base|treinado.geracao` (ver
+      // `score_model`, em `inference/contratos_eval.py`); a raiz da resposta só
+      // os traz nalgumas origens. Ler a raiz dava «0.000 em 0 amostras» mesmo
+      // com a avaliação concluída.
+      const geracao = resposta.treinado?.geracao ?? resposta.base?.geracao;
+      const f1 = geracao?.f1_medio ?? resposta.f1_medio ?? 0;
+      const amostras = geracao?.amostras?.length ?? resposta.amostras?.length ?? 0;
+      setAvaliacao({
+        f1,
+        amostras,
+        perplexidadeBase: resposta.base?.perplexidade ?? null,
+        perplexidadeTreinado: resposta.treinado?.perplexidade ?? null,
+      });
+      return `Avaliação concluída: F1 ${f1.toFixed(3)} em ${amostras} amostras.`;
     });
 
   const ultimo = estado?.ultimo_resultado;
@@ -445,7 +461,15 @@ export default function PainelDeRetreino({ variante = "painel", className = "" }
                 correr avaliação
               </button>
               {avaliacao && (
-                <p className="mt-1 text-[10px] text-muted-foreground">{avaliacao.amostras} amostras</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {avaliacao.amostras} amostras
+                  {avaliacao.perplexidadeTreinado != null && (
+                    <>
+                      {" "}· perplexidade {avaliacao.perplexidadeBase?.toFixed(2) ?? "—"} →{" "}
+                      {avaliacao.perplexidadeTreinado.toFixed(2)}
+                    </>
+                  )}
+                </p>
               )}
             </div>
             <div className={cartao}>

@@ -279,6 +279,54 @@ resultado regista `estado: "parado"`.
 Tudo em SVG/CSS: as animações são declarativas e param com
 `prefers-reduced-motion`.
 
+## 5.4 Treinar com os índices do Elasticsearch (Qwen) e escolher o modelo no chat
+
+O caminho completo, do índice ao chat — os comandos correm na raiz de
+`finance-llm/`:
+
+```bash
+# 1. índices → dataset Alpaca (o --tokenizer mede cada par com o tokenizer do Qwen)
+python training/export_es_dataset.py \
+    --dataset contratos --dataset empresas --dataset subvencoes \
+    --max-records 2000 --seed 42 \
+    --tokenizer Qwen/Qwen2.5-0.5B-Instruct --max-tokens 480 \
+    --out data/final/iqos_contratos_empresas_qwen.jsonl
+
+# 2a. treinar com o loop da plataforma (CPU, com pausa e retoma)
+python training/train_lora_contratos.py --resume --max-pairs 400
+
+# 2b. …ou com o Soup, de uma só tacada (config em training/soup/)
+docker compose --profile train run --rm soup train -y \
+    --config training/soup/soup-qwen05-empresas-contratos.yaml
+
+# 3. avaliar no held-out (base vs adaptador)
+curl -s -X POST localhost:4180/api/llm/modelo/avaliar \
+     -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+     -d '{"limite": 8, "gerar": 2}'
+```
+
+No **`/modelo/retreino`** o mesmo ciclo faz-se sem linha de comandos: o
+separador *motor* escolhe `incremental (CPU)` ou `Soup (CLI)`; no Soup o botão
+**treinar com Soup** lança o `soup train` no config escolhido e o painel segue o
+passo e a perda (lidos do `rewind.jsonl` que o Soup escreve na pasta de saída).
+
+**Escolher o modelo no chat.** `/modelo/chat` lista os adaptadores que existem
+em `model/*/` (`GET /llm/modelo/adaptadores`) e mostra um seletor ao lado do
+título quando há mais de um compatível. O `id` escolhido vai no pedido
+(`POST /llm/modelo/chat` com `"adaptador": "soup-qwen05-…"`) e a resposta diz
+qual respondeu (`adaptador_escolhido`). Só aparecem os adaptadores treinados
+sobre o **mesmo modelo base** que o chat carrega (~`Qwen/Qwen2.5-0.5B-Instruct`);
+um LoRA de outro modelo é recusado com uma mensagem explícita em vez de produzir
+texto sem sentido.
+
+| Onde | O que testa |
+|---|---|
+| `/modelo/chat` | resposta conversacional com o adaptador escolhido, árvore do raciocínio e fita de tokens |
+| `/modelo/contratos` | perplexidade base vs adaptador, exatidão por token e delta no held-out |
+| `/modelo/playground` | o mesmo modelo com prompt de sistema, temperatura e tokens à vista |
+| `soup chat --model out` | o adaptador treinado pelo Soup, fora da plataforma |
+| `python training/soup/eval_holdout.py` | F1/números gerados num ficheiro de perguntas próprias |
+
 ## 6. Índices do Elasticsearch
 
 Criados pela primeira escrita (mapeamentos em `llm_contratos_service.MAPPINGS` e

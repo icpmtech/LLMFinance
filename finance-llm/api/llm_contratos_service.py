@@ -195,16 +195,21 @@ def responder(
     raciocinio: bool = True,
     max_new_tokens: int = 160,
     temperatura: float = 0.2,
+    adaptador: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Resposta com memória, skills, RAG, verificação e traço de raciocínio.
 
     O traço (`passos`) é a lista ordenada do que aconteceu: pedido → skill →
     memória → evidências → geração → verificação. A interface desenha-o como
     árvore; a API devolve-o para que qualquer cliente possa auditar a resposta.
+
+    `adaptador` escolhe o LoRA treinado a usar (ver `listar_adaptadores`);
+    sem ele usa-se o adaptador da plataforma.
     """
     from api import llm_contratos_agente as agente
 
     inicio = time.time()
+    pasta_adaptador = contratos_lora.resolver_adaptador(adaptador)
     texto_prompt = agente.resolver_prompt(prompt_id, sistema)
 
     passos: List[Dict[str, Any]] = []
@@ -241,6 +246,7 @@ def responder(
         max_new_tokens=max_new_tokens,
         temperature=temperatura,
         devolver_tokens=True,
+        adapter_dir=pasta_adaptador,
     )
     passos.append(
         {
@@ -269,6 +275,7 @@ def responder(
         "resposta": gerado["resposta"],
         "modelo": gerado["modelo"],
         "adaptador": gerado["adaptador"],
+        "adaptador_escolhido": pasta_adaptador.name,
         "prompt_tokens": gerado["prompt_tokens"],
         "tokens_gerados": gerado["tokens_gerados"],
         "tokens": gerado.get("tokens") or [],
@@ -287,17 +294,27 @@ def responder(
 # ---------------------------------------------------------------------------
 
 
-def avaliar(limite: int = 8, gerar: int = 2, holdout: int = 60, seed: int = 42) -> Dict[str, Any]:
+def avaliar(
+    limite: int = 8,
+    gerar: int = 2,
+    holdout: int = 60,
+    seed: int = 42,
+    adaptador: Optional[str] = None,
+) -> Dict[str, Any]:
     """Corre a avaliação base vs adaptador num subconjunto do held-out.
 
     Serializado por `_eval_lock`: dois pedidos em simultâneo duplicariam o custo
     e o segundo não traria informação nova (é o mesmo conjunto, o mesmo modelo).
+    `adaptador` permite medir um modelo treinado no Soup (`soup-*`) em vez do
+    adaptador da plataforma.
     """
     from inference.contratos_eval import evaluate
 
+    pasta = contratos_lora.resolver_adaptador(adaptador)
     with _eval_lock:
-        resultado = evaluate(holdout=holdout, seed=seed, limite=limite, gerar=gerar)
+        resultado = evaluate(holdout=holdout, seed=seed, limite=limite, gerar=gerar, adapter_dir=pasta)
     resultado["origem"] = "api"
+    resultado["adaptador_escolhido"] = pasta.name
     doc_id = index_eval(resultado)
     resultado["documento"] = doc_id
     return resultado
@@ -309,7 +326,7 @@ def _resumo_eval(resultado: Dict[str, Any]) -> Dict[str, Any]:
     geracao = (treinado.get("geracao") or {})
     return {
         "modelo_base": contratos_lora.DEFAULT_BASE_MODEL,
-        "adaptador": str(contratos_lora.DEFAULT_ADAPTER_DIR),
+        "adaptador": str(resultado.get("adaptador_escolhido") or contratos_lora.DEFAULT_ADAPTER_DIR),
         "conjunto": resultado.get("conjunto") or {},
         "base": {k: base.get(k) for k in ("perplexidade", "exactidao_token", "perda_por_token")},
         "treinado": {k: treinado.get(k) for k in ("perplexidade", "exactidao_token", "perda_por_token")},

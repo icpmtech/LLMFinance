@@ -19,6 +19,7 @@ Duas decisões que valem a pena conhecer:
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -216,10 +217,67 @@ _RE_PASSO = re.compile(r"(\d+)\s*/\s*(\d+)")
 _RE_PERDA = re.compile(r"loss[=:\s]+([0-9]*\.?[0-9]+)", re.IGNORECASE)
 _RE_MOLDURA = re.compile(r"[│┃|]")
 
+#: Cache do `rewind.jsonl` (uma linha por micro-lote) por `mtime` e tamanho.
+_rewind_cache: Dict[str, Any] = {"chave": None, "pontos": []}
+
+
+def _pontos_rewind(saida: Optional[str], limite: int = 400) -> List[Dict[str, Any]]:
+    """Curva de perda a partir do `rewind.jsonl` que o Soup escreve na saída.
+
+    A saída de texto do `soup train` depende da barra de progresso (que muda de
+    versão para versão); o `rewind.jsonl` é estável — uma linha por micro-lote
+    com `step` e `row_loss`. A perda do passo é a média das linhas desse passo.
+    """
+    if not saida:
+        return []
+    ficheiro = (ROOT / str(saida).lstrip("./")).resolve() / "rewind.jsonl"
+    try:
+        info = ficheiro.stat()
+    except OSError:
+        return []
+    chave = (str(ficheiro), info.st_mtime, info.st_size)
+    if _rewind_cache["chave"] == chave:
+        return _rewind_cache["pontos"]
+
+    somas: Dict[int, List[float]] = {}
+    try:
+        with ficheiro.open("r", encoding="utf-8") as fh:
+            for linha in fh:
+                linha = linha.strip()
+                if not linha:
+                    continue
+                try:
+                    registo = json.loads(linha)
+                except ValueError:
+                    continue
+                if registo.get("kind") != "batch":
+                    continue
+                passo = registo.get("step")
+                perdas = registo.get("row_loss") or []
+                if not isinstance(passo, int) or not perdas:
+                    continue
+                somas.setdefault(passo, []).extend(float(v) for v in perdas if v is not None)
+    except OSError:  # pragma: no cover - depende do disco
+        return _rewind_cache["pontos"]
+
+    pontos = [
+        {"passo": passo, "perda": round(sum(valores) / len(valores), 4)}
+        for passo, valores in sorted(somas.items())
+        if valores
+    ][-limite:]
+    _rewind_cache.update({"chave": chave, "pontos": pontos})
+    return pontos
+
 
 def _interpretar(linha: str) -> Optional[Dict[str, Any]]:
     """Extrai passo/passos/perda de uma linha do Soup (tqdm, época, loss)."""
     limpa = _RE_MOLDURA.sub(" ", linha)
+    # Só linhas de treino: as barras de «Truncating dataset» também escrevem
+    # `10/10` e passavam por passos (a de *eval* dava um total errado).
+    if "it/s" not in limpa and "step" not in limpa.lower() and "loss" not in limpa.lower():
+        return None
+    if "truncat" in limpa.lower():
+        return None
     passo = passos = None
     achado = _RE_PASSO.search(limpa)
     if achado:
@@ -386,6 +444,13 @@ def instantaneo() -> Dict[str, Any]:
     estado["treino_disponivel"] = treino_disponivel()
     estado["versao"] = versao()
     estado["comando_contentor"] = COMANDO_CONTENTOR
+    # A barra de progresso do Soup muda de formato entre versões; o
+    # `rewind.jsonl` da pasta de saída é estável e serve de fonte para a curva.
+    do_ficheiro = _pontos_rewind(estado.get("saida"))
+    if do_ficheiro and len(do_ficheiro) >= len(estado["pontos"]):
+        estado["pontos"] = do_ficheiro
+        estado["passo"] = do_ficheiro[-1]["passo"]
+        estado["perda"] = do_ficheiro[-1]["perda"]
     estado["agora_ts"] = time.time()
     return estado
 

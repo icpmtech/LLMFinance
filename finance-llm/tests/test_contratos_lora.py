@@ -1,8 +1,8 @@
-"""Testes do modelo de contratos (fine-tuning LoRA) e da sua API.
+﻿"""Testes do modelo de contratos (fine-tuning LoRA) e da sua API.
 
-Correm sem treinar nem carregar o modelo: cobrem as peças onde um erro é fácil
-de esconder — a divisão treino/held-out, a máscara do prompt (a perda só pode
-contar a resposta), as métricas de fidelidade e a ligação rota→serviço.
+Correm sem treinar nem carregar o modelo: cobrem as peÃ§as onde um erro Ã© fÃ¡cil
+de esconder â€” a divisÃ£o treino/held-out, a mÃ¡scara do prompt (a perda sÃ³ pode
+contar a resposta), as mÃ©tricas de fidelidade e a ligaÃ§Ã£o rotaâ†’serviÃ§o.
 
     pytest tests/test_contratos_lora.py -q
 """
@@ -25,13 +25,13 @@ from inference import contratos_lora as modelo  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# Prompt e máscara
+# Prompt e mÃ¡scara
 # ---------------------------------------------------------------------------
 
 
 def test_render_prompt_tem_instrucao_e_dados() -> None:
     prompt = modelo.render_prompt("Descreve o contrato.", "Contrato 1 - limpeza")
-    assert "### Instrução:" in prompt
+    assert "### InstruÃ§Ã£o:" in prompt
     assert "Descreve o contrato." in prompt
     assert "Contrato 1 - limpeza" in prompt
     assert prompt.rstrip().endswith("### Resposta:")
@@ -45,7 +45,7 @@ def test_build_messages_leva_o_sistema() -> None:
 
 
 class _TokenizerFalso:
-    """Tokenizer mínimo: um id por caractere, para o teste não descer ao Qwen."""
+    """Tokenizer mÃ­nimo: um id por caractere, para o teste nÃ£o descer ao Qwen."""
 
     chat_template = "{{ messages }}"
     eos_token_id = 0
@@ -79,7 +79,7 @@ def test_encode_example_sem_espaco_devolve_none() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Divisão treino / held-out
+# DivisÃ£o treino / held-out
 # ---------------------------------------------------------------------------
 
 
@@ -111,50 +111,50 @@ def test_held_out_pairs_nao_cruza_com_o_treino(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Métricas de fidelidade
+# MÃ©tricas de fidelidade
 # ---------------------------------------------------------------------------
 
 
 def test_numeros_normalizados_ignoram_formatacao() -> None:
-    assert avaliacao.numeric_tokens("20 806,20 € e 1 379,64 €") == ["20806.20", "1379.64"]
+    assert avaliacao.numeric_tokens("20 806,20 â‚¬ e 1 379,64 â‚¬") == ["20806.20", "1379.64"]
     assert avaliacao.numeric_tokens("sem valores") == []
 
 
 def test_numeros_em_formato_ingles_nao_viram_milhoes() -> None:
-    # Regressão: «20806.2» era lido como 208 062 (o ponto tratado como milhares)
-    # e a verificação acusava um valor inventado que estava nos dados.
-    assert avaliacao.numeric_tokens("Preço contratual: 20806.2") == ["20806.20"]
+    # RegressÃ£o: Â«20806.2Â» era lido como 208 062 (o ponto tratado como milhares)
+    # e a verificaÃ§Ã£o acusava um valor inventado que estava nos dados.
+    assert avaliacao.numeric_tokens("PreÃ§o contratual: 20806.2") == ["20806.20"]
     assert avaliacao.numeric_tokens("1.234.567") == ["1234567.00"]
-    assert avaliacao.numeric_fidelity("teve como valor de 20 806,20 €.", "Preço: 20806.2") == 1.0
+    assert avaliacao.numeric_fidelity("teve como valor de 20 806,20 â‚¬.", "PreÃ§o: 20806.2") == 1.0
 
 
 def test_f1_premia_sobreposicao_e_pune_resposta_errada() -> None:
-    assert avaliacao.token_f1("valor de 20 806,20 €", "valor de 20 806,20 €") == pytest.approx(1.0)
+    assert avaliacao.token_f1("valor de 20 806,20 â‚¬", "valor de 20 806,20 â‚¬") == pytest.approx(1.0)
     assert avaliacao.token_f1("contrato de limpeza", "contrato de limpeza urbana") > 0.6
     assert avaliacao.token_f1("nada a ver", "contrato de limpeza") == 0.0
     assert avaliacao.token_f1("", "contrato") == 0.0
 
 
 def test_fidelidade_numerica_detecta_valor_trocado() -> None:
-    gabarito = "O valor contratual foi 20 806,20 €."
-    assert avaliacao.numeric_fidelity("O valor foi 20 806,20 €.", gabarito) == 1.0
-    assert avaliacao.numeric_fidelity("O valor foi 20,00 €.", gabarito) == 0.0
-    assert avaliacao.numeric_fidelity("sem números", "também sem números") is None
+    gabarito = "O valor contratual foi 20 806,20 â‚¬."
+    assert avaliacao.numeric_fidelity("O valor foi 20 806,20 â‚¬.", gabarito) == 1.0
+    assert avaliacao.numeric_fidelity("O valor foi 20,00 â‚¬.", gabarito) == 0.0
+    assert avaliacao.numeric_fidelity("sem nÃºmeros", "tambÃ©m sem nÃºmeros") is None
 
 
 def test_ancoragem_apanha_data_inventada() -> None:
     """O defeito real: contrato sem data, resposta com data.
 
-    `numeric_fidelity` não via isto — a data não estava no gabarito, logo não era
-    medida. A ancoragem mede ao contrário: números escritos que não estão no
+    `numeric_fidelity` nÃ£o via isto â€” a data nÃ£o estava no gabarito, logo nÃ£o era
+    medida. A ancoragem mede ao contrÃ¡rio: nÃºmeros escritos que nÃ£o estÃ£o no
     pedido.
     """
-    pedido = "Contrato 900001 - reagentes\nPreço contratual: 15430.75"
+    pedido = "Contrato 900001 - reagentes\nPreÃ§o contratual: 15430.75"
     inventada = (
         "Este contrato, publicado a 2021-08-26 e com regime CCP (DL 18/2008), "
-        "tem o valor de 15 430,75 €."
+        "tem o valor de 15 430,75 â‚¬."
     )
-    ancorada = "Este contrato tem o valor de 15 430,75 €."
+    ancorada = "Este contrato tem o valor de 15 430,75 â‚¬."
 
     resultado = avaliacao.numeric_grounding(inventada, pedido)
     assert resultado is not None
@@ -165,11 +165,11 @@ def test_ancoragem_apanha_data_inventada() -> None:
 
     assert avaliacao.numeric_grounding(ancorada, pedido)["inventados"] == []
     assert avaliacao.numeric_grounding(ancorada, pedido)["taxa"] == 0.0
-    assert avaliacao.numeric_grounding("sem números", pedido) is None
+    assert avaliacao.numeric_grounding("sem nÃºmeros", pedido) is None
 
 
 # ---------------------------------------------------------------------------
-# Serviço e índice
+# ServiÃ§o e Ã­ndice
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ def test_read_metrics_le_a_curva(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         "\n".join(
             [
                 json.dumps({"step": 1, "perda": 1.5, "perplexidade": 4.48}),
-                "linha inválida",
+                "linha invÃ¡lida",
                 json.dumps({"step": 2, "perda": 0.8, "perplexidade": 2.22}),
             ]
         ),
@@ -200,6 +200,33 @@ def test_model_state_sem_adaptador(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert estado["fonte_dados"]["indices"] == ["contratos", "finance_entities", "finance_subvencoes"]
 
 
+def test_adaptadores_no_disco_sao_listados_e_resolvidos(tmp_path: Path) -> None:
+    """O chat escolhe o adaptador por `id`; os de outro modelo base ficam de fora."""
+    import json as _json
+
+    def _criar(pasta: Path, base: str) -> None:
+        pasta.mkdir(parents=True, exist_ok=True)
+        (pasta / "adapter_config.json").write_text(_json.dumps({"base_model_name_or_path": base}), encoding="utf-8")
+        (pasta / "adapter_model.safetensors").write_bytes(b"0" * 16)
+
+    _criar(tmp_path / "qwen05-contratos", modelo.DEFAULT_BASE_MODEL)
+    _criar(tmp_path / "soup-qwen05", modelo.DEFAULT_BASE_MODEL)
+    _criar(tmp_path / "soup-mistral", "mistralai/Mistral-7B-Instruct-v0.3")
+    (tmp_path / "vazia").mkdir()
+
+    itens = {i["id"]: i for i in modelo.listar_adaptadores(tmp_path)}
+    assert set(itens) == {"qwen05-contratos", "soup-qwen05", "soup-mistral"}
+    assert itens["soup-qwen05"]["origem"] == "soup"
+    assert itens["soup-qwen05"]["compativel"] is True
+    assert itens["soup-mistral"]["compativel"] is False
+
+    assert modelo.resolver_adaptador("soup-qwen05", tmp_path).name == "soup-qwen05"
+    with pytest.raises(ValueError, match="mistral"):
+        modelo.resolver_adaptador("soup-mistral", tmp_path)
+    with pytest.raises(ValueError, match="desconhecido"):
+        modelo.resolver_adaptador("nao-existe", tmp_path)
+
+
 def test_index_eval_sem_elasticsearch_nao_rebenta(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service, "_client", lambda: None)
     assert service.index_eval({"base": {}, "treinado": {}}) is None
@@ -210,12 +237,12 @@ def test_index_eval_sem_elasticsearch_nao_rebenta(monkeypatch: pytest.MonkeyPatc
 def test_mapeamentos_do_indice_cobrem_as_metricas() -> None:
     campos = service.MAPPINGS[service.MODEL_EVALS_INDEX]["properties"]
     for esperado in ("base", "treinado", "delta", "f1_medio", "criado_em"):
-        assert esperado in campos, f"o índice de avaliações perdeu o campo {esperado}"
+        assert esperado in campos, f"o Ã­ndice de avaliaÃ§Ãµes perdeu o campo {esperado}"
     assert "metricas" in service.MAPPINGS[service.MODEL_RUNS_INDEX]["properties"]
 
 
 # ---------------------------------------------------------------------------
-# Matriz de pesos (lida do adaptador) e ligações
+# Matriz de pesos (lida do adaptador) e ligaÃ§Ãµes
 # ---------------------------------------------------------------------------
 
 
@@ -235,7 +262,7 @@ def test_normas_do_adaptador_agrega_por_camada_e_projeccao(tmp_path: Path) -> No
     dados = service._normas_do_adaptador(ficheiro)
     assert dados["camadas"] == [0, 1]
     assert dados["modulos"] == ["q", "k", "v", "o", "gate", "up", "down"]
-    # ‖A‖ de ones(4,8) = √32 ; ‖B‖ de 2·ones(8,4) = 2√32 → produto = 2·32 = 64
+    # â€–Aâ€– de ones(4,8) = âˆš32 ; â€–Bâ€– de 2Â·ones(8,4) = 2âˆš32 â†’ produto = 2Â·32 = 64
     assert dados["detalhe"]["0:q"]["produto"] == pytest.approx(64.0, rel=1e-3)
     assert dados["detalhe"]["1:down"]["produto"] == pytest.approx(12 * 32, rel=1e-3)
     assert dados["detalhe"]["0:k"]["produto"] == 0.0
@@ -330,7 +357,7 @@ def test_chat_com_sessao_devolve_resposta(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 # ---------------------------------------------------------------------------
-# Agente: skills, memória, prompts, verificação e auto-aprendizagem
+# Agente: skills, memÃ³ria, prompts, verificaÃ§Ã£o e auto-aprendizagem
 # ---------------------------------------------------------------------------
 
 
@@ -340,7 +367,7 @@ def test_termos_uteis_tira_as_palavras_da_pergunta() -> None:
 
 def test_escolher_skills_por_gatilho() -> None:
     assert "procurar_contratos" in agente.escolher_skills("mostra os contratos de limpeza")
-    assert "subsidios" in agente.escolher_skills("que subsídios recebeu este beneficiário?")
+    assert "subsidios" in agente.escolher_skills("que subsÃ­dios recebeu este beneficiÃ¡rio?")
     assert agente.escolher_skills("bom dia") == []
 
 
@@ -367,16 +394,16 @@ def test_resumo_de_contrato_aceita_parte_em_dict() -> None:
         "idcontrato": "1",
         "objectoContrato": "Limpeza",
         "precoContratual": 10.0,
-        "adjudicantes": {"parsed": [{"nome": "Município X"}]},
+        "adjudicantes": {"parsed": [{"nome": "MunicÃ­pio X"}]},
         "adjudicatarios": {"raw": ["501394192 - Empresa Y"]},
     }
     resumo = agente._resumo_contrato(item)
-    assert resumo["adjudicante"] == "Município X"
+    assert resumo["adjudicante"] == "MunicÃ­pio X"
     assert resumo["adjudicatario"] == "Empresa Y"
 
 
 def test_verificacao_apanha_numeros_inventados() -> None:
-    resultado = agente.verificar_resposta("Custou 20 806,20 € e 99 999,00 €.", "Preço contratual: 20806.2")
+    resultado = agente.verificar_resposta("Custou 20 806,20 â‚¬ e 99 999,00 â‚¬.", "PreÃ§o contratual: 20806.2")
     assert resultado["suportados"] == ["20806.20"]
     assert resultado["inventados"] == ["99999.00"]
     assert resultado["confianca"] == 0.5
@@ -395,9 +422,55 @@ def test_construir_contexto_sem_elasticsearch_nao_parte(monkeypatch: pytest.Monk
     monkeypatch.setattr(agente, "recuperar_rag", lambda *a, **k: [])
     monkeypatch.setattr(agente, "escolher_skills", lambda *a, **k: [])
     construido = agente.construir_contexto(pergunta="descreve isto", dados="Contrato 1")
-    assert [p.fase for p in construido["passos"]] == ["pergunta", "dados"]
+    fases = [p.fase for p in construido["passos"]]
+    assert fases[0] == "pergunta" and "dados" in fases
     assert "DADOS DO PEDIDO" in construido["contexto"]
     assert construido["evidencias"] == []
+
+
+def test_com_documento_o_corpus_nao_e_consultado(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Um 0,5 B colava evidÃªncias de outros contratos na descriÃ§Ã£o do documento."""
+
+    def _explodir(*_a, **_k):  # pragma: no cover - sÃ³ falha se for chamado
+        raise AssertionError("com documento no pedido nÃ£o se procura no corpus")
+
+    monkeypatch.setattr(agente, "recuperar_rag", _explodir)
+    monkeypatch.setattr(agente, "executar_skill", _explodir)
+    monkeypatch.setattr(agente, "recuperar_memorias", lambda *a, **k: [])
+
+    doc = "Contrato 772453 - limpeza de coletores\nAdjudicante: MunicÃ­pio de Condeixa-a-Nova"
+    construido = agente.construir_contexto(pergunta="Descreve este contrato.", dados=doc)
+    assert construido["evidencias"] == []
+    assert construido["skills"] == []
+    assert "[DADOS DO PEDIDO]" in construido["contexto"]
+    assert "Corpus nÃ£o consultado" in " ".join(p.titulo for p in construido["passos"])
+
+    # Sem documento (pergunta sobre o corpus) o RAG volta a correr.
+    chamadas: list[str] = []
+    monkeypatch.setattr(agente, "recuperar_rag", lambda consulta, k=3: chamadas.append(consulta) or [])
+    monkeypatch.setattr(agente, "escolher_skills", lambda *_a, **_k: [])
+    agente.construir_contexto(pergunta="que contratos existem sobre limpeza?", dados="")
+    assert chamadas == ["que contratos existem sobre limpeza?"]
+
+
+def test_memoria_de_outro_municipio_nao_entra_na_descricao(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uma memÃ³ria sobre Chaves colava-se a um contrato de Condeixa-a-Nova."""
+    chaves = {"id": "m1", "tipo": "memoria", "titulo": "MunicÃ­pio de Chaves Ã© o NIF 506782100", "instrucao": "CÃ¢mara de Chaves", "dados": ""}
+    condeixa = {"id": "m2", "tipo": "memoria", "titulo": "Condeixa-a-Nova Ã© o NIF 506131870", "instrucao": "CÃ¢mara de Condeixa", "dados": ""}
+    monkeypatch.setattr(agente, "recuperar_memorias", lambda *a, **k: [chaves, condeixa])
+    monkeypatch.setattr(agente, "recuperar_rag", lambda *a, **k: [])
+    monkeypatch.setattr(agente, "escolher_skills", lambda *a, **k: [])
+
+    doc = "Contrato 772453 - limpeza de coletores\nAdjudicante: MunicÃ­pio de Condeixa-a-Nova"
+    construido = agente.construir_contexto(pergunta="Descreve este contrato.", dados=doc)
+    assert construido["memoria_ids"] == ["m2"]
+    assert "Chaves" not in construido["contexto"]
+    assert any("ignoradas" in p.titulo for p in construido["passos"])
+
+
+def test_ancoras_ignoram_vocabulario_generico() -> None:
+    assert agente._ancoras("Adjudicante: MunicÃ­pio de Condeixa-a-Nova") == {"condeixa"}
+    assert agente._ancoras("municÃ­pio de Chaves NIF 506782100") == {"chaves", "506782100"}
 
 
 def test_pares_de_feedback_viram_treino(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -434,14 +507,14 @@ def test_retreino_recusa_sem_pares(monkeypatch: pytest.MonkeyPatch) -> None:
     finally:
         api_main.app.dependency_overrides.clear()
     assert resposta.status_code == 409
-    assert "mínimo" in resposta.json()["detail"]
+    assert "mÃ­nimo" in resposta.json()["detail"]
 
 
 def test_rotas_do_agente_estao_registadas() -> None:
     from api import main as api_main
 
-    # `app.routes` desta versão do FastAPI embrulha os routers incluídos em
-    # `_IncludedRouter` (sem `.path`); o contrato público é o esquema OpenAPI.
+    # `app.routes` desta versÃ£o do FastAPI embrulha os routers incluÃ­dos em
+    # `_IncludedRouter` (sem `.path`); o contrato pÃºblico Ã© o esquema OpenAPI.
     caminhos = set(api_main.app.openapi()["paths"])
     for esperado in (
         "/llm/modelo/matriz",
@@ -460,7 +533,7 @@ def test_rotas_do_agente_estao_registadas() -> None:
     ):
         assert esperado in caminhos, f"rota em falta: {esperado}"
 
-    # O WebSocket não entra no OpenAPI: procura-se na árvore de rotas do router.
+    # O WebSocket nÃ£o entra no OpenAPI: procura-se na Ã¡rvore de rotas do router.
     from api import llm_contratos_routes as rotas
 
     websockets = {r.path for r in rotas.router.routes if r.__class__.__name__ == "APIWebSocketRoute"}
@@ -468,11 +541,11 @@ def test_rotas_do_agente_estao_registadas() -> None:
 
 
 def test_instantaneo_do_treino_nao_varre_o_disco(monkeypatch: pytest.MonkeyPatch) -> None:
-    """O WebSocket pede um retrato a cada 400 ms: não pode contar backups."""
+    """O WebSocket pede um retrato a cada 400 ms: nÃ£o pode contar backups."""
     from api import llm_contratos_treino as treino
 
-    def _explodir() -> int:  # pragma: no cover - só falha se for chamado
-        raise AssertionError("instantaneo() não deve contar versões guardadas")
+    def _explodir() -> int:  # pragma: no cover - sÃ³ falha se for chamado
+        raise AssertionError("instantaneo() nÃ£o deve contar versÃµes guardadas")
 
     monkeypatch.setattr(treino, "_versoes_guardadas", _explodir)
     estado = treino.instantaneo()
@@ -483,7 +556,7 @@ def test_instantaneo_do_treino_nao_varre_o_disco(monkeypatch: pytest.MonkeyPatch
 
 
 def test_ws_do_retreino_recusa_sem_token() -> None:
-    """Sem token o canal fecha antes de aceitar (1008), não fica a escutar."""
+    """Sem token o canal fecha antes de aceitar (1008), nÃ£o fica a escutar."""
     from starlette.websockets import WebSocketDisconnect
 
     cliente, _ = _cliente()
@@ -491,11 +564,11 @@ def test_ws_do_retreino_recusa_sem_token() -> None:
         with cliente.websocket_connect("/llm/modelo/retreinar/ws"):
             pass
     assert falha.value.code == 1008
-    assert "Sessão em falta" in (falha.value.reason or "")
+    assert "SessÃ£o em falta" in (falha.value.reason or "")
 
 
 def test_ws_do_retreino_entrega_o_estado_com_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Com sessão válida o canal aceita e envia logo o retrato do estado."""
+    """Com sessÃ£o vÃ¡lida o canal aceita e envia logo o retrato do estado."""
     from api import llm_contratos_treino as treino
     from api import llm_contratos_routes as rotas
 
@@ -532,3 +605,37 @@ def test_ws_do_retreino_entrega_o_estado_com_token(monkeypatch: pytest.MonkeyPat
     assert dados["passo"] == 3
     assert dados["fase"] == "a_treinar"
     assert len(dados["historico"]) == 2
+
+# ---------------------------------------------------- guarda numÃ©rica (chat)
+class _TokFalso:
+    """Tokenizer mÃ­nimo: sÃ³ os dÃ­gitos 0-9, em ids 10-19."""
+
+    def get_vocab(self) -> dict:
+        return {str(d): 10 + d for d in range(10)}
+
+
+def test_guarda_numerica_so_deixa_escrever_numeros_do_documento() -> None:
+    import torch
+
+    guarda = modelo.GuardaNumerica(_TokFalso(), "Preco contratual: 20806.2")
+    assert guarda.permitidos == {"20806", "208062"}
+
+    def bloqueados(ids: list) -> set:
+        scores = torch.zeros(1, 20)
+        saida = guarda(torch.tensor([ids]), scores)
+        return {d for d in range(10) if saida[0, 10 + d].item() == float("-inf")}
+
+    # Â«2Â» em curso: sÃ³ o Â«0Â» continua para 20806 (o Â«19/07/2019Â» inventado morre aqui)
+    assert bloqueados([10 + 2]) == set(range(10)) - {0}
+    # Â«2080Â» em curso: sÃ³ o Â«6Â» fecha o nÃºmero
+    assert bloqueados([10 + 2, 10 + 0, 10 + 8, 10 + 0]) == set(range(10)) - {6}
+
+
+def test_guarda_numerica_sem_numero_em_curso_nao_bloqueia() -> None:
+    import torch
+
+    guarda = modelo.GuardaNumerica(_TokFalso(), "sem numeros aqui 7")
+    scores = torch.zeros(1, 20)
+    saida = guarda(torch.tensor([[999]]), scores)  # token que nao e digito
+    assert not torch.isinf(saida).any()
+

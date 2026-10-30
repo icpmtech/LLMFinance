@@ -907,6 +907,44 @@ def _pergunta_aberta(pergunta: str) -> bool:
     )
 
 
+def _texto_da_memoria(memoria: Dict[str, Any]) -> str:
+    return " ".join(
+        str(memoria.get(campo) or "") for campo in ("titulo", "instrucao", "dados", "resposta")
+    )
+
+
+#: Palavras que aparecem em qualquer contrato: não servem para decidir se uma
+#: memória é sobre **este** documento.
+_PALAVRAS_GENERICAS = frozenset(
+    """
+    contrato contratos público públicos pública públicas município municípios
+    camara câmara serviços servico serviço preço preços valor valores total
+    adjudicante adjudicatário adjudicatario procedimento ajuste direto regime
+    geral aquisição aquisicao obra obras entidade entidades nif data ano
+    descreve descrever descreva este esta esse essa para por com que qual
+    """.split()
+)
+
+
+def _ancoras(texto: str) -> set:
+    """Identificadores concretos de um texto: NIFs e nomes próprios.
+
+    Serve para decidir se dois textos falam da **mesma** entidade. Só palavras
+    com maiúscula no original (nomes) ou NIFs de 9 dígitos contam — o
+    vocabulário genérico de contratos («município», «preço», «serviços») daria
+    sempre sobreposição e nunca filtraria nada.
+    """
+    import re as _re
+
+    texto = texto or ""
+    ancoras = set(_re.findall(r"\b\d{9}\b", texto))
+    for palavra in _re.findall(r"\b[A-ZÁÂÃÀÉÊÍÓÔÕÚÇ][\wÁÂÃÀÉÊÍÓÔÕÚÇáâãàéêíóôõúç]{4,}", texto):
+        if palavra.lower() in _PALAVRAS_GENERICAS:
+            continue
+        ancoras.add(palavra.lower())
+    return ancoras
+
+
 def construir_contexto(
     *,
     pergunta: str,
@@ -928,7 +966,22 @@ def construir_contexto(
     skills_usadas: List[Dict[str, Any]] = []
     memoria_ids: List[str] = []
 
-    if usar_skills:
+    # Com o documento no pedido, o corpus não entra: um modelo de 0,5 B não
+    # distingue «EVIDÊNCIAS» de «DADOS DO PEDIDO» e colava na descrição de um
+    # contrato de Condeixa-a-Nova entidades de outro contrato recuperado pelo
+    # BM25 («Autoridade Tributária e Aduaneira», «E.A.D. …»). As evidências e as
+    # skills de pesquisa servem para perguntas **sobre o corpus**, sem documento.
+    tem_documento = bool(dados.strip())
+    if tem_documento and (usar_rag or usar_skills):
+        passos.append(
+            Passo(
+                "rag",
+                "Corpus não consultado",
+                "o pedido traz o documento; procurar no corpus só acrescentava contratos alheios",
+            )
+        )
+
+    if usar_skills and not tem_documento:
         for nome in escolher_skills(pergunta):
             try:
                 resultado = executar_skill(nome, pergunta)
@@ -947,6 +1000,23 @@ def construir_contexto(
 
     if usar_memoria:
         memorias = recuperar_memorias(f"{pergunta}\n{dados[:400]}", k=k_memoria)
+        if memorias and tem_documento:
+            # Uma memória sobre outro município entrava na descrição do
+            # contrato («Município de Chaves, NIF 506782100…» numa adjudicação
+            # de Condeixa-a-Nova): o modelo de 0,5 B copia o que lhe dão. Só
+            # ficam as memórias que partilham uma âncora concreta com o
+            # documento (NIF ou nome próprio), não o vocabulário genérico.
+            alvo = _ancoras(dados)
+            relevantes = [m for m in memorias if _ancoras(_texto_da_memoria(m)) & alvo]
+            if len(relevantes) != len(memorias):
+                passos.append(
+                    Passo(
+                        "memoria",
+                        f"{len(memorias) - len(relevantes)} memórias ignoradas",
+                        "sem NIF nem nome próprio em comum com o documento",
+                    )
+                )
+            memorias = relevantes
         if memorias:
             memoria_ids = [m["id"] for m in memorias if m.get("id")]
             linhas = []
@@ -957,7 +1027,7 @@ def construir_contexto(
             partes.append("[MEMÓRIA]\n" + "\n".join(linhas))
             passos.append(Passo("memoria", f"{len(memorias)} memórias relevantes", "\n".join(linhas)[:500]))
 
-    if usar_rag:
+    if usar_rag and not tem_documento:
         # Pesquisar com o **documento**, não com a instrução. «Descreve este
         # contrato público português» não tem termos de contrato nenhum: o BM25
         # devolvia o que calhava (num teste real, um contrato de Condeixa-a-Nova

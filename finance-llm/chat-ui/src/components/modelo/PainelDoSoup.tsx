@@ -36,29 +36,47 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
   const [escolhido, setEscolhido] = useState<string>("");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "erro" | "ok" | "info"; texto: string } | null>(null);
+  // Falha ao **ler** o estado (servidor a reiniciar, 502 do proxy): não é o
+  // mesmo que «CLI não instalado», e mostrar essa conclusão seria mentira.
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
   const montado = useRef(true);
 
   const recarregar = useCallback(async () => {
     try {
       const resposta = await getEstadoSoup();
       if (!montado.current) return;
+      // O Qwen primeiro: é o modelo que o chat e as páginas do modelo usam, e
+      // é o único cujos adaptadores aparecem depois no seletor do chat.
+      const ordenados = [...resposta.configs].sort((a, b) => {
+        const qwen = (c: ConfigSoup) => (c.base ?? "").toLowerCase().includes("qwen");
+        if (qwen(a) === qwen(b)) return 0;
+        return qwen(a) ? -1 : 1;
+      });
+      setConfigs(ordenados);
       setEstado(resposta.estado);
-      setConfigs(resposta.configs);
+      setErroCarga(null);
       setEscolhido((atual) => {
-        if (atual && resposta.configs.some((c) => c.nome === atual)) return atual;
-        return resposta.configs[0]?.nome ?? "";
+        if (atual && ordenados.some((c) => c.nome === atual)) return atual;
+        return ordenados[0]?.nome ?? "";
       });
     } catch (falha) {
       if (!montado.current) return;
-      setAviso({ tipo: "erro", texto: falha instanceof Error ? falha.message : "Falha ao ler o estado do Soup" });
+      setErroCarga(falha instanceof Error ? falha.message : "não foi possível ler o estado do Soup");
     }
   }, []);
 
   useEffect(() => {
     montado.current = true;
     void recarregar();
+    // Falha transitória (contentor a arrancar) não pode ficar «presa»: tenta
+    // outra vez ao voltar à janela e de vez em quando, mesmo parado.
+    const aoFocar = () => void recarregar();
+    window.addEventListener("focus", aoFocar);
+    const timer = window.setInterval(() => void recarregar(), 15000);
     return () => {
       montado.current = false;
+      window.removeEventListener("focus", aoFocar);
+      window.clearInterval(timer);
     };
   }, [recarregar]);
 
@@ -97,7 +115,18 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
   const treinar = () =>
     executar("treinar", async () => {
       const r = await treinarComSoup(escolhido, true);
-      return `Soup arrancou com ${r.config}.`;
+      // O `soup train` pode morrer nos primeiros instantes (falta o extra
+      // `[train]`, dataset inválido): relê-se o estado para não anunciar um
+      // arranque que já falhou.
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      const depois = await getEstadoSoup();
+      if (montado.current) {
+        setEstado(depois.estado);
+        setConfigs(depois.configs);
+      }      if (depois.estado.fase === "erro" && !depois.estado.a_correr) {
+        throw new Error(depois.estado.erro || "o Soup terminou com erro ao arrancar");
+      }
+      return `Treino do Soup lançado com ${r.config}.`;
     });
 
   const parar = () =>
@@ -116,10 +145,23 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
           <Cpu size={12} /> motor Soup (soup-cli)
         </span>
         <span className="flex items-center gap-2 text-[10px] normal-case">
-          {estado?.disponivel ? (
+          {erroCarga ? (
+            <button
+              type="button"
+              onClick={() => void recarregar()}
+              className="inline-flex items-center gap-1 text-red-400 hover:underline"
+              title={erroCarga}
+            >
+              <AlertTriangle size={11} /> estado indisponível — repetir
+            </button>
+          ) : !estado ? (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Loader2 size={11} className="animate-spin" /> a ler…
+            </span>
+          ) : estado.disponivel ? (
             estado.treino_disponivel ? (
               <span className="inline-flex items-center gap-1 text-primary">
-                <CheckCircle2 size={11} /> {estado.versao ?? "soup"} disponível
+                <CheckCircle2 size={11} /> {estado.versao ?? "soup"} · treino disponível
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-amber-500" title="falta o extra [train]: peft, trl, datasets, accelerate">
@@ -153,7 +195,9 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
           onChange={(evento) => setEscolhido(evento.target.value)}
           className="rounded-lg border border-border bg-background px-2 py-1 text-[11px] text-foreground outline-none focus:border-primary disabled:opacity-50"
         >
-          {configs.length === 0 && <option value="">sem configs em training/soup/</option>}
+          {configs.length === 0 && (
+            <option value="">{erroCarga ? "estado indisponível" : "sem configs em training/soup/"}</option>
+          )}
           {configs.map((item) => (
             <option key={item.nome} value={item.nome}>
               {item.nome}
@@ -228,7 +272,8 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
           <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[10px] text-muted-foreground">
             <span>{estado?.fase}</span>
             <span>
-              passo {estado?.passo ?? 0}/{estado?.passos ?? 0}
+              passo {estado?.passo ?? 0}
+              {estado?.passos ? `/${estado.passos}` : ""}
             </span>
             <span>perda {typeof estado?.perda === "number" ? estado.perda.toFixed(4) : "—"}</span>
             <span>início {formatarData(estado?.iniciado)}</span>
@@ -247,6 +292,12 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
       {estado?.erro && (
         <p className="mt-2 flex items-start gap-1 text-[10px] leading-relaxed text-amber-500">
           <AlertTriangle size={11} className="mt-0.5 shrink-0" /> {estado.erro}
+        </p>
+      )}
+
+      {erroCarga && (
+        <p className="mt-2 flex items-start gap-1 text-[10px] leading-relaxed text-red-400">
+          <AlertTriangle size={11} className="mt-0.5 shrink-0" /> {erroCarga}
         </p>
       )}
 
@@ -271,6 +322,10 @@ export default function PainelDoSoup({ className = "" }: { className?: string })
           <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-[10px] text-foreground">
             {comando}
           </code>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Numa máquina onde o treino deva correr directamente:{" "}
+            <code className="text-foreground">pip install "soup-cli[train]"</code>.
+          </p>
         </div>
       )}
 

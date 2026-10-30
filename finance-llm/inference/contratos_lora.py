@@ -111,6 +111,74 @@ def read_run_metadata(adapter_dir: Path | str = DEFAULT_ADAPTER_DIR) -> Dict[str
         return {}
 
 
+def listar_adaptadores(raiz: Path | str | None = None) -> List[Dict[str, Any]]:
+    """Adaptadores LoRA treinados que existem em `model/*/`.
+
+    Inclui os `model/soup-*` (treinados pelo CLI do Soup) e o adaptador da
+    plataforma (`qwen05-contratos`). O `base` vem do `adapter_config.json`
+    quando lá está — é o que permite carregar um adaptador do Soup sem saber de
+    antemão sobre que modelo foi treinado.
+    """
+    pasta = Path(raiz) if raiz else ROOT / "model"
+    if not pasta.is_dir():
+        return []
+    lista: List[Dict[str, Any]] = []
+    for candidato in sorted(pasta.iterdir()):
+        if not candidato.is_dir() or not adapter_available(candidato):
+            continue
+        base = None
+        try:
+            config = json.loads((candidato / "adapter_config.json").read_text(encoding="utf-8"))
+            base = config.get("base_model_name_or_path")
+        except (OSError, ValueError):
+            base = None
+        try:
+            bytes_adaptador = sum(f.stat().st_size for f in candidato.glob("adapter_model.*") if f.is_file())
+        except OSError:  # pragma: no cover - depende do disco
+            bytes_adaptador = 0
+        metadados = read_run_metadata(candidato)
+        base_modelo = base or metadados.get("modelo_base")
+        lista.append(
+            {
+                "id": candidato.name,
+                "nome": metadados.get("adaptador") or candidato.name,
+                "caminho": str(candidato),
+                "base": base_modelo,
+                # Um LoRA só faz sentido sobre o modelo em que foi treinado: o
+                # chat carrega `DEFAULT_BASE_MODEL`, por isso os adaptadores de
+                # outro modelo (os `soup-*` do 22 M, por exemplo) ficam de fora
+                # em vez de produzirem lixo.
+                "compativel": not base_modelo or str(base_modelo) == DEFAULT_BASE_MODEL,
+                "bytes": bytes_adaptador,
+                "pares": metadados.get("dados", {}).get("pares_treino"),
+                "perda_final": metadados.get("treino", {}).get("perda_final"),
+                "criado_em": metadados.get("treino", {}).get("concluido_em"),
+                "origem": "soup" if candidato.name.startswith("soup-") else "plataforma",
+                "atual": candidato.resolve() == Path(DEFAULT_ADAPTER_DIR).resolve(),
+            }
+        )
+    return lista
+
+
+def resolver_adaptador(identificador: str | None, raiz: Path | str | None = None) -> Path:
+    """Caminho do adaptador pedido (ou o predefinido quando não vem nenhum).
+
+    Só aceita um `id` que conste da lista de adaptadores conhecidos: o valor vem
+    de um pedido HTTP e não pode escolher um diretório arbitrário do disco.
+    """
+    if not identificador:
+        return Path(DEFAULT_ADAPTER_DIR)
+    for item in listar_adaptadores(raiz):
+        if identificador in (item["id"], item["nome"]):
+            if not item["compativel"]:
+                raise ValueError(
+                    f"adaptador {item['id']} foi treinado sobre {item['base']}, "
+                    f"não sobre {DEFAULT_BASE_MODEL}"
+                )
+            return Path(item["caminho"])
+    raise ValueError(f"adaptador desconhecido: {identificador}")
+
+
 def split_indices(total: int, holdout: int, seed: int = 42) -> tuple[list[int], list[int]]:
     """Divide `total` linhas em treino e held-out de forma **estável**.
 
@@ -169,6 +237,108 @@ def limpar_cache() -> None:
         _cache.clear()
 
 
+# ---------------------------------------------------------------------------
+# Guarda numérica
+# ---------------------------------------------------------------------------
+
+#: Cache dos ids do vocabulário que são só dígitos/separadores, por tokenizer.
+_ids_numericos: Dict[int, Dict[int, str]] = {}
+
+
+def _digitos(texto: str) -> str:
+    return "".join(c for c in texto if c in "0123456789")
+
+
+def ids_numericos(tokenizer) -> Dict[int, str]:
+    """Ids do vocabulário que escrevem números → os seus dígitos.
+
+    Um modelo de 0,5 B inventa datas e valores («publicado a 19/07/2019» num
+    contrato que não traz data). Bloquear, na geração, os tokens que formariam um
+    número ausente do documento resolve isso na origem — e é determinístico, ao
+    contrário de pedir ao modelo que se contenha.
+    """
+    chave = id(tokenizer)
+    if chave in _ids_numericos:
+        return _ids_numericos[chave]
+    mapa: Dict[int, str] = {}
+    try:
+        vocabulario = tokenizer.get_vocab()
+    except (AttributeError, NotImplementedError):  # pragma: no cover
+        vocabulario = {}
+    for token, token_id in vocabulario.items():
+        texto = token.replace("Ġ", " ").replace("▁", " ").strip()
+        # Só ASCII: dígitos de largura completa («０») e afins ficavam no mapa
+        # sem nunca casar com um número permitido — bloqueados para sempre.
+        if texto and all(c in "0123456789.,-/:" for c in texto) and _digitos(texto):
+            mapa[token_id] = _digitos(texto)
+    _ids_numericos[chave] = mapa
+    return mapa
+
+
+def _permitidos(contexto: str, extra: str = "") -> set:
+    """Dígitos aceitáveis: os números que o contexto contém, sem zeros à direita."""
+    from inference import contratos_eval
+
+    numeros = set()
+    for texto in (contexto or "", extra or ""):
+        for valor in contratos_eval.numeric_tokens(texto):
+            inteiro, _, decimal = str(valor).partition(".")
+            digitos_inteiro = _digitos(inteiro)
+            if not digitos_inteiro:
+                continue
+            numeros.add(digitos_inteiro)
+            decimal = decimal.rstrip("0")
+            if decimal:
+                numeros.add(digitos_inteiro + _digitos(decimal))
+    return numeros
+
+
+class GuardaNumerica:
+    """`LogitsProcessor` que proíbe números que não existem no documento.
+
+    A cada passo olha para os dígitos já escritos (`buffer`): se estiverem a meio
+    de um número, só deixa continuar tokens cujo resultado seja **prefixo** de um
+    número permitido. Assim `20806.2` pode ser escrito (está no documento) e
+    `208 062,20` — a duplicação que aparecia no chat — fica bloqueado assim que
+    diverge.
+    """
+
+    def __init__(self, tokenizer, contexto: str, extra: str = ""):
+        self.mapa = ids_numericos(tokenizer)
+        self.permitidos = _permitidos(contexto, extra) or {"0"}
+        self.ativos = set(self.mapa)
+        self._ultimo: Optional[int] = None
+
+    def __call__(self, input_ids, scores):
+        import torch
+
+        ultimo = int(input_ids[0, -1]) if input_ids.shape[-1] else None
+        buffer = ""
+        if ultimo in self.mapa:
+            texto = input_ids[0, -8:].tolist()
+            pedacos = []
+            for token_id in reversed(texto):
+                if token_id not in self.mapa:
+                    break
+                pedacos.append(self.mapa[token_id])
+            buffer = "".join(reversed(pedacos))
+        if not buffer:
+            self._ultimo = ultimo
+            return scores
+        bloqueados = []
+        for token_id in self.ativos:
+            candidato = buffer + self.mapa[token_id]
+            # O número **permitido** tem de começar pelo que já se escreveu:
+            # «20» é prefixo de «20806» (ok), «201» não é (bloqueado).
+            if not any(permitido.startswith(candidato) for permitido in self.permitidos):
+                bloqueados.append(token_id)
+        if bloqueados:
+            scores = scores.clone()
+            scores[:, bloqueados] = -float("inf")
+        self._ultimo = ultimo
+        return scores
+
+
 def answer(
     instruction: str,
     data: str,
@@ -181,12 +351,17 @@ def answer(
     sistema: Optional[str] = None,
     contexto: Optional[str] = None,
     devolver_tokens: bool = False,
+    guarda_numerica: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Gera a resposta do modelo afinado para um documento do Elasticsearch.
 
     Com `devolver_tokens`, devolve também a probabilidade que o modelo deu a cada
     token gerado — é a matéria-prima do diagrama «como é que ele chegou aqui»
     (uma resposta com tokens de 0,2 de probabilidade é um palpite).
+
+    `guarda_numerica` (por omissão ligada quando há documento) impede a geração
+    de escrever números que não estejam no documento/contexto — é o que garante
+    que a verificação da resposta não encontra valores inventados.
     """
     import torch
 
@@ -194,6 +369,13 @@ def answer(
     prompt = render_chat_prompt(tokenizer, instruction, data, sistema=sistema, contexto=contexto)
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1536)
     prompt_len = inputs["input_ids"].shape[-1]
+
+    if guarda_numerica is None:
+        guarda_numerica = os.environ.get("LLMFINANCE_GUARDA_NUMERICA", "1") != "0"
+    guardas = []
+    if guarda_numerica and (data or contexto):
+        guardas.append(GuardaNumerica(tokenizer, contexto or "", data or ""))
+
     with torch.no_grad():
         saida = model.generate(
             **inputs,
@@ -213,6 +395,7 @@ def answer(
             eos_token_id=tokenizer.eos_token_id,
             output_scores=devolver_tokens,
             return_dict_in_generate=devolver_tokens,
+            logits_processor=guardas or None,
         )
     sequencia = saida.sequences if devolver_tokens else saida
     gerados = sequencia[0][prompt_len:]

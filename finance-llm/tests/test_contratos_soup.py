@@ -112,6 +112,48 @@ def test_rotas_do_soup_estao_registadas() -> None:
         assert esperado in caminhos, f"rota em falta: {esperado}"
 
 
+def test_curva_do_rewind_jsonl(tmp_path: Path) -> None:
+    """A curva vem do `rewind.jsonl` (média das linhas de cada passo)."""
+    saida = tmp_path / "out"
+    saida.mkdir()
+    (saida / "rewind.jsonl").write_text(
+        "\n".join(
+            [
+                '{"kind": "batch", "step": 1, "row_loss": [1.0, 0.5]}',
+                '{"kind": "batch", "step": 1, "row_loss": [0.3]}',
+                '{"kind": "batch", "step": 2, "row_loss": [0.2]}',
+                '{"kind": "outro", "step": 2, "row_loss": [9.9]}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    pontos = soup._pontos_rewind(str(saida))
+    assert pontos == [{"passo": 1, "perda": 0.6}, {"passo": 2, "perda": 0.2}]
+
+
+def test_instantaneo_usa_o_rewind_quando_a_saida_existe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    saida = tmp_path / "out"
+    saida.mkdir()
+    (saida / "rewind.jsonl").write_text(
+        '{"kind": "batch", "step": 7, "row_loss": [0.4, 0.6]}\n', encoding="utf-8"
+    )
+    monkeypatch.setitem(soup._estado, "saida", str(saida))
+    monkeypatch.setitem(soup._estado, "pontos", [])
+    monkeypatch.setitem(soup._estado, "passo", 0)
+    monkeypatch.setitem(soup._estado, "perda", None)
+
+    estado = soup.instantaneo()
+    assert estado["pontos"] == [{"passo": 7, "perda": 0.5}]
+    assert estado["passo"] == 7
+    assert estado["perda"] == pytest.approx(0.5)
+
+
+def test_linhas_de_truncagem_nao_contam_como_passos() -> None:
+    """`Truncating eval dataset: 10/10` dava um total de passos errado."""
+    assert soup._interpretar("Truncating eval dataset: 100%|████| 10/10 [00:00<00:00, 4538 ex/s]") is None
+    assert soup._interpretar("  step 3/47 loss=1.25") == {"passo": 3, "passos": 47, "perda": 1.25}
+
+
 def test_parar_sem_corrida_nao_e_erro_fatal() -> None:
     resultado = soup.parar()
     assert resultado["ok"] is False

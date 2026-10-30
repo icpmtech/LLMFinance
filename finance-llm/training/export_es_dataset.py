@@ -53,6 +53,7 @@ import argparse
 import html
 import json
 import logging
+import random
 import re
 import sys
 from dataclasses import dataclass, field, replace
@@ -208,6 +209,80 @@ class Recipe:
 #: = ~30 s.
 TEXTO_CAMPO_MAX = 90
 
+#: Fração de pares em que campos opcionais são **removidos do pedido e da
+#: resposta**. Sem isto, 100 % dos exemplos citam data, regime e CPV, e o modelo
+#: aprende a citá-los sempre — quando o documento do chat não traz a data, ele
+#: inventa uma. Com dropout, o modelo vê as duas situações e aprende a calar o
+#: que não está no documento.
+_DROPOUT = 0.0
+_DROPOUT_SEED = 0
+
+
+def definir_dropout(fracao: float, seed: int = 0) -> None:
+    """Liga o *dropout* de campos (0 = nenhum, 1 = todos os pares)."""
+    global _DROPOUT, _DROPOUT_SEED
+    _DROPOUT = max(0.0, min(1.0, float(fracao)))
+    _DROPOUT_SEED = int(seed)
+
+
+def _campos_contrato(doc: Dict[str, Any], idcontrato: str) -> Dict[str, Any]:
+    """Campos normalizados do contrato, já com o **dropout** aplicado.
+
+    Um só sítio decide o que sai: o par principal e as variantes (cidadão,
+    auditoria) têm de citar exatamente os mesmos campos, senão uma delas volta a
+    ensinar a inventar a data que a outra aprendeu a calar.
+    """
+    tipo = _listed(doc.get("tipoContrato"))
+    procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
+    preco_raw = doc.get("precoContratual")
+    data = _clean(doc.get("dataPublicacao"))
+    regime = _clean(doc.get("regime"))
+    cpv = _cpv_label(doc.get("cpv"))
+    # «não especificado» não é informação: o campo sai para o modelo não
+    # aprender a citar um marcador de ausência.
+    if regime.lower() in {"", "não especificado", "nao especificado"}:
+        regime = ""
+    if cpv.lower() in {"", "não especificado", "nao especificado"}:
+        cpv = ""
+    if procedimento.lower() in {"não especificado", "nao especificado"}:
+        procedimento = ""
+
+    # Dropout de campos opcionais: o mesmo contrato aparece com e sem eles, para
+    # o modelo aprender que «campo ausente no pedido = não citar». O sorteio é
+    # reprodutível (id do contrato + semente), por isso dois exports iguais dão
+    # o mesmo dataset.
+    if _DROPOUT > 0:
+        rng = random.Random(f"{idcontrato}|{_DROPOUT_SEED}")
+        if rng.random() < _DROPOUT:
+            data = ""
+        if rng.random() < _DROPOUT:
+            regime = ""
+        if rng.random() < _DROPOUT:
+            cpv = ""
+        if rng.random() < _DROPOUT:
+            tipo = ""
+        if rng.random() < _DROPOUT:
+            procedimento = ""
+
+    preco = _money(preco_raw)
+    return {
+        "adjudicante": _listed(doc.get("adjudicantes"), fallback="não identificado"),
+        "adjudicatario": _listed(doc.get("adjudicatarios"), fallback="não identificado"),
+        "tipo": tipo,
+        "procedimento": procedimento,
+        "preco_raw": preco_raw,
+        "preco": preco,
+        # O valor entra na resposta **como vem no pedido**, e não reformatado
+        # para «15 430,75 €»: reformatar obriga o modelo a mexer nos dígitos e
+        # um 0,5 B troca-os. Copiar é o que ele faz bem — os nomes das entidades
+        # saem sempre certos. A verificação numérica normaliza os dois formatos.
+        "preco_texto": f"{preco_raw} €" if preco_raw not in (None, "") else preco,
+        "descricao": _truncate(_clean(doc.get("descContrato")), TEXTO_CAMPO_MAX),
+        "data": data,
+        "regime": regime,
+        "cpv": cpv,
+    }
+
 
 def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[str, str, Dict[str, Any]]]:
     """Espelha ``collectors/contratos.py::build_training_corpus`` (mesma redação).
@@ -223,44 +298,58 @@ def _build_contrato_pt(doc: Dict[str, Any], max_chars: int) -> Optional[Tuple[st
     objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), TEXTO_CAMPO_MAX)
     if not idcontrato or not objecto:
         return None
-    adjudicante = _listed(doc.get("adjudicantes"), fallback="não identificado")
-    adjudicatario = _listed(doc.get("adjudicatarios"), fallback="não identificado")
-    tipo = _listed(doc.get("tipoContrato"))
-    procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
-    preco_raw = doc.get("precoContratual")
-    preco = _money(preco_raw)
-    descricao = _truncate(_clean(doc.get("descContrato")), TEXTO_CAMPO_MAX)
-    data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
-    regime = _clean(doc.get("regime")) or "não especificado"
-    cpv = _cpv_label(doc.get("cpv"))
-    # O valor entra na resposta **como vem no pedido**, e não reformatado para
-    # «15 430,75 €»: reformatar obriga o modelo a mexer nos dígitos e um 0,5 B
-    # troca-os («1 54 30 75 €», «1 5430,75 €»). Copiar é o que ele faz bem — os
-    # nomes das entidades saem sempre certos. A verificação numérica da API
-    # normaliza os dois formatos, por isso a leitura não perde nada.
-    preco_texto = f"{preco_raw} €" if preco_raw not in (None, "") else preco
+    idcontrato = _clean(doc.get("idcontrato"))
+    objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), TEXTO_CAMPO_MAX)
+    if not idcontrato or not objecto:
+        return None
+    campos = _campos_contrato(doc, idcontrato)
+    adjudicante = campos["adjudicante"]
+    adjudicatario = campos["adjudicatario"]
+    tipo = campos["tipo"]
+    procedimento = campos["procedimento"]
+    preco_raw = campos["preco_raw"]
+    descricao = campos["descricao"]
+    data = campos["data"]
+    regime = campos["regime"]
+    cpv = campos["cpv"]
+    preco_texto = campos["preco_texto"]
+    preco = campos["preco"]
+    linhas = [
+        f"Contrato {idcontrato} - {objecto}",
+        f"Adjudicante: {adjudicante}",
+        f"Adjudicatário: {adjudicatario}",
+    ]
+    if tipo:
+        linhas.append(f"Tipo: {tipo}")
+    if procedimento:
+        linhas.append(f"Procedimento: {procedimento}")
+    linhas.append(f"Preço contratual: {preco_raw}")
+    if data:
+        linhas.append(f"Data de publicação: {data}")
+    if regime:
+        linhas.append(f"Regime: {regime}")
+    if cpv:
+        linhas.append(f"CPV principal: {cpv}")
+    # A descrição só entra quando diz algo para além do objecto: repetir a
+    # mesma frase custa tokens (e atenção) sem dar informação nova.
+    # Um campo por linha (e não «A | B») porque com separadores o modelo
+    # copiava pedaços do pedido para dentro da frase («num procedimento
+    # «Concurso publico | Tipo: Aquisicao de bens moveis»»).
+    if descricao and descricao not in objecto:
+        linhas.append(f"Descrição: {descricao}")
+    prompt = "\n".join(linhas)
 
-    prompt = (
-        f"Contrato {idcontrato} - {objecto}\n"
-        f"Adjudicante: {adjudicante}\n"
-        f"Adjudicatário: {adjudicatario}\n"
-        f"Tipo: {tipo}\n"
-        f"Procedimento: {procedimento}\n"
-        f"Preço contratual: {preco_raw}\n"
-        f"Data de publicação: {data}\n"
-        f"Regime: {regime}\n"
-        f"CPV principal: {cpv}"
-        # A descrição só entra quando diz algo para além do objecto: repetir a
-        # mesma frase custa tokens (e atenção) sem dar informação nova.
-        # Um campo por linha (e não «A | B») porque com separadores o modelo
-        # copiava pedaços do pedido para dentro da frase («num procedimento
-        # «Concurso publico | Tipo: Aquisicao de bens moveis»»).
-        + (f"\nDescrição: {descricao}" if descricao and descricao not in objecto else "")
-    )
-    completion = (
-        f"Este contrato, publicado a {data} e com regime {regime}, liga {adjudicante} "
-        f"a {adjudicatario} por {preco_texto}, para {objecto}. CPV: {cpv}."
-    )
+    cabeca = "Este contrato"
+    if data:
+        cabeca += f", publicado a {data}"
+    if regime:
+        cabeca += (" e com regime " if data else ", com regime ") + regime
+    completion = f"{cabeca}, liga {adjudicante} a {adjudicatario} por {preco_texto}, para {objecto}."
+    # Sem data nem regime a frase começava por «Este contrato, liga …».
+    completion = completion.replace("Este contrato, liga", "Este contrato liga")
+    if cpv:
+        completion += f" CPV: {cpv}."
+
     return (
         _truncate(prompt, max_chars) if max_chars else prompt,
         completion,
@@ -325,26 +414,28 @@ def _build_contrato_pt_variantes(
 
     idcontrato = _clean(doc.get("idcontrato"))
     objecto = _truncate(_clean(doc.get("objectoContrato") or doc.get("descContrato")), TEXTO_CAMPO_MAX)
-    adjudicante = _listed(doc.get("adjudicantes"), fallback="não identificado")
-    adjudicatario = _listed(doc.get("adjudicatarios"), fallback="não identificado")
-    procedimento = _clean(doc.get("tipoprocedimento")) or "não especificado"
-    preco_raw = doc.get("precoContratual")
-    preco_texto = f"{preco_raw} €" if preco_raw not in (None, "") else _money(preco_raw)
-    data = _clean(doc.get("dataPublicacao")) or "data desconhecida"
-    cpv = _cpv_label(doc.get("cpv"))
+    campos = _campos_contrato(doc, idcontrato)
+    adjudicante = campos["adjudicante"]
+    adjudicatario = campos["adjudicatario"]
+    procedimento = campos["procedimento"]
+    data = campos["data"]
+    cpv = campos["cpv"]
 
-    cidadao = (
-        f"{adjudicante} contratou «{objecto}» a {adjudicatario} por {preco_texto}. "
-        f"O procedimento foi {procedimento} e o contrato foi publicado a {data}."
-    )
+    cidadao = f"{adjudicante} contratou «{objecto}» a {adjudicatario} por {campos['preco_texto']}."
+    if procedimento:
+        cidadao += f" O procedimento foi {procedimento}."
+    if data:
+        cidadao += f" O contrato foi publicado a {data}."
+
     sinais = _sinais_de_risco(procedimento, doc.get("precoContratual"), adjudicatario)
     # Curta de propósito: um molde longo e formulaico é decorado (perda 0,002) e
     # depois o modelo enche as lacunas com valores inventados quando o documento
     # não encaixa. Duas frases ancoradas generalizam melhor que cinco decoradas.
     auditoria = (
-        f"Procedimento {procedimento}, valor {preco_texto}, adjudicatário {adjudicatario}."
+        f"Procedimento {procedimento or 'não indicado'}, valor {campos['preco_texto']}, "
+        f"adjudicatário {adjudicatario}."
         + (f" Sinal de risco: {sinais}." if sinais else " Sem sinais de risco nos dados.")
-        + f" Confirmar o enquadramento e o CPV {cpv}."
+        + (f" Confirmar o enquadramento e o CPV {cpv}." if cpv else " Confirmar o enquadramento do contrato.")
     )
     return [
         ("Descreve este contrato público português.", prompt, completion, metadata),
@@ -912,6 +1003,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="Orçamento de tokens por par (prompt + resposta); 0 = sem limite. Exige --tokenizer")
     parser.add_argument("--seed", type=int,
                         help="Amostra dispersa pelo índice com esta semente (sem ele, a ordem do índice agrupa por ficheiro de origem)")
+    parser.add_argument("--dropout", type=float, default=0.0, metavar="FRACAO",
+                        help="Fração de pares em que campos opcionais (data, regime, CPV, tipo, procedimento) "
+                             "desaparecem do pedido **e** da resposta — ensina o modelo a não inventar o que falta "
+                             "(padrão: 0)")
     parser.add_argument("--dry-run", action="store_true", help="Só contar os documentos que correspondem ao filtro")
     parser.add_argument("--list", action="store_true", help="Listar as receitas disponíveis")
     parser.add_argument("--verbose", action="store_true", help="Log detalhado")
@@ -928,6 +1023,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         for name, recipe in sorted(RECIPES.items()):
             print(f"  {name:<14} {recipe.index:<16} {recipe.instruction}")
         return 0
+
+    if args.dropout:
+        definir_dropout(args.dropout, seed=args.seed or 0)
 
     query = None
     if args.query:

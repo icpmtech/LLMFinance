@@ -53,13 +53,16 @@ COPY . .
 # (localmente não se via: o compose monta `./chat-ui`, que lá tem o `dist`).
 COPY _frontend_dist /app/chat-ui/dist
 
-# O CLI do Soup (instalação **leve**: sem o extra `[train]`) é o que a página de
-# retreino usa para listar e validar os configs de `training/soup/`
-# (`api/llm_contratos_soup.py`). O treino a sério corre no serviço `soup`
-# (`docker compose --profile train`), que traz o `[train]`; instalar aqui o
-# extra traria `trl`/`accelerate` e podia subir o `transformers`, que é
-# exactamente o que este ficheiro existe para não fazer.
-RUN pip install --no-cache-dir soup-cli
+# O CLI do Soup **com o extra `[train]`**: a página de retreino lista, valida e
+# lança treinos (`api/llm_contratos_soup.py`). O `[train]` acrescenta `trl`,
+# `datasets`, `bitsandbytes`, `dill`, `multiprocess` e `fsspec` — nada disso
+# toca em `torch`/`transformers`, mas o `pip` só aceita essa resolução com as
+# versões actuais **fixadas**: sem o `-c`, voltava a resolver as duas e mudava
+# o ambiente validado (o que este ficheiro existe para evitar). Se a base mudar
+# de versões, a build falha aqui em vez de produzir uma imagem diferente.
+RUN printf 'torch==2.14.1\ntransformers==5.19.0\n' > /tmp/constraints.txt \
+    && pip install --no-cache-dir -c /tmp/constraints.txt "soup-cli[train]" \
+    && rm -f /tmp/constraints.txt
 
 # Dependências que o incremental tem de acrescentar à parte. São poucas e leves:
 # o `requirements.txt` já as traz, mas uma build a frio resolveria também
@@ -69,3 +72,17 @@ RUN pip install --no-cache-dir soup-cli
 # `faster-whisper` a transcrição local — incluindo a **palavra de ativação**
 # (escuta contínua com o modelo `tiny`).
 RUN pip install --no-cache-dir "edge-tts>=6.1.0" "faster-whisper>=1.0.0"
+
+# `peft` e `accelerate` para **carregar o Adaptador LoRA**: a avaliação
+# (`inference/contratos_eval.py`) e a adaptação incremental
+# (`api/llm_contratos_treino.py`) fazem `from peft import PeftModel` e falhavam
+# no contentor com `ModuleNotFoundError: No module named 'peft'` — a imagem base
+# é anterior a essas dependências no `requirements.txt`.
+#
+# `--no-deps` + as poucas dependências que faltam, em vez de um `pip install peft`
+# normal: assim o `pip` não tem liberdade para resolver `torch`/`transformers`
+# outra vez (o objectivo deste ficheiro é manter exactamente as versões
+# validadas). `psutil` e `safetensors` não vinham na base; `numpy`, `torch`,
+# `transformers` e `huggingface_hub` já lá estão.
+RUN pip install --no-cache-dir --no-deps "peft>=0.14.0" "accelerate>=0.30.0" \
+    && pip install --no-cache-dir psutil safetensors

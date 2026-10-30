@@ -135,13 +135,20 @@ def test_contrato_pt_pede_todos_os_campos_que_a_resposta_cita() -> None:
 
 
 def test_contrato_pt_sem_data_nao_inventa_data() -> None:
-    """Sem ``dataPublicacao`` o pedido diz «data desconhecida» e a resposta também."""
+    """Sem ``dataPublicacao`` o campo sai do pedido **e** da resposta.
+
+    Antes o pedido dizia «data desconhecida» e a resposta repetia o marcador;
+    agora o modelo vê o par sem o campo, que é o que o ensina a calar-se quando
+    o documento do chat não traz a data.
+    """
     documento = {**DOC_PT, "dataPublicacao": None, "regime": ""}
     prompt, completion, _ = exporter._build_contrato_pt(documento, exporter.DEFAULT_MAX_CHARS)
 
-    assert "Data de publicação: data desconhecida" in prompt
-    assert "Regime: não especificado" in prompt
-    assert "data desconhecida" in completion
+    assert "Data de publicação" not in prompt
+    assert "Regime:" not in prompt
+    assert "publicado a" not in completion
+    assert "data desconhecida" not in completion
+    assert "Este contrato, liga" not in completion
 
 
 def test_variantes_cobrem_as_tres_instrucoes_da_interface() -> None:
@@ -501,3 +508,51 @@ def test_cli_aceita_varios_datasets_e_recusa_query_com_mais_que_um(tmp_path, mon
 
     with pytest.raises(SystemExit):
         exporter.main(["--dataset", "contratos", "--dataset", "empresas", "--query", '{"match_all": {}}'])
+
+# ------------------------------------------------- dropout de campos opcionais
+def _doc_contrato() -> dict:
+    return {
+        "idcontrato": "772453",
+        "objectoContrato": "limpeza de coletores",
+        "adjudicantes": [{"nome": "Municipio de Condeixa-a-Nova"}],
+        "adjudicatarios": [{"nome": "OLIVEIRA & PIRES"}],
+        "tipoContrato": ["Aquisicao de servicos"],
+        "tipoprocedimento": "Ajuste Direto Regime Geral",
+        "precoContratual": "20806.2",
+        "dataPublicacao": "2013-06-05",
+        "regime": "DL 18/2008",
+        "cpv": "90470000",
+    }
+
+
+def test_sem_dropout_a_resposta_cita_data_e_regime() -> None:
+    exporter.definir_dropout(0)
+    prompt, completion, _ = exporter._build_contrato_pt(_doc_contrato(), 0)
+    assert "Data de publicacao: 2013-06-05" in prompt.replace("ç", "c").replace("ã", "a")
+    assert "publicado a 2013-06-05" in completion
+
+
+def test_dropout_remove_o_campo_do_pedido_e_da_resposta() -> None:
+    """O modelo aprende a nao citar o que o documento nao traz."""
+    exporter.definir_dropout(1.0, seed=42)
+    try:
+        prompt, completion, _ = exporter._build_contrato_pt(_doc_contrato(), 0)
+    finally:
+        exporter.definir_dropout(0)
+    for campo in ("Data de publica", "Regime:", "CPV principal", "Tipo:", "Procedimento:"):
+        assert campo not in prompt, f"{campo} devia ter saido do pedido"
+    assert "publicado a" not in completion
+    assert "regime" not in completion
+    assert "Este contrato liga" in completion
+    # O essencial fica sempre.
+    assert "20806.2" in prompt and "20806.2" in completion
+
+
+def test_dropout_e_reprodutivel() -> None:
+    exporter.definir_dropout(0.5, seed=7)
+    try:
+        primeiro = exporter._build_contrato_pt(_doc_contrato(), 0)
+        segundo = exporter._build_contrato_pt(_doc_contrato(), 0)
+    finally:
+        exporter.definir_dropout(0)
+    assert primeiro == segundo

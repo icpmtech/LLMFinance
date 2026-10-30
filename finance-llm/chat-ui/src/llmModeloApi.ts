@@ -63,6 +63,7 @@ export type RespostaModelo = {
   resposta: string;
   modelo: string;
   adaptador: string | null;
+  adaptador_escolhido?: string | null;
   prompt_tokens: number;
   tokens_gerados: number;
   tokens: { token: string; id: number; probabilidade?: number; entropia?: number }[];
@@ -86,7 +87,31 @@ export type PedidoChat = {
   usar_memoria?: boolean;
   usar_skills?: boolean;
   raciocinio?: boolean;
+  /** Id do adaptador LoRA treinado (`qwen05-contratos`, `soup-*`). */
+  adaptador?: string | null;
 };
+
+/** Modelo treinado disponível para o chat (plataforma ou Soup). */
+export type AdaptadorTreinado = {
+  id: string;
+  nome: string;
+  caminho: string;
+  base: string | null;
+  bytes: number;
+  pares: number | null;
+  perda_final: number | null;
+  criado_em: string | null;
+  /** `plataforma` (adaptação incremental) ou `soup` (treino pelo CLI). */
+  origem: "plataforma" | "soup";
+  /** `true` no adaptador que a API usa por omissão. */
+  atual: boolean;
+  /** `true` quando foi treinado sobre o mesmo modelo base que o chat carrega. */
+  compativel: boolean;
+};
+
+export function getAdaptadores(): Promise<{ adaptadores: AdaptadorTreinado[]; total: number }> {
+  return pedir("/llm/modelo/adaptadores");
+}
 
 export type MatrizAdaptador = {
   disponivel: boolean;
@@ -198,13 +223,25 @@ export type AmostraAvaliacao = {
   numeros: number | null;
 };
 
+export type GeracaoAvaliacao = {
+  f1_medio: number;
+  fidelidade_numerica: number | null;
+  ancoragem_numerica?: number | null;
+  amostras: AmostraAvaliacao[];
+};
+
 export type ResultadoAvaliacao = {
   id?: string;
   modelo_base?: string;
   adaptador?: string;
   conjunto?: { pares?: number; ficheiro?: string; origem?: string[]; holdout_total?: number };
-  base?: { perplexidade?: number; exactidao_token?: number; perda_por_token?: number };
-  treinado?: { perplexidade?: number; exactidao_token?: number; perda_por_token?: number } | null;
+  base?: { perplexidade?: number; exactidao_token?: number; perda_por_token?: number; geracao?: GeracaoAvaliacao };
+  treinado?: {
+    perplexidade?: number;
+    exactidao_token?: number;
+    perda_por_token?: number;
+    geracao?: GeracaoAvaliacao;
+  } | null;
   delta?: { perplexidade?: number; exactidao_token?: number; f1_medio?: number };
   f1_medio?: number | null;
   fidelidade_numerica?: number | null;
@@ -213,7 +250,7 @@ export type ResultadoAvaliacao = {
   criado_em?: string;
   documento?: string | null;
   origem?: string;
-  geracao?: { f1_medio: number; fidelidade_numerica: number | null; amostras: AmostraAvaliacao[] };
+  geracao?: GeracaoAvaliacao;
   nota?: string;
 };
 

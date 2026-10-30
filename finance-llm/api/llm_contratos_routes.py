@@ -57,6 +57,11 @@ class ChatRequest(BaseModel):
     usar_memoria: bool = Field(True, description="Incluir memórias e skills aprendidas")
     usar_skills: bool = Field(True, description="Executar skills (consultas ao Elasticsearch)")
     raciocinio: bool = Field(True, description="Traço de raciocínio e verificação dos números")
+    adaptador: Optional[str] = Field(
+        None,
+        max_length=120,
+        description="Adaptador LoRA a usar (`qwen05-contratos`, `soup-*`); vazio usa o da plataforma",
+    )
 
 
 class PassoResposta(BaseModel):
@@ -70,6 +75,7 @@ class ChatResponse(BaseModel):
     resposta: str
     modelo: str
     adaptador: Optional[str] = None
+    adaptador_escolhido: Optional[str] = None
     prompt_tokens: int = 0
     tokens_gerados: int = 0
     tokens: List[Dict[str, Any]] = Field(default_factory=list)
@@ -113,6 +119,9 @@ class AvaliarRequest(BaseModel):
     gerar: int = Field(2, ge=0, le=6, description="Respostas geradas para medir fidelidade")
     holdout: int = Field(60, ge=0, le=2000)
     seed: int = 42
+    adaptador: Optional[str] = Field(
+        None, max_length=120, description="Adaptador a avaliar (por omissão, o da plataforma)"
+    )
 
 
 class RagRequest(BaseModel):
@@ -198,6 +207,7 @@ async def chat(req: ChatRequest, session: Session) -> ChatResponse:  # noqa: ARG
             raciocinio=req.raciocinio,
             max_new_tokens=req.max_tokens,
             temperatura=req.temperatura,
+            adaptador=req.adaptador,
         )
     except Exception as error:  # pragma: no cover - depende do modelo em disco
         logger.exception("Falha ao gerar resposta com o modelo de contratos")
@@ -205,11 +215,24 @@ async def chat(req: ChatRequest, session: Session) -> ChatResponse:  # noqa: ARG
     return ChatResponse(**resultado)
 
 
+@router.get("/adaptadores", summary="Adaptadores LoRA treinados disponíveis")
+def listar_adaptadores() -> Dict[str, Any]:
+    """Modelos treinados que o chat pode usar (plataforma e Soup).
+
+    Leitura pública, como a ficha: a lista mostra o que existe em `model/` sem
+    expor caminhos arbitrários — o `id` é o que o `/chat` aceita em `adaptador`.
+    """
+    from inference import contratos_lora
+
+    itens = contratos_lora.listar_adaptadores()
+    return {"adaptadores": itens, "total": len(itens)}
+
+
 @router.post("/avaliar", summary="Correr a avaliação base vs adaptador")
 async def avaliar(req: AvaliarRequest, session: Session) -> Dict[str, Any]:  # noqa: ARG001
     """Mede o held-out e guarda o resultado em `finance_llm_model_evals`."""
     try:
-        return await run_in_threadpool(service.avaliar, req.limite, req.gerar, req.holdout, req.seed)
+        return await run_in_threadpool(service.avaliar, req.limite, req.gerar, req.holdout, req.seed, req.adaptador)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:  # pragma: no cover - depende do modelo em disco

@@ -34,11 +34,13 @@ import ArvoreDoRaciocinio from "./ArvoreDoRaciocinio";
 import PainelDeRetreino from "./PainelDeRetreino";
 import {
   enviarFeedback,
+  getAdaptadores,
   getPrompts,
   getSkills,
   guardarMemoria,
   listarMemorias,
   perguntarAoModelo,
+  type AdaptadorTreinado,
   type ItemMemoria,
   type PromptSistema,
   type RespostaModelo,
@@ -46,6 +48,8 @@ import {
 } from "../../llmModeloApi";
 
 const CHAVE_STORAGE = "chat_modelo_contratos_historico";
+/** Adaptador escolhido no chat (o modelo treinado que responde). */
+const CHAVE_ADAPTADOR = "chat_modelo_contratos_adaptador";
 /** Evento para o painel de auto-aprendizagem reler os contadores de feedback. */
 const EVENTO_ATUALIZAR_RETREINO = "iqos:retreino-atualizar";
 
@@ -195,16 +199,45 @@ export default function ChatDoModelo({
   const fimRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [mostrarOpcoes, setMostrarOpcoes] = useState<number | null>(null);
+  // Modelo treinado escolhido: `""` = o adaptador predefinido da plataforma.
+  const [adaptadores, setAdaptadores] = useState<AdaptadorTreinado[]>([]);
+  const [adaptadorId, setAdaptadorId] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem(CHAVE_ADAPTADOR) ?? "";
+    } catch {
+      return "";
+    }
+  });
+
+  const escolherAdaptador = (id: string) => {
+    setAdaptadorId(id);
+    try {
+      if (id) window.localStorage.setItem(CHAVE_ADAPTADOR, id);
+      else window.localStorage.removeItem(CHAVE_ADAPTADOR);
+    } catch {
+      /* modo privado: fica só em memória */
+    }
+  };
 
   const carregarPainel = useCallback(async () => {
-    const [listaPrompts, listaSkills, listaMemorias] = await Promise.all([
+    const [listaPrompts, listaSkills, listaMemorias, listaAdaptadores] = await Promise.all([
       getPrompts().catch(() => ({ prompts: [], total: 0 })),
       getSkills().catch(() => ({ skills: [], total: 0 })),
       listarMemorias().catch(() => ({ itens: [], total: 0 })),
+      getAdaptadores().catch(() => ({ adaptadores: [], total: 0 })),
     ]);
     setPrompts(listaPrompts.prompts);
     setSkills(listaSkills.skills);
     setMemorias(listaMemorias.itens);
+    // Só os adaptadores treinados sobre o mesmo modelo base que o chat carrega:
+    // um LoRA de outro modelo devolveria texto sem sentido.
+    setAdaptadores(listaAdaptadores.adaptadores.filter((a) => a.compativel));
+    // O adaptador guardado pode ter desaparecido (pasta apagada, versão
+    // revertida): nesse caso volta-se ao predefinido em vez de falhar no envio.
+    setAdaptadorId((atual) => {
+      if (!atual) return atual;
+      return listaAdaptadores.adaptadores.some((a) => a.id === atual && a.compativel) ? atual : "";
+    });
   }, []);
 
   useEffect(() => {
@@ -264,6 +297,7 @@ export default function ChatDoModelo({
         raciocinio: raf.raciocinio,
         max_tokens: maxTokens,
         temperatura,
+        adaptador: adaptadorId || null,
       });
       adicionarMensagem({
         id: Date.now() + 1,
@@ -302,6 +336,7 @@ export default function ChatDoModelo({
         raciocinio: true,
         max_tokens: 320,
         temperatura: 0.1,
+        adaptador: adaptadorId || null,
       });
       adicionarMensagem({
         id: Date.now() + 1,
@@ -444,7 +479,28 @@ export default function ChatDoModelo({
           </div>
           <div>
             <h3 className="text-sm font-medium text-foreground">Modelo de contratos</h3>
-            <p className="text-[11px] text-muted-foreground">Qwen 0.5B + LoRA · memória, skills, RAG e raciocínio</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span>{adaptadorId ? `${adaptadorId} · LoRA` : "Qwen 0.5B + LoRA"}</span>
+              <span>· memória, skills, RAG e raciocínio</span>
+              {adaptadores.length > 1 && (
+                <label className="flex items-center gap-1" title="Escolher o modelo treinado que responde">
+                  <select
+                    value={adaptadorId}
+                    onChange={(evento) => escolherAdaptador(evento.target.value)}
+                    disabled={aEnviar}
+                    className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10.5px] text-foreground outline-none focus:border-primary disabled:opacity-50"
+                  >
+                    {adaptadores.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.id}
+                        {item.origem === "soup" ? " (soup)" : ""}
+                        {item.atual ? " · predefinido" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
