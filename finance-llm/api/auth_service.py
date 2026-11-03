@@ -439,7 +439,10 @@ def authenticate(email: str, password: str) -> Dict[str, Any]:
     if status != USER_STATUS_ACTIVE:
         raise AuthError("Esta conta está suspensa.", status_code=403, code="suspended")
     if _is_trial_expired(user):
-        raise AuthError("O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.", status_code=403, code="trial_expired")
+        from api import billing_service
+
+        if not billing_service.has_active_subscription(user):
+            raise AuthError("O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.", status_code=403, code="trial_expired")
     return user
 
 

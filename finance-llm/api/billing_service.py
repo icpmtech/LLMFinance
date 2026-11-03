@@ -172,6 +172,23 @@ def get_user_subscription(user: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def has_active_subscription(user: Dict[str, Any]) -> bool:
+    """True only for a valid paid/manual subscription within its billing period."""
+    subscription = user.get("subscription") or {}
+    if subscription.get("status") != "active" or subscription.get("plan_id") not in PLAN_BY_ID:
+        return False
+    period_end = subscription.get("current_period_end")
+    if not period_end:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(str(period_end).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > datetime.now(timezone.utc)
+
+
 def _public_payment(payment: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": payment.get("id"),
@@ -456,6 +473,51 @@ def confirm_payment(user_id: str, payment_id: str, *, admin_confirmed: bool = Fa
     _add_payment(user_id, payment)
     updated_user = _activate_subscription(user_id, payment)
     return {"ok": True, "payment_id": payment_id, "user": updated_user}
+
+
+def activate_subscription_manually(user_id: str, *, plan_id: str, interval: str) -> Dict[str, Any]:
+    """Ativa um plano pela administração, sem registar um pagamento."""
+    if plan_id not in PLAN_BY_ID:
+        raise auth.AuthError("Plano inválido.", status_code=422, code="invalid_input")
+    if interval not in {"monthly", "yearly"}:
+        raise auth.AuthError("Intervalo inválido (use monthly ou yearly).", status_code=422, code="invalid_input")
+
+    user = auth.get_user_by_id(user_id)
+    if not user:
+        raise auth.AuthError("Conta não encontrada.", status_code=404, code="not_found")
+
+    now = datetime.now(timezone.utc)
+    period_end = _plan_end(now, interval)
+    subscription = {
+        "plan_id": plan_id,
+        "status": "active",
+        "interval": interval,
+        "payment_method": "admin",
+        "current_period_start": now.isoformat(),
+        "current_period_end": period_end.isoformat(),
+        "last_payment_id": None,
+        "updated_at": _now_iso(),
+    }
+    updated = _upsert_subscription(user_id, subscription)
+    if user.get("status") != auth.USER_STATUS_ACTIVE:
+        auth.update_user(user_id, {"status": auth.USER_STATUS_ACTIVE}, admin_fields=True)
+        updated = auth.public_user(auth.get_user_by_id(user_id) or {**user, "status": auth.USER_STATUS_ACTIVE})
+
+    notification_email.send_subscription_activated_email(
+        to=user.get("email") or "",
+        name=user.get("name") or user.get("email") or "",
+        plan_name=PLAN_BY_ID[plan_id]["name"],
+        period_end=subscription["current_period_end"],
+    )
+    events.log_event(
+        "info",
+        "billing",
+        f"Subscrição ativada manualmente: {user.get('email')} → {plan_id} ({interval})",
+        data={"plan_id": plan_id, "interval": interval, "activation_method": "admin"},
+        user_id=user_id,
+        user_email=user.get("email"),
+    )
+    return updated
 
 
 def mbway_payment_request(user_id: str, payment_id: str, phone: str) -> Dict[str, Any]:

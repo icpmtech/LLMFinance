@@ -7,8 +7,8 @@
  *   tamanho), contas por papel/estado, eventos das últimas 24 h e ficheiros de log.
  * - **Utilizadores** — pesquisa, papel (`admin`/`member`), estado
  *   (`active`/`suspended`/`pending`), plano (subscrição paga, trial em curso ou
- *   sem plano), sessões ativas e ações (aprovar, suspender, promover, terminar
- *   sessões, apagar).
+ *   sem plano), sessões ativas e ações (aprovar, suspender, promover, redefinir
+ *   palavra-passe, ativar plano, terminar sessões, apagar).
  * - **Eventos** — o *event logger viewer*: filtros por nível/origem/utilizador/
  *   texto, fonte (tempo real em memória ou arquivo no Elasticsearch), atualização
  *   automática, gráfico por hora, detalhe JSON de cada evento e criação de eventos
@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import {
   approveAdminUser,
+  activateAdminUserPlan,
   confirmAdminPayment,
   deleteAdminUser,
   getAdminEventStats,
@@ -65,6 +66,7 @@ import {
   listAdminUsers,
   logAdminEvent,
   revokeAdminUserSessions,
+  resetAdminUserPassword,
   setAdminUserMfa,
   tailAdminLog,
   updateAdminUser,
@@ -626,6 +628,10 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [passwordResult, setPasswordResult] = useState<{ email: string; password: string } | null>(null);
+  const [planTarget, setPlanTarget] = useState<AdminUser | null>(null);
+  const [planId, setPlanId] = useState("basic");
+  const [planInterval, setPlanInterval] = useState<"monthly" | "yearly">("monthly");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -645,18 +651,42 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
     void load();
   }, [load]);
 
-  const act = async (label: string, action: () => Promise<unknown>, userId: string) => {
+  const act = async <T,>(label: string, action: () => Promise<T>, userId: string): Promise<T | undefined> => {
     setBusy(userId);
     setNotice(null);
     try {
-      await action();
+      const result = await action();
       setNotice(label);
       await load();
+      return result;
     } catch (error) {
       onError(error instanceof Error ? error.message : `Erro: ${label}`);
+      return undefined;
     } finally {
       setBusy(null);
     }
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!passwordResult) return;
+    try {
+      await navigator.clipboard.writeText(passwordResult.password);
+      setNotice(`Palavra-passe copiada para ${passwordResult.email}.`);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Não foi possível copiar a palavra-passe.");
+    }
+  };
+
+  const submitPlanActivation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!planTarget) return;
+    const target = planTarget;
+    const result = await act(
+      `Plano ${planName(planId)} (${planInterval === "yearly" ? "anual" : "mensal"}) ativado para ${target.email}`,
+      () => activateAdminUserPlan(target.id, planId, planInterval),
+      target.id,
+    );
+    if (result) setPlanTarget(null);
   };
 
   return (
@@ -805,6 +835,39 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
 
                       <button
                         type="button"
+                        disabled={disabled || isSelf}
+                        title="Gerar palavra-passe temporária e terminar as sessões"
+                        onClick={() => {
+                          if (!window.confirm(`Redefinir a palavra-passe de ${user.email}? As sessões atuais serão terminadas.`)) return;
+                          void act(
+                            `Palavra-passe redefinida para ${user.email}`,
+                            async () => {
+                              const result = await resetAdminUserPassword(user.id);
+                              setPasswordResult({ email: user.email, password: result.temporary_password });
+                              return result;
+                            },
+                            user.id,
+                          );
+                        }}
+                        className="rounded-md border border-white/10 bg-white/[0.04] p-1 text-muted-foreground transition hover:text-amber-200 disabled:opacity-40"
+                      >
+                        <RefreshCw size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        title="Ativar ou alterar o plano"
+                        onClick={() => {
+                          setPlanTarget(user);
+                          setPlanId(user.subscription?.plan_id || "basic");
+                          setPlanInterval(user.subscription?.interval === "yearly" ? "yearly" : "monthly");
+                        }}
+                        className="rounded-md border border-white/10 bg-white/[0.04] p-1 text-muted-foreground transition hover:text-teal-200 disabled:opacity-40"
+                      >
+                        <CreditCard size={12} />
+                      </button>
+                      <button
+                        type="button"
                         disabled={disabled}
                         title={
                           user.mfa_enabled
@@ -857,6 +920,103 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
           </tbody>
         </table>
       </section>
+
+      {passwordResult && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-password-title"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171d] p-5 shadow-2xl"
+          >
+            <h2 id="admin-password-title" className="text-base font-semibold">Palavra-passe temporária gerada</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Entregue esta palavra-passe a {passwordResult.email} por um canal seguro. Só é mostrada nesta janela.
+            </p>
+            <input
+              readOnly
+              value={passwordResult.password}
+              autoComplete="new-password"
+              aria-label="Palavra-passe temporária"
+              onFocus={(event) => event.currentTarget.select()}
+              className="mt-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void copyTemporaryPassword()}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/[0.06]"
+              >
+                Copiar
+              </button>
+              <button
+                type="button"
+                onClick={() => setPasswordResult(null)}
+                className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-sm text-teal-100 hover:bg-teal-500/30"
+              >
+                Fechar
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {planTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation">
+          <form
+            onSubmit={(event) => void submitPlanActivation(event)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-plan-title"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171d] p-5 shadow-2xl"
+          >
+            <h2 id="admin-plan-title" className="text-base font-semibold">Ativar plano</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Utilizador: <span className="text-foreground">{planTarget.email}</span>. A ativação é manual, não regista pagamento e dá acesso imediato.
+            </p>
+            <label className="mt-4 block text-xs text-muted-foreground">
+              Plano
+              <select
+                value={planId}
+                onChange={(event) => setPlanId(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
+              >
+                <option value="basic">Básico</option>
+                <option value="pro">Profissional</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </label>
+            <label className="mt-3 block text-xs text-muted-foreground">
+              Duração
+              <select
+                value={planInterval}
+                onChange={(event) => setPlanInterval(event.target.value as "monthly" | "yearly")}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
+              >
+                <option value="monthly">Mensal (30 dias)</option>
+                <option value="yearly">Anual (365 dias)</option>
+              </select>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPlanTarget(null)}
+                disabled={busy === planTarget.id}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={busy === planTarget.id}
+                className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-sm text-teal-100 hover:bg-teal-500/30 disabled:opacity-50"
+              >
+                {busy === planTarget.id ? <Loader2 size={14} className="animate-spin" /> : "Ativar plano"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

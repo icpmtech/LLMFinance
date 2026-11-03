@@ -208,7 +208,7 @@ def _require_user_active(user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="A conta está pendente de aprovação por um administrador.")
     if status != auth.USER_STATUS_ACTIVE:
         raise HTTPException(status_code=403, detail="Esta conta está suspensa.")
-    if auth._is_trial_expired(user):
+    if auth._is_trial_expired(user) and not billing_service_module.has_active_subscription(user):
         raise HTTPException(status_code=403, detail="O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.")
 
 

@@ -198,6 +198,25 @@ export function approveAdminUser(userId: string, trialDays = 5): Promise<{ ok: b
   return post(`/admin/users/${encodeURIComponent(userId)}/approve`, { trial_days: trialDays });
 }
 
+export function resetAdminUserPassword(userId: string): Promise<{
+  ok: boolean;
+  temporary_password: string;
+  revoked_sessions: number;
+}> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/reset-password`);
+}
+
+export function activateAdminUserPlan(
+  userId: string,
+  planId: string,
+  interval: "monthly" | "yearly",
+): Promise<{ ok: boolean; user: AdminUser; subscription: AdminUser["subscription"] }> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/activate-plan`, {
+    plan_id: planId,
+    interval,
+  });
+}
+
 /* ------------------------------------------ verificação em dois passos (MFA) */
 
 export type MfaPolicy = {

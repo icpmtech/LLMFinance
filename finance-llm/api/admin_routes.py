@@ -6,6 +6,8 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `GET  /admin/overview`            — saúde do sistema (API, Elasticsearch, índices, contas, eventos)
 - `GET  /admin/users`               — lista/pesquisa de contas
 - `PATCH /admin/users/{user_id}`    — alterar papel/estado/nome
+- `POST /admin/users/{user_id}/reset-password` — gerar palavra-passe temporária e terminar sessões
+- `POST /admin/users/{user_id}/activate-plan` — ativar manualmente um plano
 - `POST /admin/users/{user_id}/approve` — aprovar conta pendente (inicia trial de 5 dias)
 - `DELETE /admin/users/{user_id}`   — apagar conta
 - `POST /admin/users/{user_id}/revoke-sessions` — terminar sessões de um utilizador
@@ -35,6 +37,8 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import secrets
+import string
 import threading
 import time
 from typing import Annotated, Any, Dict, List, Optional, Tuple
@@ -128,6 +132,23 @@ class MfaPolicyPayload(BaseModel):
 
 class UserMfaPayload(BaseModel):
     enabled: bool
+
+
+class AdminPlanActivationPayload(BaseModel):
+    plan_id: str = Field(..., description="basic | pro | enterprise")
+    interval: str = Field("monthly", description="monthly | yearly")
+
+
+def _generate_temporary_password() -> str:
+    """Gera uma palavra-passe aleatória compatível com a política da conta."""
+    alphabet = string.ascii_letters + string.digits + "-_"
+    password = [
+        secrets.choice(string.ascii_letters),
+        secrets.choice(string.digits),
+        *(secrets.choice(alphabet) for _ in range(18)),
+    ]
+    secrets.SystemRandom().shuffle(password)
+    return "".join(password)
 
 
 # -------------------------------------------------------------------- visão geral
@@ -334,6 +355,69 @@ def admin_update_user(user_id: str, payload: UserPatch, session: AdminSession) -
         user_email=session.user.email,
     )
     return {"user": updated}
+
+
+@router.post("/users/{user_id}/reset-password")
+def admin_reset_user_password(user_id: str, session: AdminSession) -> Dict[str, Any]:
+    """Define uma palavra-passe temporária e revoga todas as sessões da conta."""
+    if user_id == session.user.id:
+        raise HTTPException(status_code=422, detail="Use as definições da conta para alterar a sua própria palavra-passe.")
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        temporary_password = _generate_temporary_password()
+        auth.set_password(user_id, temporary_password)
+        revoked_sessions = auth.revoke_all_sessions(user_id)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Palavra-passe redefinida por administrador: {target.get('email')}",
+        data={"target_user": target.get("email"), "revoked_sessions": revoked_sessions},
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {
+        "ok": True,
+        "temporary_password": temporary_password,
+        "revoked_sessions": revoked_sessions,
+    }
+
+
+@router.post("/users/{user_id}/activate-plan")
+def admin_activate_user_plan(
+    user_id: str, payload: AdminPlanActivationPayload, session: AdminSession
+) -> Dict[str, Any]:
+    """Ativa manualmente um plano sem registar pagamento."""
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        updated = billing.activate_subscription_manually(
+            user_id,
+            plan_id=payload.plan_id,
+            interval=payload.interval,
+        )
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Plano ativado manualmente: {target.get('email')} → {payload.plan_id} ({payload.interval})",
+        data={
+            "target_user": target.get("email"),
+            "plan_id": payload.plan_id,
+            "interval": payload.interval,
+            "activation_method": "admin",
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": updated, "subscription": billing.get_user_subscription(updated)}
 
 
 @router.delete("/users/{user_id}")
