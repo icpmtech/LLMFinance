@@ -768,6 +768,7 @@ def _render_slider(data: Dict[str, Any]) -> str:
         )
 
     slides_html = "".join(slide(item, i) for i, item in enumerate(items))
+
     def dot(i: int) -> str:
         current = "true" if i == 0 else "false"
         return f'<button type="button" class="slider-dot" data-slide="{i}" aria-label="Ir para o slide {i + 1}" aria-current="{current}"></button>'
@@ -779,13 +780,44 @@ def _render_slider(data: Dict[str, Any]) -> str:
     ) if len(items) > 1 else ""
     autoplay_attr = f' data-autoplay="true" data-interval="{interval}"' if autoplay and len(items) > 1 else ""
 
+    # O JS do slider é individual: cada instância gere o seu track/dots/arrows
+    # sem partilhar estado. Sem isto, múltiplos sliders na mesma página colidiam
+    # e só o último funcionava.
+    slider_js = (
+        f'<script>(function(){{'
+        f'var host=document.getElementById("{slider_id}");'
+        f'if(!host)return;var track=host.querySelector(".slider-track");'
+        f'if(!track)return;var slides=Array.from(track.children);'
+        f'var dots=Array.from(host.querySelectorAll(".slider-dot"));'
+        f'var prev=host.querySelector(".slider-arrow--prev");'
+        f'var next=host.querySelector(".slider-arrow--next");'
+        f'var total=slides.length;if(total<2)return;var current=0;'
+        f'var interval=parseInt(host.dataset.interval||"6000",10);'
+        f'var autoplay=host.dataset.autoplay==="true"&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches;'
+        f'var timer=null;'
+        f'function show(index){{index=(index+total)%total;slides.forEach(function(s,i){{'
+        f's.classList.toggle("is-active",i===index);s.setAttribute("aria-hidden",i===index?"false":"true");}});'
+        f'dots.forEach(function(d,i){{d.classList.toggle("is-active",i===index);d.setAttribute("aria-current",i===index?"true":"false");}});'
+        f'current=index;}}'
+        f'function nextSlide(){{show(current+1);}}'
+        f'function start(){{if(autoplay){{stop();timer=setInterval(nextSlide,interval);}}}}'
+        f'function stop(){{if(timer){{clearInterval(timer);timer=null;}}}}'
+        f'show(0);start();'
+        f'if(prev)prev.addEventListener("click",function(e){{e.preventDefault();stop();show(current-1);start();}});'
+        f'if(next)next.addEventListener("click",function(e){{e.preventDefault();stop();show(current+1);start();}});'
+        f'dots.forEach(function(d,i){{d.addEventListener("click",function(e){{e.preventDefault();stop();show(i);start();}});}});'
+        f'host.addEventListener("mouseenter",stop);host.addEventListener("mouseleave",start);'
+        f'host.addEventListener("focusin",stop);host.addEventListener("focusout",start);'
+        f'}})();</script>'
+    ) if len(items) > 1 else ""
+
     titulo = f'<h2 class="slider-section-title">{_esc(data.get("title"))}</h2>' if data.get("title") else ""
     return (
         f'<section class="slider-section">{titulo}'
         f'<div id="{slider_id}" class="slider" data-slider="{slider_id}"{autoplay_attr}>'
         f'<ul class="slider-track" role="region" aria-label="Destaques">{slides_html}</ul>'
         f'{arrows}<div class="slider-dots" role="tablist">{dots}</div>'
-        f'</div></section>'
+        f'</div>{slider_js}</section>'
     )
 
 
@@ -1915,29 +1947,6 @@ def _layout(
                 '\x3cscript\x3e(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right\x3ewindow.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();\x3c/script\x3e'
                 # Loader da pesquisa: mostra o spinner quando o formulário é submetido.
                 '\x3cscript\x3e(function(){document.querySelectorAll("[data-busca-form]").forEach(function(f){f.addEventListener("submit",function(){f.setAttribute("aria-busy","true");});f.querySelectorAll("a,button:not([type=submit])").forEach(function(e){e.addEventListener("click",function(){f.setAttribute("aria-busy","true");});});window.addEventListener("pageshow",function(){f.removeAttribute("aria-busy");});});})();\x3c/script\x3e'
-            )
-        )
-        + (
-            # Slider do CMS: passa os slides, pára no hover e ao focar, respeita
-            # preferência de redução de movimento e mantém os controlos acessíveis.
-            ""
-            if "class=\"slider\"" not in body and 'class="slider"' not in body
-            else (
-                '<script>(function(){function initSlider(host){var track=host.querySelector(".slider-track");'
-                'if(!track)return;var slides=Array.from(track.children);var dots=Array.from(host.querySelectorAll(".slider-dot"));'
-                'var prev=host.querySelector(".slider-arrow--prev");var next=host.querySelector(".slider-arrow--next");'
-                'var total=slides.length;if(total<2)return;var current=0;var interval=parseInt(host.dataset.interval||"6000",10);'
-                'var autoplay=host.dataset.autoplay==="true"&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches;'
-                'var timer=null;function show(index){index=(index+total)%total;slides.forEach(function(s,i){'
-                's.classList.toggle("is-active",i===index);s.setAttribute("aria-hidden",i===index?"false":"true");});'
-                'dots.forEach(function(d,i){d.classList.toggle("is-active",i===index);d.setAttribute("aria-current",i===index?"true":"false");});'
-                'current=index;}function nextSlide(){show(current+1);}function start(){if(autoplay){stop();timer=setInterval(nextSlide,interval);}}'
-                'function stop(){if(timer){clearInterval(timer);timer=null;}}show(0);start();if(prev)prev.addEventListener("click",function(e){e.preventDefault();stop();show(current-1);start();});'
-                'if(next)next.addEventListener("click",function(e){e.preventDefault();stop();show(current+1);start();});'
-                'dots.forEach(function(d,i){d.addEventListener("click",function(e){e.preventDefault();stop();show(i);start();});});'
-                'host.addEventListener("mouseenter",stop);host.addEventListener("mouseleave",start);'
-                'host.addEventListener("focusin",stop);host.addEventListener("focusout",start);}'
-                'document.querySelectorAll("[data-slider]").forEach(initSlider);})();\x3c/script\x3e'
             )
         )
         + "</body></html>"
