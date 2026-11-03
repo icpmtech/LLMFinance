@@ -18,6 +18,7 @@ import json
 import logging
 import re
 import unicodedata
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import quote
@@ -714,6 +715,98 @@ def _grafico_barras(data: Dict[str, Any]) -> str:
     )
 
 
+def _slider_from_blog(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Constroi 3 slides a partir dos posts mais recentes do blog."""
+    category_id = str(data.get("blog_category_id") or "")
+    limit = max(1, min(10, int(_grafico_numero(data.get("blog_limit")) or 3)))
+    posts = store.published_posts(category_id=category_id or None, limit=limit)
+    slides = []
+    for post in posts:
+        slides.append({
+            "title": str(post.get("title") or ""),
+            "subtitle": str(post.get("excerpt") or _plain_excerpt(post) or ""),
+            "image_id": str(post.get("cover_id") or ""),
+            "cta_label": str(data.get("blog_cta_label") or "Ler mais"),
+            "cta_href": f"/site/blog/{post.get('slug') or ''}",
+            "align": str(data.get("align") or "esquerda"),
+        })
+    return slides
+
+
+def _render_slider(data: Dict[str, Any]) -> str:
+    """Carrossel de destaques — HTML/CSS/JS autónomo, sem dependências."""
+    source = str(data.get("source") or "manual").strip().lower()
+    if source == "blog":
+        items = _slider_from_blog(data)
+    else:
+        items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
+    if not items:
+        return ""
+
+    interval = max(2, int(_grafico_numero(data.get("interval")) or 6)) * 1000
+    autoplay = bool(data.get("autoplay", True))
+    slider_id = f"slider_{uuid.uuid4().hex[:8]}"
+
+    def slide(item: Dict[str, Any], index: int) -> str:
+        image = _media_url(item.get("image_id"))
+        align = "centro" if str(item.get("align") or "").strip().lower() == "centro" else "esquerda"
+        title = _esc(item.get("title") or "")
+        subtitle = _esc(item.get("subtitle") or "")
+        cta_label = _esc(item.get("cta_label") or "")
+        cta_href = _esc(item.get("cta_href") or "#")
+        actions = f'<div class="slider-actions"><a class="btn" href="{cta_href}">{cta_label}</a></div>' if cta_label else ""
+        bg = f'<img class="slider-bg" src="{_esc(image)}" alt="" aria-hidden="true">' if image else ""
+        active = " is-active" if index == 0 else ""
+        hidden = "false" if index == 0 else "true"
+        return (
+            f'<li class="slider-slide{active}" data-index="{index}" role="group" aria-roledescription="slide" '
+            f'aria-label="{index + 1} de {len(items)}" aria-hidden="{hidden}">'
+            f'{bg}<div class="slider-overlay" aria-hidden="true"></div>'
+            f'<div class="slider-copy slider-copy--{align}">'
+            f'<h2>{title}</h2><p class="lead">{subtitle}</p>{actions}'
+            f'</div></li>'
+        )
+
+    slides_html = "".join(slide(item, i) for i, item in enumerate(items))
+    def dot(i: int) -> str:
+        current = "true" if i == 0 else "false"
+        return f'<button type="button" class="slider-dot" data-slide="{i}" aria-label="Ir para o slide {i + 1}" aria-current="{current}"></button>'
+
+    dots = "".join(dot(i) for i in range(len(items))) if len(items) > 1 else ""
+    arrows = (
+        '<button type="button" class="slider-arrow slider-arrow--prev" aria-label="Slide anterior"></button>'
+        '<button type="button" class="slider-arrow slider-arrow--next" aria-label="Próximo slide"></button>'
+    ) if len(items) > 1 else ""
+    autoplay_attr = f' data-autoplay="true" data-interval="{interval}"' if autoplay and len(items) > 1 else ""
+
+    titulo = f'<h2 class="slider-section-title">{_esc(data.get("title"))}</h2>' if data.get("title") else ""
+    return (
+        f'<section class="slider-section">{titulo}'
+        f'<div id="{slider_id}" class="slider" data-slider="{slider_id}"{autoplay_attr}>'
+        f'<ul class="slider-track" role="region" aria-label="Destaques">{slides_html}</ul>'
+        f'{arrows}<div class="slider-dots" role="tablist">{dots}</div>'
+        f'</div></section>'
+    )
+
+
+def _render_metricas(data: Dict[str, Any]) -> str:
+    """Indicadores numéricos em destaque, como os do hero do site."""
+    items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
+    if not items:
+        return ""
+
+    titulo = f'<p class="metricas-title">{_esc(data.get("title"))}</p>' if data.get("title") else ""
+    cards = "".join(
+        f'<div class="metrica">'
+        f'<span class="metrica-label">{_esc(item.get("label"))}</span>'
+        f'<strong class="metrica-value">{_esc(item.get("value"))}</strong>'
+        f'<small class="metrica-note">{_esc(item.get("note"))}</small>'
+        f'</div>'
+        for item in items
+    )
+    return f'<section class="metricas-section">{titulo}<div class="metricas">{cards}</div></section>'
+
+
 def _render_block(
     block: Dict[str, Any],
     *,
@@ -729,6 +822,12 @@ def _render_block(
 
     if block_type == "pesquisa-sabemos":
         return _bloco_pesquisa_sabemos(data, query=query, tipo=tipo, pagina=pagina, preview=preview)
+
+    if block_type == "slider":
+        return _render_slider(data)
+
+    if block_type == "metricas":
+        return _render_metricas(data)
 
     if block_type == "hero":
         title = _esc(data.get("title") or "")
@@ -1816,6 +1915,29 @@ def _layout(
                 '\x3cscript\x3e(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right\x3ewindow.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();\x3c/script\x3e'
                 # Loader da pesquisa: mostra o spinner quando o formulário é submetido.
                 '\x3cscript\x3e(function(){document.querySelectorAll("[data-busca-form]").forEach(function(f){f.addEventListener("submit",function(){f.setAttribute("aria-busy","true");});f.querySelectorAll("a,button:not([type=submit])").forEach(function(e){e.addEventListener("click",function(){f.setAttribute("aria-busy","true");});});window.addEventListener("pageshow",function(){f.removeAttribute("aria-busy");});});})();\x3c/script\x3e'
+            )
+        )
+        + (
+            # Slider do CMS: passa os slides, pára no hover e ao focar, respeita
+            # preferência de redução de movimento e mantém os controlos acessíveis.
+            ""
+            if "class=\"slider\"" not in body and 'class="slider"' not in body
+            else (
+                '<script>(function(){function initSlider(host){var track=host.querySelector(".slider-track");'
+                'if(!track)return;var slides=Array.from(track.children);var dots=Array.from(host.querySelectorAll(".slider-dot"));'
+                'var prev=host.querySelector(".slider-arrow--prev");var next=host.querySelector(".slider-arrow--next");'
+                'var total=slides.length;if(total<2)return;var current=0;var interval=parseInt(host.dataset.interval||"6000",10);'
+                'var autoplay=host.dataset.autoplay==="true"&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches;'
+                'var timer=null;function show(index){index=(index+total)%total;slides.forEach(function(s,i){'
+                's.classList.toggle("is-active",i===index);s.setAttribute("aria-hidden",i===index?"false":"true");});'
+                'dots.forEach(function(d,i){d.classList.toggle("is-active",i===index);d.setAttribute("aria-current",i===index?"true":"false");});'
+                'current=index;}function nextSlide(){show(current+1);}function start(){if(autoplay){stop();timer=setInterval(nextSlide,interval);}}'
+                'function stop(){if(timer){clearInterval(timer);timer=null;}}show(0);start();if(prev)prev.addEventListener("click",function(e){e.preventDefault();stop();show(current-1);start();});'
+                'if(next)next.addEventListener("click",function(e){e.preventDefault();stop();show(current+1);start();});'
+                'dots.forEach(function(d,i){d.addEventListener("click",function(e){e.preventDefault();stop();show(i);start();});});'
+                'host.addEventListener("mouseenter",stop);host.addEventListener("mouseleave",start);'
+                'host.addEventListener("focusin",stop);host.addEventListener("focusout",start);}'
+                'document.querySelectorAll("[data-slider]").forEach(initSlider);})();\x3c/script\x3e'
             )
         )
         + "</body></html>"

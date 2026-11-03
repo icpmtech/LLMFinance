@@ -536,6 +536,8 @@ const itemDefaults: Record<string, Record<string, string>> = {
   faq: { question: "Pergunta?", answer: "" },
   passos: { title: "Passo", text: "" },
   numeros: { value: "0", label: "Indicador", note: "" },
+  metricas: { value: "0", label: "Indicador", note: "" },
+  slider: { title: "Título do slide", subtitle: "", image_id: "", cta_label: "", cta_href: "" },
   cta: { label: "", href: "" },
 };
 
@@ -711,11 +713,22 @@ function ItemsEditor({
             {keys.map((key) => {
               const atualizar = (valor: string) =>
                 onChange(items.map((entry, position) => (position === index ? { ...entry, [key]: valor } : entry)));
-              if (key === "icon_id") {
-                return <MediaPicker key={key} label="Ícone" value={String(item[key] ?? "")} onChange={atualizar} media={media} placeholder="— sem ícone —" />;
+              if (key === "icon_id" || key === "image_id") {
+                return (
+                  <MediaPicker
+                    key={key}
+                    label={labels?.[key] ?? (key === "image_id" ? "Imagem" : "Ícone")}
+                    value={String(item[key] ?? "")}
+                    onChange={atualizar}
+                    media={media}
+                    placeholder="— sem imagem —"
+                    wide
+                  />
+                );
               }
+              const wide = key === "title" || key === "question" || key === "value" || key === "subtitle" || key === "cta_href";
               return (
-                <Field key={key} label={labels?.[key] ?? itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
+                <Field key={key} label={labels?.[key] ?? itemFieldLabels[key] ?? "Texto"} wide={wide}>
                   <input className={inputClass} value={String(item[key] ?? "")} onChange={(event) => atualizar(event.target.value)} />
                 </Field>
               );
@@ -835,10 +848,86 @@ function BlockSpecificFields({
     case "faq":
     case "passos":
     case "numeros":
+    case "metricas":
       return (
         <div className="space-y-2">
           <TextInput label="Título da secção" value={text("title")} onChange={(next) => set("title", next)} wide />
           <ItemsEditor block={block} items={list("items")} onChange={(next) => set("items", next)} media={media} />
+        </div>
+      );
+    case "slider":
+      return (
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextInput label="Título da secção (opcional)" value={text("title")} onChange={(next) => set("title", next)} wide />
+            <NumberInput
+              label="Intervalo entre slides (segundos)"
+              value={Number(data.interval) || 6}
+              onChange={(next) => set("interval", next)}
+              min={2}
+              max={60}
+            />
+          </div>
+          <SelectInput
+            label="Fonte dos slides"
+            value={text("source") || "manual"}
+            onChange={(next) => set("source", next)}
+            options={[
+              { value: "manual", label: "Manual (lista abaixo)" },
+              { value: "blog", label: "Posts mais recentes do blog" },
+            ]}
+            wide
+          />
+          {text("source") === "blog" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SelectInput
+                label="Categoria do blog (opcional)"
+                value={text("blog_category_id")}
+                onChange={(next) => set("blog_category_id", next)}
+                options={[{ value: "", label: "— todas —" }, ...categories.map((item) => ({ value: item.id, label: item.name }))]}
+                wide
+              />
+              <NumberInput
+                label="N.º de posts a mostrar"
+                value={Number(data.blog_limit) || 3}
+                onChange={(next) => set("blog_limit", next)}
+                min={1}
+                max={10}
+              />
+              <TextInput
+                label="Texto do botão"
+                value={text("blog_cta_label")}
+                onChange={(next) => set("blog_cta_label", next)}
+                placeholder="Ler mais"
+              />
+              <SelectInput
+                label="Alinhamento"
+                value={text("align") || "esquerda"}
+                onChange={(next) => set("align", next)}
+                options={[
+                  { value: "esquerda", label: "Esquerda" },
+                  { value: "centro", label: "Centro" },
+                ]}
+              />
+            </div>
+          ) : (
+            <>
+              <Toggle label="Avançar automaticamente" checked={Boolean(data.autoplay ?? true)} onChange={(next: boolean) => set("autoplay", next)} />
+              <ItemsEditor
+                block={block}
+                items={list("items")}
+                onChange={(next) => set("items", next)}
+                media={media}
+                labels={{
+                  title: "Título",
+                  subtitle: "Subtítulo",
+                  image_id: "Imagem de fundo",
+                  cta_label: "Botão — texto",
+                  cta_href: "Botão — ligação",
+                }}
+              />
+            </>
+          )}
         </div>
       );
     case "cta":

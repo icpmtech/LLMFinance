@@ -240,6 +240,8 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "galeria", "label": "Galeria", "hint": "Conjunto de imagens em grelha", "icon": "Images"},
     {"id": "destaques", "label": "Cartões", "hint": "Cartões de destaque em grelha, com ícone opcional", "icon": "LayoutGrid"},
     {"id": "numeros", "label": "Números", "hint": "Indicadores em tiras (valor, etiqueta e nota)", "icon": "Gauge"},
+    {"id": "metricas", "label": "Métricas", "hint": "Indicadores em destaque, como os do hero do site", "icon": "BarChart"},
+    {"id": "slider", "label": "Slider", "hint": "Carrossel de destaques com imagem, texto e botão", "icon": "GalleryHorizontal"},
     {"id": "cta", "label": "Chamada à ação", "hint": "Faixa com botão principal e botões secundários", "icon": "MousePointerClick"},
     {"id": "faq", "label": "Perguntas frequentes", "hint": "Perguntas e respostas", "icon": "HelpCircle"},
     {"id": "passos", "label": "Passos", "hint": "Sequência numerada", "icon": "ListOrdered"},
