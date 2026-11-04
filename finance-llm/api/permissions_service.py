@@ -60,8 +60,9 @@ READ_LIKE = re.compile(
 )
 
 # Módulos em que qualquer conta autenticada pode escrever: é estado do próprio
-# utilizador (sessão, subscrição, favoritos, pastas) ou conversa.
-SELF_SERVICE: Tuple[str, ...] = ("auth", "billing", "chat", "favorites", "workspace", "search")
+# utilizador (sessão, subscrição, favoritos, pastas), conversa, ou recolhas
+# criadas pelo próprio utilizador.
+SELF_SERVICE: Tuple[str, ...] = ("auth", "billing", "chat", "favorites", "workspace", "search", "execucoes", "vendas")
 
 # Módulos reservados à administração da plataforma, mesmo para `manager`.
 ADMIN_ONLY: Tuple[str, ...] = ("admin", "permissions")
@@ -101,6 +102,8 @@ MODULES: Tuple[Dict[str, Any], ...] = (
     {"id": "cire", "label": "CIRE", "group": "Empresas e pessoas", "content": True},
     {"id": "massa-insolvente", "label": "Massa insolvente", "group": "Empresas e pessoas", "content": True},
     {"id": "citacoes", "label": "Citações", "group": "Empresas e pessoas", "content": True},
+    {"id": "execucoes", "label": "Execuções", "group": "Empresas e pessoas", "content": True},
+    {"id": "vendas", "label": "Vendas penhorados", "group": "Empresas e pessoas", "content": True},
     {"id": "devedores", "label": "Devedores", "group": "Empresas e pessoas", "content": True},
     {"id": "grandes-litigantes", "label": "Grandes litigantes (+200 ações)", "group": "Empresas e pessoas", "content": True},
     {"id": "crm", "label": "CRM", "group": "CRM", "content": True},
@@ -185,15 +188,23 @@ def default_matrix() -> Dict[str, Dict[str, Dict[str, bool]]]:
 
 
 def _normalize(matriz: Any) -> Dict[str, Dict[str, Dict[str, bool]]]:
-    """Une o que veio do índice com os defaults, descartando o que não existe."""
+    """Une o que veio do índice com os defaults, mantendo módulos novos.
+
+    Módulos adicionados ao código mas ainda ausentes da matriz gravada no
+    índice ficam com os valores por omissão; módulos removidos do catálogo
+    são descartados. Os valores existentes no índice prevalecem sobre os
+    defaults.
+    """
     base = default_matrix()
     if not isinstance(matriz, dict):
         return base
-    for role, linha in matriz.items():
-        if role not in base or not isinstance(linha, dict):
-            continue
-        for module_id, acoes in linha.items():
-            if module_id not in base[role] or not isinstance(acoes, dict):
+    for role in ROLES:
+        linha = matriz.get(role) if isinstance(matriz.get(role), dict) else {}
+        for module_id in MODULE_IDS:
+            if module_id not in base[role]:
+                continue
+            acoes = linha.get(module_id)
+            if not isinstance(acoes, dict):
                 continue
             for acao in ACTIONS:
                 if acao in acoes:
