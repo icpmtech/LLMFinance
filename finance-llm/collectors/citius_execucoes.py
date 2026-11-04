@@ -587,7 +587,10 @@ class ExecucoesClient:
                     letra = "0"
             fields[FIELD_ALFABETO] = letra
 
-        html = self._post(self._payload(BUTTON_SEARCH, **fields))
+        payload = self._payload(BUTTON_SEARCH, **fields)
+        # Garantir que o ddlAlfabeto é enviado mesmo que o formulário base o tenha como "0".
+        payload[FIELD_ALFABETO] = fields.get(FIELD_ALFABETO, letra or "0")
+        html = self._post(payload)
         self._absorb(html)
         return ExecucoesPage(
             items=parse_items(html),
