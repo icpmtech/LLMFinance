@@ -175,9 +175,14 @@ def current_page(html: str) -> int:
 
 def has_next_page(html: str) -> bool:
     """Indica se o paginador tem ligação para a página seguinte."""
-    return bool(re.search(r'Pager1_lnkNext"\s+title="P[áa]gina\s+seguinte', html or "")) or bool(
-        re.search(r'name="ctl00\$ContentPlaceHolder1\$Pager1\$lnkNext"', html or "")
-    )
+    if not html:
+        return False
+    # O paginador usa <a id="...Pager1_lnkNext" title="Página seguinte: 2" href="javascript:__doPostBack(...)>2</a>.
+    # Na resposta real o acento do atributo title pode chegar como entidade numérica; por isso
+    # procuramos apenas o id seguido de title="...seguinte".
+    return bool(
+        re.search(r'id="ctl00_ContentPlaceHolder1_Pager1_lnkNext"[^>]*title="[^"]*seguinte', html, re.I)
+    ) or bool(re.search(r'name="ctl00\$ContentPlaceHolder1\$Pager1\$lnkNext"', html))
 
 
 def _blocked(text: str) -> bool:

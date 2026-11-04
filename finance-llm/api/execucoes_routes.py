@@ -69,7 +69,7 @@ class ExecucoesCollectRequest(BaseModel):
     max_pages_per_letra: int = Field(
         execucoes_service.DEFAULT_MAX_PAGES_PER_LETRA,
         ge=1,
-        le=5000,
+        le=12000,
         description="Máximo de páginas CITIUS por letra",
     )
     max_items: Optional[int] = Field(None, ge=1, description="Máximo total de registos a recolher")

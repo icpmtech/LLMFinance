@@ -46,7 +46,7 @@ DEFAULT_PARTIAL_PAGES = 50
 DEFAULT_MIN_INTERVAL = 1.5
 
 #: Páginas máximas por letra do alfabeto por omissão.
-DEFAULT_MAX_PAGES_PER_LETRA = 2000
+DEFAULT_MAX_PAGES_PER_LETRA = 12000
 
 # Cache das opções do formulário (alfabeto).
 _OPTIONS_CACHE: Dict[str, Any] = {"at": 0.0, "data": None}
@@ -336,18 +336,25 @@ def collect(
                     if stop and stop():
                         break
                     try:
+                        paginas_feitas_letra = 0
+
+                        def _on_page(page, novos, letra=letra):
+                            nonlocal paginas_feitas_letra
+                            paginas_feitas_letra = page.page
+                            _progress(
+                                "collecting",
+                                letra=letra,
+                                page=page.page,
+                                pages=pages_done + page.page,
+                                declared_total=page.total,
+                            )
+
                         records, resumo = client.collect(
                             dias=dias,
                             max_pages=max_pages_per_letra,
                             max_items=max_items,
                             letras=[letra],
-                            on_page=lambda page, novos, letra=letra: _progress(
-                                "collecting",
-                                letra=letra,
-                                page=page.page,
-                                pages=page.page,
-                                declared_total=page.total,
-                            ),
+                            on_page=_on_page,
                             stop=stop,
                         )
                     except Exception as exc:  # noqa: BLE001
@@ -356,9 +363,9 @@ def collect(
                         continue
                     _add(records)
                     total_declared += resumo.get("total", 0)
-                    pages_done += resumo.get("pages", 0)
+                    pages_done += paginas_feitas_letra or resumo.get("pages", 0)
                     letras_feitas += 1
-                    if partial_every and len(itens) // partial_every > 0:
+                    if partial_every and len(itens) >= partial_every * (letras_feitas + 1):
                         _guardar_parcial(f"letra {letra}")
                     if max_items and len(itens) >= max_items:
                         itens = itens[:max_items]
