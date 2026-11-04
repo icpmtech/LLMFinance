@@ -191,6 +191,13 @@ MASSA_INSOLVENTE_INDEX = "finance_massa_insolvente"
 VENDAS_PENHORADOS_INDEX = "finance_vendas_penhorados"
 
 
+# Lista Pública de Execuções (CITIUS / Ministério da Justiça): executados em
+# relação aos quais não se conseguiu encontrar bens penhoráveis suficientes.
+# Cada registo traz o nome, processo, data de entrada, valor, tribunal/comarca,
+# unidade orgânica, agente de execução e estado.
+EXECUCOES_INDEX = "finance_execucoes"
+
+
 
 # Pessoas e cargos extraídos das publicações societárias (MJ). Um documento por
 # NIF de pessoa (individual ou coletiva), com roles aninhados por empresa/acto.
@@ -1370,6 +1377,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     CUSTO_VIDA_INDEX: {
         # Nomes de concelhos escritos com acentos (Évora, Bragança, Loulé).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    EXECUCOES_INDEX: {
+        # Nomes de executados vêm com acentos e maiúsculas («JOSÉ FERREIRA»);
+        # `world_folding` permite encontrar com ou sem acentos.
         "analysis": {
             "analyzer": {
                 "world_folding": {

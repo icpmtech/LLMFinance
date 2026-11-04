@@ -331,6 +331,7 @@ from api.cire_routes import router as cire_router
 from api.massa_insolvente_routes import router as massa_insolvente_router
 from api.citacoes_routes import router as citacoes_router
 from api.vendas_routes import router as vendas_router
+from api.execucoes_routes import router as execucoes_router
 from api.people_routes import router as people_router
 from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
@@ -1000,6 +1001,8 @@ app.include_router(cire_router)
 app.include_router(massa_insolvente_router)
 app.include_router(citacoes_router)
 app.include_router(vendas_router)
+# Lista Pública de Execuções (CITIUS).
+app.include_router(execucoes_router)
 app.include_router(people_router)
 app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
@@ -1433,6 +1436,13 @@ def _seo_meta_for_path(path: str) -> Dict[str, str]:
             "keywords": "empresas, entidades, contratos públicos, NIF, fornecedores, compradores, Portugal, Espanha, França",
             "og_title": "Pesquisa de empresas — IQ OS",
             "og_description": "Pesquise empresas e entidades presentes nos contratos públicos de Portugal, Espanha e França.",
+        },
+        "/execucoes": {
+            "title": "Lista Pública de Execuções — CITIUS — IQ OS",
+            "description": "Pesquise e recolha execuções do CITIUS: nome do executado, processo, tribunal, valor da execução e estado.",
+            "keywords": "execuções, CITIUS, lista pública de execuções, processos, tribunal, executado, Portugal",
+            "og_title": "Lista Pública de Execuções — CITIUS — IQ OS",
+            "og_description": "Pesquise e recolha execuções do CITIUS: nome do executado, processo, tribunal, valor da execução e estado.",
         },
     }
     candidatas = sorted(
@@ -2503,6 +2513,7 @@ def serve_transparencia_grafo_spa_page(request: Request, path: str = ""):
 @app.get("/massa-insolvente")
 @app.get("/citacoes")
 @app.get("/vendas")
+@app.get("/execucoes")
 @app.get("/contribuintes")
 @app.get("/world")
 @app.get("/world/rede")

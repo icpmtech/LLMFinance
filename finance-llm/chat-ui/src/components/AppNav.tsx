@@ -67,6 +67,7 @@ export type AppView =
   | "massa-insolvente"
   | "citacoes"
   | "vendas"
+  | "execucoes"
   | "contribuintes"
   | "world"
   | "world-rede"

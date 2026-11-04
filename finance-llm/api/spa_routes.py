@@ -120,6 +120,7 @@ SEGMENTOS_DA_APP = frozenset(
         "massa-insolvente",
         "citacoes",
         "vendas",
+        "execucoes",
         "compare",
         "dashboard",
         "deep-search",

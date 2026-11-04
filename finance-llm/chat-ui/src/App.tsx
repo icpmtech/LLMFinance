@@ -90,6 +90,7 @@ import CirePage from "./pages/CirePage";
 import MassaInsolventePage from "./pages/MassaInsolventePage";
 import CitacoesPage from "./pages/CitacoesPage";
 import VendasPage from "./pages/VendasPage";
+import ExecucoesPage from "./pages/ExecucoesPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
 import GrandesLitigantesPage from "./pages/GrandesLitigantesPage";
 import WorldPage from "./pages/WorldPage";
@@ -449,6 +450,7 @@ function pathForView(
   if (view === "massa-insolvente") return "/massa-insolvente";
   if (view === "citacoes") return "/citacoes";
   if (view === "vendas") return "/vendas";
+  if (view === "execucoes") return "/execucoes";
   if (view === "contribuintes") return "/contribuintes";
   if (view === "world") return "/world";
   if (view === "world-rede") return "/world/rede";
@@ -738,6 +740,7 @@ export default function App() {
     if (path === "/massa-insolvente" || path.startsWith("/massa-insolvente/")) return "massa-insolvente";
     if (path === "/citacoes" || path.startsWith("/citacoes/")) return "citacoes";
     if (path === "/vendas" || path.startsWith("/vendas/")) return "vendas";
+    if (path === "/execucoes" || path.startsWith("/execucoes/")) return "execucoes";
     if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
     if (path === "/world/rede") return "world-rede";
     if (path === "/world" || path.startsWith("/world/")) return "world";
@@ -941,6 +944,7 @@ export default function App() {
       else if (path === "/massa-insolvente" || path.startsWith("/massa-insolvente/")) next = "massa-insolvente";
       else if (path === "/citacoes" || path.startsWith("/citacoes/")) next = "citacoes";
       else if (path === "/vendas" || path.startsWith("/vendas/")) next = "vendas";
+      else if (path === "/execucoes" || path.startsWith("/execucoes/")) next = "execucoes";
       else if (path === "/contribuintes" || path.startsWith("/contribuintes/")) next = "contribuintes";
       else if (path === "/world/rede") next = "world-rede";
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
@@ -1864,6 +1868,7 @@ export default function App() {
     if (target === "massa-insolvente") return <MassaInsolventePage />;
     if (target === "citacoes") return <CitacoesPage />;
     if (target === "vendas") return <VendasPage />;
+    if (target === "execucoes") return <ExecucoesPage />;
     if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;

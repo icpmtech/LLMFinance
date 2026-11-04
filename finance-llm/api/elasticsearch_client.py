@@ -38,6 +38,7 @@ from api.es import (
     core,
     entidades,
     erc,
+    execucoes,
     geo,
     grafos,
     indices,
@@ -670,6 +671,17 @@ from api.es.vendas import (  # noqa: F401
     vendas_penhorados_status,
 )
 
+# --- execucoes (8 nomes, em api/es/execucoes.py)
+from api.es.execucoes import (  # noqa: F401
+    delete_execucoes_run,
+    execucoes_existing_ids,
+    execucoes_runs_summary,
+    execucoes_status,
+    get_execucao,
+    index_execucoes_items,
+    search_execucoes,
+)
+
 _MODULOS = {
     "benchmarks": benchmarks,
     "cire": cire,
@@ -681,6 +693,7 @@ _MODULOS = {
     "core": core,
     "entidades": entidades,
     "erc": erc,
+    "execucoes": execucoes,
     "geo": geo,
     "grafos": grafos,
     "indices": indices,

@@ -494,6 +494,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "execucoes",
+    label: "Execuções",
+    hint: "Lista Pública de Execuções do CITIUS (executados sem bens penhoráveis suficientes)",
+    icon: Gavel,
+    gradient: "from-red-200 via-rose-500 to-slate-700",
+    accent: "244,63,94",
+  },
+  {
     id: "contribuintes",
     label: "Contribuintes",
     hint: "Todos os NIF/NIPC do sistema (contratos, empresas, CIRE, marcas, CRM) com cron",

@@ -153,7 +153,7 @@ export const APP_MODULES: AppModule[] = [
     id: "dados-publicos",
     label: "Dados públicos",
     hint: "Insolvências, citações editais, contribuintes, societário, registos LEI, subvenções, remunerações dos eleitos locais, despesas das câmaras municipais, comunicação social (ERC) e o Governo",
-    ids: ["cire", "massa-insolvente", "citacoes", "vendas", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "grandes-litigantes", "administracao-central", "governo", "remuneracoes", "municipios-despesas", "municipios-contactos", "freguesias-contactos", "empresas-locais", "erc", "vortal"],
+    ids: ["cire", "massa-insolvente", "citacoes", "vendas", "execucoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "grandes-litigantes", "administracao-central", "governo", "remuneracoes", "municipios-despesas", "municipios-contactos", "freguesias-contactos", "empresas-locais", "erc", "vortal"],
   },
   {
     id: "mercados",
