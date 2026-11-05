@@ -62,7 +62,9 @@ DEFAULTS: Dict[str, Any] = {
         "logo_alt": "",
     },
     "header": {
-        "items": [],
+        "items": [
+            {"label": "Market Pro Store", "href": "https://store-marketpro.web.app/"},
+        ],
         "cta": {"label": "Criar conta", "href": "/register"},
         "secondary": {"label": "Entrar", "href": "/login"},
     },
@@ -71,6 +73,7 @@ DEFAULTS: Dict[str, Any] = {
         "items": [
             {"label": "Entrar", "href": "/login"},
             {"label": "Criar conta", "href": "/register"},
+            {"label": "Market Pro Store", "href": "https://store-marketpro.web.app/"},
         ],
         "social": {chave: "" for chave, _ in SOCIAL},
     },

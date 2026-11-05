@@ -52,7 +52,9 @@ export type AppShellState = {
 export const DEFAULT_APP_SHELL: AppShell = {
   brand: { name: "IQ OS", tagline: "Plataforma de inteligência financeira", logo_url: "", logo_alt: "IQ OS" },
   header: {
-    items: [],
+    items: [
+      { label: "Market Pro Store", href: "https://store-marketpro.web.app/" },
+    ],
     cta: { label: "Criar conta", href: "/register" },
     secondary: { label: "Entrar", href: "/login" },
   },
@@ -61,6 +63,7 @@ export const DEFAULT_APP_SHELL: AppShell = {
     items: [
       { label: "Entrar", href: "/login" },
       { label: "Criar conta", href: "/register" },
+      { label: "Market Pro Store", href: "https://store-marketpro.web.app/" },
     ],
     social: [],
   },

@@ -488,28 +488,26 @@ export function defaultIframePages(): IframePageConfig[] {
       // evidências). Perfil `osif` do compose; precisa do código do upstream em
       // `docker/osif/src` (ver `docker/osif/README.md`). O nginx do IQ OS serve a
       // app e a API no mesmo porto, por isso é esta origem que vai no iframe.
-      {
-        id: "iqos-osif",
-        title: "OSINT Framework (OSIF)",
-        url: supportServiceUrl(import.meta.env.VITE_OSIF_URL, 8894),
-        icon: "Telescope",
-        accent: "16,185,129",
-        gradient: "from-emerald-300 via-emerald-500 to-emerald-700",
-        enabled: true,
-        createdAt: now,
-      },
-      // Market Pro Store — loja de demonstração/parceiro incorporada na plataforma.
-      {
-        id: "marketpro-store",
-        title: "Market Pro Store",
-        url: "https://store-marketpro.web.app/",
-        icon: "ShoppingBag",
-        accent: "16,185,129",
-        gradient: "from-emerald-300 via-emerald-500 to-emerald-700",
-        enabled: true,
-        createdAt: now,
-      },
-    ],
+      id: "iqos-osif",
+      title: "OSINT Framework (OSIF)",
+      url: supportServiceUrl(import.meta.env.VITE_OSIF_URL, 8894),
+      icon: "Telescope",
+      accent: "16,185,129",
+      gradient: "from-emerald-300 via-emerald-500 to-emerald-700",
+      enabled: true,
+      createdAt: now,
+    },
+    // Market Pro Store — loja de demonstração/parceiro incorporada na plataforma.
+    {
+      id: "marketpro-store",
+      title: "Market Pro Store",
+      url: "https://store-marketpro.web.app/",
+      icon: "ShoppingBag",
+      accent: "16,185,129",
+      gradient: "from-emerald-300 via-emerald-500 to-emerald-700",
+      enabled: true,
+      createdAt: now,
+    },
   ];
 }
 
