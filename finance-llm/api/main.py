@@ -290,6 +290,7 @@ from api.sentiment_routes import router as sentiment_router
 from api.sentiment_market_routes import router as sentiment_market_router
 # Vista de mercado: os tickers da plataforma agrupados por país (`/market/*`).
 from api.market_view_routes import router as market_view_router
+from api.portfolio_routes import router as portfolio_router
 from api.search360_routes import router as search360_router
 from api.hermes_routes import router as hermes_router
 from api.skills_routes import router as skills_router
@@ -920,6 +921,10 @@ app.include_router(sentiment_market_router)
 # Vista de mercado (`/market/by-country`, `/market/meta`). As rotas ficam antes do
 # *catch-all* da SPA; `/market` (sem barra) continua a ser a página da aplicação.
 app.include_router(market_view_router)
+# Módulo de portfólio financeiro (`/portfolio/*`): sumário, reporting, previsão,
+# otimização/resiliência, attribution e risco — dados reais do Yahoo Finance e
+# notícias do índice do sistema.
+app.include_router(portfolio_router)
 app.include_router(search360_router)
 app.include_router(hermes_router)
 app.include_router(skills_router)

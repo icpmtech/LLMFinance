@@ -110,6 +110,12 @@ import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 // Vista de mercado (`/market`): os tickers da plataforma agrupados por país.
 import MarketPage from "./pages/MarketPage";
+import { PortfolioPage } from "./pages/PortfolioPage";
+import { PortfolioReportingPage } from "./pages/PortfolioReportingPage";
+import { PortfolioForecastPage } from "./pages/PortfolioForecastPage";
+import { PortfolioResiliencePage } from "./pages/PortfolioResiliencePage";
+import { PortfolioAttributionPage } from "./pages/PortfolioAttributionPage";
+import { PortfolioRiskPage } from "./pages/PortfolioRiskPage";
 import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
@@ -250,6 +256,12 @@ type AppView =
   | "modelo-chat"
   | "modelo-retreino"
   | "market"
+  | "portfolio"
+  | "portfolio-reporting"
+  | "portfolio-forecast"
+  | "portfolio-resilience"
+  | "portfolio-attribution"
+  | "portfolio-risk"
   | "vortal"
   | "osint"
   | "reports"
@@ -506,6 +518,12 @@ function pathForView(
   if (view === "modelo-playground") return "/modelo/playground";
   if (view === "modelo-chat") return "/modelo/chat";
   if (view === "modelo-retreino") return "/modelo/retreino";
+  if (view === "portfolio") return "/portfolio";
+  if (view === "portfolio-reporting") return "/portfolio/reporting";
+  if (view === "portfolio-forecast") return "/portfolio/forecast";
+  if (view === "portfolio-resilience") return "/portfolio/resilience";
+  if (view === "portfolio-attribution") return "/portfolio/attribution";
+  if (view === "portfolio-risk") return "/portfolio/risk";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -725,6 +743,12 @@ export default function App() {
     if (path === "/forecast") return "forecast";
     if (path === "/trading") return "trading";
     if (path === "/tickers") return "tickers";
+    if (path === "/portfolio") return "portfolio";
+    if (path === "/portfolio/reporting") return "portfolio-reporting";
+    if (path === "/portfolio/forecast") return "portfolio-forecast";
+    if (path === "/portfolio/resilience") return "portfolio-resilience";
+    if (path === "/portfolio/attribution") return "portfolio-attribution";
+    if (path === "/portfolio/risk") return "portfolio-risk";
     if (path === "/grafico" || path === "/chart") return "ticker-chart";
     if (path.startsWith("/tickers/")) {
       const [symbol, section] = path.replace("/tickers/", "").split("/");
@@ -792,6 +816,13 @@ export default function App() {
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
     // Vista de mercado: os tickers da plataforma agrupados por país.
     if (path === "/market" || path.startsWith("/market/")) return "market";
+    // Módulo de portfólio financeiro.
+    if (path === "/portfolio/reporting" || path.startsWith("/portfolio/reporting/")) return "portfolio-reporting";
+    if (path === "/portfolio/forecast" || path.startsWith("/portfolio/forecast/")) return "portfolio-forecast";
+    if (path === "/portfolio/resilience" || path.startsWith("/portfolio/resilience/")) return "portfolio-resilience";
+    if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) return "portfolio-attribution";
+    if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) return "portfolio-risk";
+    if (path === "/portfolio" || path.startsWith("/portfolio/")) return "portfolio";
     // Peças do procedimento (Vortal): recolha para disco + índice Elasticsearch.
     if (path === "/vortal" || path.startsWith("/vortal/")) return "vortal";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
@@ -959,6 +990,12 @@ export default function App() {
       else if (path === "/modelo/retreino" || path.startsWith("/modelo/retreino/")) next = "modelo-retreino";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
       else if (path === "/market" || path.startsWith("/market/")) next = "market";
+      else if (path === "/portfolio/reporting" || path.startsWith("/portfolio/reporting/")) next = "portfolio-reporting";
+      else if (path === "/portfolio/forecast" || path.startsWith("/portfolio/forecast/")) next = "portfolio-forecast";
+      else if (path === "/portfolio/resilience" || path.startsWith("/portfolio/resilience/")) next = "portfolio-resilience";
+      else if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) next = "portfolio-attribution";
+      else if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) next = "portfolio-risk";
+      else if (path === "/portfolio" || path.startsWith("/portfolio/")) next = "portfolio";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
@@ -1890,6 +1927,13 @@ export default function App() {
     // ligado à sua ficha (`/tickers/<símbolo>`).
     if (target === "market")
       return <MarketPage onSelectTicker={handleSelectTicker} onBack={() => setViewAndHistory("dashboard")} />;
+    // Módulo de portfólio financeiro.
+    if (target === "portfolio") return <PortfolioPage />;
+    if (target === "portfolio-reporting") return <PortfolioReportingPage />;
+    if (target === "portfolio-forecast") return <PortfolioForecastPage />;
+    if (target === "portfolio-resilience") return <PortfolioResiliencePage />;
+    if (target === "portfolio-attribution") return <PortfolioAttributionPage />;
+    if (target === "portfolio-risk") return <PortfolioRiskPage />;
     // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
     if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;
@@ -2239,6 +2283,12 @@ export default function App() {
       "companies-search": "Entidades (Contratos)",
       "companies-dashboard": "Dashboard de Empresas",
       "contracts-list": "Contratos",
+      portfolio: "Portfólio",
+      "portfolio-reporting": "Relatórios de Portfólio",
+      "portfolio-forecast": "Previsões de Portfólio",
+      "portfolio-resilience": "Resiliência do Portfólio",
+      "portfolio-attribution": "Attribution do Portfólio",
+      "portfolio-risk": "Risco do Portfólio",
     };
     return { title: fallback[target] ?? "IQ OS", icon: <Sparkles size={13} /> };
   };
