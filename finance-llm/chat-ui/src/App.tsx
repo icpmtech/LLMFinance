@@ -116,6 +116,7 @@ import { PortfolioForecastPage } from "./pages/PortfolioForecastPage";
 import { PortfolioResiliencePage } from "./pages/PortfolioResiliencePage";
 import { PortfolioAttributionPage } from "./pages/PortfolioAttributionPage";
 import { PortfolioRiskPage } from "./pages/PortfolioRiskPage";
+import { PortfolioManagePage } from "./pages/PortfolioManagePage";
 import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
@@ -262,6 +263,7 @@ type AppView =
   | "portfolio-resilience"
   | "portfolio-attribution"
   | "portfolio-risk"
+  | "portfolio-manage"
   | "vortal"
   | "osint"
   | "reports"
@@ -524,6 +526,7 @@ function pathForView(
   if (view === "portfolio-resilience") return "/portfolio/resilience";
   if (view === "portfolio-attribution") return "/portfolio/attribution";
   if (view === "portfolio-risk") return "/portfolio/risk";
+  if (view === "portfolio-manage") return "/portfolio/manage";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -749,6 +752,7 @@ export default function App() {
     if (path === "/portfolio/resilience") return "portfolio-resilience";
     if (path === "/portfolio/attribution") return "portfolio-attribution";
     if (path === "/portfolio/risk") return "portfolio-risk";
+    if (path === "/portfolio/manage") return "portfolio-manage";
     if (path === "/grafico" || path === "/chart") return "ticker-chart";
     if (path.startsWith("/tickers/")) {
       const [symbol, section] = path.replace("/tickers/", "").split("/");
@@ -822,6 +826,7 @@ export default function App() {
     if (path === "/portfolio/resilience" || path.startsWith("/portfolio/resilience/")) return "portfolio-resilience";
     if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) return "portfolio-attribution";
     if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) return "portfolio-risk";
+    if (path === "/portfolio/manage" || path.startsWith("/portfolio/manage/")) return "portfolio-manage";
     if (path === "/portfolio" || path.startsWith("/portfolio/")) return "portfolio";
     // Peças do procedimento (Vortal): recolha para disco + índice Elasticsearch.
     if (path === "/vortal" || path.startsWith("/vortal/")) return "vortal";
@@ -995,6 +1000,7 @@ export default function App() {
       else if (path === "/portfolio/resilience" || path.startsWith("/portfolio/resilience/")) next = "portfolio-resilience";
       else if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) next = "portfolio-attribution";
       else if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) next = "portfolio-risk";
+      else if (path === "/portfolio/manage" || path.startsWith("/portfolio/manage/")) next = "portfolio-manage";
       else if (path === "/portfolio" || path.startsWith("/portfolio/")) next = "portfolio";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
@@ -1934,6 +1940,7 @@ export default function App() {
     if (target === "portfolio-resilience") return <PortfolioResiliencePage />;
     if (target === "portfolio-attribution") return <PortfolioAttributionPage />;
     if (target === "portfolio-risk") return <PortfolioRiskPage />;
+    if (target === "portfolio-manage") return <PortfolioManagePage />;
     // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
     if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;
@@ -2289,6 +2296,7 @@ export default function App() {
       "portfolio-resilience": "Resiliência do Portfólio",
       "portfolio-attribution": "Attribution do Portfólio",
       "portfolio-risk": "Risco do Portfólio",
+      "portfolio-manage": "Gestão de Carteiras",
     };
     return { title: fallback[target] ?? "IQ OS", icon: <Sparkles size={13} /> };
   };

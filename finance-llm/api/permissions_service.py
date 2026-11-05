@@ -62,7 +62,20 @@ READ_LIKE = re.compile(
 # Módulos em que qualquer conta autenticada pode escrever: é estado do próprio
 # utilizador (sessão, subscrição, favoritos, pastas), conversa, ou recolhas
 # criadas pelo próprio utilizador.
-SELF_SERVICE: Tuple[str, ...] = ("auth", "billing", "chat", "favorites", "workspace", "search", "execucoes", "vendas")
+SELF_SERVICE: Tuple[str, ...] = (
+    "auth",
+    "billing",
+    "chat",
+    "favorites",
+    "workspace",
+    "search",
+    "execucoes",
+    "vendas",
+    # Carteiras, watchlists e ordens: cada conta escreve apenas no seu próprio
+    # índice Elasticsearch (`api/portfolio_store.py`), por isso é estado do
+    # próprio utilizador e não conteúdo da plataforma.
+    "portfolio",
+)
 
 # Módulos reservados à administração da plataforma, mesmo para `manager`.
 ADMIN_ONLY: Tuple[str, ...] = ("admin", "permissions")
@@ -136,6 +149,8 @@ MODULES: Tuple[Dict[str, Any], ...] = (
     {"id": "skills", "label": "Competências", "group": "Análise", "content": True},
     {"id": "world", "label": "Mundo", "group": "Análise", "content": True},
     {"id": "mercado", "label": "Mercado", "group": "Mercados", "content": True},
+    # Portfólio é estado do próprio utilizador (um índice ES por conta).
+    {"id": "portfolio", "label": "Portfólio", "group": "Mercados", "content": False},
     {"id": "tickers", "label": "Tickers", "group": "Mercados", "content": True},
     {"id": "elastic", "label": "Índices de mercado", "group": "Mercados", "content": True},
     {"id": "sentiment", "label": "Sentimento", "group": "Mercados", "content": True},

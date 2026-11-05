@@ -291,6 +291,8 @@ from api.sentiment_market_routes import router as sentiment_market_router
 # Vista de mercado: os tickers da plataforma agrupados por país (`/market/*`).
 from api.market_view_routes import router as market_view_router
 from api.portfolio_routes import router as portfolio_router
+# Gestão de carteiras, watchlists e ordens: um índice Elasticsearch por conta.
+from api.portfolio_manage_routes import router as portfolio_manage_router
 from api.search360_routes import router as search360_router
 from api.hermes_routes import router as hermes_router
 from api.skills_routes import router as skills_router
@@ -925,6 +927,9 @@ app.include_router(market_view_router)
 # otimização/resiliência, attribution e risco — dados reais do Yahoo Finance e
 # notícias do índice do sistema.
 app.include_router(portfolio_router)
+# Gestão de carteiras/watchlists/ordens (`/portfolio/portfolios`, `/portfolio/watchlists`,
+# `/portfolio/orders`, `/portfolio/search`) — estado persistido por conta.
+app.include_router(portfolio_manage_router)
 app.include_router(search360_router)
 app.include_router(hermes_router)
 app.include_router(skills_router)

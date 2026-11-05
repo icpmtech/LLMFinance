@@ -6,6 +6,12 @@
  */
 import { API_BASE } from "./api";
 
+/** Token da sessão: as rotas de gestão escrevem no índice da conta. */
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("finance-llm-token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export type PortfolioTicker = {
   ticker: string;
   name: string;
@@ -173,7 +179,7 @@ export type OptimizeRequest = { tickers?: string[]; weights?: number[]; objectiv
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -184,12 +190,31 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ${res.status}: ${text}`);
   }
   return res.json();
+}
+
+async function sendJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `Erro ${res.status}`;
+    try {
+      const payload = (await res.json()) as { detail?: unknown };
+      if (payload?.detail) detail = String(payload.detail);
+    } catch {
+      /* resposta sem JSON */
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
 }
 
 export async function getPortfolioMeta(): Promise<PortfolioMetaResponse> {
@@ -228,4 +253,188 @@ export async function getPortfolioTickerHistory(ticker: string, period = "1y", i
   return getJson(
     `/portfolio/ticker/${encodeURIComponent(ticker)}/history?period=${encodeURIComponent(period)}&interval=${encodeURIComponent(interval)}`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de carteiras, watchlists e ordens (estado por conta)
+// ---------------------------------------------------------------------------
+export type SavedPosition = {
+  ticker: string;
+  name: string;
+  weight: number;
+  quantity: number;
+  avg_price: number;
+  target_price: number;
+  note: string;
+  added_at?: string;
+};
+
+export type SavedPortfolio = {
+  id: string;
+  name: string;
+  description: string;
+  currency: string;
+  benchmark: string;
+  cash: number;
+  initial_cash: number;
+  tags: string[];
+  tickers: SavedPosition[];
+  ticker_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type WatchlistItem = {
+  ticker: string;
+  name: string;
+  target_price: number;
+  note: string;
+  added_at?: string;
+};
+
+export type SavedWatchlist = {
+  id: string;
+  name: string;
+  description: string;
+  items: WatchlistItem[];
+  item_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SavedOrder = {
+  id: string;
+  order_id: string;
+  portfolio_id: string;
+  ticker: string;
+  side: "buy" | "sell";
+  order_type: "market" | "limit";
+  status: "pending" | "filled" | "cancelled" | "rejected";
+  quantity: number;
+  limit_price: number;
+  filled_price: number;
+  filled_quantity: number;
+  notional: number;
+  fees: number;
+  placed_at?: string;
+  executed_at?: string;
+};
+
+export type TickerSearchItem = {
+  ticker: string;
+  name: string;
+  exchange: string;
+  type: string;
+  sector: string;
+  industry: string;
+};
+
+export async function searchTickers(q: string, limit = 12): Promise<TickerSearchItem[]> {
+  const result = await getJson<{ items: TickerSearchItem[] }>(
+    `/portfolio/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+  );
+  return result.items ?? [];
+}
+
+export async function listPortfolios(): Promise<SavedPortfolio[]> {
+  const result = await getJson<{ items: SavedPortfolio[] }>("/portfolio/portfolios");
+  return result.items ?? [];
+}
+
+export async function createPortfolio(body: {
+  name: string;
+  description?: string;
+  currency?: string;
+  benchmark?: string;
+  cash?: number;
+  tags?: string[];
+}): Promise<SavedPortfolio> {
+  return sendJson("POST", "/portfolio/portfolios", body);
+}
+
+export async function updatePortfolio(
+  portfolioId: string,
+  body: Partial<Pick<SavedPortfolio, "name" | "description" | "currency" | "benchmark" | "cash" | "tags">>,
+): Promise<SavedPortfolio> {
+  return sendJson("PATCH", `/portfolio/portfolios/${encodeURIComponent(portfolioId)}`, body);
+}
+
+export async function deletePortfolio(portfolioId: string): Promise<{ deleted: string }> {
+  return sendJson("DELETE", `/portfolio/portfolios/${encodeURIComponent(portfolioId)}`);
+}
+
+export async function addPortfolioTicker(
+  portfolioId: string,
+  body: {
+    ticker: string;
+    name?: string;
+    weight?: number;
+    quantity?: number;
+    avg_price?: number;
+    target_price?: number;
+    note?: string;
+    fill_price?: boolean;
+  },
+): Promise<SavedPortfolio> {
+  return sendJson("POST", `/portfolio/portfolios/${encodeURIComponent(portfolioId)}/tickers`, body);
+}
+
+export async function removePortfolioTicker(portfolioId: string, ticker: string): Promise<SavedPortfolio> {
+  return sendJson(
+    "DELETE",
+    `/portfolio/portfolios/${encodeURIComponent(portfolioId)}/tickers/${encodeURIComponent(ticker)}`,
+  );
+}
+
+export async function listWatchlists(): Promise<SavedWatchlist[]> {
+  const result = await getJson<{ items: SavedWatchlist[] }>("/portfolio/watchlists");
+  return result.items ?? [];
+}
+
+export async function createWatchlist(body: {
+  name: string;
+  description?: string;
+}): Promise<SavedWatchlist> {
+  return sendJson("POST", "/portfolio/watchlists", body);
+}
+
+export async function deleteWatchlist(watchlistId: string): Promise<{ deleted: string }> {
+  return sendJson("DELETE", `/portfolio/watchlists/${encodeURIComponent(watchlistId)}`);
+}
+
+export async function addWatchlistItem(
+  watchlistId: string,
+  body: { ticker: string; name?: string; target_price?: number; note?: string },
+): Promise<SavedWatchlist> {
+  return sendJson("POST", `/portfolio/watchlists/${encodeURIComponent(watchlistId)}/items`, body);
+}
+
+export async function removeWatchlistItem(watchlistId: string, ticker: string): Promise<SavedWatchlist> {
+  return sendJson(
+    "DELETE",
+    `/portfolio/watchlists/${encodeURIComponent(watchlistId)}/items/${encodeURIComponent(ticker)}`,
+  );
+}
+
+export async function listOrders(portfolioId?: string): Promise<SavedOrder[]> {
+  const query = portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : "";
+  const result = await getJson<{ items: SavedOrder[] }>(`/portfolio/orders${query}`);
+  return result.items ?? [];
+}
+
+export async function placeOrder(body: {
+  portfolio_id: string;
+  ticker: string;
+  side: "buy" | "sell";
+  quantity: number;
+  order_type?: "market" | "limit";
+  limit_price?: number;
+  fees?: number;
+  price?: number;
+}): Promise<SavedOrder> {
+  return sendJson("POST", "/portfolio/orders", body);
+}
+
+export async function cancelOrder(orderId: string): Promise<SavedOrder> {
+  return sendJson("POST", `/portfolio/orders/${encodeURIComponent(orderId)}/cancel`);
 }

@@ -64,6 +64,7 @@ export type AppView =
   | "portfolio-resilience"
   | "portfolio-attribution"
   | "portfolio-risk"
+  | "portfolio-manage"
   | "rag"
   | "elastic"
   | "search"
