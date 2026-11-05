@@ -244,6 +244,9 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://127.0.0.1:${SEARXNG_PORT:-8888}/
       - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+      # Aviso: ao servir através de /searxng/ no nginx, o SearXNG continua a ver
+      # pedidos no seu caminho interno (/). A base_url acima serve para o limiter
+      # e para links gerados internamente; o proxy reescreve o prefixo no edge.
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
       interval: 30s

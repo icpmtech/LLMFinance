@@ -421,11 +421,11 @@ function supportServiceUrl(
   const { protocol, hostname } = window.location;
   const isPublicDomain = hostname === "sabemos.studio" || hostname.endsWith(".sabemos.studio");
 
-  if (isPublicDomain && publicPort) {
-    return `${protocol}//${hostname}:${publicPort}/`;
-  }
   if (isPublicDomain && publicPath) {
     return `${protocol}//${hostname}${publicPath}`;
+  }
+  if (isPublicDomain && publicPort) {
+    return `${protocol}//${hostname}:${publicPort}/`;
   }
 
   return `http://${hostname}:${port}/`;
@@ -438,7 +438,7 @@ export function defaultIframePages(): IframePageConfig[] {
     {
       id: "iqos-pesquisa",
       title: "Pesquisa",
-      url: supportServiceUrl(import.meta.env.VITE_SEARXNG_URL, 8888),
+      url: supportServiceUrl(import.meta.env.VITE_SEARXNG_URL, 8888, "/searxng/"),
       icon: "Search",
       accent: "56,189,248",
       gradient: "from-sky-300 via-sky-500 to-sky-700",
@@ -537,14 +537,36 @@ const DEFAULT_PAGE_RENAMES: { id: string; from: string; to: string }[] = [
   { id: "iqos-mirofish", from: "MiroFish", to: "Simulador IQ OS · Estúdio" },
 ];
 
+/**
+ * Atualizações de URL de páginas predefinidas já instaladas.
+ *
+ * Quando o endereço de uma página predefinida muda (por exemplo, para passar a
+ * usar um subcaminho/proxy em vez de um porto direto no domínio público),
+ * atualizamos **apenas** as entradas que ainda têm o URL antigo por omissão.
+ */
+const DEFAULT_URL_UPDATES: { id: string; from: string; to: string }[] = [
+  {
+    id: "iqos-pesquisa",
+    from: "http://sabemos.studio:8888/",
+    to: "https://sabemos.studio/searxng/",
+  },
+];
+
 export function migrateDefaultIframePages(): IframePageConfig[] {
   const current = getIframePages();
   let changed = false;
   const next = current.map((page) => {
     const rename = DEFAULT_PAGE_RENAMES.find((item) => item.id === page.id && page.title === item.from);
-    if (!rename) return page;
-    changed = true;
-    return { ...page, title: rename.to };
+    if (rename) {
+      changed = true;
+      return { ...page, title: rename.to };
+    }
+    const urlUpdate = DEFAULT_URL_UPDATES.find((item) => item.id === page.id && page.url === item.from);
+    if (urlUpdate) {
+      changed = true;
+      return { ...page, url: urlUpdate.to };
+    }
+    return page;
   });
   if (!changed) return current;
   commit(next);
