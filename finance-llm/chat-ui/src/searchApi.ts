@@ -15,6 +15,7 @@ export type SearchScopeId =
   | "social"
   | "contracts"
   | "contracts_es"
+  | "execucoes"
   | "entities_es"
   | "entities"
   | "pessoas"

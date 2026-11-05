@@ -3,7 +3,7 @@
 Uma pergunta, um resultado por área. O `unified_search` dispara em paralelo uma
 consulta por **âmbito** (recolha, contratos, contratos de Espanha, entidades de
 Espanha, empresas, marcas, firmas, notícias de mercado, imprensa recolhida,
-mercado e CRM) e devolve grupos normalizados — cada item com título, subtítulo,
+execuções, mercado e CRM) e devolve grupos normalizados — cada item com título, subtítulo,
 excerto, data, etiquetas e (quando faz sentido) a vista interna que o abre.
 
 Decisões importantes:
@@ -50,6 +50,7 @@ from api.elasticsearch_client import (
     search_contratos_es_entities,
     search_contracts,
     search_entities,
+    search_execucoes,
     search_firmas,
     search_people_faceted,
     search_scraped,
@@ -68,6 +69,7 @@ SCOPES: List[Dict[str, Any]] = [
     {"id": "social", "label": "Redes sociais", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook — filtráveis por tipo e plataforma"},
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública (portal base)"},
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
+    {"id": "execucoes", "label": "Execuções", "hint": "Lista Pública de Execuções do CITIUS"},
     {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas adjudicatárias de Espanha"},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades"},
     {"id": "contribuintes", "label": "Contribuintes", "hint": "NIF/NIPC do sistema, papéis e valores por fonte"},
@@ -108,6 +110,12 @@ SCOPE_FILTERS: Dict[str, Dict[str, Dict[str, str]]] = {
     "imprensa": {"fonte": {"field": "source_id", "label": "Jornal"}},
     "scraped": {"fonte": {"field": "source_id", "label": "Fonte"}},
     "wikipedia": {"fonte": {"field": "lang", "label": "Wikipédia"}},
+    "execucoes": {
+        "estado": {"field": "extra.estado", "label": "Estado"},
+        "comarca": {"field": "extra.comarca", "label": "Comarca"},
+        "tribunal": {"field": "extra.tribunal.keyword", "label": "Tribunal"},
+        "agente_execucao": {"field": "extra.agente_execucao.keyword", "label": "Agente de execução"},
+    },
 }
 
 #: Políticos: ficha da Wikipédia **ou** ficha do parlamento (as duas famílias que
@@ -608,6 +616,82 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
             )
         )
     return _group("contracts", _label_for("contracts"), items, result.get("total", 0), 0)
+
+
+def _search_execucoes_group(
+    q: str,
+    size: int,
+    offset: int,
+    filters: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    selected = filters or {}
+    result = search_execucoes(
+        q=q or None,
+        estado=selected.get("estado"),
+        comarca=selected.get("comarca"),
+        tribunal=selected.get("tribunal"),
+        agente_execucao=selected.get("agente_execucao"),
+        size=size,
+        from_=offset,
+    )
+    if result.get("error"):
+        return _error_group("execucoes", _label_for("execucoes"), str(result["error"]))
+
+    items = []
+    for row in result.get("items", []):
+        extra = row.get("extra") or {}
+        items.append(
+            _item(
+                "execucoes",
+                row.get("pub_id") or row.get("doc_id") or "",
+                row.get("nome_executado") or "Execução",
+                subtitle=" · ".join(
+                    filter(
+                        None,
+                        [
+                            row.get("numero_processo"),
+                            extra.get("tribunal") or extra.get("comarca"),
+                        ],
+                    )
+                ),
+                snippet=" · ".join(
+                    filter(
+                        None,
+                        [
+                            extra.get("unidade_organica"),
+                            extra.get("agente_execucao"),
+                        ],
+                    )
+                ),
+                date=row.get("data_entrada"),
+                badges=[extra.get("estado")],
+                extra={
+                    "numero_processo": row.get("numero_processo"),
+                    "estado": extra.get("estado"),
+                    "comarca": extra.get("comarca"),
+                    "tribunal": extra.get("tribunal"),
+                    "agente_execucao": extra.get("agente_execucao"),
+                    "valor_execucao": extra.get("valor_execucao"),
+                },
+                score=row.get("score"),
+            )
+        )
+
+    facets = result.get("facets") or {}
+    group = {
+        **_group("execucoes", _label_for("execucoes"), items, result.get("total", 0), 0),
+        "facets": facets,
+    }
+    group["filters"] = _filter_panel(
+        "execucoes",
+        {
+            "estado": facets.get("estado") or [],
+            "comarca": facets.get("comarca") or [],
+            "tribunal": facets.get("tribunal") or [],
+            "agente_execucao": facets.get("agente_execucao") or [],
+        },
+    )
+    return group
 
 
 def _search_contratos_es_group(q: str, size: int, offset: int) -> Dict[str, Any]:
@@ -1502,6 +1586,7 @@ def unified_search(
         "social": lambda: _search_social_group(query, size, offset, filtros),
         "contracts": lambda: _search_contracts_group(query, size, offset),
         "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
+        "execucoes": lambda: _search_execucoes_group(query, size, offset, filtros),
         "entities_es": lambda: _search_entities_es_group(query, size, offset),
         "entities": lambda: _search_entities_group(query, size, offset),
         "contribuintes": lambda: _search_contribuintes_group(query, size, offset),

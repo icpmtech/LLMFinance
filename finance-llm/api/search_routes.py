@@ -45,7 +45,7 @@ def search_scopes() -> Dict[str, Any]:
 @router.get("/unified")
 def search_unified(
     q: str = Query("", description="Texto a pesquisar (título, descrição, entidades, NIF, ticker…)."),
-    scope: str = Query("all", description="Âmbito: all | scraped | social | contracts | contracts_es | entities_es | entities | pessoas | politicos | wikipedia | trademarks | firmas | news | imprensa | market | crm"),
+    scope: str = Query("all", description="Âmbito: all | scraped | social | contracts | contracts_es | execucoes | entities_es | entities | pessoas | politicos | wikipedia | trademarks | firmas | news | imprensa | market | crm"),
     size: int = Query(8, ge=1, le=50, description="Resultados por âmbito."),
     offset: int = Query(0, ge=0, description="Resultados a saltar (no âmbito escolhido)."),
     filters: Optional[str] = Query(
@@ -53,7 +53,8 @@ def search_unified(
         description=(
             "Filtros (facetas) do âmbito, em JSON — ex.: `{\"partido\": \"PS\"}` ou `partido:PS`. "
             "Cada âmbito aplica os que conhece (tipo/plataforma nas redes, partido/círculo/cargo nos "
-            "políticos, origem/fonte nas pessoas e fonte na recolha e na imprensa)."
+            "políticos, origem/fonte nas pessoas, fonte na recolha/imprensa e estado, comarca, tribunal "
+            "ou agente de execução nas execuções)."
         ),
     ),
     session: Session = None,

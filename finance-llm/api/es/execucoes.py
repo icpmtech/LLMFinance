@@ -128,7 +128,10 @@ def _execucoes_query(
                         {"match": {"nome_executado": q}},
                         {"match": {"numero_processo": q}},
                         {"match": {"extra.tribunal": q}},
+                        {"match": {"extra.comarca": q}},
+                        {"match": {"extra.unidade_organica": q}},
                         {"match": {"extra.agente_execucao": q}},
+                        {"match": {"extra.estado": q}},
                     ]
                 }
             }
@@ -140,13 +143,13 @@ def _execucoes_query(
     if tribunal:
         filters.append({"match": {"extra.tribunal": tribunal}})
     if comarca:
-        filters.append({"term": {"extra.comarca.keyword": comarca}})
+        filters.append({"term": {"extra.comarca": comarca}})
     if unidade_organica:
         filters.append({"match": {"extra.unidade_organica": unidade_organica}})
     if agente_execucao:
         filters.append({"match": {"extra.agente_execucao": agente_execucao}})
     if estado:
-        filters.append({"term": {"extra.estado.keyword": estado}})
+        filters.append({"term": {"extra.estado": estado}})
     if data_from or data_to:
         date_filter: Dict[str, Any] = {}
         if data_from:
@@ -218,8 +221,8 @@ def search_execucoes(
         "track_total_hits": True,
         "sort": [{"data_entrada": {"order": "desc", "missing": "_last"}}, "_score"],
         "aggs": {
-            "by_estado": {"terms": {"field": "extra.estado.keyword", "size": 15}},
-            "by_comarca": {"terms": {"field": "extra.comarca.keyword", "size": 25}},
+            "by_estado": {"terms": {"field": "extra.estado", "size": 15}},
+            "by_comarca": {"terms": {"field": "extra.comarca", "size": 25}},
             "by_tribunal": {"terms": {"field": "extra.tribunal.keyword", "size": 25}},
             "by_agente": {"terms": {"field": "extra.agente_execucao.keyword", "size": 25}},
             "valor_total": {"sum": {"field": "extra.valor_execucao"}},
