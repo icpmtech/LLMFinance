@@ -106,9 +106,18 @@ _lock = threading.Lock()
 def _job_update(job_id: str, **fields: Any) -> None:
     with _lock:
         job = _jobs.get(job_id)
-        if job:
-            job.update(fields)
-            job["updated_at"] = datetime.now(timezone.utc).isoformat()
+        if not job:
+            return
+        if "logs" in fields and job.get("logs") is not None and fields["logs"] is not None:
+            job["logs"] = list(job.get("logs", [])) + list(fields["logs"])
+            del fields["logs"]
+        job.update(fields)
+        job["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _job_log(job_id: str, message: str) -> None:
+    """Adiciona uma linha de log ao job."""
+    _job_update(job_id, logs=[{"at": datetime.now(timezone.utc).isoformat(), "message": message}])
 
 
 def _run_collect(job_id: str, req: ExecucoesCollectRequest) -> None:
@@ -117,14 +126,54 @@ def _run_collect(job_id: str, req: ExecucoesCollectRequest) -> None:
         _job_update(job_id, state="running", stage="recolher")
 
         def on_progress(info: Dict[str, Any]) -> None:
+            stage = info.get("stage") or "recolher"
+            letra = info.get("letra") or None
+            page = info.get("page")
+            pages = info.get("pages")
+            declared_total = info.get("declared_total")
+            collected = info.get("collected")
+            indexed = info.get("indexed")
+            skipped_existing = info.get("skipped_existing")
+            msg_parts: List[str] = []
+            if stage == "collecting":
+                msg_parts.append("A recolher")
+                if letra:
+                    msg_parts.append(f"letra {letra}")
+                if page:
+                    msg_parts.append(f"página {page}")
+                if pages:
+                    msg_parts.append(f"(total {pages} páginas)")
+                if declared_total:
+                    msg_parts.append(f"· {declared_total} anunciados")
+                if collected:
+                    msg_parts.append(f"· {collected} recolhidos")
+            elif stage == "indexing":
+                msg_parts.append("A indexar parcialmente")
+                if collected is not None:
+                    msg_parts.append(f"{collected} recolhidos")
+                if indexed is not None:
+                    msg_parts.append(f"{indexed} novos")
+                if skipped_existing is not None:
+                    msg_parts.append(f"{skipped_existing} já existiam")
+            elif stage == "indexed":
+                msg_parts.append("Indexação final concluída")
+                if indexed is not None:
+                    msg_parts.append(f"{indexed} novos registos")
+                if skipped_existing is not None:
+                    msg_parts.append(f"{skipped_existing} ignorados")
+            else:
+                msg_parts.append(stage)
+            _job_log(job_id, " · ".join(msg_parts))
             _job_update(
                 job_id,
-                stage=info.get("stage") or "recolher",
-                page=info.get("page"),
-                pages=info.get("pages"),
-                declared_total=info.get("declared_total"),
-                collected=info.get("collected"),
-                letra=info.get("letra") or None,
+                stage=stage,
+                page=page,
+                pages=pages,
+                declared_total=declared_total,
+                collected=collected,
+                indexed=indexed,
+                skipped_existing=skipped_existing,
+                letra=letra,
             )
 
         resultado = execucoes_service.collect(
@@ -138,6 +187,7 @@ def _run_collect(job_id: str, req: ExecucoesCollectRequest) -> None:
             max_items=req.max_items,
             min_interval=req.min_interval,
             proxy=req.proxy,
+            index=req.index,
             on_progress=on_progress,
             stop=lambda: bool(_jobs.get(job_id, {}).get("stop_requested")),
         )
@@ -151,14 +201,14 @@ def _run_collect(job_id: str, req: ExecucoesCollectRequest) -> None:
             errors=meta_info.get("errors") or [],
         )
 
-        if req.index and meta_info["collected"]:
-            _job_update(job_id, stage="importar")
-            ingest = execucoes_service.ingest_run(resultado["run_id"])
+        # A indexação já acontece durante e no final da recolha quando
+        # `index=True`; o job recebe os contadores finais do on_progress.
+        if req.index and meta_info.get("collected"):
             _job_update(
                 job_id,
-                indexed=ingest.get("indexed_count", 0),
-                skipped_existing=ingest.get("skipped_existing", 0),
-                index_total=ingest.get("index_total"),
+                stage="indexado",
+                indexed=meta_info.get("index_count", 0),
+                skipped_existing=meta_info.get("skipped_existing", 0),
             )
 
         estado = "stopped" if meta_info.get("stopped") else "done"
@@ -298,12 +348,17 @@ def execucoes_collect(req: ExecucoesCollectRequest, session: Session) -> Dict[st
         "collected": 0,
         "pages": 0,
         "indexed": 0,
+        "skipped_existing": 0,
         "errors": [],
+        "logs": [],
         "stop_requested": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": getattr(getattr(session, "user", None), "id", None) or getattr(session, "email", None),
         "finished": False,
     }
+
+    def _log(message: str) -> None:
+        _job_update(job_id, logs=[{"at": datetime.now(timezone.utc).isoformat(), "message": message}])
     with _lock:
         _jobs[job_id] = job
         if len(_jobs) > MAX_JOBS:

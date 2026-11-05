@@ -57,13 +57,14 @@ import { formatMoney } from "../components/graph/graphStudio";
 const numberFormat = new Intl.NumberFormat("pt-PT");
 const dateFormat = new Intl.DateTimeFormat("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" });
 
-type Section = "pesquisa" | "recolha" | "execucoes" | "estado";
+type Section = "pesquisa" | "recolha" | "execucoes" | "estado" | "logs";
 
 const SECTIONS: { id: Section; label: string; hint: string; icon: React.ReactNode }[] = [
   { id: "pesquisa", label: "Pesquisa", hint: "Procurar execuções indexadas", icon: <Search size={14} /> },
   { id: "recolha", label: "Recolha", hint: "Recolher a lista do portal para JSON", icon: <Play size={14} /> },
   { id: "execucoes", label: "Execuções", hint: "Ficheiros gravados e importação", icon: <FileJson size={14} /> },
   { id: "estado", label: "Estado", hint: "Volumetria e distribuições do índice", icon: <Database size={14} /> },
+  { id: "logs", label: "Logs", hint: "Registo de atividade das recolhas", icon: <RefreshCw size={14} /> },
 ];
 
 function formatDate(value?: string | null): string {
@@ -311,6 +312,7 @@ export default function ExecucoesPage() {
           />
         )}
         {active === "estado" && <EstadoSection status={status} onRefresh={refreshStatus} />}
+        {active === "logs" && <LogsSection />}
       </main>
     </div>
   );
@@ -996,6 +998,20 @@ function RecolhaSection({
           )}
         </Card>
 
+        {job?.logs && job.logs.length > 0 ? (
+          <Card className="space-y-2">
+            <div className="text-[11.5px] font-semibold text-foreground">Log da recolha</div>
+            <div className="max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground">
+              {job.logs.map((entry, idx) => (
+                <div key={idx} className="flex gap-2 py-0.5">
+                  <span className="shrink-0 text-white/30">{formatDateTime(entry.at)}</span>
+                  <span className="text-foreground/80">{entry.message}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
         <Card className="space-y-1 text-[11px] text-muted-foreground">
           <div className="text-[11.5px] font-semibold text-foreground">Como funciona</div>
           <p>
@@ -1003,9 +1019,9 @@ function RecolhaSection({
             <span className="font-mono text-foreground">data/execucoes/runs</span>.
           </p>
           <p>
-            2. No fim (se «Importar» estiver ligado) o JSON é indexado em{" "}
-            <span className="font-mono text-foreground">{meta?.index ?? "finance_execucoes"}</span>;. Reimportar a
-            mesma recolha não duplica: os registos já existentes são ignorados.
+            2. Durante e no final da recolha (se «Importar» estiver ligado) os registos novos são indexados em{" "}
+            <span className="font-mono text-foreground">{meta?.index ?? "finance_execucoes"}</span>;. Já existentes
+            são ignorados.
           </p>
           <p>
             3. Sem critérios específicos, a recolha percorre A-Z (e a opção «0») para obter a lista completa. Cada letra
@@ -1264,6 +1280,117 @@ function EstadoSection({ status, onRefresh }: { status: ExecucaoStatus | null; o
           {(status.by_agente ?? []).length === 0 ? <div className="text-[11px] text-muted-foreground">—</div> : null}
         </Card>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ logs */
+
+function LogsSection() {
+  const [jobs, setJobs] = useState<ExecucaoJob[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<ExecucaoJob | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listExecucoesJobs();
+      setJobs(data.jobs);
+    } catch (err) {
+      /* ignora silenciosamente */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedJob(null);
+      return;
+    }
+    let timer: number | null = null;
+    const fetchJob = async () => {
+      try {
+        const job = await getExecucoesJob(selectedId);
+        setSelectedJob(job);
+      } catch {
+        setSelectedJob(null);
+      }
+    };
+    void fetchJob();
+    timer = window.setInterval(fetchJob, 1500);
+    return () => {
+      if (timer) window.clearInterval(timer);
+    };
+  }, [selectedId]);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <Card className="space-y-2 self-start">
+        <div className="flex items-center justify-between">
+          <div className="text-[11.5px] font-semibold text-foreground">Recolhas</div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10.5px] text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> atualizar
+          </button>
+        </div>
+        {jobs.length === 0 ? (
+          <div className="text-[11px] text-muted-foreground">Ainda não há recolhas nesta sessão da API.</div>
+        ) : (
+          <div className="space-y-1">
+            {jobs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedId(item.id)}
+                className={`w-full rounded-lg border px-2 py-1.5 text-left text-[11px] transition ${
+                  selectedId === item.id
+                    ? "border-rose-400/30 bg-rose-400/10 text-rose-100"
+                    : "border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06]"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-foreground">{item.id}</span>
+                  <span className="text-[10px]">{item.state}</span>
+                </div>
+                <div className="text-[10px]">
+                  {item.stage}
+                  {item.letra ? ` · letra ${item.letra}` : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="space-y-2">
+        <div className="text-[11.5px] font-semibold text-foreground">Log do processo</div>
+        {!selectedJob ? (
+          <div className="text-[11px] text-muted-foreground">
+            Seleciona uma recolha para ver o registo de atividade.
+          </div>
+        ) : !selectedJob.logs || selectedJob.logs.length === 0 ? (
+          <div className="text-[11px] text-muted-foreground">Sem mensagens de log para esta recolha.</div>
+        ) : (
+          <div className="max-h-[calc(100vh-220px)] overflow-y-auto rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground">
+            {selectedJob.logs.map((entry, idx) => (
+              <div key={idx} className="flex gap-2 py-0.5">
+                <span className="shrink-0 text-white/30">{formatDateTime(entry.at)}</span>
+                <span className="text-foreground/80">{entry.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

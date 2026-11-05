@@ -126,6 +126,11 @@ export type ExecucaoRun = {
   stopped?: boolean;
 };
 
+export type ExecucaoJobLog = {
+  at: string;
+  message: string;
+};
+
 export type ExecucaoJob = {
   id: string;
   state: "queued" | "running" | "done" | "error" | "stopped" | "empty";
@@ -145,6 +150,7 @@ export type ExecucaoJob = {
   skipped_existing?: number;
   stop_requested?: boolean;
   finished?: boolean;
+  logs?: ExecucaoJobLog[];
   created_at?: string;
   updated_at?: string;
 };

@@ -258,6 +258,7 @@ def collect(
     partial_every: int = DEFAULT_PARTIAL_PAGES,
     on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     stop: Optional[Callable[[], bool]] = None,
+    index: bool = True,
     persist: bool = True,
 ) -> Dict[str, Any]:
     """Recolhe registos da Lista Pública de Execuções e grava-os em JSON.
@@ -302,9 +303,9 @@ def collect(
         if on_progress:
             on_progress({"stage": stage, "collected": len(itens), "errors": erros, **campos})
 
-    def _guardar_parcial(motivo: str) -> None:
+    def _guardar_parcial(motivo: str) -> Dict[str, Any]:
         if not persist or not itens:
-            return
+            return {}
         agora = datetime.now(timezone.utc)
         payload = _payload(run_id, criterios, itens, partial=True)
         meta_info = _meta(
@@ -319,11 +320,23 @@ def collect(
             partial=True,
             motivo=motivo,
         )
+        resultado_index: Dict[str, Any] = {}
         try:
-            save_run(payload, meta_info)
+            paths = save_run(payload, meta_info)
+            meta_info["file"] = paths["path"]
+            meta_info["meta_file"] = paths["meta_path"]
             logger.info("Execuções %s: progresso parcial gravado (%s itens).", run_id, len(itens))
+            if index:
+                try:
+                    resultado_index = ingest_run(run_id=run_id, items=itens, mark_meta=False)
+                    meta_info["index_count"] = resultado_index.get("indexed_count", 0)
+                    meta_info["skipped_existing"] = resultado_index.get("skipped_existing", 0)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Execuções %s: indexação parcial falhou: %s", run_id, exc)
+                    resultado_index = {"error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.warning("Não foi possível gravar o progresso parcial de %s: %s", run_id, exc)
+        return resultado_index
 
     try:
         with ExecucoesClient(min_interval=min_interval, proxy=proxy) as client:
@@ -341,13 +354,25 @@ def collect(
                         def _on_page(page, novos, letra=letra):
                             nonlocal paginas_feitas_letra
                             paginas_feitas_letra = page.page
+                            _add(novos)
                             _progress(
                                 "collecting",
                                 letra=letra,
                                 page=page.page,
                                 pages=pages_done + page.page,
                                 declared_total=page.total,
+                                collected=len(itens),
                             )
+                            if partial_every and len(itens) >= partial_every * (letras_feitas + 1):
+                                res_index = _guardar_parcial(f"letra {letra}")
+                                if res_index:
+                                    _progress(
+                                        "indexing",
+                                        letra=letra,
+                                        collected=len(itens),
+                                        indexed=res_index.get("indexed_count", 0),
+                                        skipped_existing=res_index.get("skipped_existing", 0),
+                                    )
 
                         records, resumo = client.collect(
                             dias=dias,
@@ -365,8 +390,6 @@ def collect(
                     total_declared += resumo.get("total", 0)
                     pages_done += paginas_feitas_letra or resumo.get("pages", 0)
                     letras_feitas += 1
-                    if partial_every and len(itens) >= partial_every * (letras_feitas + 1):
-                        _guardar_parcial(f"letra {letra}")
                     if max_items and len(itens) >= max_items:
                         itens = itens[:max_items]
                         break
@@ -393,12 +416,17 @@ def collect(
                     dias=dias,
                     max_pages=max_pages_per_letra,
                     max_items=max_items,
-                    on_page=lambda page, novos: _progress(
-                        "collecting",
-                        page=page.page,
-                        pages=page.page,
-                        declared_total=page.total,
-                    ),
+                    on_page=lambda page, novos: (
+                        _add(novos),
+                        _progress(
+                            "collecting",
+                            page=page.page,
+                            pages=page.page,
+                            declared_total=page.total,
+                            collected=len(itens),
+                        ),
+                        _guardar_parcial(f"página {page.page}") if partial_every and len(itens) >= partial_every else None,
+                    )[-1],
                     stop=stop,
                 )
                 _add(records)
@@ -426,6 +454,22 @@ def collect(
         paths = save_run(payload, meta_info)
         meta_info["file"] = paths["path"]
         meta_info["meta_file"] = paths["meta_path"]
+
+    resultado_final_index: Dict[str, Any] = {}
+    if persist and index and itens:
+        try:
+            resultado_final_index = ingest_run(run_id=run_id, items=itens, mark_meta=False)
+            meta_info["index_count"] = resultado_final_index.get("indexed_count", 0)
+            meta_info["skipped_existing"] = resultado_final_index.get("skipped_existing", 0)
+            _progress(
+                "indexed",
+                collected=len(itens),
+                indexed=resultado_final_index.get("indexed_count", 0),
+                skipped_existing=resultado_final_index.get("skipped_existing", 0),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Execuções %s: indexação final falhou: %s", run_id, exc)
+            erros.append(f"indexação final: {exc}")
 
     _progress("collected", collected=len(itens), pages=meta_info.get("pages", 0))
     return {"run_id": run_id, "payload": payload, "meta": meta_info}
