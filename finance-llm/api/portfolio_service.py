@@ -163,8 +163,8 @@ def _fetch_news_from_es(
             sort="recent",
             page=1,
             size=size,
-            start_date=start.strftime("%Y-%m-%dT%H:%M:%S"),
-            end_date=end.strftime("%Y-%m-%dT%H:%M:%S"),
+            start_date=start.strftime("%Y-%m-%d"),
+            end_date=end.strftime("%Y-%m-%d"),
         )
         items = result.get("items") or []
         # Normalizar campos para o frontend.
@@ -195,7 +195,7 @@ def _fetch_yahoo_news(ticker: str, size: int = 6) -> List[Dict[str, Any]]:
         from api.tools import get_news
 
         result = get_news(ticker)
-        items = result.get("items") or []
+        items = result.get("news") or []
         out = []
         for item in items[:size]:
             out.append(
@@ -699,13 +699,14 @@ def portfolio_forecast(
             from forecasting.arima_model import run_full_pipeline
             from api.tools import _normalize_ticker
 
-            result = run_full_pipeline(
+            raw_result = run_full_pipeline(
                 ticker=_normalize_ticker(ticker),
-                future_days=future_days,
+                future_steps=future_days,
                 period="5y",
-                order="2,1,2",
+                order=(2, 1, 2),
                 train_ratio=0.85,
             )
+            result = raw_result.to_dict() if hasattr(raw_result, "to_dict") else raw_result
             points = []
             for p in result.get("forecast", []):
                 points.append(
