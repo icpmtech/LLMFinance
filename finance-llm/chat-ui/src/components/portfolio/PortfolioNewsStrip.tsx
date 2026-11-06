@@ -12,6 +12,12 @@ function sentimentIcon(sentiment?: string) {
   return <Minus className="h-3 w-3 text-slate-500" />;
 }
 
+function looksEnglish(text: string): boolean {
+  const amostra = ` ${text.toLowerCase()} `;
+  const marcadores = [" the ", " and ", " of ", " to ", " for ", " with ", " after ", " as ", " is ", " are "];
+  return marcadores.filter((m) => amostra.includes(m)).length >= 2;
+}
+
 export function PortfolioNewsStrip({ news }: PortfolioNewsStripProps) {
   if (!news.length) {
     return <p className="text-sm text-slate-500">Sem notícias recentes.</p>;
@@ -43,6 +49,11 @@ export function PortfolioNewsStrip({ news }: PortfolioNewsStripProps) {
                   {traduzido && (
                     <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">
                       PT
+                    </span>
+                  )}
+                  {!item.title_pt && looksEnglish(item.title) && (
+                    <span className="text-[10px] text-slate-600" title="A tradução é preparada em segundo plano">
+                      a traduzir…
                     </span>
                   )}
                 </div>

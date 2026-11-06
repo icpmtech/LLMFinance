@@ -27,6 +27,13 @@ import { PortfolioNewsStrip } from "../components/portfolio/PortfolioNewsStrip";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 import { PortfolioScopeBar } from "../components/portfolio/PortfolioScopeBar";
 
+const REFRESH_OPTIONS = [
+  { value: 0, label: "Off" },
+  { value: 15, label: "15s" },
+  { value: 60, label: "1m" },
+  { value: 300, label: "5m" },
+];
+
 const SECTIONS = [
   { id: "manage", label: "Gerir carteiras e ordens", icon: Briefcase, route: "/portfolio/manage", color: "text-emerald-400" },
   { id: "reporting", label: "Automatizar relatórios", icon: FileText, route: "/portfolio/reporting", color: "text-emerald-400" },
@@ -134,25 +141,33 @@ export function PortfolioPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <PortfolioScopeBar scope={scope} />
-            <label className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5">
+            <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-1">
               <RefreshCw
-                className={`h-3.5 w-3.5 ${refreshSeconds ? "text-emerald-400" : "text-slate-500"}`}
+                className={`ml-1 h-3.5 w-3.5 ${refreshSeconds ? "animate-spin text-emerald-400" : "text-slate-600"}`}
+                style={refreshSeconds ? { animationDuration: "3s" } : undefined}
               />
-              <span className="text-xs uppercase tracking-wider text-slate-500">Auto</span>
-              <select
-                value={refreshSeconds}
-                onChange={(event) => setRefreshSeconds(Number(event.target.value))}
-                className="bg-transparent text-sm text-slate-200 focus:outline-none"
-                aria-label="Intervalo de actualização automática"
-              >
-                <option value={0}>Desligado</option>
-                <option value={15}>15 s</option>
-                <option value={30}>30 s</option>
-                <option value={60}>1 min</option>
-                <option value={300}>5 min</option>
-                <option value={900}>15 min</option>
-              </select>
-            </label>
+              <span className="px-1 text-[10px] uppercase tracking-wider text-slate-500">Auto</span>
+              {REFRESH_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setRefreshSeconds(option.value)}
+                  aria-pressed={refreshSeconds === option.value}
+                  title={
+                    option.value
+                      ? `Actualizar os dados a cada ${option.label}`
+                      : "Sem actualização automática"
+                  }
+                  className={[
+                    "rounded px-2 py-1 text-xs font-medium transition",
+                    refreshSeconds === option.value
+                      ? "bg-emerald-600 text-white"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <a
               href="/portfolio/manage"
               className="inline-flex items-center gap-2 rounded-md bg-emerald-600/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-600/30"
@@ -161,7 +176,7 @@ export function PortfolioPage() {
               Gerir carteiras
             </a>
             <button
-              onClick={load}
+              onClick={() => void load()}
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
@@ -219,7 +234,11 @@ export function PortfolioPage() {
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
             <div className="text-xs uppercase tracking-wider text-slate-500">Notícias</div>
             <div className="mt-2 text-2xl font-semibold text-white">{data?.news.length ?? "-"}</div>
-            <div className="mt-1 text-sm text-slate-400">últimas 72h</div>
+            <div className="mt-1 text-sm text-slate-400">
+              {updatedAt
+                ? `actualizado ${updatedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+                : "últimas 72h"}
+            </div>
           </div>
         </div>
 
