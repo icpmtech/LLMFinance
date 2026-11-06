@@ -25,15 +25,9 @@ export function PortfolioNewsStrip({ news }: PortfolioNewsStripProps) {
         const titulo = item.title_pt || item.title;
         const resumo = item.summary_pt || item.summary;
         const traduzido = Boolean(item.title_pt && item.title_pt !== item.title);
-        return (
-          <a
-            key={item.id}
-            href={item.url || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abrir a notícia numa nova aba"
-            className="group block rounded-md border border-slate-800/60 bg-slate-950/40 p-3 hover:border-slate-700 transition"
-          >
+        const hasLink = Boolean(item.url && item.url !== "#");
+        const corpo = (
+          <>
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -57,7 +51,9 @@ export function PortfolioNewsStrip({ news }: PortfolioNewsStripProps) {
                 </h3>
                 {resumo && <p className="mt-1 text-xs text-slate-500 line-clamp-2">{resumo}</p>}
               </div>
-              <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600 group-hover:text-slate-400" />
+              {hasLink && (
+                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600 group-hover:text-slate-400" />
+              )}
             </div>
             {item.published && (
               <div className="mt-2 text-[10px] text-slate-600">
@@ -69,7 +65,27 @@ export function PortfolioNewsStrip({ news }: PortfolioNewsStripProps) {
                 })}
               </div>
             )}
+          </>
+        );
+        const className =
+          "group block rounded-md border border-slate-800/60 bg-slate-950/40 p-3 transition hover:border-slate-700";
+
+        // Sem endereço não há link: um `href="#"` recarregava a página.
+        return hasLink ? (
+          <a
+            key={item.id}
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir a notícia numa nova aba"
+            className={className}
+          >
+            {corpo}
           </a>
+        ) : (
+          <div key={item.id} className={className}>
+            {corpo}
+          </div>
         );
       })}
     </div>

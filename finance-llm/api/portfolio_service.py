@@ -14,6 +14,7 @@ import hashlib
 import os
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -40,6 +41,9 @@ NEWS_TRANSLATION_MAX = 8
 
 _translation_lock = threading.Lock()
 _translation_state: Dict[str, bool] = {"running": False}
+# Fila de títulos à espera de tradução: o trabalhador esvazia-a por ciclos, para
+# que nenhuma notícia fique sempre de fora quando a lista muda.
+_pending_titles: "deque[str]" = deque()
 
 
 @dataclass
@@ -194,7 +198,7 @@ def _fetch_news_from_es(
                     "summary_pt": item.get("summary_pt") or item.get("translated_summary") or "",
                     "publisher": item.get("publisher") or item.get("source") or "",
                     "published": item.get("published") or item.get("published_at") or "",
-                    "url": item.get("url") or "#",
+                    "url": item.get("url") or item.get("link") or "",
                     "ticker": item.get("ticker") or "",
                     "sentiment": item.get("sentiment") or "neutro",
                     "topics": item.get("topics") or [],
@@ -222,7 +226,8 @@ def _fetch_yahoo_news(ticker: str, size: int = 6) -> List[Dict[str, Any]]:
                     "summary": item.get("summary") or "",
                     "publisher": item.get("publisher") or "Yahoo Finance",
                     "published": item.get("published") or "",
-                    "url": item.get("link") or "#",
+                    # O leitor de notícias devolve `url`; `link` é o nome antigo.
+                    "url": item.get("url") or item.get("link") or "",
                     "ticker": ticker,
                     "sentiment": "neutro",
                     "topics": [],
@@ -252,13 +257,13 @@ def _store_translation(source: str, translated: Optional[str]) -> None:
 
 
 def _translate_news_batch(texts: List[str]) -> None:
-    """Traduz títulos em segundo plano (fornecedor de IA e, se falhar, modelo local).
+    """Traduz um lote de títulos (fornecedor de IA e, se falhar, modelo local).
 
     Corre fora do pedido: o modelo local leva dezenas de segundos por título e o
     fornecedor pode estar sem quota. O resultado fica em cache, pelo que a página
     passa a mostrar o português nas visitas seguintes sem custo nenhum.
     """
-    pendentes = [t for t in texts if t and not _cached_translation(t)][:NEWS_TRANSLATION_MAX]
+    pendentes = [t for t in texts if t and not _cached_translation(t)]
     if not pendentes:
         return
     try:
@@ -282,23 +287,33 @@ def _translate_news_batch(texts: List[str]) -> None:
         logger.debug("Tradução local indisponível para notícias: %s", exc)
 
 
+def _drain_news_translation_queue() -> None:
+    """Traduz a fila até ao fim, em lotes, e desliga o indicador de actividade."""
+    while True:
+        with _translation_lock:
+            if not _pending_titles:
+                _translation_state["running"] = False
+                return
+            lote = [_pending_titles.popleft() for _ in range(min(NEWS_TRANSLATION_MAX, len(_pending_titles)))]
+        try:
+            _translate_news_batch(lote)
+        except Exception as exc:  # pragma: no cover - nunca deve matar o trabalhador
+            logger.debug("Trabalhador de tradução de notícias: %s", exc)
+
+
 def _schedule_news_translation(texts: List[str]) -> None:
-    """Arranca a tradução em segundo plano (um único trabalho de cada vez)."""
+    """Junta os títulos à fila e garante que há um trabalhador a correr."""
     if not NEWS_TRANSLATE_ENABLED:
         return
     with _translation_lock:
-        if _translation_state["running"]:
+        for texto in texts:
+            if texto and not _cached_translation(texto) and texto not in _pending_titles:
+                _pending_titles.append(texto)
+        if _translation_state["running"] or not _pending_titles:
             return
         _translation_state["running"] = True
 
-    def _run() -> None:
-        try:
-            _translate_news_batch(texts)
-        finally:
-            with _translation_lock:
-                _translation_state["running"] = False
-
-    threading.Thread(target=_run, name="portfolio-news-pt", daemon=True).start()
+    threading.Thread(target=_drain_news_translation_queue, name="portfolio-news-pt", daemon=True).start()
 
 
 def _apply_news_translations(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

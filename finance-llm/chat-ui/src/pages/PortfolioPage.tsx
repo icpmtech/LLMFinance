@@ -43,42 +43,61 @@ export function PortfolioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [refreshSeconds, setRefreshSeconds] = useState<number>(() => {
+    const saved = Number(window.localStorage.getItem("iqos-portfolio-refresh") ?? "0");
+    return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  });
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const portfolioId = scope.portfolioId;
 
   // A carteira escolhida é a fonte de todos os números desta página.
-  const load = useCallback(async () => {
-    if (scope.loading) return;
-    if (!portfolioId) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const summary = await getPortfolioSummary({ portfolio_id: portfolioId });
-      setData(summary);
-      const histories: Record<string, TickerHistoryResponse> = {};
-      for (const ticker of summary.tickers.slice(0, 5)) {
-        if (ticker.error) continue;
-        try {
-          histories[ticker.ticker] = await getPortfolioTickerHistory(ticker.ticker, "1y", "1d");
-        } catch {
-          // ignorar falhas individuais de histórico
-        }
+  const load = useCallback(
+    async (silent = false) => {
+      if (scope.loading) return;
+      if (!portfolioId) {
+        setData(null);
+        setLoading(false);
+        return;
       }
-      setHistory(histories);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar portfólio");
-    } finally {
-      setLoading(false);
-    }
-  }, [portfolioId, scope.loading]);
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const summary = await getPortfolioSummary({ portfolio_id: portfolioId });
+        setData(summary);
+        setUpdatedAt(new Date());
+        const histories: Record<string, TickerHistoryResponse> = {};
+        for (const ticker of summary.tickers.slice(0, 5)) {
+          if (ticker.error) continue;
+          try {
+            histories[ticker.ticker] = await getPortfolioTickerHistory(ticker.ticker, "1y", "1d");
+          } catch {
+            // ignorar falhas individuais de histórico
+          }
+        }
+        setHistory(histories);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao carregar portfólio");
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [portfolioId, scope.loading],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Actualização automática: o intervalo escolhido fica guardado no browser.
+  useEffect(() => {
+    window.localStorage.setItem("iqos-portfolio-refresh", String(refreshSeconds));
+    if (!refreshSeconds) return;
+    const id = window.setInterval(() => {
+      void load(true);
+    }, refreshSeconds * 1000);
+    return () => window.clearInterval(id);
+  }, [refreshSeconds, load]);
 
   const totalValue = data?.portfolio_value ?? 0;
   const totalChange = data?.portfolio_change_pct ?? 0;
@@ -115,6 +134,25 @@ export function PortfolioPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <PortfolioScopeBar scope={scope} />
+            <label className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5">
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshSeconds ? "text-emerald-400" : "text-slate-500"}`}
+              />
+              <span className="text-xs uppercase tracking-wider text-slate-500">Auto</span>
+              <select
+                value={refreshSeconds}
+                onChange={(event) => setRefreshSeconds(Number(event.target.value))}
+                className="bg-transparent text-sm text-slate-200 focus:outline-none"
+                aria-label="Intervalo de actualização automática"
+              >
+                <option value={0}>Desligado</option>
+                <option value={15}>15 s</option>
+                <option value={30}>30 s</option>
+                <option value={60}>1 min</option>
+                <option value={300}>5 min</option>
+                <option value={900}>15 min</option>
+              </select>
+            </label>
             <a
               href="/portfolio/manage"
               className="inline-flex items-center gap-2 rounded-md bg-emerald-600/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-600/30"
