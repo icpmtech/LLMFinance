@@ -47,6 +47,9 @@ export type PortfolioTicker = {
 export type PortfolioNewsItem = {
   id: string;
   title: string;
+  /** T?tulo/resumo em portugu?s (tradu??o em segundo plano no servidor). */
+  title_pt?: string;
+  summary_pt?: string;
   summary?: string;
   publisher?: string;
   published?: string;

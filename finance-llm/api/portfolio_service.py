@@ -421,17 +421,25 @@ def aligned_history(
     valid_tickers: List[str] = []
     for ticker in tickers:
         df = _fetch_history(ticker, period=period, interval=interval)
-        if df.empty or "Close" not in df.columns:
+        if df.empty or "Close" not in df.columns or "Date" not in df.columns:
             continue
         ts = df.set_index("Date")["Close"].rename(f"{ticker}_Close")
         series_map[ticker] = ts
         valid_tickers.append(ticker)
     if not series_map:
         return pd.DataFrame(), []
-    df = pd.concat(series_map.values(), axis=1).dropna()
-    # Normalizar para base 100 no primeiro dia para comparar evolução.
-    normalized = df.div(df.iloc[0]) * 100
-    return normalized, valid_tickers
+    joined = pd.concat(series_map.values(), axis=1).dropna()
+    if joined.empty:
+        # Históricos sem uma única data em comum (ticker suspenso, mercado
+        # diferente ou série toda vazia): sem linhas não há série alinhada. Antes
+        # isto rebentava em `joined.iloc[0]` com um 500.
+        return pd.DataFrame(), []
+    # Depois do `dropna()` só ficam as colunas com dados: os tickers válidos
+    # passam a ser os das colunas que restaram (senão os pesos apontavam para
+    # colunas inexistentes).
+    aligned_tickers = [str(col)[: -len("_Close")] for col in joined.columns]
+    normalized = joined.div(joined.iloc[0]) * 100
+    return normalized, aligned_tickers
 
 
 # ---------------------------------------------------------------------------
@@ -529,7 +537,7 @@ def portfolio_summary(
         "cash": round(cash_value, 4),
         "invested_value": round(invested_value, 4),
         "positioned": bool(positions),
-        "news": deduped[:16],
+        "news": _apply_news_translations(deduped[:16]),
         "benchmark": {"ticker": "^GSPC", "name": "S&P 500"},
         "as_of": datetime.utcnow().isoformat() + "Z",
     }
@@ -925,7 +933,7 @@ def portfolio_forecast(
         "future_days": future_days,
         "use_sentiment": use_sentiment,
         "forecasts": forecasts,
-        "news": news[:12],
+        "news": _apply_news_translations(news[:12]),
         "as_of": datetime.utcnow().isoformat() + "Z",
     }
 
