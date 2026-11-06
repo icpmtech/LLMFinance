@@ -9,6 +9,7 @@ import {
   Newspaper,
   RefreshCw,
   ChevronRight,
+  Briefcase,
 } from "lucide-react";
 import {
   getPortfolioSummary,
@@ -22,6 +23,7 @@ import { PortfolioNewsStrip } from "../components/portfolio/PortfolioNewsStrip";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 
 const SECTIONS = [
+  { id: "manage", label: "Gerir carteiras e ordens", icon: Briefcase, route: "/portfolio/manage", color: "text-emerald-400" },
   { id: "reporting", label: "Automatizar relatórios", icon: FileText, route: "/portfolio/reporting", color: "text-emerald-400" },
   { id: "forecast", label: "Antecipar o futuro", icon: Sparkles, route: "/portfolio/forecast", color: "text-violet-400" },
   { id: "resilience", label: "Construir portfólio resiliente", icon: ShieldAlert, route: "/portfolio/resilience", color: "text-amber-400" },
@@ -95,6 +97,13 @@ export function PortfolioPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href="/portfolio/manage"
+              className="inline-flex items-center gap-2 rounded-md bg-emerald-600/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-600/30"
+            >
+              <Briefcase className="h-4 w-4" />
+              Gerir carteiras
+            </a>
             <button
               onClick={load}
               disabled={loading}
