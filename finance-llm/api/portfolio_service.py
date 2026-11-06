@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 import math
+import hashlib
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -26,6 +28,18 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PORTFOLIO_PATH = ROOT / "data" / "portfolio_default.json"
 
 CACHE_TTL_SECONDS = 45.0
+
+# Notícias: a tradução para português corre em segundo plano e fica em cache uma
+# semana (o texto de uma notícia não muda). O interruptor permite desligá-la num
+# ambiente sem modelo nem fornecedor de IA disponível.
+NEWS_TRANSLATION_TTL = 7 * 24 * 3600.0
+NEWS_TRANSLATE_ENABLED = os.getenv("PORTFOLIO_NEWS_TRANSLATE", "1").strip().lower() not in {"0", "false", "no"}
+# Quantos títulos por ciclo: o modelo local é lento, o que importa é ir enchendo
+# a cache sem martelar a máquina.
+NEWS_TRANSLATION_MAX = 8
+
+_translation_lock = threading.Lock()
+_translation_state: Dict[str, bool] = {"running": False}
 
 
 @dataclass
@@ -167,14 +181,17 @@ def _fetch_news_from_es(
             end_date=end.strftime("%Y-%m-%d"),
         )
         items = result.get("items") or []
-        # Normalizar campos para o frontend.
+        # Normalizar campos para o frontend. `title`/`summary` ficam no original;
+        # `title_pt`/`summary_pt` trazem a versão portuguesa já guardada no índice.
         normalized = []
         for item in items:
             normalized.append(
                 {
                     "id": item.get("id") or item.get("_id") or f"{item.get('ticker')}-{item.get('published')}",
-                    "title": item.get("translated_title") or item.get("title") or "Sem título",
-                    "summary": item.get("summary_pt") or item.get("translated_summary") or item.get("summary") or "",
+                    "title": item.get("title") or "Sem título",
+                    "title_pt": item.get("translated_title") or "",
+                    "summary": item.get("summary") or "",
+                    "summary_pt": item.get("summary_pt") or item.get("translated_summary") or "",
                     "publisher": item.get("publisher") or item.get("source") or "",
                     "published": item.get("published") or item.get("published_at") or "",
                     "url": item.get("url") or "#",
@@ -215,6 +232,94 @@ def _fetch_yahoo_news(ticker: str, size: int = 6) -> List[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("Notícias do Yahoo indisponíveis para %s: %s", ticker, exc)
         return []
+
+
+def _news_translation_key(text: str) -> str:
+    return "newstrans:" + hashlib.sha1(text.strip().lower().encode("utf-8")).hexdigest()
+
+
+def _cached_translation(text: str) -> Optional[str]:
+    if not text:
+        return None
+    value = _CACHE.get(_news_translation_key(text))
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _store_translation(source: str, translated: Optional[str]) -> None:
+    target = (translated or "").strip()
+    if target and target != source.strip():
+        _CACHE.set(_news_translation_key(source), target, ttl=NEWS_TRANSLATION_TTL)
+
+
+def _translate_news_batch(texts: List[str]) -> None:
+    """Traduz títulos em segundo plano (fornecedor de IA e, se falhar, modelo local).
+
+    Corre fora do pedido: o modelo local leva dezenas de segundos por título e o
+    fornecedor pode estar sem quota. O resultado fica em cache, pelo que a página
+    passa a mostrar o português nas visitas seguintes sem custo nenhum.
+    """
+    pendentes = [t for t in texts if t and not _cached_translation(t)][:NEWS_TRANSLATION_MAX]
+    if not pendentes:
+        return
+    try:
+        from api.news_traducao import traduzir_textos
+
+        resultado = traduzir_textos(pendentes)
+        for origem, destino in (resultado.get("translations") or {}).items():
+            _store_translation(origem, destino)
+    except Exception as exc:  # pragma: no cover - depende do fornecedor
+        logger.debug("Tradução por IA indisponível para notícias: %s", exc)
+
+    faltam = [t for t in pendentes if not _cached_translation(t)]
+    if not faltam:
+        return
+    try:
+        from api.news_nlp import _translate_en_to_pt
+
+        for texto in faltam:
+            _store_translation(texto, _translate_en_to_pt(texto))
+    except Exception as exc:  # pragma: no cover - depende do modelo local
+        logger.debug("Tradução local indisponível para notícias: %s", exc)
+
+
+def _schedule_news_translation(texts: List[str]) -> None:
+    """Arranca a tradução em segundo plano (um único trabalho de cada vez)."""
+    if not NEWS_TRANSLATE_ENABLED:
+        return
+    with _translation_lock:
+        if _translation_state["running"]:
+            return
+        _translation_state["running"] = True
+
+    def _run() -> None:
+        try:
+            _translate_news_batch(texts)
+        finally:
+            with _translation_lock:
+                _translation_state["running"] = False
+
+    threading.Thread(target=_run, name="portfolio-news-pt", daemon=True).start()
+
+
+def _apply_news_translations(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Junta o português já traduzido e agenda o que falta.
+
+    `title`/`summary` mantêm o original; `title_pt`/`summary_pt` trazem a versão
+    portuguesa quando existe. A página mostra a portuguesa e o original como
+    recurso, sem nunca esperar pela tradução.
+    """
+    faltam: List[str] = []
+    for item in items:
+        titulo = str(item.get("title") or "")
+        resumo = str(item.get("summary") or "")
+        item["title_pt"] = item.get("title_pt") or _cached_translation(titulo) or ""
+        if resumo:
+            item["summary_pt"] = item.get("summary_pt") or _cached_translation(resumo) or ""
+        if not item["title_pt"] and titulo:
+            faltam.append(titulo)
+    if faltam:
+        _schedule_news_translation(faltam)
+    return items
 
 
 # ---------------------------------------------------------------------------
