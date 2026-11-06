@@ -34,6 +34,13 @@ export type PortfolioTicker = {
   recommendation_mean?: number;
   number_of_analysts?: number;
   kpis?: Record<string, number>;
+  quantity?: number;
+  avg_price?: number;
+  market_value?: number;
+  cost_basis?: number;
+  unrealized_pnl?: number;
+  unrealized_pnl_pct?: number;
+  weight?: number;
   error?: string;
 };
 
@@ -55,9 +62,23 @@ export type PortfolioSummaryResponse = {
   currency: string;
   tickers: PortfolioTicker[];
   weights: number[];
+  cash?: number;
+  invested_value?: number;
+  positioned?: boolean;
   news: PortfolioNewsItem[];
   benchmark: { ticker: string; name: string };
+  scope?: PortfolioScopeMeta;
   as_of: string;
+};
+
+export type PortfolioScopeMeta = {
+  source: "request" | "portfolio" | "watchlist" | "default";
+  portfolio_id?: string;
+  portfolio_name?: string;
+  watchlist_id?: string;
+  watchlist_name?: string;
+  currency?: string;
+  cash?: number;
 };
 
 export type PortfolioAttributionSector = {
@@ -74,6 +95,7 @@ export type PortfolioAttributionSector = {
 };
 
 export type PortfolioAttributionResponse = {
+  error?: string;
   period: string;
   portfolio_return: number;
   active_return: number;
@@ -172,9 +194,26 @@ export type TickerHistoryResponse = {
   error?: string;
 };
 
-export type PortfolioRequest = { tickers?: string[]; weights?: number[] };
-export type ForecastRequest = { tickers?: string[]; future_days?: number; use_sentiment?: boolean };
-export type OptimizeRequest = { tickers?: string[]; weights?: number[]; objective?: string };
+export type PortfolioRequest = {
+  tickers?: string[];
+  weights?: number[];
+  portfolio_id?: string;
+  watchlist_id?: string;
+};
+export type ForecastRequest = PortfolioRequest & { future_days?: number; use_sentiment?: boolean };
+export type OptimizeRequest = PortfolioRequest & { objective?: string };
+
+/**
+ * Respostas de an?lise que falham trazem `error` no corpo (HTTP 200): sem isto
+ * o ecr? rebentava a ler listas que n?o existem.
+ */
+function ensureOk<T>(payload: T): T {
+  const problem = (payload as { error?: unknown } | null)?.error;
+  if (typeof problem === "string" && problem.trim()) {
+    throw new Error(problem);
+  }
+  return payload;
+}
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -222,27 +261,27 @@ export async function getPortfolioMeta(): Promise<PortfolioMetaResponse> {
 }
 
 export async function getPortfolioSummary(req?: PortfolioRequest): Promise<PortfolioSummaryResponse> {
-  return postJson("/portfolio/summary", req ?? {});
+  return ensureOk(await postJson<PortfolioSummaryResponse>("/portfolio/summary", req ?? {}));
 }
 
 export async function getPortfolioReporting(req?: PortfolioRequest): Promise<PortfolioReportingResponse> {
-  return postJson("/portfolio/reporting", req ?? {});
+  return ensureOk(await postJson<PortfolioReportingResponse>("/portfolio/reporting", req ?? {}));
 }
 
 export async function getPortfolioForecast(req?: ForecastRequest): Promise<PortfolioForecastResponse> {
-  return postJson("/portfolio/forecast", req ?? {});
+  return ensureOk(await postJson<PortfolioForecastResponse>("/portfolio/forecast", req ?? {}));
 }
 
 export async function getPortfolioResilience(req?: OptimizeRequest): Promise<PortfolioOptimizeResponse> {
-  return postJson("/portfolio/resilience", req ?? {});
+  return ensureOk(await postJson<PortfolioOptimizeResponse>("/portfolio/resilience", req ?? {}));
 }
 
 export async function getPortfolioAttribution(req?: PortfolioRequest): Promise<PortfolioAttributionResponse> {
-  return postJson("/portfolio/attribution", req ?? {});
+  return ensureOk(await postJson<PortfolioAttributionResponse>("/portfolio/attribution", req ?? {}));
 }
 
 export async function getPortfolioRisk(req?: PortfolioRequest): Promise<PortfolioRiskResponse> {
-  return postJson("/portfolio/risk", req ?? {});
+  return ensureOk(await postJson<PortfolioRiskResponse>("/portfolio/risk", req ?? {}));
 }
 
 export async function getPortfolioTickerInfo(ticker: string): Promise<PortfolioTicker> {
@@ -328,6 +367,17 @@ export type TickerSearchItem = {
   sector: string;
   industry: string;
 };
+
+export type PortfolioSources = {
+  portfolios: SavedPortfolio[];
+  watchlists: SavedWatchlist[];
+  has_portfolio: boolean;
+  has_watchlist: boolean;
+};
+
+export async function getPortfolioSources(): Promise<PortfolioSources> {
+  return getJson("/portfolio/sources");
+}
 
 export async function searchTickers(q: string, limit = 12): Promise<TickerSearchItem[]> {
   const result = await getJson<{ items: TickerSearchItem[] }>(

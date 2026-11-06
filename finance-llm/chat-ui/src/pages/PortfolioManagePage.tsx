@@ -32,6 +32,7 @@ import {
 } from "../portfolioApi";
 import { TickerPicker } from "../components/portfolio/TickerPicker";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
+import { portfolioIdFromUrl } from "../portfolioScope";
 
 type Tab = "carteiras" | "watchlists" | "ordens";
 
@@ -40,7 +41,8 @@ export function PortfolioManagePage() {
   const [portfolios, setPortfolios] = useState<SavedPortfolio[]>([]);
   const [watchlists, setWatchlists] = useState<SavedWatchlist[]>([]);
   const [orders, setOrders] = useState<SavedOrder[]>([]);
-  const [selectedPortfolio, setSelectedPortfolio] = useState<string | null>(null);
+  // Chega j? com a carteira escolhida no dashboard (`?portfolio=`).
+  const [selectedPortfolio, setSelectedPortfolio] = useState<string | null>(() => portfolioIdFromUrl());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -332,10 +332,23 @@ def aligned_history(
 # ---------------------------------------------------------------------------
 # Sumário de portfólio
 # ---------------------------------------------------------------------------
-def portfolio_summary(tickers: Optional[List[str]] = None, weights: Optional[List[float]] = None) -> Dict[str, Any]:
+def portfolio_summary(
+    tickers: Optional[List[str]] = None,
+    weights: Optional[List[float]] = None,
+    positions: Optional[List[Dict[str, Any]]] = None,
+    cash: float = 0.0,
+    currency: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Sumário da carteira.
+
+    Com `positions` (as posições guardadas: ticker, quantidade e preço médio) o
+    valor passa a ser o **dinheiro real investido** — quantidade × cotação, mais
+    a caixa — e a variação é ponderada pelo valor de mercado. Sem posições fica
+    o comportamento antigo (pesos relativos sobre a cotação), usado pela carteira
+    de demonstração.
+    """
     tickers, w = _get_tickers_and_weights(tickers, weights)
     rows = enrich_tickers(tickers)
-    valid = [r for r in rows if r["price"] is not None]
 
     total_value = sum((r["price"] or 0) * w[i] for i, r in enumerate(rows) if i < len(w))
     total_change_pct = 0.0
@@ -347,6 +360,46 @@ def portfolio_summary(tickers: Optional[List[str]] = None, weights: Optional[Lis
                 if i < len(w)
             )
         )
+
+    invested_value = 0.0
+    cash_value = float(cash or 0.0)
+    if positions:
+        by_ticker = {str(p.get("ticker") or "").upper(): p for p in positions}
+        invested_value = 0.0
+        weighted_change = 0.0
+        for row in rows:
+            position = by_ticker.get(row["ticker"])
+            if not position:
+                continue
+            quantity = float(position.get("quantity") or 0.0)
+            avg_price = float(position.get("avg_price") or 0.0)
+            price = float(row.get("price") or 0.0)
+            market_value = round(quantity * price, 4)
+            cost_basis = round(quantity * avg_price, 4) if avg_price > 0 else 0.0
+            row["quantity"] = quantity
+            row["avg_price"] = avg_price
+            row["market_value"] = market_value
+            row["cost_basis"] = cost_basis
+            row["unrealized_pnl"] = round(market_value - cost_basis, 4) if cost_basis else 0.0
+            row["unrealized_pnl_pct"] = (
+                round((market_value / cost_basis - 1) * 100, 4) if cost_basis and cost_basis > 0 else 0.0
+            )
+            invested_value += market_value
+            weighted_change += market_value * float(row.get("change_pct") or 0.0)
+
+        if invested_value > 0:
+            total_change_pct = weighted_change / invested_value
+            w = np.array(
+                [
+                    (float((by_ticker.get(r["ticker"]) or {}).get("quantity") or 0.0) * float(r.get("price") or 0.0))
+                    / invested_value
+                    for r in rows
+                ],
+                dtype=float,
+            )
+            for index, row in enumerate(rows):
+                row["weight"] = round(float(w[index]), 6) if index < len(w) else 0.0
+        total_value = invested_value + cash_value
 
     # Notícias do sistema (primeiro) + fallback Yahoo.
     news = _fetch_news_from_es(tickers=tickers, size=12, hours=72)
@@ -365,9 +418,12 @@ def portfolio_summary(tickers: Optional[List[str]] = None, weights: Optional[Lis
     return {
         "portfolio_value": round(total_value, 4),
         "portfolio_change_pct": round(total_change_pct, 4),
-        "currency": rows[0].get("currency", "USD") if rows else "USD",
+        "currency": currency or (rows[0].get("currency", "USD") if rows else "USD"),
         "tickers": rows,
         "weights": [round(float(x), 6) for x in w.tolist()],
+        "cash": round(cash_value, 4),
+        "invested_value": round(invested_value, 4),
+        "positioned": bool(positions),
         "news": deduped[:16],
         "benchmark": {"ticker": "^GSPC", "name": "S&P 500"},
         "as_of": datetime.utcnow().isoformat() + "Z",
@@ -388,7 +444,7 @@ def portfolio_attribution(
     # Histórico dos últimos 6 meses para retornos.
     history, valid_tickers = aligned_history(tickers, period="6mo")
     if history.empty or len(valid_tickers) < 2:
-        return {"error": "Histórico insuficiente para calcular attribution.", "tickers": tickers}
+        return {"error": "Precisa de pelo menos 2 tickers com histórico para calcular attribution.", "tickers": tickers}
 
     # Retorno de cada ticker no período.
     perf = {}
@@ -475,7 +531,10 @@ def portfolio_risk(tickers: Optional[List[str]] = None, weights: Optional[List[f
     rows = enrich_tickers(tickers)
 
     history, valid_tickers = aligned_history(tickers, period="1y")
-    if history.empty or len(valid_tickers) < 2:
+    # Uma carteira de um único ativo é válida: a volatilidade, o VaR e o beta
+    # calculam-se na mesma (a contribuição marginal é 100%). Só sem histórico é
+    # que não há métricas.
+    if history.empty or len(valid_tickers) < 1:
         return {"error": "Histórico insuficiente para métricas de risco.", "tickers": tickers}
 
     # Apenas tickers válidos.
@@ -593,7 +652,7 @@ def portfolio_optimize(
 
     history, valid_tickers = aligned_history(tickers, period="2y")
     if history.empty or len(valid_tickers) < 2:
-        return {"error": "Histórico insuficiente para otimização.", "tickers": tickers}
+        return {"error": "Precisa de pelo menos 2 tickers com histórico para otimizar a carteira.", "tickers": tickers}
 
     w_valid = _normalise_weights(w[[t in valid_tickers for t in tickers]].tolist())
     valid_cols = [f"{t}_Close" for t in valid_tickers]
@@ -770,10 +829,16 @@ def portfolio_forecast(
 # Relatórios (dados agregados para PDF/HTML)
 # ---------------------------------------------------------------------------
 def portfolio_reporting(
-    tickers: Optional[List[str]] = None, weights: Optional[List[float]] = None
+    tickers: Optional[List[str]] = None,
+    weights: Optional[List[float]] = None,
+    positions: Optional[List[Dict[str, Any]]] = None,
+    cash: float = 0.0,
+    currency: Optional[str] = None,
 ) -> Dict[str, Any]:
     tickers, w = _get_tickers_and_weights(tickers, weights)
-    summary = portfolio_summary(tickers=tickers, weights=w.tolist())
+    summary = portfolio_summary(
+        tickers=tickers, weights=w.tolist(), positions=positions, cash=cash, currency=currency
+    )
     attribution = portfolio_attribution(tickers=tickers, weights=w.tolist())
     risk = portfolio_risk(tickers=tickers, weights=w.tolist())
     optimize = portfolio_optimize(tickers=tickers, weights=w.tolist(), objective="sharpe")

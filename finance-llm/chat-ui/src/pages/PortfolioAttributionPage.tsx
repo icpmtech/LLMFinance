@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PieChart, RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -12,31 +12,37 @@ import {
   Cell,
 } from "recharts";
 import { getPortfolioAttribution, type PortfolioAttributionResponse } from "../portfolioApi";
+import { usePortfolioScope } from "../portfolioScope";
+import { PortfolioScopeBar } from "../components/portfolio/PortfolioScopeBar";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 
 const COLORS = ["#34d399", "#60a5fa", "#f87171", "#fbbf24", "#a78bfa", "#22d3ee", "#f472b6", "#94a3b8"];
 
 export function PortfolioAttributionPage() {
+  const scope = usePortfolioScope();
+  const portfolioId = scope.portfolioId;
+
   const [data, setData] = useState<PortfolioAttributionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (scope.loading) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getPortfolioAttribution();
+      const result = await getPortfolioAttribution({ portfolio_id: portfolioId ?? undefined });
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar attribution");
     } finally {
       setLoading(false);
     }
-  };
+  }, [portfolioId, scope.loading]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const sectorData =
     data?.sectors.map((s, i) => ({
@@ -69,14 +75,17 @@ export function PortfolioAttributionPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <PortfolioScopeBar scope={scope} />
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
+            </button>
+          </div>
         </div>
 
         {loading && !data ? (

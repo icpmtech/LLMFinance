@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ShieldAlert, RefreshCw, Target, SlidersHorizontal } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -13,32 +13,38 @@ import {
   CartesianGrid,
 } from "recharts";
 import { getPortfolioResilience, type PortfolioOptimizeResponse } from "../portfolioApi";
+import { usePortfolioScope } from "../portfolioScope";
+import { PortfolioScopeBar } from "../components/portfolio/PortfolioScopeBar";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 
 const COLORS = ["#34d399", "#60a5fa", "#f87171", "#fbbf24", "#a78bfa", "#22d3ee", "#f472b6"];
 
 export function PortfolioResiliencePage() {
+  const scope = usePortfolioScope();
+  const portfolioId = scope.portfolioId;
+
   const [data, setData] = useState<PortfolioOptimizeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [objective, setObjective] = useState<"sharpe" | "risk" | "resilience" | "return">("sharpe");
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (scope.loading) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getPortfolioResilience({ objective });
+      const result = await getPortfolioResilience({ objective, portfolio_id: portfolioId ?? undefined });
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao otimizar carteira");
     } finally {
       setLoading(false);
     }
-  };
+  }, [objective, portfolioId, scope.loading]);
 
   useEffect(() => {
-    load();
-  }, [objective]);
+    void load();
+  }, [load]);
 
   const pieData =
     data?.tickers.map((t, i) => ({
@@ -79,6 +85,7 @@ export function PortfolioResiliencePage() {
               <option value="risk">Minimizar risco</option>
               <option value="resilience">Resiliência (min. vol)</option>
             </select>
+            <PortfolioScopeBar scope={scope} />
             <button
               onClick={load}
               disabled={loading}

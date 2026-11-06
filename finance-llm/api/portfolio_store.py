@@ -682,6 +682,77 @@ def cancel_order(user_id: str, order_id: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Escopo de cálculo (carteira ou watchlist escolhida)
+# ---------------------------------------------------------------------------
+def _market_price(ticker: str, fallback: float = 0.0) -> float:
+    """Cotação ao vivo, com o preço médio como recurso."""
+    try:
+        from api import portfolio_service  # importação local: evita ciclo de módulos
+
+        quote = portfolio_service._fetch_live_quote(ticker)
+        price = portfolio_service._safe_float(quote.get("price"))
+        if price:
+            return float(price)
+    except Exception as exc:  # pragma: no cover - depende da rede
+        logger.debug("Cotação indisponível para %s: %s", ticker, exc)
+    return float(fallback or 0.0)
+
+
+def _positions_weights(positions: List[Dict[str, Any]]) -> List[float]:
+    """Pesos das posições: explícitos → valor de mercado → partes iguais."""
+    explicit = [float(p.get("weight") or 0.0) for p in positions]
+    if explicit and all(w > 0 for w in explicit):
+        total = sum(explicit)
+        return [round(w / total, 6) for w in explicit]
+
+    values: List[float] = []
+    for position in positions:
+        quantity = float(position.get("quantity") or 0.0)
+        avg_price = float(position.get("avg_price") or 0.0)
+        price = avg_price if avg_price > 0 else _market_price(str(position.get("ticker") or ""), avg_price)
+        values.append(max(quantity, 0.0) * price)
+    if values and all(v > 0 for v in values):
+        total = sum(values)
+        return [round(v / total, 6) for v in values]
+
+    return [round(1.0 / len(positions), 6) for _ in positions]
+
+
+def portfolio_scope(user_id: str, portfolio_id: str) -> Optional[Dict[str, Any]]:
+    """Tickers e pesos de uma carteira guardada, prontos para os cálculos."""
+    portfolio = get_portfolio(user_id, portfolio_id)
+    if not portfolio or not portfolio["tickers"]:
+        return None
+    positions = portfolio["tickers"]
+    return {
+        "tickers": [p["ticker"] for p in positions],
+        "weights": _positions_weights(positions),
+        "portfolio": portfolio,
+        "source": "portfolio",
+    }
+
+
+def watchlist_scope(user_id: str, watchlist_id: str) -> Optional[Dict[str, Any]]:
+    """Tickers de uma watchlist (sem posições: pesos iguais)."""
+    client = ensure_user_index(user_id)
+    if not client:
+        return None
+    doc = _get(client, user_index(user_id), watchlist_id)
+    if not doc or doc.get("kind") != "watchlist":
+        return None
+    items = doc.get("items") or []
+    if not items:
+        return None
+    tickers = [i["ticker"] for i in items]
+    return {
+        "tickers": tickers,
+        "weights": [round(1.0 / len(tickers), 6) for _ in tickers],
+        "watchlist": _watchlist_public({**doc, "id": watchlist_id}),
+        "source": "watchlist",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Pesquisa de tickers (Yahoo Finance)
 # ---------------------------------------------------------------------------
 def search_tickers(query: str, limit: int = 12) -> Dict[str, Any]:

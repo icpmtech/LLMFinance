@@ -1,30 +1,36 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FileText, Download, RefreshCw } from "lucide-react";
 import { getPortfolioReporting, type PortfolioReportingResponse } from "../portfolioApi";
+import { usePortfolioScope } from "../portfolioScope";
+import { PortfolioScopeBar } from "../components/portfolio/PortfolioScopeBar";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 import { PortfolioNewsStrip } from "../components/portfolio/PortfolioNewsStrip";
 
 export function PortfolioReportingPage() {
+  const scope = usePortfolioScope();
+  const portfolioId = scope.portfolioId;
+
   const [data, setData] = useState<PortfolioReportingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (scope.loading) return;
     setLoading(true);
     setError(null);
     try {
-      const report = await getPortfolioReporting();
+      const report = await getPortfolioReporting({ portfolio_id: portfolioId ?? undefined });
       setData(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao gerar relatório");
     } finally {
       setLoading(false);
     }
-  };
+  }, [portfolioId, scope.loading]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const downloadJson = () => {
     if (!data) return;
@@ -36,6 +42,16 @@ export function PortfolioReportingPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Cada bloco pode falhar isoladamente (ex.: carteira com um só ativo não tem
+  // attribution nem otimização): o relatório continua, com aviso no lugar.
+  const risk = data?.risk && !data.risk.error ? data.risk : null;
+  const attribution = data?.attribution && !data.attribution.error ? data.attribution : null;
+  const blockWarnings = [
+    { label: "Attribution", error: data?.attribution?.error },
+    { label: "Risco", error: data?.risk?.error },
+    { label: "Otimização", error: data?.optimization?.error },
+  ].filter((entry): entry is { label: string; error: string } => Boolean(entry.error));
 
   return (
     <div className="min-h-screen bg-[#0b0d10] text-slate-200 p-4 md:p-6">
@@ -51,6 +67,7 @@ export function PortfolioReportingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <PortfolioScopeBar scope={scope} />
             <button
               onClick={load}
               disabled={loading}
@@ -83,9 +100,19 @@ export function PortfolioReportingPage() {
                 value={`${data.summary.portfolio_change_pct >= 0 ? "+" : ""}${data.summary.portfolio_change_pct.toFixed(2)}%`}
                 positive={data.summary.portfolio_change_pct >= 0}
               />
-              <Card label="Volatilidade" value={`${data.risk.portfolio_volatility_pct.toFixed(2)}%`} />
-              <Card label="Ratio de Sharpe" value={data.risk.sharpe_ratio.toFixed(2)} />
+              <Card label="Volatilidade" value={risk ? `${risk.portfolio_volatility_pct.toFixed(2)}%` : "-"} />
+              <Card label="Ratio de Sharpe" value={risk ? risk.sharpe_ratio.toFixed(2) : "-"} />
             </div>
+
+            {blockWarnings.length > 0 && (
+              <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                {blockWarnings.map((entry) => (
+                  <div key={entry.label}>
+                    <span className="font-medium">{entry.label}:</span> {entry.error}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-6">
@@ -122,7 +149,7 @@ export function PortfolioReportingPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {data.attribution.sectors.map((s) => (
+                        {(attribution?.sectors ?? []).map((s) => (
                           <tr key={s.sector}>
                             <td className="py-2 text-slate-300">{s.sector}</td>
                             <td className="py-2 text-right text-slate-400">{(s.portfolio_weight * 100).toFixed(1)}%</td>
@@ -151,7 +178,7 @@ export function PortfolioReportingPage() {
 
                 <Section title="Top contributors" emoji="🚀">
                   <div className="space-y-2">
-                    {data.attribution.top_contributors.slice(0, 10).map((c) => (
+                    {(attribution?.top_contributors ?? []).slice(0, 10).map((c) => (
                       <div key={c.ticker} className="flex items-center gap-3">
                         <div className="w-24 text-sm text-slate-300">{c.ticker}</div>
                         <div className="flex-1 h-2 rounded bg-slate-800">
@@ -169,17 +196,23 @@ export function PortfolioReportingPage() {
 
               <div className="space-y-6">
                 <Section title="Métricas de risco" emoji="⚠️">
-                  <RiskMetric label="Volatilidade anual" value={`${data.risk.portfolio_volatility_pct.toFixed(2)}%`} />
-                  <RiskMetric label="Beta vs S&P 500" value={data.risk.beta.toFixed(2)} />
-                  <RiskMetric label="Tracking error" value={`${data.risk.tracking_error_pct.toFixed(2)}%`} />
-                  <RiskMetric label="VaR 95% (dia)" value={`${data.risk.var_95_daily.toFixed(2)}%`} />
-                  <RiskMetric label="CVaR 95% (dia)" value={`${data.risk.cvar_95_daily.toFixed(2)}%`} />
-                  <RiskMetric label="Sharpe" value={data.risk.sharpe_ratio.toFixed(2)} />
+                  {risk ? (
+                    <>
+                      <RiskMetric label="Volatilidade anual" value={`${risk.portfolio_volatility_pct.toFixed(2)}%`} />
+                      <RiskMetric label="Beta vs S&P 500" value={risk.beta.toFixed(2)} />
+                      <RiskMetric label="Tracking error" value={`${risk.tracking_error_pct.toFixed(2)}%`} />
+                      <RiskMetric label="VaR 95% (dia)" value={`${risk.var_95_daily.toFixed(2)}%`} />
+                      <RiskMetric label="CVaR 95% (dia)" value={`${risk.cvar_95_daily.toFixed(2)}%`} />
+                      <RiskMetric label="Sharpe" value={risk.sharpe_ratio.toFixed(2)} />
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500">Sem m?tricas de risco para esta carteira.</p>
+                  )}
                 </Section>
 
                 <Section title="Factor exposures" emoji="📈">
                   <div className="space-y-2">
-                    {data.risk.factor_exposures.map((f) => (
+                    {(risk?.factor_exposures ?? []).map((f) => (
                       <div key={f.factor} className="flex items-center justify-between">
                         <span className="text-sm text-slate-300">{f.factor} <span className="text-xs text-slate-500">({f.proxy})</span></span>
                         <span className={`text-sm font-medium ${f.exposure >= 0 ? "text-emerald-400" : "text-rose-400"}`}>

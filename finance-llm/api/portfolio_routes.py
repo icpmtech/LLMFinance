@@ -5,13 +5,13 @@ métricas; notícias do índice finance_news do Elasticsearch (com fallback Yaho
 """
 from __future__ import annotations
 
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.auth_routes import CurrentSession, optional_session
-from api import portfolio_service
+from api import portfolio_service, portfolio_store
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -24,10 +24,15 @@ Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
 class PortfolioRequest(BaseModel):
     tickers: Optional[List[str]] = Field(None, description="Tickers da carteira.")
     weights: Optional[List[float]] = Field(None, description="Pesos da carteira (mesma ordem dos tickers).")
+    portfolio_id: Optional[str] = Field(None, description="Carteira guardada do utilizador a usar como escopo.")
+    watchlist_id: Optional[str] = Field(None, description="Watchlist do utilizador a usar como escopo.")
 
 
 class ForecastRequest(BaseModel):
     tickers: Optional[List[str]] = Field(None, description="Tickers a prever.")
+    weights: Optional[List[float]] = Field(None)
+    portfolio_id: Optional[str] = Field(None)
+    watchlist_id: Optional[str] = Field(None)
     future_days: int = Field(30, ge=1, le=90)
     use_sentiment: bool = Field(False)
 
@@ -35,7 +40,70 @@ class ForecastRequest(BaseModel):
 class OptimizeRequest(BaseModel):
     tickers: Optional[List[str]] = Field(None)
     weights: Optional[List[float]] = Field(None)
+    portfolio_id: Optional[str] = Field(None)
+    watchlist_id: Optional[str] = Field(None)
     objective: str = Field("sharpe", description="sharpe | return | risk | resilience")
+
+
+# ---------------------------------------------------------------------------
+# Escopo: tickers/pesos explícitos, ou os da carteira/watchlist do utilizador
+# ---------------------------------------------------------------------------
+def _resolve_scope(
+    *,
+    tickers: Optional[List[str]],
+    weights: Optional[List[float]],
+    portfolio_id: Optional[str],
+    watchlist_id: Optional[str],
+    session: Optional[CurrentSession],
+) -> Dict[str, Any]:
+    """Resolve a origem dos dados: pedido expl?cito, carteira, watchlist ou default.
+
+    As carteiras e watchlists vivem no ?ndice Elasticsearch de cada conta, por
+    isso s? se resolvem quando h? sess?o. Sem sess?o (ou sem correspond?ncia) o
+    servi?o usa a carteira de demonstra??o.
+    """
+    if tickers:
+        return {"tickers": tickers, "weights": weights, "positions": None, "cash": 0.0, "meta": {"source": "request"}}
+
+    user_id = str(session.user.id) if session else ""
+    if user_id and portfolio_id:
+        scope = portfolio_store.portfolio_scope(user_id, portfolio_id)
+        if scope:
+            portfolio = scope["portfolio"]
+            return {
+                "tickers": scope["tickers"],
+                "weights": scope["weights"],
+                "positions": portfolio["tickers"],
+                "cash": float(portfolio.get("cash") or 0.0),
+                "meta": {
+                    "source": "portfolio",
+                    "portfolio_id": portfolio["id"],
+                    "portfolio_name": portfolio["name"],
+                    "currency": portfolio.get("currency"),
+                    "cash": portfolio.get("cash"),
+                },
+            }
+    if user_id and watchlist_id:
+        scope = portfolio_store.watchlist_scope(user_id, watchlist_id)
+        if scope:
+            watchlist = scope["watchlist"]
+            return {
+                "tickers": scope["tickers"],
+                "weights": scope["weights"],
+                "positions": None,
+                "cash": 0.0,
+                "meta": {
+                    "source": "watchlist",
+                    "watchlist_id": watchlist["id"],
+                    "watchlist_name": watchlist["name"],
+                },
+            }
+    return {"tickers": None, "weights": None, "positions": None, "cash": 0.0, "meta": {"source": "default"}}
+
+
+def _with_scope(result: Dict[str, Any], scope: Dict[str, Any]) -> Dict[str, Any]:
+    result["scope"] = scope
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -57,55 +125,125 @@ def portfolio_meta() -> Dict[str, Any]:
 
 @router.post("/summary", summary="Sumário de carteira com cotações e notícias")
 def portfolio_summary(
+    session: Session,
     body: PortfolioRequest = Body(default_factory=PortfolioRequest),
 ) -> Dict[str, Any]:
-    return portfolio_service.portfolio_summary(tickers=body.tickers, weights=body.weights)
+    resolved = _resolve_scope(
+        tickers=body.tickers,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(
+        portfolio_service.portfolio_summary(
+            tickers=resolved["tickers"],
+            weights=resolved["weights"],
+            positions=resolved["positions"],
+            cash=resolved["cash"],
+            currency=resolved["meta"].get("currency"),
+        ),
+        resolved["meta"],
+    )
 
 
 @router.post("/reporting", summary="Dados agregados para relatórios de carteira")
 def portfolio_reporting(
+    session: Session,
     body: PortfolioRequest = Body(default_factory=PortfolioRequest),
 ) -> Dict[str, Any]:
-    return portfolio_service.portfolio_reporting(tickers=body.tickers, weights=body.weights)
+    resolved = _resolve_scope(
+        tickers=body.tickers,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(
+        portfolio_service.portfolio_reporting(
+            tickers=resolved["tickers"],
+            weights=resolved["weights"],
+            positions=resolved["positions"],
+            cash=resolved["cash"],
+            currency=resolved["meta"].get("currency"),
+        ),
+        resolved["meta"],
+    )
 
 
 @router.post("/forecast", summary="Previsões ARIMA de preço para os tickers")
 def portfolio_forecast(
+    session: Session,
     body: ForecastRequest = Body(default_factory=ForecastRequest),
 ) -> Dict[str, Any]:
-    return portfolio_service.portfolio_forecast(
+    resolved = _resolve_scope(
         tickers=body.tickers,
-        future_days=body.future_days,
-        use_sentiment=body.use_sentiment,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(
+        portfolio_service.portfolio_forecast(
+            tickers=resolved["tickers"],
+            future_days=body.future_days,
+            use_sentiment=body.use_sentiment,
+        ),
+        resolved["meta"],
     )
 
 
 @router.post("/resilience", summary="Otimização de carteira para resiliência / Sharpe")
 def portfolio_resilience(
+    session: Session,
     body: OptimizeRequest = Body(default_factory=OptimizeRequest),
 ) -> Dict[str, Any]:
     objective = body.objective
     if objective not in {"sharpe", "return", "risk", "resilience"}:
         raise HTTPException(status_code=422, detail="objective deve ser sharpe, return, risk ou resilience")
-    return portfolio_service.portfolio_optimize(
+    resolved = _resolve_scope(
         tickers=body.tickers,
         weights=body.weights,
-        objective=objective,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(
+        portfolio_service.portfolio_optimize(
+            tickers=resolved["tickers"], weights=resolved["weights"], objective=objective
+        ),
+        resolved["meta"],
     )
 
 
 @router.post("/attribution", summary="Análise de attribution Brinson por setor")
 def portfolio_attribution(
+    session: Session,
     body: PortfolioRequest = Body(default_factory=PortfolioRequest),
 ) -> Dict[str, Any]:
-    return portfolio_service.portfolio_attribution(tickers=body.tickers, weights=body.weights)
+    resolved = _resolve_scope(
+        tickers=body.tickers,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(portfolio_service.portfolio_attribution(tickers=resolved["tickers"], weights=resolved["weights"]), resolved["meta"])
 
 
 @router.post("/risk", summary="Métricas de risco, VaR, beta e factor exposures")
 def portfolio_risk(
+    session: Session,
     body: PortfolioRequest = Body(default_factory=PortfolioRequest),
 ) -> Dict[str, Any]:
-    return portfolio_service.portfolio_risk(tickers=body.tickers, weights=body.weights)
+    resolved = _resolve_scope(
+        tickers=body.tickers,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(portfolio_service.portfolio_risk(tickers=resolved["tickers"], weights=resolved["weights"]), resolved["meta"])
 
 
 @router.get("/ticker/{ticker}/info", summary="Informação detalhada de um ticker")

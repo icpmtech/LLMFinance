@@ -225,6 +225,14 @@ interface AppNavProps {
 
 /** Sub-ecrãs que pertencem a uma aplicação do menu (mantêm-na realçada). */
 const APP_MATCH: Record<string, AppView[]> = {
+  portfolio: [
+    "portfolio-manage",
+    "portfolio-reporting",
+    "portfolio-forecast",
+    "portfolio-resilience",
+    "portfolio-attribution",
+    "portfolio-risk",
+  ],
   "contracts-search": ["contracts", "contracts-list"],
   "contracts-dashboard": ["companies-dashboard"],
   "entities-search": ["companies-search", "company-detail"],

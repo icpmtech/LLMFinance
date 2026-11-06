@@ -1063,6 +1063,54 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "45,212,191",
   },
   {
+    id: "portfolio-manage",
+    label: "Carteiras",
+    hint: "Criar carteiras, adicionar tickers, watchlists e ordens",
+    icon: Briefcase,
+    gradient: "from-emerald-200 via-teal-400 to-emerald-700",
+    accent: "16,185,129",
+  },
+  {
+    id: "portfolio-reporting",
+    label: "Relatórios de carteira",
+    hint: "Relatório agregado da carteira escolhida: alocação, attribution, risco e otimização",
+    icon: FileText,
+    gradient: "from-teal-200 via-emerald-500 to-teal-700",
+    accent: "20,184,166",
+  },
+  {
+    id: "portfolio-forecast",
+    label: "Previsão de carteira",
+    hint: "Previsões ARIMA dos tickers da carteira escolhida, com bandas de confiança",
+    icon: Sparkles,
+    gradient: "from-violet-200 via-purple-500 to-indigo-700",
+    accent: "139,92,246",
+  },
+  {
+    id: "portfolio-resilience",
+    label: "Resiliência da carteira",
+    hint: "Otimização de pesos por Sharpe, retorno ou risco mínimo",
+    icon: ShieldAlert,
+    gradient: "from-amber-200 via-orange-500 to-amber-700",
+    accent: "245,158,11",
+  },
+  {
+    id: "portfolio-attribution",
+    label: "Attribution da carteira",
+    hint: "O que impulsiona os retornos: alocação e seleção por setor",
+    icon: PieChart,
+    gradient: "from-cyan-200 via-sky-500 to-cyan-700",
+    accent: "34,211,238",
+  },
+  {
+    id: "portfolio-risk",
+    label: "Risco da carteira",
+    hint: "Volatilidade, VaR, CVaR, beta, tracking error e exposição a fatores",
+    icon: BarChart3,
+    gradient: "from-rose-200 via-rose-500 to-rose-700",
+    accent: "244,63,94",
+  },
+  {
     id: "trading",
     label: "Trading",
     hint: "Simulador de trading",
@@ -1264,7 +1312,11 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "gleif-mapa", "gleif-ingestao", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado", ...CRM_SUITE_DOCK.map((app) => app.id)];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "gleif-mapa", "gleif-ingestao", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado",
+  // Módulos de portfólio: entram no menu lateral (grupo «Mercados e previsão»)
+  // sem encherem o dock, que já tem o ícone «Portfólio» como porta de entrada.
+  "portfolio-manage", "portfolio-reporting", "portfolio-forecast", "portfolio-resilience", "portfolio-attribution", "portfolio-risk",
+  ...CRM_SUITE_DOCK.map((app) => app.id)];
 
 export type DockPrefs = {
   position: DockPosition;

@@ -119,6 +119,20 @@ def portfolio_search(
     return portfolio_store.search_tickers(q, limit=limit)
 
 
+@router.get("/sources", summary="Carteiras e watchlists do utilizador (com tickers)")
+def portfolio_sources(session: Session) -> Dict[str, Any]:
+    """Universo de dados do utilizador: escolhe-se a carteira onde os módulos se baseiam."""
+    owner = _owner(session)
+    portfolios = portfolio_store.list_portfolios(owner).get("items") or []
+    watchlists = portfolio_store.list_watchlists(owner).get("items") or []
+    return {
+        "portfolios": portfolios,
+        "watchlists": watchlists,
+        "has_portfolio": bool(portfolios),
+        "has_watchlist": bool(watchlists),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Carteiras
 # ---------------------------------------------------------------------------

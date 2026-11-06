@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sparkles, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   LineChart,
@@ -11,21 +11,27 @@ import {
   ReferenceArea,
 } from "recharts";
 import { getPortfolioForecast, type PortfolioForecastResponse, type ForecastPoint, type ForecastSeries } from "../portfolioApi";
+import { usePortfolioScope } from "../portfolioScope";
+import { PortfolioScopeBar } from "../components/portfolio/PortfolioScopeBar";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
 import { PortfolioNewsStrip } from "../components/portfolio/PortfolioNewsStrip";
 
 export function PortfolioForecastPage() {
+  const scope = usePortfolioScope();
+  const portfolioId = scope.portfolioId;
+
   const [data, setData] = useState<PortfolioForecastResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(30);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (scope.loading) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getPortfolioForecast({ future_days: days, use_sentiment: false });
+      const result = await getPortfolioForecast({ future_days: days, use_sentiment: false, portfolio_id: portfolioId ?? undefined });
       setData(result);
       setSelectedTicker((prev) => prev || (result.forecasts[0]?.ticker ?? null));
     } catch (e) {
@@ -33,11 +39,11 @@ export function PortfolioForecastPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [days, portfolioId, scope.loading]);
 
   useEffect(() => {
-    load();
-  }, [days]);
+    void load();
+  }, [load]);
 
   const selected = data?.forecasts.find((f) => f.ticker === selectedTicker);
 
@@ -66,6 +72,7 @@ export function PortfolioForecastPage() {
                 <option key={d} value={d}>{d} dias à frente</option>
               ))}
             </select>
+            <PortfolioScopeBar scope={scope} />
             <button
               onClick={load}
               disabled={loading}
