@@ -7,8 +7,9 @@
  *   tamanho), contas por papel/estado, eventos das últimas 24 h e ficheiros de log.
  * - **Utilizadores** — pesquisa, papel (`admin`/`member`), estado
  *   (`active`/`suspended`/`pending`), plano (subscrição paga, trial em curso ou
- *   sem plano), sessões ativas e ações (aprovar, suspender, promover, redefinir
- *   palavra-passe, ativar plano, terminar sessões, apagar).
+ *   sem plano) com início/fim do período, sessões ativas e ações (aprovar,
+ *   suspender, promover, redefinir palavra-passe, ativar plano, prolongar o
+ *   período, registar pagamentos, terminar sessões, apagar).
  * - **Eventos** — o *event logger viewer*: filtros por nível/origem/utilizador/
  *   texto, fonte (tempo real em memória ou arquivo no Elasticsearch), atualização
  *   automática, gráfico por hora, detalhe JSON de cada evento e criação de eventos

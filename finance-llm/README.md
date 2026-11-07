@@ -358,10 +358,12 @@ dock escondem-na aos restantes), com quatro separadores:
   (`finance_users`, `finance_sessions`, `finance_events`, `contratos`, `finance_entities`, …),
   contas por papel/estado, sessões ativas e eventos das últimas 24 h por nível, origem e caminho.
 - **Utilizadores** — pesquisa por nome/email, filtros por papel (`admin`/`manager`/`member`) e
-  estado (`active`/`suspended`/`pending`), **plano** (subscrição paga, trial em curso ou sem plano),
-  sessões ativas e nº de logins por conta; **aprovar** contas pendentes (inicia o trial de 5 dias),
-  alterar papel/estado, terminar sessões de um utilizador e apagar contas (as ações ficam
-  registadas como eventos de auditoria).
+  estado (`active`/`suspended`/`pending`), **plano** (subscrição paga, trial em curso ou sem plano)
+  com o **início e fim do período** em coluna própria, sessões ativas e nº de logins por conta;
+  **aprovar** contas pendentes (inicia o trial de 5 dias), alterar papel/estado, ativar/substituir
+  o plano, **prolongar** o fim do período (dias somados ao fim atual, ou a partir de hoje se já
+  expirou), **registar pagamentos** manuais e ver o histórico da conta, terminar sessões de um
+  utilizador e apagar contas (as ações ficam registadas como eventos de auditoria).
 - **Eventos** — o *event logger viewer* descrito abaixo.
 - **Ficheiros de log** — lista de `logs/*.log|.err|.out|.jsonl` com tamanho e data, pré-visualização
   das últimas linhas (100–3000), modo «Direto» (atualiza a cada 5 s) e quebra de linhas.
