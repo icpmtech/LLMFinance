@@ -926,6 +926,23 @@ app.include_router(market_view_router)
 # Módulo de portfólio financeiro (`/portfolio/*`): sumário, reporting, previsão,
 # otimização/resiliência, attribution e risco — dados reais do Yahoo Finance e
 # notícias do índice do sistema.
+# Módulo de portfólio: as vistas da SPA (`/portfolio`, `/portfolio/risk`, …) têm de
+# estar registadas aqui. Sem isto o `try_files` do nginx cai no *fallback* do
+# backend e o 404 aparece — escondido no browser pelo service worker, mas real
+# num carregamento directo ou para um rastreador. Os caminhos não colidem com os
+# GET da API (`/portfolio/meta`, `/portfolio/sources`, …).
+@app.get("/portfolio")
+@app.get("/portfolio/manage")
+@app.get("/portfolio/reporting")
+@app.get("/portfolio/forecast")
+@app.get("/portfolio/resilience")
+@app.get("/portfolio/attribution")
+@app.get("/portfolio/risk")
+def serve_portfolio_spa_page(request: Request):
+    """Página do módulo **Portfólio** (SPA) e das suas vistas."""
+    return spa_page_response(str(request.url.path))
+
+
 app.include_router(portfolio_router)
 # Gestão de carteiras/watchlists/ordens (`/portfolio/portfolios`, `/portfolio/watchlists`,
 # `/portfolio/orders`, `/portfolio/search`) — estado persistido por conta.
