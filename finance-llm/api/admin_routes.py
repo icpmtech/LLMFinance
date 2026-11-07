@@ -8,6 +8,9 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `PATCH /admin/users/{user_id}`    — alterar papel/estado/nome
 - `POST /admin/users/{user_id}/reset-password` — gerar palavra-passe temporária e terminar sessões
 - `POST /admin/users/{user_id}/activate-plan` — ativar manualmente um plano
+- `POST /admin/users/{user_id}/extend-plan`   — prolongar o fim do período do plano
+- `GET  /admin/users/{user_id}/payments`      — histórico de pagamentos de uma conta
+- `POST /admin/users/{user_id}/payments`      — registar um pagamento manual e ativar o plano
 - `POST /admin/users/{user_id}/approve` — aprovar conta pendente (inicia trial de 5 dias)
 - `DELETE /admin/users/{user_id}`   — apagar conta
 - `POST /admin/users/{user_id}/revoke-sessions` — terminar sessões de um utilizador
@@ -137,6 +140,19 @@ class UserMfaPayload(BaseModel):
 class AdminPlanActivationPayload(BaseModel):
     plan_id: str = Field(..., description="basic | pro | enterprise")
     interval: str = Field("monthly", description="monthly | yearly")
+
+
+class ExtendPlanPayload(BaseModel):
+    days: int = Field(30, ge=1, le=3650, description="Dias a acrescentar ao fim do período atual")
+    plan_id: Optional[str] = Field(None, description="basic | pro | enterprise (por omissão mantém o plano)")
+    interval: Optional[str] = Field(None, description="monthly | yearly (por omissão mantém o intervalo)")
+
+
+class RegisterPaymentPayload(BaseModel):
+    plan_id: str = Field(..., description="basic | pro | enterprise")
+    interval: str = Field("yearly", description="monthly | yearly")
+    method: str = Field("transfer", description="mbway | transfer | stripe | paypal")
+    amount: Optional[float] = Field(None, ge=0, description="Valor recebido (por omissão, o preço do plano)")
 
 
 def _generate_temporary_password() -> str:
@@ -418,6 +434,97 @@ def admin_activate_user_plan(
         user_email=session.user.email,
     )
     return {"ok": True, "user": updated, "subscription": billing.get_user_subscription(updated)}
+
+
+@router.post("/users/{user_id}/extend-plan")
+def admin_extend_user_plan(
+    user_id: str, payload: ExtendPlanPayload, session: AdminSession
+) -> Dict[str, Any]:
+    """Prolonga o plano de uma conta (dias a partir do fim atual) e reativa-a se preciso."""
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        before = billing.get_user_subscription(target)
+        updated = billing.extend_subscription(
+            user_id,
+            days=payload.days,
+            plan_id=payload.plan_id,
+            interval=payload.interval,
+        )
+        after = billing.get_user_subscription(updated)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Plano prolongado: {target.get('email')} +{payload.days} dias (até {after.get('current_period_end')})",
+        data={
+            "target_user": target.get("email"),
+            "days": payload.days,
+            "plan_id": after.get("plan_id"),
+            "current_period_end": after.get("current_period_end"),
+            "extended_by": session.user.email,
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": updated, "subscription": after, "before": before}
+
+
+@router.get("/users/{user_id}/payments")
+def admin_user_payments(user_id: str, session: AdminSession) -> Dict[str, Any]:
+    """Histórico de pagamentos de uma conta."""
+    target = auth.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    items = billing.list_payments(user_id)
+    return {
+        "ok": True,
+        "total": len(items),
+        "items": items,
+        "subscription": billing.get_user_subscription(target),
+    }
+
+
+@router.post("/users/{user_id}/payments")
+def admin_register_user_payment(
+    user_id: str, payload: RegisterPaymentPayload, session: AdminSession
+) -> Dict[str, Any]:
+    """Regista um pagamento manual já recebido e ativa/renova o plano da conta."""
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        updated = billing.register_payment(
+            user_id,
+            plan_id=payload.plan_id,
+            interval=payload.interval,
+            method=payload.method,
+            amount=payload.amount,
+        )
+        after = billing.get_user_subscription(updated)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Pagamento registado: {target.get('email')} → {payload.plan_id} ({payload.interval})",
+        data={
+            "target_user": target.get("email"),
+            "plan_id": payload.plan_id,
+            "interval": payload.interval,
+            "method": payload.method,
+            "amount": payload.amount,
+            "current_period_end": after.get("current_period_end"),
+            "registered_by": session.user.email,
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": updated, "subscription": after}
 
 
 @router.delete("/users/{user_id}")

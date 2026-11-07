@@ -28,6 +28,7 @@ import {
   Activity,
   AlertTriangle,
   Bug,
+  CalendarPlus,
   CheckCircle2,
   Clock,
   Database,
@@ -58,13 +59,16 @@ import {
   activateAdminUserPlan,
   confirmAdminPayment,
   deleteAdminUser,
+  extendAdminUserPlan,
   getAdminEventStats,
   getAdminOverview,
   listAdminEvents,
   listAdminLogs,
   listAdminPayments,
+  listAdminUserPayments,
   listAdminUsers,
   logAdminEvent,
+  registerAdminUserPayment,
   revokeAdminUserSessions,
   resetAdminUserPassword,
   setAdminUserMfa,
@@ -73,6 +77,7 @@ import {
   type AdminOverview,
   type AdminPayment,
   type AdminUser,
+  type AdminUserPayment,
   type EventLevel,
   type EventQuery,
   type EventStats,
@@ -131,6 +136,14 @@ function formatClock(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleTimeString("pt-PT", { hour12: false });
+}
+
+/** Data curta (sem hora) para o período do plano, que ocupa pouco espaço na tabela. */
+function formatDate(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("pt-PT");
 }
 
 /** Cartão simples de métrica (usado na visão geral e nos utilizadores). */
@@ -619,6 +632,178 @@ function planLabel(user: AdminUser): { texto: string; detalhe?: string; tom: str
   return { texto: "Sem plano", tom: "border-white/10 bg-white/[0.03] text-muted-foreground" };
 }
 
+/**
+ * Histórico de pagamentos de uma conta e registo de um pagamento manual.
+ *
+ * A tabela de pagamentos só mostrava os pendentes de todos os utilizadores; aqui
+ * o contexto é a conta, para se ver o que já entrou e ativar o plano na hora.
+ */
+function UserPaymentsPanel({
+  user,
+  onError,
+  onChanged,
+}: {
+  user: AdminUser;
+  onError: (message: string | null) => void;
+  onChanged: () => void;
+}) {
+  const [items, setItems] = useState<AdminUserPayment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [planId, setPlanId] = useState(user.subscription?.plan_id || "basic");
+  const [interval, setInterval] = useState<"monthly" | "yearly">(
+    user.subscription?.interval === "yearly" ? "yearly" : "monthly",
+  );
+  const [method, setMethod] = useState("transfer");
+  const [amount, setAmount] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await listAdminUserPayments(user.id);
+      setItems(response.items);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Erro ao carregar os pagamentos da conta.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id, onError]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const register = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const parsed = Number(amount.replace(",", "."));
+      await registerAdminUserPayment(user.id, {
+        plan_id: planId,
+        interval,
+        method,
+        ...(amount.trim() && Number.isFinite(parsed) ? { amount: parsed } : {}),
+      });
+      setNotice(`Pagamento registado · ${planName(planId)} (${interval === "yearly" ? "anual" : "mensal"}).`);
+      setAmount("");
+      await load();
+      onChanged();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Erro ao registar o pagamento.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pagamentos</h3>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground transition hover:text-foreground"
+        >
+          <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Atualizar
+        </button>
+      </div>
+
+      <div className="mt-2 max-h-32 overflow-auto">
+        {items.length === 0 ? (
+          <p className="text-[11.5px] text-muted-foreground">
+            {loading ? "A carregar…" : "Sem pagamentos registados."}
+          </p>
+        ) : (
+          <table className="w-full text-[11.5px]">
+            <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="py-1 text-left font-medium">Data</th>
+                <th className="py-1 text-left font-medium">Plano</th>
+                <th className="py-1 text-left font-medium">Método</th>
+                <th className="py-1 text-right font-medium">Valor</th>
+                <th className="py-1 text-right font-medium">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((payment) => (
+                <tr key={payment.id} className="border-t border-white/5">
+                  <td className="py-1 text-muted-foreground">{formatDate(payment.paid_at || payment.created_at)}</td>
+                  <td className="py-1">
+                    {planName(payment.plan_id)} · {payment.interval === "yearly" ? "anual" : "mensal"}
+                  </td>
+                  <td className="py-1 text-muted-foreground">{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</td>
+                  <td className="py-1 text-right tabular-nums">{(payment.amount ?? 0).toFixed(2)} €</td>
+                  <td className="py-1 text-right text-muted-foreground">{payment.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {notice && <p className="mt-2 text-[11.5px] text-teal-200">{notice}</p>}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="text-[11px] text-muted-foreground">
+          Plano
+          <select
+            value={planId}
+            onChange={(event) => setPlanId(event.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-2 py-1.5 text-[12px] text-foreground"
+          >
+            <option value="basic">Básico</option>
+            <option value="pro">Profissional</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-muted-foreground">
+          Duração
+          <select
+            value={interval}
+            onChange={(event) => setInterval(event.target.value as "monthly" | "yearly")}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-2 py-1.5 text-[12px] text-foreground"
+          >
+            <option value="monthly">Mensal</option>
+            <option value="yearly">Anual</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-muted-foreground">
+          Método
+          <select
+            value={method}
+            onChange={(event) => setMethod(event.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-2 py-1.5 text-[12px] text-foreground"
+          >
+            <option value="transfer">Transferência</option>
+            <option value="mbway">MB Way</option>
+            <option value="stripe">Cartão (Stripe)</option>
+            <option value="paypal">PayPal</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-muted-foreground">
+          Valor (€)
+          <input
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            inputMode="decimal"
+            placeholder="preço do plano"
+            className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-[12px]"
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void register()}
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-500/20 px-3 py-1.5 text-[12.5px] text-teal-100 transition hover:bg-teal-500/30 disabled:opacity-50"
+      >
+        {busy ? <Loader2 size={13} className="animate-spin" /> : <ReceiptText size={13} />} Registar pagamento e ativar
+      </button>
+    </section>
+  );
+}
+
 function UsersTab({ onError, currentUserId }: { onError: (message: string | null) => void; currentUserId?: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -632,6 +817,8 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
   const [planTarget, setPlanTarget] = useState<AdminUser | null>(null);
   const [planId, setPlanId] = useState("basic");
   const [planInterval, setPlanInterval] = useState<"monthly" | "yearly">("monthly");
+  const [extendTarget, setExtendTarget] = useState<AdminUser | null>(null);
+  const [extendDays, setExtendDays] = useState(365);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -689,6 +876,19 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
     if (result) setPlanTarget(null);
   };
 
+  const submitPlanExtension = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!extendTarget) return;
+    const target = extendTarget;
+    const days = Math.min(3650, Math.max(1, Math.floor(Number(extendDays) || 0)));
+    const result = await act(
+      `Plano de ${target.email} prolongado por ${days} dia(s)`,
+      () => extendAdminUserPlan(target.id, days),
+      target.id,
+    );
+    if (result) setExtendTarget(null);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <section className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.02] p-2">
@@ -742,6 +942,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
               <th className="px-3 py-1.5 text-left font-medium">Papel</th>
               <th className="px-3 py-1.5 text-left font-medium">Estado</th>
               <th className="px-3 py-1.5 text-left font-medium">Plano</th>
+              <th className="px-3 py-1.5 text-left font-medium">Período do plano</th>
               <th className="px-3 py-1.5 text-right font-medium">Sessões</th>
               <th className="px-3 py-1.5 text-right font-medium">Logins</th>
               <th className="px-3 py-1.5 text-left font-medium">Último login</th>
@@ -752,7 +953,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
           <tbody>
             {users.length === 0 && !loading && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
                   Sem contas para os filtros escolhidos.
                 </td>
               </tr>
@@ -799,7 +1000,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                       className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] ${plano.tom}`}
                       title={
                         user.subscription?.current_period_end
-                          ? `Pago até ${formatTime(user.subscription.current_period_end)}`
+                          ? `Pago de ${formatTime(user.subscription.current_period_start)} até ${formatTime(user.subscription.current_period_end)}`
                           : user.trial_expires_at
                             ? `Trial até ${formatTime(user.trial_expires_at)}`
                             : undefined
@@ -808,6 +1009,16 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                       {plano.texto}
                       {plano.detalhe ? <span className="text-[9.5px] opacity-70">· {plano.detalhe}</span> : null}
                     </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-[11px] text-muted-foreground">
+                    {user.subscription?.current_period_start || user.subscription?.current_period_end ? (
+                      <>
+                        {formatDate(user.subscription?.current_period_start)} →{" "}
+                        <span className="text-foreground/80">{formatDate(user.subscription?.current_period_end)}</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{user.active_sessions ?? 0}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{user.login_count ?? 0}</td>
@@ -865,6 +1076,18 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                         className="rounded-md border border-white/10 bg-white/[0.04] p-1 text-muted-foreground transition hover:text-teal-200 disabled:opacity-40"
                       >
                         <CreditCard size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        title="Prolongar o fim do plano"
+                        onClick={() => {
+                          setExtendTarget(user);
+                          setExtendDays(user.subscription?.interval === "yearly" ? 365 : 30);
+                        }}
+                        className="rounded-md border border-white/10 bg-white/[0.04] p-1 text-muted-foreground transition hover:text-sky-200 disabled:opacity-40"
+                      >
+                        <CalendarPlus size={12} />
                       </button>
                       <button
                         type="button"
@@ -962,56 +1185,144 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
       )}
 
       {planTarget && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation">
-          <form
-            onSubmit={(event) => void submitPlanActivation(event)}
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-auto bg-black/70 p-4" role="presentation">
+          <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="admin-plan-title"
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171d] p-5 shadow-2xl"
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#15171d] p-5 shadow-2xl"
           >
-            <h2 id="admin-plan-title" className="text-base font-semibold">Ativar plano</h2>
+            <h2 id="admin-plan-title" className="text-base font-semibold">Plano do utilizador</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Utilizador: <span className="text-foreground">{planTarget.email}</span>. A ativação é manual, não regista pagamento e dá acesso imediato.
             </p>
+            <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11.5px] text-muted-foreground">
+              {planTarget.subscription?.plan_id ? (
+                <>
+                  Plano atual:{" "}
+                  <span className="text-foreground">
+                    {planName(planTarget.subscription.plan_id)} ·{" "}
+                    {planTarget.subscription.interval === "yearly" ? "anual" : "mensal"}
+                  </span>
+                  . Início <span className="text-foreground">{formatDate(planTarget.subscription.current_period_start)}</span>, fim{" "}
+                  <span className="text-foreground">{formatDate(planTarget.subscription.current_period_end)}</span>.
+                </>
+              ) : planTarget.trial_expires_at ? (
+                <>Sem plano pago. Trial até <span className="text-foreground">{formatDate(planTarget.trial_expires_at)}</span>.</>
+              ) : (
+                "Sem plano."
+              )}
+            </div>
+
+            <form onSubmit={(event) => void submitPlanActivation(event)}>
+              <label className="mt-4 block text-xs text-muted-foreground">
+                Plano
+                <select
+                  value={planId}
+                  onChange={(event) => setPlanId(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="basic">Básico</option>
+                  <option value="pro">Profissional</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </label>
+              <label className="mt-3 block text-xs text-muted-foreground">
+                Duração
+                <select
+                  value={planInterval}
+                  onChange={(event) => setPlanInterval(event.target.value as "monthly" | "yearly")}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="monthly">Mensal (30 dias)</option>
+                  <option value="yearly">Anual (365 dias)</option>
+                </select>
+              </label>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPlanTarget(null)}
+                  disabled={busy === planTarget.id}
+                  className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy === planTarget.id}
+                  className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-sm text-teal-100 hover:bg-teal-500/30 disabled:opacity-50"
+                >
+                  {busy === planTarget.id ? <Loader2 size={14} className="animate-spin" /> : "Ativar plano"}
+                </button>
+              </div>
+            </form>
+
+            <UserPaymentsPanel user={planTarget} onError={onError} onChanged={() => void load()} />
+          </div>
+        </div>
+      )}
+
+      {extendTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation">
+          <form
+            onSubmit={(event) => void submitPlanExtension(event)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-extend-title"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171d] p-5 shadow-2xl"
+          >
+            <h2 id="admin-extend-title" className="text-base font-semibold">Prolongar plano</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Utilizador: <span className="text-foreground">{extendTarget.email}</span>. Os dias são somados ao fim do período atual{" "}
+              {extendTarget.subscription?.current_period_end ? (
+                <>
+                  (<span className="text-foreground">{formatDate(extendTarget.subscription.current_period_end)}</span>)
+                </>
+              ) : null}
+              ; se já tiver expirado, contam a partir de hoje. A conta é reativada.
+            </p>
             <label className="mt-4 block text-xs text-muted-foreground">
-              Plano
-              <select
-                value={planId}
-                onChange={(event) => setPlanId(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
-              >
-                <option value="basic">Básico</option>
-                <option value="pro">Profissional</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
+              Dias a acrescentar
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={extendDays}
+                onChange={(event) => setExtendDays(Number(event.target.value))}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+              />
             </label>
-            <label className="mt-3 block text-xs text-muted-foreground">
-              Duração
-              <select
-                value={planInterval}
-                onChange={(event) => setPlanInterval(event.target.value as "monthly" | "yearly")}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-foreground"
-              >
-                <option value="monthly">Mensal (30 dias)</option>
-                <option value="yearly">Anual (365 dias)</option>
-              </select>
-            </label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[30, 90, 180, 365].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setExtendDays(days)}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                    extendDays === days
+                      ? "border-sky-400/40 bg-sky-400/10 text-sky-200"
+                      : "border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  +{days} d
+                </button>
+              ))}
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setPlanTarget(null)}
-                disabled={busy === planTarget.id}
+                onClick={() => setExtendTarget(null)}
+                disabled={busy === extendTarget.id}
                 className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/[0.06] disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={busy === planTarget.id}
-                className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-sm text-teal-100 hover:bg-teal-500/30 disabled:opacity-50"
+                disabled={busy === extendTarget.id}
+                className="flex items-center gap-1.5 rounded-lg bg-sky-500/20 px-3 py-1.5 text-sm text-sky-100 hover:bg-sky-500/30 disabled:opacity-50"
               >
-                {busy === planTarget.id ? <Loader2 size={14} className="animate-spin" /> : "Ativar plano"}
+                {busy === extendTarget.id ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />} Prolongar
               </button>
             </div>
           </form>

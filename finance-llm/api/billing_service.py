@@ -520,6 +520,117 @@ def activate_subscription_manually(user_id: str, *, plan_id: str, interval: str)
     return updated
 
 
+def extend_subscription(
+    user_id: str,
+    *,
+    days: int,
+    plan_id: Optional[str] = None,
+    interval: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Prolonga o fim do período da subscrição em `days` dias.
+
+    Usado pela administração para prolongar um plano sem novo pagamento (oferta,
+    compensação ou renovação manual). A contagem parte do fim atual; se a
+    subscrição já tiver expirado parte de agora, para não «gastar» os dias
+    acrescentados em tempo que já passou. A conta é reativada se estiver suspensa.
+    """
+    if days < 1 or days > 3650:
+        raise auth.AuthError("Número de dias inválido (1 a 3650).", status_code=422, code="invalid_input")
+    if plan_id is not None and plan_id not in PLAN_BY_ID:
+        raise auth.AuthError("Plano inválido.", status_code=422, code="invalid_input")
+    if interval is not None and interval not in {"monthly", "yearly"}:
+        raise auth.AuthError("Intervalo inválido (use monthly ou yearly).", status_code=422, code="invalid_input")
+
+    user = auth.get_user_by_id(user_id)
+    if not user:
+        raise auth.AuthError("Conta não encontrada.", status_code=404, code="not_found")
+
+    subscription = dict(user.get("subscription") or {})
+    now = datetime.now(timezone.utc)
+    base = now
+    if subscription.get("current_period_end"):
+        try:
+            current_end = datetime.fromisoformat(str(subscription["current_period_end"]).replace("Z", "+00:00"))
+            if current_end.tzinfo is None:
+                current_end = current_end.replace(tzinfo=timezone.utc)
+            base = max(current_end, now)
+        except ValueError:
+            base = now
+
+    patch = {
+        "plan_id": plan_id or subscription.get("plan_id") or PLAN_BASIC,
+        "status": "active",
+        "interval": interval or subscription.get("interval") or "monthly",
+        "payment_method": subscription.get("payment_method") or "admin",
+        "current_period_start": subscription.get("current_period_start") or now.isoformat(),
+        "current_period_end": (base + timedelta(days=days)).isoformat(),
+        "updated_at": _now_iso(),
+    }
+    updated = _upsert_subscription(user_id, patch)
+    if user.get("status") != auth.USER_STATUS_ACTIVE:
+        auth.update_user(user_id, {"status": auth.USER_STATUS_ACTIVE}, admin_fields=True)
+        updated = auth.public_user(auth.get_user_by_id(user_id) or {**user, "status": auth.USER_STATUS_ACTIVE})
+
+    events.log_event(
+        "info",
+        "billing",
+        f"Subscrição prolongada: {user.get('email')} +{days} dias (até {patch['current_period_end']})",
+        data={"target_user": user.get("email"), "days": days, "current_period_end": patch["current_period_end"]},
+        user_id=user_id,
+        user_email=user.get("email"),
+    )
+    return updated
+
+
+def register_payment(
+    user_id: str,
+    *,
+    plan_id: str,
+    interval: str,
+    method: str = "transfer",
+    amount: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Regista um pagamento já recebido (fora do fluxo automático) e ativa o plano.
+
+    A administração usa isto quando o dinheiro entrou por um caminho que a
+    plataforma não viu (transferência, MB Way manual). O pagamento fica no
+    histórico da conta e o período da subscrição começa agora.
+    """
+    if plan_id not in PLAN_BY_ID:
+        raise auth.AuthError("Plano inválido.", status_code=422, code="invalid_input")
+    if interval not in {"monthly", "yearly"}:
+        raise auth.AuthError("Intervalo inválido (use monthly ou yearly).", status_code=422, code="invalid_input")
+    if method not in PAYMENT_METHODS:
+        raise auth.AuthError("Método de pagamento inválido.", status_code=422, code="invalid_input")
+
+    user = auth.get_user_by_id(user_id)
+    if not user:
+        raise auth.AuthError("Conta não encontrada.", status_code=404, code="not_found")
+
+    plan = PLAN_BY_ID[plan_id]
+    if amount is None:
+        amount = plan["price_yearly"] if interval == "yearly" else plan["price_monthly"]
+    if amount < 0:
+        raise auth.AuthError("Valor inválido.", status_code=422, code="invalid_input")
+
+    now = _now_iso()
+    payment = {
+        "id": f"pay_{secrets.token_hex(12)}",
+        "user_id": user_id,
+        "plan_id": plan_id,
+        "interval": interval,
+        "amount": round(float(amount), 2),
+        "currency": CURRENCY,
+        "method": method,
+        "status": "paid",
+        "created_at": now,
+        "paid_at": now,
+        "metadata": {"registered_by": "admin"},
+    }
+    _add_payment(user_id, payment)
+    return _activate_subscription(user_id, payment)
+
+
 def mbway_payment_request(user_id: str, payment_id: str, phone: str) -> Dict[str, Any]:
     """Cria pedido MB Way para um pagamento pendente."""
     user = auth.get_user_by_id(user_id)

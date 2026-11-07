@@ -648,7 +648,14 @@ def approve_user(
 
 
 def suspend_trial_expired_users(*, client: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
-    """Suspende contas ativas cujo trial tenha expirado. Devolve as afetadas."""
+    """Suspende contas ativas cujo trial tenha expirado. Devolve as afetadas.
+
+    Contas com subscrição ativa dentro do período são ignoradas: quem já paga
+    deixou de estar em trial, e suspender a conta cortava o acesso a um plano
+    válido. (A importação é diferida para não criar um ciclo com `billing_service`.)
+    """
+    from api import billing_service
+
     es = client or _client()
     now = _now_iso()
     try:
@@ -677,6 +684,8 @@ def suspend_trial_expired_users(*, client: Optional[Elasticsearch] = None) -> Li
         user_id = source.get("id")
         key = normalize_email(source.get("email") or "")
         if not user_id or not key:
+            continue
+        if billing_service.has_active_subscription(source):
             continue
         try:
             es.update(

@@ -73,7 +73,10 @@ export type AdminUser = {
     plan_id?: string;
     status?: string;
     interval?: string;
+    current_period_start?: string;
     current_period_end?: string;
+    payment_method?: string;
+    updated_at?: string;
   } | null;
 };
 
@@ -215,6 +218,41 @@ export function activateAdminUserPlan(
     plan_id: planId,
     interval,
   });
+}
+
+export function extendAdminUserPlan(
+  userId: string,
+  days: number,
+  planId?: string,
+  interval?: "monthly" | "yearly",
+): Promise<{ ok: boolean; user: AdminUser; subscription: AdminUser["subscription"] }> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/extend-plan`, {
+    days,
+    ...(planId ? { plan_id: planId } : {}),
+    ...(interval ? { interval } : {}),
+  });
+}
+
+/** Pagamento no histórico de uma conta (sem os campos de utilizador do `/admin/payments`). */
+export type AdminUserPayment = Pick<
+  AdminPayment,
+  "id" | "plan_id" | "interval" | "amount" | "currency" | "method" | "status" | "created_at" | "paid_at"
+>;
+
+export function listAdminUserPayments(userId: string): Promise<{
+  ok: boolean;
+  total: number;
+  items: AdminUserPayment[];
+  subscription?: AdminUser["subscription"];
+}> {
+  return request(`/admin/users/${encodeURIComponent(userId)}/payments`);
+}
+
+export function registerAdminUserPayment(
+  userId: string,
+  payload: { plan_id: string; interval: "monthly" | "yearly"; method: string; amount?: number },
+): Promise<{ ok: boolean; user: AdminUser; subscription: AdminUser["subscription"] }> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/payments`, payload);
 }
 
 /* ------------------------------------------ verificação em dois passos (MFA) */
