@@ -1,0 +1,91 @@
+# colibri — motor de inferência (C puro, CPU) para o Mistral-Large-4.
+#
+# Espelha o `docker/Dockerfile.slim` do upstream
+# (https://github.com/JustVugg/colibri) com uma diferença: em vez de exigir um
+# checkout do colibri como contexto de build, clona o repositório num *stage*
+# próprio. O contexto desta imagem é a raiz do `finance-llm` (o mesmo do
+# `Dockerfile.backend`), por isso nada do colibri é vendorizado aqui.
+#
+# O modelo **nunca** entra na imagem: o Mistral-Large-4 UD-IQ1_S são 233 GB e é
+# montado em `/model` (ver `docker-compose.colibri.yml`). A imagem final são
+# ~120 MB: o binário `colibri`, o launcher `coli` e o gateway OpenAI em Python
+# (só stdlib, sem `pip`).
+#
+#   docker build -t iq-os-colibri:latest -f Dockerfile.colibri .
+#   docker run --rm -v D:/models/mistral-4:/model iq-os-colibri:latest info
+#   docker run --rm -p 8050:8000 -v D:/models/mistral-4:/model iq-os-colibri:latest \
+#       serve --host 0.0.0.0 --port 8000 --model-id mistral-large-4 --ram 24
+
+# --------------------------------------------------------------------------
+# Stage 1: o motor. ARCH fica no alvo portátil do `make` (x86-64-v3, AVX2) e
+# **não** em `native`: um build nativo grava a ISA da máquina que compila e dá
+# SIGILL num host diferente.
+FROM debian:stable-slim AS build
+
+ARG COLIBRI_REF=v2.1.0
+ARG ARCH=x86-64-v3
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        build-essential \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git clone --depth 1 --branch "${COLIBRI_REF}" \
+        https://github.com/JustVugg/colibri.git colibri \
+    && make -C colibri/c colibri ARCH="${ARCH}"
+
+# --------------------------------------------------------------------------
+# Stage 2: runtime. `openai_server.py` e o launcher usam só a biblioteca padrão
+# do Python, daí não haver `pip install`. O `libgomp1` é o runtime OpenMP que o
+# motor liga (threads por omissão = núcleos físicos; ver `OMP_NUM_THREADS` no
+# compose).
+FROM debian:stable-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 colibri
+
+WORKDIR /app
+
+# Binário do motor + launcher + ficheiros que o `coli` resolve em runtime (o
+# gateway, o planeador de RAM, o doctor, o registo de famílias e o importador
+# de GGUF em `tools/`, que é o que o `coli import` do Mistral usa).
+COPY --from=build /src/colibri/c/colibri            ./colibri
+COPY --from=build /src/colibri/c/coli               \
+                  /src/colibri/c/version.py         \
+                  /src/colibri/c/openai_server.py   \
+                  /src/colibri/c/v4_dsml.py         \
+                  /src/colibri/c/v41_dsml.py        \
+                  /src/colibri/c/family_registry.py \
+                  /src/colibri/c/resource_plan.py   \
+                  /src/colibri/c/doctor.py          \
+                  /src/colibri/c/autotune.py        \
+                  /src/colibri/c/image_engine.py    \
+                  /src/colibri/c/term_image.py      ./
+COPY --from=build /src/colibri/c/tools/ ./tools/
+
+# `COLI_DOCKER_GLM_ONLY=1` faz o launcher recusar famílias cujo motor não está
+# nesta imagem — e é o que dá uma mensagem clara em vez de "binário não existe".
+# O Mistral-Large-4 corre no motor do GLM-5.2 (família `glm`), por isso passa.
+ENV COLI_MODEL=/model \
+    COLI_ENGINE=/app/colibri \
+    COLI_DOCKER_GLM_ONLY=1 \
+    PYTHONUNBUFFERED=1
+
+# O modelo é montado aqui; o VOLUME documenta o contrato.
+VOLUME ["/model"]
+
+# Porta por omissão do `coli serve` (o subcomando, não o do compose do upstream).
+EXPOSE 8000
+
+# UID 1000: a pasta do modelo tem de ser legível por este utilizador
+# (`chmod -R a+rX` numa pasta de root, ou `--user` igual ao dono).
+USER colibri
+
+ENTRYPOINT ["python3", "/app/coli"]
+CMD ["info"]

@@ -1,0 +1,76 @@
+# colibri + Mistral-Large-4 — API OpenAI-compatível servida de dentro do stack.
+#
+# Ficheiro **separado** de propósito: o `docker-compose.yml` da solução é o
+# contrato de produção (backend, frontend, ES, OSIF…) e este serviço é opcional
+# e exige um host com RAM e NVMe que a máquina de desenvolvimento não tem.
+#
+#   1) importar o GGUF uma vez (mesma montagem do import e do serve, para o
+#      apontador do modo `link` continuar válido dentro do contentor):
+#
+#        docker run --rm -v D:/models:/models iq-os-colibri:latest \
+#            import /models/gguf/Mistral-Large-4-1T-A52B-UD-IQ1_S-00001-of-00006.gguf \
+#                   --model /models/Mistral-Large-4-1T-A52B-UD-IQ1_S.colibri
+#
+#   2) subir o servidor:
+#
+#        $env:COLIBRI_MODEL_DIR='D:/models/Mistral-Large-4-1T-A52B-UD-IQ1_S.colibri'
+#        docker compose -f docker-compose.colibri.yml up -d --build
+#
+#        curl http://127.0.0.1:8050/v1/models
+#
+#   3) o backend/agentes passam a usar `http://colibri:8000/v1` (dentro da rede
+#      do compose) ou `http://127.0.0.1:8050/v1` (do host).
+
+services:
+  colibri:
+    build:
+      context: .
+      dockerfile: Dockerfile.colibri
+    image: iq-os-colibri:latest
+    container_name: finance-llm-colibri
+    ports:
+      - "${COLIBRI_PORT:-8050}:8000"
+    volumes:
+      # Só leitura: o servidor nunca escreve no modelo. Não uses mount de rede
+      # (SMB/NFS) — o streaming de experts é dominado pela latência do disco.
+      - "${COLIBRI_MODEL_DIR:?define COLIBRI_MODEL_DIR com a pasta .colibri do modelo}:/model:ro"
+    environment:
+      # Orçamento de RAM em GB para a cache de experts. Mais RAM = mais experts
+      # residentes = mais tokens/s. O Mistral-Large-4 arranca com 16 GB e corre
+      # como medido a partir de 32 GB.
+      COLI_RAM: "${COLI_RAM:-24}"
+      COLI_MODEL_ID: "${COLI_MODEL_ID:-mistral-large-4}"
+      # O guard de DNS-rebinding só aceita Host de loopback e do bind. Vindo do
+      # `backend` pela rede do compose, o Host é `colibri` — daí esta lista.
+      # Para expor por IP/DNS de fora do Docker, usa `*` (desliga o guard).
+      COLI_ALLOWED_HOSTS: "${COLI_ALLOWED_HOSTS:-colibri}"
+      # O motor reparte as threads OpenMP por núcleos físicos; em hosts com
+      # P/E-cores (Intel 12ª geração em diante) fixar os P-cores evita a equipa
+      # a aterrar nos E-cores — ver docs/tuning.md do upstream.
+      OMP_NUM_THREADS: "${COLI_OMP_THREADS:-}"
+    command:
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --model-id
+      - "${COLI_MODEL_ID:-mistral-large-4}"
+      - --ram
+      - "${COLI_RAM:-24}"
+    healthcheck:
+      # O runtime não traz `curl`; o Python da imagem chega para o /v1/models.
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/v1/models", timeout=5)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # O primeiro arranque lê o índice do modelo do disco (centenas de GB de
+      # ficheiros): dá-lhe folga antes de contar como falhanço.
+      start_period: 600s
+    restart: unless-stopped
+    # Streamming de um 1T toca muita page cache; dá headroom ao /dev/shm.
+    shm_size: "2gb"
