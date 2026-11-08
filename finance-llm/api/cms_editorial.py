@@ -298,6 +298,78 @@ SEED_MEDIA_LOJA: Sequence[Sequence[str]] = (
         "Mala de arquivo Sabemos, com lombada larga, para dossiês impressos",
         "",
     ),
+    (
+        "produto-radio-baofeng-uv-5r.jpg",
+        "Produto · Rádio Baofeng UV-5R",
+        "Rádio Baofeng UV-5R de dupla banda, 128 canais e 5 W, com carregador, bateria e auscultador",
+        "",
+    ),
+    (
+        "produto-radio-baofeng-uv-5r-kit-auscultador-antena.svg",
+        "Produto · Kit UV-5R com auscultador e antena",
+        "Rádio Baofeng UV-5R com auscultador com PTT e antena de ganho",
+        "",
+    ),
+    (
+        "produto-radio-baofeng-uv-82.jpg",
+        "Produto · Rádio Baofeng UV-82",
+        "Rádio Baofeng UV-82 de dupla banda, 8 W e 128 canais",
+        "",
+    ),
+    (
+        "produto-radio-baofeng-bf-888s-pack-2.jpg",
+        "Produto · Pack de 2 rádios BF-888S",
+        "Pack de dois rádios Baofeng BF-888S de UHF, com carregadores e auscultadores",
+        "",
+    ),
+    (
+        "produto-radio-baofeng-uv-9r-plus.jpg",
+        "Produto · Rádio Baofeng UV-9R Plus",
+        "Rádio Baofeng UV-9R Plus estanque IP67, com 10 W e bateria de 2800 mAh",
+        "",
+    ),
+    (
+        "produto-radio-baofeng-gt-5r.svg",
+        "Produto · Rádio Baofeng GT-5R",
+        "Rádio Baofeng GT-5R limitado às bandas amadoras de 144 e 430 MHz",
+        "",
+    ),
+    (
+        "produto-kit-sobrevivencia-72h.svg",
+        "Produto · Kit de sobrevivência 72 horas",
+        "Mochila de sobrevivência de 72 horas, com abrigo, água, alimento e primeiros socorros",
+        "",
+    ),
+    (
+        "produto-kit-primeiros-socorros-120-pecas.jpg",
+        "Produto · Kit de primeiros socorros",
+        "Kit de primeiros socorros com 120 peças em bolsa compacta",
+        "",
+    ),
+    (
+        "produto-kit-purificacao-agua.jpg",
+        "Produto · Kit de purificação de água",
+        "Kit de purificação de água com filtro de 0,01 µm, pastilhas e saco de 3 litros",
+        "",
+    ),
+    (
+        "produto-kit-fogo-bushcraft.jpg",
+        "Produto · Kit de fogo e bushcraft",
+        "Kit de fogo com pederneira, isqueiro à prova de vento e acendalha",
+        "",
+    ),
+    (
+        "produto-kit-ferramentas-multifuncoes.svg",
+        "Produto · Kit de ferramentas multifunções",
+        "Alicate multifunções de 14 funções, com faca, serra e bits",
+        "",
+    ),
+    (
+        "produto-kit-emergencia-automovel.svg",
+        "Produto · Kit de emergência automóvel",
+        "Kit de emergência automóvel com cabos de bateria, compressor de 12 V e sinalização",
+        "",
+    ),
 )
 
 #: Menu do site: rótulo e caminho da página, pela ordem em que aparece. O

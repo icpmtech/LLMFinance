@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Kit de purificação de água com filtro e pastilhas">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="chama" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Purificação de água</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Filtro 0,01 µm · 1 000 litros</text>
+<g transform="translate(400 176)"><path d="M0 -4 C 0 -4 -66 82 -66 118 a66 66 0 0 0 132 0 C 66 82 0 -4 0 -4 Z" fill="#0ea5a4"/><path d="M-34 108 a34 34 0 0 0 26 33" fill="none" stroke="#bae6fd" stroke-width="7" stroke-linecap="round"/></g><g transform="translate(470 236) rotate(24)"><rect x="0" y="0" width="20" height="150" rx="10" fill="#0f172a"/><rect x="0" y="118" width="20" height="32" rx="10" fill="#38bdf8"/></g><rect x="548" y="196" width="77" height="30" rx="15" fill="#0ea5a4"/><text x="587" y="216" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#04252a">1 000 L</text><text x="80" y="438" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Filtro de 0,01 µm, pastilhas e saco de 3 litros</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Água potável em qualquer lado</text>
+</svg>

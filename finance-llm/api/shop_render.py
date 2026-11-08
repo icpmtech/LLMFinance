@@ -54,6 +54,10 @@ _THEMES: Dict[str, Dict[str, str]] = {
 
 _CART_KEY = "iqos-loja-carrinho"
 
+#: Quantas categorias cabem nas pílulas do menu (a barra desliza na horizontal
+#: quando não cabem todas, mas um menu com vinte entradas deixa de se ler).
+MAX_CATEGORIAS_NO_MENU = 6
+
 #: Origem canónica da loja, usada quando as definições ainda não têm `base_url`
 #: (é o caso por omissão numa instalação nova). Daqui saem os `<loc>` do sitemap,
 #: a linha `Sitemap:` do `robots.txt`, a canónica e o `og:url` das páginas — e
@@ -1298,7 +1302,7 @@ def _header(settings: Dict[str, Any], *, current_path: str = "", preview: bool =
     montra_active = ' class="active"' if base == "/loja" else ""
     all_active = ' class="all active"' if base == "/loja/produtos" else ' class="all"'
     pills = [f'<a href="/loja"{montra_active}>Montra</a>']
-    for category in categories[:5]:
+    for category in categories[:MAX_CATEGORIAS_NO_MENU]:
         href = f'/loja/categoria/{category.get("slug")}'
         active = ' class="active"' if base == href else ""
         count = store._int(category.get("products"))

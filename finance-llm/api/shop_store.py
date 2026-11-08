@@ -1405,6 +1405,24 @@ IMAGENS_PRODUTO: Dict[str, str] = {
     "mala-de-arquivo": "produto-mala-de-arquivo.svg",
 }
 
+#: Imagens do catálogo comercial (rádios e kits de sobrevivência), que entra
+#: pela migração `_criar_produtos_radios_sobrevivencia.py` e não pela semente de
+#: demonstração. A ligação ao produto é a mesma: `slug` → ficheiro do media.
+IMAGENS_PRODUTO_COMERCIAL: Dict[str, str] = {
+    "radio-baofeng-uv-5r": "produto-radio-baofeng-uv-5r.jpg",
+    "radio-baofeng-uv-5r-kit-auscultador-antena": "produto-radio-baofeng-uv-5r-kit-auscultador-antena.svg",
+    "radio-baofeng-uv-82": "produto-radio-baofeng-uv-82.jpg",
+    "radio-baofeng-bf-888s-pack-2": "produto-radio-baofeng-bf-888s-pack-2.jpg",
+    "radio-baofeng-uv-9r-plus": "produto-radio-baofeng-uv-9r-plus.jpg",
+    "radio-baofeng-gt-5r": "produto-radio-baofeng-gt-5r.svg",
+    "kit-sobrevivencia-72h": "produto-kit-sobrevivencia-72h.svg",
+    "kit-primeiros-socorros-120-pecas": "produto-kit-primeiros-socorros-120-pecas.jpg",
+    "kit-purificacao-agua": "produto-kit-purificacao-agua.jpg",
+    "kit-fogo-bushcraft": "produto-kit-fogo-bushcraft.jpg",
+    "kit-ferramentas-multifuncoes": "produto-kit-ferramentas-multifuncoes.svg",
+    "kit-emergencia-automovel": "produto-kit-emergencia-automovel.svg",
+}
+
 
 def _media_das_imagens_de_produto() -> Dict[str, str]:
     """`{ficheiro: id}` do media de marca, garantindo que está instalado.
@@ -1424,7 +1442,8 @@ def _media_das_imagens_de_produto() -> Dict[str, str]:
 
 def _imagem_do_produto(slug: str, media: Dict[str, str]) -> str:
     """Id do media da imagem de marca de um produto (vazio se não houver)."""
-    return str(media.get(IMAGENS_PRODUTO.get(slug, "")) or "")
+    ficheiro = IMAGENS_PRODUTO.get(slug) or IMAGENS_PRODUTO_COMERCIAL.get(slug) or ""
+    return str(media.get(ficheiro) or "")
 
 
 def instalar_imagens_de_produto(author: str = "") -> Dict[str, Any]:

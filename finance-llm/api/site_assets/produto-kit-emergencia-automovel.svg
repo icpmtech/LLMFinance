@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Kit de emergência automóvel com cabos e compressor">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="chama" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Emergência automóvel</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Cabos 400 A · compressor 12 V</text>
+<g stroke="#f59e0b" stroke-width="7" fill="none" stroke-linecap="round"><path d="M232 356 q26 22 52 4"/><path d="M236 372 q26 18 48 2"/></g><g transform="translate(268 246)"><path d="M0 74 q0 -22 22 -30 l 26 -40 q8 -12 22 -12 h 60 q14 0 22 12 l 26 40 q22 8 22 30 v 22 q0 12 -12 12 h -12 a 22 22 0 0 0 -44 0 h -56 a 22 22 0 0 0 -44 0 h -12 q-12 0 -12 -12z" fill="#0f172a"/><path d="M56 44 h 42 v 30 h -58z" fill="#bae6fd"/><path d="M108 44 h 38 l 18 30 h -56z" fill="#bae6fd"/><circle cx="52" cy="108" r="20" fill="#1e293b"/><circle cx="148" cy="108" r="20" fill="#1e293b"/></g><g transform="translate(512 268)"><path d="M52 0 L 104 92 H 0 Z" fill="#f59e0b"/><rect x="46" y="26" width="12" height="36" rx="6" fill="#3b2600"/><rect x="46" y="70" width="12" height="12" rx="6" fill="#3b2600"/></g><rect x="548" y="196" width="76" height="30" rx="15" fill="#b45309"/><text x="586" y="216" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">400 A</text><text x="80" y="438" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Cabos, compressor de 12 V, triângulo e colete</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Para o porta-bagagens</text>
+</svg>

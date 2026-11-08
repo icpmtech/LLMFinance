@@ -21,6 +21,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
+from api import cms_editorial as editorial
 from api import cms_render
 from api import cms_store
 from api import shop_render as render
@@ -67,6 +68,19 @@ def test_cada_produto_fica_com_a_sua_imagem_de_marca(loja):
     for slug, ficheiro in store.IMAGENS_PRODUTO.items():
         assert ficheiro in media, f"{ficheiro} não foi instalado na biblioteca"
         assert produtos[slug]["image_ids"] == [media[ficheiro]["id"]], slug
+
+
+def test_imagens_do_catalogo_comercial_estao_declaradas(loja):
+    """Os rádios e kits entram por migração; as imagens deles viajam no código."""
+    loja.reset_seed()
+    media = _media_por_ficheiro()
+    declaradas = {item[0] for item in editorial.SEED_MEDIA_LOJA}
+    for slug, ficheiro in store.IMAGENS_PRODUTO_COMERCIAL.items():
+        assert ficheiro in declaradas, f"{ficheiro} não está em SEED_MEDIA_LOJA"
+        assert ficheiro in media, f"{ficheiro} não foi instalado na biblioteca"
+        assert media[ficheiro]["kind"] == "imagem", ficheiro
+        if ficheiro.endswith(".svg"):
+            assert media[ficheiro]["width"] == 800 and media[ficheiro]["height"] == 600, ficheiro
 
 
 def test_imagem_instalada_e_a_copia_do_asset_do_codigo(loja):

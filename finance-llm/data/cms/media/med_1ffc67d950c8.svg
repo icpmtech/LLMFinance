@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Kit de fogo e bushcraft com pederneira">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="chama" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Kit de fogo</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Pederneira, isqueiro e acendalha</text>
+<g fill="#f59e0b"><circle cx="316" cy="228" r="5"/><circle cx="296" cy="268" r="4"/><circle cx="306" cy="316" r="3.5"/><circle cx="492" cy="240" r="4"/><circle cx="510" cy="292" r="3.5"/></g><g transform="translate(400 176)"><path d="M0 0 c 34 52 66 78 66 116 a66 66 0 0 1 -132 0 c0 -30 18 -52 32 -72 6 14 14 22 24 26 -6 -28 -4 -52 10 -70z" fill="url(#chama)"/><path d="M0 62 c 16 24 30 36 30 54 a30 30 0 0 1 -60 0 c0 -18 16 -34 30 -54z" fill="#fff7ed" opacity="0.9"/></g><g transform="translate(520 300) rotate(-18)"><rect x="0" y="0" width="96" height="22" rx="8" fill="#0f172a"/><rect x="66" y="-6" width="34" height="34" rx="8" fill="#334155"/></g><text x="80" y="438" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Pederneira, isqueiro, fósforos impermeáveis e acendalha</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Fogo com chuva e vento</text>
+</svg>
