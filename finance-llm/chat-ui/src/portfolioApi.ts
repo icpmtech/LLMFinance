@@ -469,6 +469,33 @@ export async function removeWatchlistItem(watchlistId: string, ticker: string): 
   );
 }
 
+export type CsvImportRow = {
+  symbol: string;
+  side?: "buy" | "sell" | "deposit" | string;
+  quantity?: number;
+  price?: number;
+  fees?: number;
+  date?: string;
+  note?: string;
+};
+
+export type CsvImportResponse = {
+  portfolio: SavedPortfolio;
+  imported: number;
+  cash: number;
+  skipped?: { row: number; symbol: string; reason: string }[];
+};
+
+export async function importPortfolioCsv(body: {
+  name: string;
+  currency?: string;
+  deposit_cash?: boolean;
+  future_dates_as_today?: boolean;
+  rows: CsvImportRow[];
+}): Promise<CsvImportResponse> {
+  return sendJson("POST", "/portfolio/import-csv", body);
+}
+
 export async function listOrders(portfolioId?: string): Promise<SavedOrder[]> {
   const query = portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : "";
   const result = await getJson<{ items: SavedOrder[] }>(`/portfolio/orders${query}`);

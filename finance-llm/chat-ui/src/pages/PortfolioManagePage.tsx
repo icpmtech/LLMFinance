@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Briefcase,
   Eye,
@@ -10,6 +10,7 @@ import {
   ArrowDownRight,
   Wallet,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import {
   addPortfolioTicker,
@@ -19,6 +20,7 @@ import {
   createWatchlist,
   deletePortfolio,
   deleteWatchlist,
+  importPortfolioCsv,
   listOrders,
   listPortfolios,
   listWatchlists,
@@ -83,6 +85,33 @@ export function PortfolioManagePage() {
       if (message) setNotice(message);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Operação falhou");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runImport = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      const result = await importPortfolioCsv({
+        name: file.name.replace(/\.csv$/i, ""),
+        currency: "EUR",
+        deposit_cash: true,
+        future_dates_as_today: true,
+        rows,
+      });
+      await load();
+      if (result.skipped?.length) {
+        setNotice(`${result.imported} posições importadas. ${result.skipped.length} linhas ignoradas.`);
+      } else if (result.imported > 0) {
+        setNotice("Carteira importada do CSV.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Importação falhou");
     } finally {
       setBusy(false);
     }
@@ -175,6 +204,7 @@ export function PortfolioManagePage() {
                 onRemoveTicker={(portfolioId, ticker) =>
                   run(() => removePortfolioTicker(portfolioId, ticker), `${ticker} removido.`)
                 }
+                onImportCsv={(file) => void runImport(file)}
               />
             )}
 
@@ -213,6 +243,18 @@ export function PortfolioManagePage() {
 // ---------------------------------------------------------------------------
 // Carteiras
 // ---------------------------------------------------------------------------
+type CarteirasTabProps = {
+  portfolios: SavedPortfolio[];
+  active: SavedPortfolio | null;
+  busy: boolean;
+  onSelect: (id: string) => void;
+  onCreate: (name: string, cash: number, currency: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onAddTicker: (portfolioId: string, item: TickerSearchItem, quantity: number, avgPrice: number) => Promise<void>;
+  onRemoveTicker: (portfolioId: string, ticker: string) => Promise<void>;
+  onImportCsv?: (file: File) => void;
+};
+
 function CarteirasTab({
   portfolios,
   active,
@@ -222,16 +264,8 @@ function CarteirasTab({
   onDelete,
   onAddTicker,
   onRemoveTicker,
-}: {
-  portfolios: SavedPortfolio[];
-  active: SavedPortfolio | null;
-  busy: boolean;
-  onSelect: (id: string) => void;
-  onCreate: (name: string, cash: number, currency: string) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  onAddTicker: (portfolioId: string, item: TickerSearchItem, quantity: number, avgPrice: number) => Promise<void>;
-  onRemoveTicker: (portfolioId: string, ticker: string) => Promise<void>;
-}) {
+  onImportCsv,
+}: CarteirasTabProps) {
   const [name, setName] = useState("");
   const [cash, setCash] = useState(100000);
   const [currency, setCurrency] = useState("USD");
@@ -293,6 +327,8 @@ function CarteirasTab({
             </button>
           </div>
         </div>
+
+        {onImportCsv && <CsvImportCard busy={busy} onImport={onImportCsv} />}
 
         <div className="rounded-lg border border-slate-800 bg-slate-900/50">
           <h2 className="border-b border-slate-800 px-4 py-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
@@ -807,3 +843,102 @@ function Kpi({
     </div>
   );
 }
+
+function parseCsvRows(text: string): { symbol: string; side?: string; quantity?: number; price?: number; fees?: number; date?: string; note?: string }[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+  const col = (name: string, ...fallbacks: string[]) => {
+    for (const n of [name, ...fallbacks]) {
+      const idx = headers.findIndex((h) => h === n.toLowerCase());
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+  const symbolIdx = col("symbol", "ticker", "ativo");
+  const sideIdx = col("transaction_type", "side", "tipo");
+  const qtyIdx = col("quantity", "qty", "quantidade", "shares");
+  const priceIdx = col("purchase_price", "price", "preço", "preco");
+  const feeIdx = col("commission", "fees", "comissao", "comissão");
+  const dateIdx = col("trade_date", "date", "data");
+  const noteIdx = col("comment", "notes", "nota", "note");
+  if (symbolIdx < 0) return [];
+  const out: ReturnType<typeof parseCsvRows> = [];
+  for (let i = 1; i < lines.length; i++) {
+    const raw = parseCsvLine(lines[i]);
+    if (!raw[symbolIdx]?.trim()) continue;
+    const symbol = raw[symbolIdx].trim();
+    const sideRaw = sideIdx >= 0 ? raw[sideIdx]?.trim().toLowerCase() : "";
+    const side = symbol.startsWith("$") || symbol.toLowerCase() === "cash_tx" ? "deposit" : sideRaw === "sell" ? "sell" : "buy";
+    out.push({
+      symbol,
+      side,
+      quantity: qtyIdx >= 0 ? parseFloatLocale(raw[qtyIdx]) : undefined,
+      price: priceIdx >= 0 ? parseFloatLocale(raw[priceIdx]) : undefined,
+      fees: feeIdx >= 0 ? parseFloatLocale(raw[feeIdx]) : undefined,
+      date: dateIdx >= 0 ? raw[dateIdx] || undefined : undefined,
+      note: noteIdx >= 0 ? raw[noteIdx] || undefined : undefined,
+    });
+  }
+  return out;
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (const ch of line) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      cells.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  cells.push(current);
+  return cells;
+}
+
+function parseFloatLocale(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function CsvImportCard({ busy, onImport }: { busy: boolean; onImport: (file: File) => void }) {
+  const [drag, setDrag] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImport(file);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
+        <Upload className="h-4 w-4" /> Importar CSV
+      </h2>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onImport(f); }}
+        className={[
+          "flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed px-4 py-6 text-center transition",
+          drag ? "border-emerald-500 bg-emerald-500/10" : "border-slate-700 hover:border-slate-500",
+        ].join(" ")}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-6 w-6 text-slate-500" />
+        <span className="text-sm text-slate-300">Arraste um CSV ou clique para escolher</span>
+        <span className="text-xs text-slate-500">Colunas: Symbol, Transaction Type, Quantity, Purchase Price, Commission, Trade Date, Comment</span>
+      </div>
+      <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onChange} disabled={busy} />
+    </div>
+  );
+}
+

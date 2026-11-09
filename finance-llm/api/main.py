@@ -940,6 +940,7 @@ app.include_router(market_view_router)
 @app.get("/portfolio/resilience")
 @app.get("/portfolio/attribution")
 @app.get("/portfolio/risk")
+@app.get("/trading-scenarios")
 def serve_portfolio_spa_page(request: Request):
     """Página do módulo **Portfólio** (SPA) e das suas vistas."""
     return spa_page_response(str(request.url.path))

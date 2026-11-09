@@ -107,6 +107,7 @@ SEGMENTOS_DA_APP = frozenset(
         "simulador",
         "tickers",
         "trading",
+        "trading-scenarios",
         "world",
         # Análise, investigação e assistentes
         "analise",

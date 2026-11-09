@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from api.auth_routes import CurrentSession, require_session
 from api import portfolio_service, portfolio_store
+from datetime import datetime
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -59,6 +60,25 @@ class AddTickerIn(BaseModel):
     target_price: float = 0.0
     note: str = ""
     fill_price: bool = Field(False, description="Preencher avg_price com a cotação actual quando não indicado.")
+
+
+class CsvRowIn(BaseModel):
+    symbol: str
+    side: Optional[str] = Field(None, description="buy | sell | deposit")
+    quantity: Optional[float] = None
+    price: Optional[float] = None
+    fees: Optional[float] = 0.0
+    date: Optional[str] = None
+    note: Optional[str] = None
+
+
+class CsvImportIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    currency: str = "USD"
+    deposit_cash: bool = Field(True, description="Usar DEPOSIT como caixa inicial da carteira.")
+    future_dates_as_today: bool = Field(True, description="Tratar datas futuras como hoje.")
+    rows: List[CsvRowIn] = []
+
 
 
 class WatchlistIn(BaseModel):
@@ -155,6 +175,103 @@ def create_portfolio(body: PortfolioIn, session: Session) -> Dict[str, Any]:
             tags=body.tags,
         )
     )
+
+
+def _parse_csv_date(value: Optional[str], future_as_today: bool = True) -> Optional[str]:
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"):
+        try:
+            dt = datetime.strptime(value, fmt)
+            today = datetime.utcnow().date()
+            if future_as_today and dt.date() > today:
+                dt = datetime.combine(today, dt.time())
+            return dt.isoformat() + "Z"
+        except ValueError:
+            continue
+    return None
+
+
+def _import_csv_positions(rows: List[CsvRowIn], deposit_cash: bool, future_as_today: bool) -> Dict[str, Any]:
+    positions: Dict[str, Dict[str, Any]] = {}
+    cash = 0.0
+    skipped: List[Dict[str, Any]] = []
+    # Ordenar por data para que BUYs acumulem antes dos SELLs correspondentes.
+    sorted_rows = sorted(rows, key=lambda r: (_parse_csv_date(r.date or "", future_as_today) or "", r.symbol or ""))
+    for idx, row in enumerate(sorted_rows, start=1):
+        symbol = str(row.symbol or "").strip().upper()
+        if not symbol or symbol.startswith("$") or symbol == "CASH_TX":
+            side = str(row.side or "deposit").lower()
+            if deposit_cash and side == "deposit" and row.quantity:
+                cash += float(row.quantity)
+            continue
+        side = str(row.side or "").strip().lower() or ("buy" if row.quantity else "")
+        qty = float(row.quantity or 0.0)
+        price = float(row.price or 0.0)
+        fees = float(row.fees or 0.0)
+        if side not in {"buy", "sell"}:
+            if side:
+                skipped.append({"row": idx, "symbol": symbol, "reason": f"tipo desconhecido: {side}"})
+            continue
+        if qty <= 0 or price <= 0:
+            skipped.append({"row": idx, "symbol": symbol, "reason": "quantidade/preço inválidos"})
+            continue
+        added_at = _parse_csv_date(row.date, future_as_today) or portfolio_store._now()
+        current = positions.get(symbol)
+        if side == "buy":
+            if current is None:
+                positions[symbol] = {
+                    "ticker": symbol,
+                    "name": symbol,
+                    "quantity": qty,
+                    "avg_price": price,
+                    "fees": fees,
+                    "added_at": added_at,
+                    "note": row.note or "",
+                }
+            else:
+                old_qty = float(current["quantity"])
+                old_avg = float(current["avg_price"])
+                total_cost = old_qty * old_avg + qty * price + fees
+                new_qty = old_qty + qty
+                current["quantity"] = new_qty
+                current["avg_price"] = round(total_cost / new_qty, 6) if new_qty > 0 else old_avg
+                current["fees"] = float(current.get("fees", 0.0)) + fees
+                current["note"] = current.get("note", "") + (f"; {row.note}" if row.note else "")
+                current["added_at"] = added_at
+        elif side == "sell":
+            if current is None:
+                # SELL sem posição prévia: assume-se short-cover (ignora, mas regista).
+                skipped.append({"row": idx, "symbol": symbol, "reason": "venda sem posição prévia"})
+                continue
+            if current["quantity"] < qty:
+                # Venda parcial até ao limite existente.
+                qty = current["quantity"]
+            current["quantity"] -= qty
+            current["note"] = current.get("note", "") + (f"; {row.note}" if row.note else "")
+            if current["quantity"] <= 0:
+                positions.pop(symbol, None)
+    return {"positions": list(positions.values()), "cash": cash, "skipped": skipped}
+
+
+@router.post("/import-csv", status_code=201, summary="Importar carteira a partir de CSV")
+def import_portfolio_csv(body: CsvImportIn, session: Session) -> Dict[str, Any]:
+    parsed = _import_csv_positions(body.rows, deposit_cash=body.deposit_cash, future_as_today=body.future_dates_as_today)
+    if not parsed["positions"] and parsed["cash"] <= 0:
+        raise HTTPException(status_code=422, detail="O CSV não continha posições nem depósitos válidos.")
+    result = portfolio_store.create_portfolio(
+        _owner(session),
+        name=body.name,
+        currency=(body.currency or "USD").upper(),
+        cash=max(float(parsed["cash"]), 0.0),
+        tickers=[portfolio_store._normalise_position(p) for p in parsed["positions"]],
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=int(result.get("status") or 400), detail=result["error"])
+    return {"portfolio": result, "imported": len(parsed["positions"]), "cash": parsed["cash"], "skipped": parsed["skipped"]}
 
 
 @router.get("/portfolios/{portfolio_id}", summary="Detalhe de uma carteira")
