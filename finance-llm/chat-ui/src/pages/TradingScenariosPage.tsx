@@ -694,7 +694,7 @@ function SignalCard({ signal }: { signal: TradingSignal }) {
           </div>
           <span className="font-semibold text-white">{signal.ticker}</span>
           <span className="text-xs text-slate-400">
-            Confiança {signal.confidence}% · {signal.time_horizon} · {signal.source === "llm" ? "IA" : "heurística"}
+            Confiança {signal.confidence}% · {signal.time_horizon} · {signal.source === "llm" ? "IA (cloud)" : "heurística"}
           </span>
         </div>
         <div className="text-xs text-slate-400">
