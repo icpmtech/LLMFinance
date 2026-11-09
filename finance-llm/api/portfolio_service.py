@@ -512,6 +512,15 @@ def portfolio_summary(
             row["unrealized_pnl_pct"] = (
                 round((market_value / cost_basis - 1) * 100, 4) if cost_basis and cost_basis > 0 else 0.0
             )
+            target_price = float(position.get("target_price") or 0.0)
+            row["target_price"] = target_price
+            if target_price > 0 and quantity > 0:
+                target_value = quantity * target_price
+                row["target_pnl"] = round(target_value - cost_basis, 4)
+                row["target_pnl_pct"] = round((target_price / avg_price - 1) * 100, 4) if avg_price > 0 else 0.0
+            else:
+                row["target_pnl"] = 0.0
+                row["target_pnl_pct"] = 0.0
             invested_value += market_value
             weighted_change += market_value * float(row.get("change_pct") or 0.0)
 

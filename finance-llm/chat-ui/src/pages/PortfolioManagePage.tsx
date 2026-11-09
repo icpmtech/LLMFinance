@@ -422,13 +422,15 @@ function CarteirasTab({
                     <th className="px-4 py-2 text-right">Qtd.</th>
                     <th className="px-4 py-2 text-right">Preço médio</th>
                     <th className="px-4 py-2 text-right">Custo</th>
+                    <th className="px-4 py-2 text-right">Preço alvo</th>
+                    <th className="px-4 py-2 text-right">Lucro alvo</th>
                     <th className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {active.tickers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
+                      <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
                         Sem posições. Pesquise um ticker acima.
                       </td>
                     </tr>
@@ -919,7 +921,7 @@ function PositionRow({
   const [name, setName] = useState(position.name);
   const [quantity, setQuantity] = useState(position.quantity);
   const [avgPrice, setAvgPrice] = useState(position.avg_price);
-  const [targetPrice] = useState(position.target_price);
+  const [targetPrice, setTargetPrice] = useState(position.target_price);
   const [note] = useState(position.note);
 
   const save = () => {
@@ -962,6 +964,19 @@ function PositionRow({
       <td className="px-4 py-2 text-right text-slate-300 align-top">
         {avgPrice && quantity ? (avgPrice * quantity).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}
       </td>
+      <td className="px-4 py-2 align-top">
+        <input
+          type="number"
+          value={targetPrice}
+          onChange={(e) => setTargetPrice(Number(e.target.value))}
+          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-sm text-slate-200"
+        />
+      </td>
+      <td className="px-4 py-2 text-right text-slate-300 align-top">
+        {targetPrice && avgPrice && quantity
+          ? `${(targetPrice * quantity - avgPrice * quantity >= 0 ? "+" : "")}${(targetPrice * quantity - avgPrice * quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })} (${((targetPrice / avgPrice - 1) * 100).toFixed(2)}%)`
+          : "—"}
+      </td>
       <td className="px-4 py-2 text-right align-top">
         <div className="flex items-center justify-end gap-2">
           <button
@@ -996,6 +1011,27 @@ function PositionRow({
       <td className="px-4 py-2 text-right text-slate-300">
         {position.avg_price && position.quantity
           ? (position.avg_price * position.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })
+          : "—"}
+      </td>
+      <td className="px-4 py-2 text-right text-slate-300">
+        {position.target_price ? position.target_price.toFixed(2) : "—"}
+      </td>
+      <td
+        className={`px-4 py-2 text-right ${
+          ((position.target_price || 0) * (position.quantity || 0) -
+            (position.avg_price || 0) * (position.quantity || 0)) >=
+          0
+            ? "text-emerald-400"
+            : "text-rose-400"
+        }`}
+      >
+        {position.target_price && position.avg_price && position.quantity
+          ? `${(position.target_price * position.quantity - position.avg_price * position.quantity >= 0 ? "+" : "")}${(
+              position.target_price * position.quantity -
+              position.avg_price * position.quantity
+            ).toLocaleString(undefined, { maximumFractionDigits: 2 })} (${(
+              ((position.target_price / position.avg_price - 1) * 100)
+            ).toFixed(2)}%)`
           : "—"}
       </td>
       <td className="px-4 py-2 text-right">

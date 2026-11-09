@@ -304,7 +304,9 @@ export function PortfolioPage() {
                           <th className="px-4 py-2 text-right">Qtd.</th>
                           <th className="px-4 py-2 text-right">Preço médio</th>
                           <th className="px-4 py-2 text-right">Valor</th>
-                          <th className="px-4 py-2 text-right">P&amp;L</th>
+                          <th className="px-4 py-2 text-right">P&amp;L actual</th>
+                          <th className="px-4 py-2 text-right">Alvo</th>
+                          <th className="px-4 py-2 text-right">P&amp;L alvo</th>
                           <th className="px-4 py-2 text-right">Peso</th>
                         </tr>
                       </thead>
@@ -329,6 +331,22 @@ export function PortfolioPage() {
                                     ticker.unrealized_pnl ?? 0
                                   ).toLocaleString(undefined, { maximumFractionDigits: 2 })} (${(
                                     ticker.unrealized_pnl_pct ?? 0
+                                  ).toFixed(2)}%)`
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-2 text-right text-slate-300">
+                              {ticker.target_price ? ticker.target_price.toFixed(2) : "—"}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-right ${
+                                (ticker.target_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                              }`}
+                            >
+                              {ticker.target_price && ticker.avg_price
+                                ? `${(ticker.target_pnl ?? 0) >= 0 ? "+" : ""}${(
+                                    ticker.target_pnl ?? 0
+                                  ).toLocaleString(undefined, { maximumFractionDigits: 2 })} (${(
+                                    ticker.target_pnl_pct ?? 0
                                   ).toFixed(2)}%)`
                                 : "—"}
                             </td>

@@ -40,6 +40,9 @@ export type PortfolioTicker = {
   cost_basis?: number;
   unrealized_pnl?: number;
   unrealized_pnl_pct?: number;
+  target_price?: number;
+  target_pnl?: number;
+  target_pnl_pct?: number;
   weight?: number;
   error?: string;
 };
