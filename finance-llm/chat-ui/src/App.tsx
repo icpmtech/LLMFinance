@@ -117,6 +117,7 @@ import { PortfolioResiliencePage } from "./pages/PortfolioResiliencePage";
 import { PortfolioAttributionPage } from "./pages/PortfolioAttributionPage";
 import { PortfolioRiskPage } from "./pages/PortfolioRiskPage";
 import { PortfolioManagePage } from "./pages/PortfolioManagePage";
+import { TradingScenariosPage } from "./pages/TradingScenariosPage";
 import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
@@ -264,6 +265,7 @@ type AppView =
   | "portfolio-attribution"
   | "portfolio-risk"
   | "portfolio-manage"
+  | "trading-scenarios"
   | "vortal"
   | "osint"
   | "reports"
@@ -395,6 +397,7 @@ function pathForView(
   if (view === "compare") return "/compare";
   if (view === "forecast") return "/forecast";
   if (view === "trading") return "/trading";
+  if (view === "trading-scenarios") return "/trading-scenarios";
   if (view === "tickers" || view === "ticker-detail") return ticker ? `/tickers/${ticker}` : "/tickers";
   if (view === "ticker-chart") return ticker ? `/tickers/${ticker}/grafico` : "/grafico";
   if (view === "rag") return "/rag";
@@ -527,6 +530,7 @@ function pathForView(
   if (view === "portfolio-attribution") return "/portfolio/attribution";
   if (view === "portfolio-risk") return "/portfolio/risk";
   if (view === "portfolio-manage") return "/portfolio/manage";
+  if (view === "trading-scenarios") return "/trading-scenarios";
   if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -745,6 +749,7 @@ export default function App() {
     if (path === "/compare") return "compare";
     if (path === "/forecast") return "forecast";
     if (path === "/trading") return "trading";
+    if (path === "/trading-scenarios") return "trading-scenarios";
     if (path === "/tickers") return "tickers";
     if (path === "/portfolio") return "portfolio";
     if (path === "/portfolio/reporting") return "portfolio-reporting";
@@ -827,6 +832,7 @@ export default function App() {
     if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) return "portfolio-attribution";
     if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) return "portfolio-risk";
     if (path === "/portfolio/manage" || path.startsWith("/portfolio/manage/")) return "portfolio-manage";
+    if (path === "/trading-scenarios" || path.startsWith("/trading-scenarios/")) return "trading-scenarios";
     if (path === "/portfolio" || path.startsWith("/portfolio/")) return "portfolio";
     // Peças do procedimento (Vortal): recolha para disco + índice Elasticsearch.
     if (path === "/vortal" || path.startsWith("/vortal/")) return "vortal";
@@ -966,6 +972,7 @@ export default function App() {
       else if (path === "/analise") next = "analise";
       else if (path === "/forecast") next = "forecast";
       else if (path === "/trading") next = "trading";
+      else if (path === "/trading-scenarios") next = "trading-scenarios";
       else if (path === "/tickers") next = "tickers";
       else if (path === "/grafico" || path === "/chart") next = "ticker-chart";
       else if (path.startsWith("/tickers/")) {
@@ -1001,6 +1008,7 @@ export default function App() {
       else if (path === "/portfolio/attribution" || path.startsWith("/portfolio/attribution/")) next = "portfolio-attribution";
       else if (path === "/portfolio/risk" || path.startsWith("/portfolio/risk/")) next = "portfolio-risk";
       else if (path === "/portfolio/manage" || path.startsWith("/portfolio/manage/")) next = "portfolio-manage";
+      else if (path === "/trading-scenarios" || path.startsWith("/trading-scenarios/")) next = "trading-scenarios";
       else if (path === "/portfolio" || path.startsWith("/portfolio/")) next = "portfolio";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
@@ -1941,6 +1949,7 @@ export default function App() {
     if (target === "portfolio-attribution") return <PortfolioAttributionPage />;
     if (target === "portfolio-risk") return <PortfolioRiskPage />;
     if (target === "portfolio-manage") return <PortfolioManagePage />;
+    if (target === "trading-scenarios") return <TradingScenariosPage />;
     // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
     if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;

@@ -172,6 +172,7 @@ export const APP_MODULES: AppModule[] = [
       "ticker-chart",
       "forecast",
       "trading",
+      "trading-scenarios",
     ],
   },
   {

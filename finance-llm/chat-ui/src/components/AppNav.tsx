@@ -65,6 +65,7 @@ export type AppView =
   | "portfolio-attribution"
   | "portfolio-risk"
   | "portfolio-manage"
+  | "trading-scenarios"
   | "rag"
   | "elastic"
   | "search"
@@ -232,6 +233,7 @@ const APP_MATCH: Record<string, AppView[]> = {
     "portfolio-resilience",
     "portfolio-attribution",
     "portfolio-risk",
+    "trading-scenarios",
   ],
   "contracts-search": ["contracts", "contracts-list"],
   "contracts-dashboard": ["companies-dashboard"],
