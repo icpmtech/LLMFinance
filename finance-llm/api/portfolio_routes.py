@@ -147,6 +147,28 @@ def portfolio_summary(
     )
 
 
+@router.post("/timeseries", summary="Séries normalizadas e métricas de risco para gráficos")
+def portfolio_timeseries(
+    session: Session,
+    body: PortfolioRequest = Body(default_factory=PortfolioRequest),
+) -> Dict[str, Any]:
+    """Todos os ativos do escopo num só pedido (performance + risco)."""
+    resolved = _resolve_scope(
+        tickers=body.tickers,
+        weights=body.weights,
+        portfolio_id=body.portfolio_id,
+        watchlist_id=body.watchlist_id,
+        session=session,
+    )
+    return _with_scope(
+        portfolio_service.portfolio_timeseries(
+            tickers=resolved["tickers"],
+            weights=resolved["weights"],
+        ),
+        resolved["meta"],
+    )
+
+
 @router.post("/reporting", summary="Dados agregados para relatórios de carteira")
 def portfolio_reporting(
     session: Session,

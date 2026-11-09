@@ -87,6 +87,57 @@ export type PortfolioScopeMeta = {
   cash?: number;
 };
 
+export type PortfolioTimeseriesSerie = {
+  ticker: string;
+  values: (number | null)[];
+  return_pct: number;
+  volatility_pct: number;
+  max_drawdown_pct: number;
+  weight: number;
+  drawdown: (number | null)[];
+};
+
+export type PortfolioTimeseriesResponse = {
+  error?: string;
+  period: string;
+  interval: string;
+  tickers: string[];
+  dates: string[];
+  series: PortfolioTimeseriesSerie[];
+  portfolio: {
+    values: (number | null)[];
+    return_pct: number;
+    volatility_pct: number;
+    max_drawdown_pct: number;
+    drawdown: (number | null)[];
+  };
+  rolling_volatility: {
+    window: number;
+    portfolio: (number | null)[];
+    by_ticker: Record<string, (number | null)[]>;
+  };
+  correlation: { tickers: string[]; matrix: number[][] };
+  histogram: {
+    left: number[];
+    right: number[];
+    center: number[];
+    counts: number[];
+    mean_pct: number;
+    std_pct: number;
+  };
+  contribution: { ticker: string; weight: number; return_pct: number; contribution_pct: number }[];
+  stats: {
+    positive_days_pct: number;
+    var_95_pct: number;
+    cvar_95_pct: number;
+    best_day: { date: string; pct: number };
+    worst_day: { date: string; pct: number };
+    observations: number;
+  };
+  scope?: PortfolioScopeMeta;
+  as_of: string;
+};
+
 export type PortfolioAttributionSector = {
   sector: string;
   portfolio_weight: number;
@@ -268,6 +319,11 @@ export async function getPortfolioMeta(): Promise<PortfolioMetaResponse> {
 
 export async function getPortfolioSummary(req?: PortfolioRequest): Promise<PortfolioSummaryResponse> {
   return ensureOk(await postJson<PortfolioSummaryResponse>("/portfolio/summary", req ?? {}));
+}
+
+/** Séries de todos os ativos + métricas de risco (gráficos do dashboard). */
+export async function getPortfolioTimeseries(req?: PortfolioRequest): Promise<PortfolioTimeseriesResponse> {
+  return ensureOk(await postJson<PortfolioTimeseriesResponse>("/portfolio/timeseries", req ?? {}));
 }
 
 export async function getPortfolioReporting(req?: PortfolioRequest): Promise<PortfolioReportingResponse> {

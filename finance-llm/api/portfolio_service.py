@@ -458,6 +458,220 @@ def aligned_history(
 
 
 # ---------------------------------------------------------------------------
+# Séries temporais + métricas de performance e risco (gráficos do dashboard)
+# ---------------------------------------------------------------------------
+def _fetch_histories_parallel(
+    tickers: Sequence[str], period: str, interval: str, max_workers: int = 8
+) -> Dict[str, pd.DataFrame]:
+    """Históricos em paralelo: uma carteira de 15 tickers não paga 15 idas ao Yahoo."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _one(ticker: str) -> Tuple[str, pd.DataFrame]:
+        try:
+            return ticker, _fetch_history(ticker, period=period, interval=interval)
+        except Exception as exc:  # pragma: no cover - depende da rede
+            logger.debug("Histórico indisponível para %s: %s", ticker, exc)
+            return ticker, pd.DataFrame()
+
+    frames: Dict[str, pd.DataFrame] = {}
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(tickers) or 1))) as pool:
+        for ticker, frame in pool.map(_one, list(tickers)):
+            frames[ticker] = frame
+    return frames
+
+
+def _json_series(series: pd.Series, digits: int = 4) -> List[Optional[float]]:
+    """Série pandas → lista JSON (NaN vira `None`, senão o `json` rebenta)."""
+    out: List[Optional[float]] = []
+    for value in series.tolist():
+        number = _safe_float(value)
+        out.append(round(number, digits) if number is not None else None)
+    return out
+
+
+def _drawdown_series(series: pd.Series) -> pd.Series:
+    peak = series.cummax()
+    return (series / peak - 1.0) * 100.0
+
+
+def portfolio_timeseries(
+    tickers: Optional[List[str]] = None,
+    weights: Optional[List[float]] = None,
+    period: str = "1y",
+    interval: str = "1d",
+    rolling_window: int = 30,
+) -> Dict[str, Any]:
+    """Séries normalizadas de todos os ativos + métricas de risco, num só pedido.
+
+    Alimenta os gráficos do dashboard: performance normalizada (base 100), curva
+    da carteira, drawdown, volatilidade móvel, correlação, histograma de retornos
+    diários e contribuição de cada ativo para o retorno do período.
+    """
+    ordered = [str(t).strip().upper() for t in (tickers or []) if str(t).strip()]
+    if not ordered:
+        return {"error": "Sem tickers no escopo."}
+
+    frames = _fetch_histories_parallel(ordered, period=period, interval=interval)
+
+    closes: Dict[str, pd.Series] = {}
+    for ticker in ordered:
+        frame = frames.get(ticker)
+        if frame is None or frame.empty or "Close" not in frame.columns or "Date" not in frame.columns:
+            continue
+        series = frame.set_index("Date")["Close"].astype(float).dropna()
+        if len(series) <= 1:
+            continue
+        # Fusos diferentes (NYSE em -04:00, Euronext em +02:00) não podem
+        # conviver num só índice: normaliza-se para a data UTC sem fuso.
+        index = pd.to_datetime(series.index)
+        if index.tz is not None:
+            index = index.tz_convert("UTC").tz_localize(None)
+        series.index = index.normalize()
+        series = series[~series.index.duplicated(keep="last")].sort_index()
+        closes[ticker] = series
+
+    if not closes:
+        return {"error": "Dados históricos insuficientes para os ativos do escopo."}
+
+    # Alinhamento tolerante: mercados diferentes têm feriados diferentes, por isso
+    # uma interseção exata das datas deixava poucos pontos (ou nenhum). Cada série
+    # é reindexada ao calendário união e os buracos de feriado são preenchidos com
+    # a última cotação conhecida; a normalização parte do primeiro preço de cada
+    # ativo, pelo que ativos com histórico mais curto não arrastam os restantes.
+    calendar = sorted({ts for series in closes.values() for ts in series.index})
+    price_frame = pd.DataFrame(index=pd.DatetimeIndex(calendar))
+    for ticker, series in closes.items():
+        price_frame[ticker] = series.reindex(price_frame.index).ffill()
+
+    price_frame = price_frame.dropna(how="all")
+    # Só ficam colunas que tenham pelo menos 5 cotações depois do alinhamento.
+    price_frame = price_frame.loc[:, price_frame.notna().sum() >= 5]
+    if price_frame.empty or len(price_frame) < 5:
+        return {"error": "Dados históricos insuficientes para calcular as métricas."}
+
+    valid = [str(col) for col in price_frame.columns]
+    # Preços de referência: primeiro valor válido de cada ativo (não o da linha 0,
+    # que pode ser NaN quando o ativo começou mais tarde).
+    reference = price_frame.apply(lambda column: column.dropna().iloc[0])
+    normalized = price_frame.div(reference) * 100.0
+    normalized = normalized.ffill()
+    dates = [pd.Timestamp(index).strftime("%Y-%m-%d") for index in normalized.index]
+
+    # Pesos: os do escopo (posições reais) ou partes iguais entre os tickers válidos.
+    weight_by_ticker: Dict[str, float] = {}
+    if weights and len(weights) == len(ordered):
+        weight_by_ticker = {
+            ticker: float(weight or 0.0) for ticker, weight in zip(ordered, weights)
+        }
+    raw = np.array([max(weight_by_ticker.get(ticker, 0.0), 0.0) for ticker in valid], dtype=float)
+    if raw.sum() <= 0:
+        raw = np.ones(len(valid), dtype=float)
+    w = raw / raw.sum()
+
+    daily_returns = price_frame[valid].pct_change().fillna(0.0)
+    portfolio_returns = daily_returns.mul(w, axis=1).sum(axis=1)
+    portfolio_curve = (1.0 + portfolio_returns).cumprod() * 100.0
+
+    portfolio_dd = _drawdown_series(portfolio_curve)
+    rolling = daily_returns.rolling(window=rolling_window).std() * math.sqrt(252) * 100.0
+    portfolio_rolling = portfolio_returns.rolling(window=rolling_window).std() * math.sqrt(252) * 100.0
+
+    daily_pct = (portfolio_returns * 100.0).dropna()
+    mean_daily = float(daily_pct.mean()) if not daily_pct.empty else 0.0
+    std_daily = float(daily_pct.std(ddof=1)) if len(daily_pct) > 1 else 0.0
+    var_95 = float(np.percentile(daily_pct, 5)) if not daily_pct.empty else 0.0
+    tail = daily_pct[daily_pct <= var_95]
+    cvar_95 = float(tail.mean()) if not tail.empty else var_95
+
+    counts, edges = np.histogram(daily_pct, bins=24) if not daily_pct.empty else (np.array([]), np.array([]))
+    histogram = {
+        "left": [round(float(edge), 4) for edge in edges[:-1]],
+        "right": [round(float(edge), 4) for edge in edges[1:]],
+        "counts": [int(c) for c in counts],
+        "center": [round(float((edges[i] + edges[i + 1]) / 2), 4) for i in range(len(edges) - 1)],
+        "mean_pct": round(mean_daily, 4),
+        "std_pct": round(std_daily, 4),
+    }
+
+    corr = daily_returns.corr().fillna(0.0)
+
+    contributions = []
+    for index, ticker in enumerate(valid):
+        total_return = float(normalized[ticker].iloc[-1]) - 100.0
+        contributions.append(
+            {
+                "ticker": ticker,
+                "weight": round(float(w[index]), 6),
+                "return_pct": round(total_return, 4),
+                "contribution_pct": round(float(w[index]) * total_return, 4),
+            }
+        )
+    contributions.sort(key=lambda item: item["contribution_pct"], reverse=True)
+
+    series_payload = []
+    for index, ticker in enumerate(valid):
+        asset_returns = daily_returns[ticker]
+        volatility = float(asset_returns.std(ddof=1) * math.sqrt(252) * 100.0) if len(asset_returns) > 1 else 0.0
+        asset_dd = _drawdown_series(normalized[ticker])
+        series_payload.append(
+            {
+                "ticker": ticker,
+                "values": _json_series(normalized[ticker]),
+                "return_pct": round(float(normalized[ticker].iloc[-1]) - 100.0, 4),
+                "volatility_pct": round(volatility, 4),
+                "max_drawdown_pct": round(float(asset_dd.min()), 4),
+                "weight": round(float(w[index]), 6),
+                "drawdown": _json_series(asset_dd),
+            }
+        )
+
+    portfolio_volatility = (
+        float(portfolio_returns.std(ddof=1) * math.sqrt(252) * 100.0) if len(portfolio_returns) > 1 else 0.0
+    )
+
+    return {
+        "period": period,
+        "interval": interval,
+        "tickers": valid,
+        "dates": dates,
+        "series": series_payload,
+        "portfolio": {
+            "values": _json_series(portfolio_curve),
+            "return_pct": round(float(portfolio_curve.iloc[-1]) - 100.0, 4),
+            "volatility_pct": round(portfolio_volatility, 4),
+            "max_drawdown_pct": round(float(portfolio_dd.min()), 4),
+            "drawdown": _json_series(portfolio_dd),
+        },
+        "rolling_volatility": {
+            "window": rolling_window,
+            "portfolio": _json_series(portfolio_rolling),
+            "by_ticker": {ticker: _json_series(rolling[ticker]) for ticker in valid},
+        },
+        "correlation": {
+            "tickers": valid,
+            "matrix": [[round(float(corr.loc[a, b]), 4) for b in valid] for a in valid],
+        },
+        "histogram": histogram,
+        "contribution": contributions,
+        "stats": {
+            "positive_days_pct": round(float((daily_pct > 0).mean() * 100.0), 2) if not daily_pct.empty else 0.0,
+            "var_95_pct": round(var_95, 4),
+            "cvar_95_pct": round(cvar_95, 4),
+            "best_day": {
+                "date": str(daily_pct.idxmax().date()) if not daily_pct.empty else "",
+                "pct": round(float(daily_pct.max()), 4) if not daily_pct.empty else 0.0,
+            },
+            "worst_day": {
+                "date": str(daily_pct.idxmin().date()) if not daily_pct.empty else "",
+                "pct": round(float(daily_pct.min()), 4) if not daily_pct.empty else 0.0,
+            },
+            "observations": int(len(daily_pct)),
+        },
+        "as_of": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Sumário de portfólio
 # ---------------------------------------------------------------------------
 def portfolio_summary(

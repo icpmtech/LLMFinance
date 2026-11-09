@@ -16,12 +16,20 @@ import {
 } from "lucide-react";
 import {
   getPortfolioSummary,
-  getPortfolioTickerHistory,
+  getPortfolioTimeseries,
   type PortfolioSummaryResponse,
-  type TickerHistoryResponse,
+  type PortfolioTimeseriesResponse,
 } from "../portfolioApi";
 import { usePortfolioScope, withPortfolioScope } from "../portfolioScope";
 import { PortfolioChart } from "../components/portfolio/PortfolioChart";
+import {
+  PortfolioContributionChart,
+  PortfolioCorrelationHeatmap,
+  PortfolioDrawdownChart,
+  PortfolioPerformanceChart,
+  PortfolioReturnsHistogram,
+  PortfolioRollingVolatilityChart,
+} from "../components/portfolio/PortfolioAnalysisCharts";
 import { PortfolioTickerCard } from "../components/portfolio/PortfolioTickerCard";
 import { PortfolioNewsStrip } from "../components/portfolio/PortfolioNewsStrip";
 import { PortfolioLoading } from "../components/portfolio/PortfolioLoading";
@@ -46,7 +54,7 @@ const SECTIONS = [
 export function PortfolioPage() {
   const scope = usePortfolioScope();
   const [data, setData] = useState<PortfolioSummaryResponse | null>(null);
-  const [history, setHistory] = useState<Record<string, TickerHistoryResponse>>({});
+  const [timeseries, setTimeseries] = useState<PortfolioTimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -64,25 +72,22 @@ export function PortfolioPage() {
       if (scope.loading) return;
       if (!portfolioId) {
         setData(null);
+        setTimeseries(null);
         setLoading(false);
         return;
       }
       if (!silent) setLoading(true);
       setError(null);
       try {
-        const summary = await getPortfolioSummary({ portfolio_id: portfolioId });
+        // Um pedido devolve as séries de **todos** os ativos e as métricas de
+        // risco; o sumário traz cotações, posições e notícias.
+        const [summary, series] = await Promise.all([
+          getPortfolioSummary({ portfolio_id: portfolioId }),
+          getPortfolioTimeseries({ portfolio_id: portfolioId }).catch(() => null),
+        ]);
         setData(summary);
+        setTimeseries(series && !series.error ? series : null);
         setUpdatedAt(new Date());
-        const histories: Record<string, TickerHistoryResponse> = {};
-        for (const ticker of summary.tickers.slice(0, 5)) {
-          if (ticker.error) continue;
-          try {
-            histories[ticker.ticker] = await getPortfolioTickerHistory(ticker.ticker, "1y", "1d");
-          } catch {
-            // ignorar falhas individuais de histórico
-          }
-        }
-        setHistory(histories);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar portfólio");
       } finally {
@@ -113,10 +118,6 @@ export function PortfolioPage() {
   const sectors = useMemo(
     () => new Set((data?.tickers ?? []).map((t) => t.sector).filter(Boolean)).size,
     [data],
-  );
-  const selectedTicker = useMemo(
-    () => data?.tickers.find((t) => t.ticker === selected) || data?.tickers[0],
-    [data, selected],
   );
   const watchlists = useMemo(
     () => scope.watchlists.filter((list) => list.items.length > 0),
@@ -266,19 +267,21 @@ export function PortfolioPage() {
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-6">
-                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                      Performance normalizada (base 100)
-                    </h2>
-                    {selectedTicker && (
-                      <span className="text-xs text-slate-500">
-                        Destaque: {selectedTicker.ticker} · {selectedTicker.name}
-                      </span>
-                    )}
+                {timeseries ? (
+                  <PortfolioPerformanceChart data={timeseries} />
+                ) : (
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                        Performance normalizada (base 100)
+                      </h2>
+                    </div>
+                    <PortfolioChart history={{}} selected={selected} />
+                    <p className="mt-2 text-xs text-slate-500">
+                      Ainda a recolher o histórico de todos os ativos…
+                    </p>
                   </div>
-                  <PortfolioChart history={history} selected={selected} />
-                </div>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {data.tickers.map((ticker, index) => (
@@ -358,6 +361,18 @@ export function PortfolioPage() {
                       </tbody>
                     </table>
                   </div>
+                ) : null}
+
+                {timeseries ? (
+                  <>
+                    <PortfolioDrawdownChart data={timeseries} />
+                    <PortfolioRollingVolatilityChart data={timeseries} />
+                    <PortfolioContributionChart data={timeseries} />
+                    <div className="grid gap-6 xl:grid-cols-2">
+                      <PortfolioReturnsHistogram data={timeseries} />
+                      <PortfolioCorrelationHeatmap data={timeseries} />
+                    </div>
+                  </>
                 ) : null}
 
                 {watchlists.length > 0 ? (
