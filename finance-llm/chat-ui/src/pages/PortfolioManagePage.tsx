@@ -11,6 +11,9 @@ import {
   Wallet,
   AlertTriangle,
   Upload,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import {
   addPortfolioTicker,
@@ -27,6 +30,7 @@ import {
   placeOrder,
   removePortfolioTicker,
   removeWatchlistItem,
+  updatePortfolioTicker,
   type SavedOrder,
   type SavedPortfolio,
   type SavedWatchlist,
@@ -201,6 +205,9 @@ export function PortfolioManagePage() {
                     `${item.ticker} adicionado.`,
                   )
                 }
+                onUpdateTicker={(portfolioId, ticker, fields) =>
+                  run(() => updatePortfolioTicker(portfolioId, ticker, fields), `${ticker} actualizado.`)
+                }
                 onRemoveTicker={(portfolioId, ticker) =>
                   run(() => removePortfolioTicker(portfolioId, ticker), `${ticker} removido.`)
                 }
@@ -251,6 +258,7 @@ type CarteirasTabProps = {
   onCreate: (name: string, cash: number, currency: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAddTicker: (portfolioId: string, item: TickerSearchItem, quantity: number, avgPrice: number) => Promise<void>;
+  onUpdateTicker: (portfolioId: string, ticker: string, fields: Partial<SavedPortfolio["tickers"][number]>) => Promise<void>;
   onRemoveTicker: (portfolioId: string, ticker: string) => Promise<void>;
   onImportCsv?: (file: File) => void;
 };
@@ -263,6 +271,7 @@ function CarteirasTab({
   onCreate,
   onDelete,
   onAddTicker,
+  onUpdateTicker,
   onRemoveTicker,
   onImportCsv,
 }: CarteirasTabProps) {
@@ -425,30 +434,13 @@ function CarteirasTab({
                     </tr>
                   )}
                   {active.tickers.map((position) => (
-                    <tr key={position.ticker}>
-                      <td className="px-4 py-2 font-medium text-slate-100">{position.ticker}</td>
-                      <td className="px-4 py-2 text-slate-400">{position.name}</td>
-                      <td className="px-4 py-2 text-right text-slate-300">{position.quantity}</td>
-                      <td className="px-4 py-2 text-right text-slate-300">
-                        {position.avg_price ? position.avg_price.toFixed(2) : "—"}
-                      </td>
-                      <td className="px-4 py-2 text-right text-slate-300">
-                        {position.avg_price && position.quantity
-                          ? (position.avg_price * position.quantity).toLocaleString(undefined, {
-                              maximumFractionDigits: 2,
-                            })
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <button
-                          onClick={() => void onRemoveTicker(active.id, position.ticker)}
-                          className="text-slate-600 hover:text-rose-400"
-                          aria-label={`Remover ${position.ticker}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
+                    <PositionRow
+                      key={position.ticker}
+                      position={position}
+                      busy={busy}
+                      onUpdate={(fields) => onUpdateTicker(active.id, position.ticker, fields)}
+                      onRemove={() => onRemoveTicker(active.id, position.ticker)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -908,6 +900,124 @@ function parseFloatLocale(value: string | undefined): number | undefined {
   const normalized = value.trim().replace(/\./g, "").replace(",", ".");
   const n = Number(normalized);
   return Number.isFinite(n) ? n : undefined;
+}
+
+type PortfolioPosition = SavedPortfolio["tickers"][number];
+
+function PositionRow({
+  position,
+  busy,
+  onUpdate,
+  onRemove,
+}: {
+  position: PortfolioPosition;
+  busy: boolean;
+  onUpdate: (fields: Partial<PortfolioPosition>) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(position.name);
+  const [quantity, setQuantity] = useState(position.quantity);
+  const [avgPrice, setAvgPrice] = useState(position.avg_price);
+  const [targetPrice] = useState(position.target_price);
+  const [note] = useState(position.note);
+
+  const save = () => {
+    setEditing(false);
+    onUpdate({
+      name: name.trim() || position.ticker,
+      quantity: Number(quantity) || 0,
+      avg_price: Number(avgPrice) || 0,
+      target_price: Number(targetPrice) || 0,
+      note: note.trim(),
+    });
+  };
+
+  return editing ? (
+    <tr className="bg-slate-900/80">
+      <td className="px-4 py-2 font-medium text-slate-100 align-top">{position.ticker}</td>
+      <td className="px-4 py-2 align-top">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-200"
+        />
+      </td>
+      <td className="px-4 py-2 align-top">
+        <input
+          type="number"
+          value={quantity}
+          onChange={(e) => setQuantity(Number(e.target.value))}
+          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-sm text-slate-200"
+        />
+      </td>
+      <td className="px-4 py-2 align-top">
+        <input
+          type="number"
+          value={avgPrice}
+          onChange={(e) => setAvgPrice(Number(e.target.value))}
+          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-sm text-slate-200"
+        />
+      </td>
+      <td className="px-4 py-2 text-right text-slate-300 align-top">
+        {avgPrice && quantity ? (avgPrice * quantity).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}
+      </td>
+      <td className="px-4 py-2 text-right align-top">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => void save()}
+            disabled={busy}
+            className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+            aria-label={`Guardar ${position.ticker}`}
+          >
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            disabled={busy}
+            className="text-slate-500 hover:text-slate-400"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ) : (
+    <tr className="group">
+      <td className="px-4 py-2 font-medium text-slate-100">{position.ticker}</td>
+      <td className="px-4 py-2 text-slate-400">
+        {position.name}
+        {position.note ? <span className="ml-1 text-[10px] text-slate-600">({position.note})</span> : null}
+      </td>
+      <td className="px-4 py-2 text-right text-slate-300">{position.quantity}</td>
+      <td className="px-4 py-2 text-right text-slate-300">
+        {position.avg_price ? position.avg_price.toFixed(2) : "—"}
+      </td>
+      <td className="px-4 py-2 text-right text-slate-300">
+        {position.avg_price && position.quantity
+          ? (position.avg_price * position.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })
+          : "—"}
+      </td>
+      <td className="px-4 py-2 text-right">
+        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition">
+          <button
+            onClick={() => setEditing(true)}
+            className="text-slate-500 hover:text-slate-300"
+            aria-label={`Editar ${position.ticker}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => void onRemove()}
+            className="text-slate-600 hover:text-rose-400"
+            aria-label={`Remover ${position.ticker}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
 function CsvImportCard({ busy, onImport }: { busy: boolean; onImport: (file: File) => void }) {

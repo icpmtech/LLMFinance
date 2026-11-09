@@ -358,6 +358,49 @@ def add_ticker(
     return _portfolio_public({**doc, "id": portfolio_id})
 
 
+def update_ticker(
+    user_id: str,
+    portfolio_id: str,
+    ticker: str,
+    name: Optional[str] = None,
+    weight: Optional[float] = None,
+    quantity: Optional[float] = None,
+    avg_price: Optional[float] = None,
+    target_price: Optional[float] = None,
+    note: Optional[str] = None,
+) -> Dict[str, Any]:
+    client = ensure_user_index(user_id)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    index = user_index(user_id)
+    doc = _get(client, index, portfolio_id)
+    if not doc or doc.get("kind") != "portfolio":
+        return {"error": "Carteira não encontrada", "status": 404}
+
+    code = str(ticker or "").strip().upper()
+    positions = doc.get("tickers") or []
+    position = next((p for p in positions if p.get("ticker") == code), None)
+    if position is None:
+        return {"error": "Ticker não existe na carteira", "status": 404}
+
+    if name is not None:
+        position["name"] = name or code
+    if weight is not None:
+        position["weight"] = float(weight)
+    if quantity is not None:
+        position["quantity"] = float(quantity)
+    if avg_price is not None:
+        position["avg_price"] = float(avg_price)
+    if target_price is not None:
+        position["target_price"] = float(target_price)
+    if note is not None:
+        position["note"] = note
+    doc["updated_at"] = _now()
+    doc.pop("id", None)
+    _save(client, index, portfolio_id, doc)
+    return _portfolio_public({**doc, "id": portfolio_id})
+
+
 def remove_ticker(user_id: str, portfolio_id: str, ticker: str) -> Dict[str, Any]:
     client = ensure_user_index(user_id)
     if not client:

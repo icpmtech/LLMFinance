@@ -432,6 +432,21 @@ export async function addPortfolioTicker(
   return sendJson("POST", `/portfolio/portfolios/${encodeURIComponent(portfolioId)}/tickers`, body);
 }
 
+export async function updatePortfolioTicker(
+  portfolioId: string,
+  ticker: string,
+  body: {
+    name?: string;
+    weight?: number;
+    quantity?: number;
+    avg_price?: number;
+    target_price?: number;
+    note?: string;
+  },
+): Promise<SavedPortfolio> {
+  return sendJson("PATCH", `/portfolio/portfolios/${encodeURIComponent(portfolioId)}/tickers/${encodeURIComponent(ticker)}`, body);
+}
+
 export async function removePortfolioTicker(portfolioId: string, ticker: string): Promise<SavedPortfolio> {
   return sendJson(
     "DELETE",

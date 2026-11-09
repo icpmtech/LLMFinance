@@ -62,6 +62,15 @@ class AddTickerIn(BaseModel):
     fill_price: bool = Field(False, description="Preencher avg_price com a cotação actual quando não indicado.")
 
 
+class UpdateTickerIn(BaseModel):
+    name: Optional[str] = None
+    weight: Optional[float] = None
+    quantity: Optional[float] = None
+    avg_price: Optional[float] = None
+    target_price: Optional[float] = None
+    note: Optional[str] = None
+
+
 class CsvRowIn(BaseModel):
     symbol: str
     side: Optional[str] = Field(None, description="buy | sell | deposit")
@@ -195,10 +204,27 @@ def _parse_csv_date(value: Optional[str], future_as_today: bool = True) -> Optio
     return None
 
 
-def _import_csv_positions(rows: List[CsvRowIn], deposit_cash: bool, future_as_today: bool) -> Dict[str, Any]:
+def _import_csv_positions(rows: List[CsvRowIn], deposit_cash: bool, future_as_today: bool, fill_missing_price: bool = True) -> Dict[str, Any]:
     positions: Dict[str, Dict[str, Any]] = {}
     cash = 0.0
     skipped: List[Dict[str, Any]] = []
+    # Cache local de cotações para não bater no Yahoo a cada linha.
+    price_cache: Dict[str, float] = {}
+
+    def _row_price(symbol: str, explicit: Optional[float]) -> Optional[float]:
+        price = float(explicit or 0.0)
+        if price > 0:
+            return price
+        if not fill_missing_price:
+            return None
+        if symbol not in price_cache:
+            try:
+                price_cache[symbol] = _live_price(symbol)
+            except Exception:
+                price_cache[symbol] = 0.0
+        cached = price_cache.get(symbol, 0.0)
+        return cached if cached > 0 else None
+
     # Ordenar por data para que BUYs acumulem antes dos SELLs correspondentes.
     sorted_rows = sorted(rows, key=lambda r: (_parse_csv_date(r.date or "", future_as_today) or "", r.symbol or ""))
     for idx, row in enumerate(sorted_rows, start=1):
@@ -210,13 +236,13 @@ def _import_csv_positions(rows: List[CsvRowIn], deposit_cash: bool, future_as_to
             continue
         side = str(row.side or "").strip().lower() or ("buy" if row.quantity else "")
         qty = float(row.quantity or 0.0)
-        price = float(row.price or 0.0)
+        price = _row_price(symbol, row.price)
         fees = float(row.fees or 0.0)
         if side not in {"buy", "sell"}:
             if side:
                 skipped.append({"row": idx, "symbol": symbol, "reason": f"tipo desconhecido: {side}"})
             continue
-        if qty <= 0 or price <= 0:
+        if qty <= 0 or price is None or price <= 0:
             skipped.append({"row": idx, "symbol": symbol, "reason": "quantidade/preço inválidos"})
             continue
         added_at = _parse_csv_date(row.date, future_as_today) or portfolio_store._now()
@@ -259,7 +285,12 @@ def _import_csv_positions(rows: List[CsvRowIn], deposit_cash: bool, future_as_to
 
 @router.post("/import-csv", status_code=201, summary="Importar carteira a partir de CSV")
 def import_portfolio_csv(body: CsvImportIn, session: Session) -> Dict[str, Any]:
-    parsed = _import_csv_positions(body.rows, deposit_cash=body.deposit_cash, future_as_today=body.future_dates_as_today)
+    parsed = _import_csv_positions(
+        body.rows,
+        deposit_cash=body.deposit_cash,
+        future_as_today=body.future_dates_as_today,
+        fill_missing_price=True,
+    )
     if not parsed["positions"] and parsed["cash"] <= 0:
         raise HTTPException(status_code=422, detail="O CSV não continha posições nem depósitos válidos.")
     result = portfolio_store.create_portfolio(
@@ -316,6 +347,18 @@ def add_ticker(portfolio_id: str, body: AddTickerIn, session: Session) -> Dict[s
             name=name or "",
             target_price=body.target_price,
             note=body.note,
+        )
+    )
+
+
+@router.patch("/portfolios/{portfolio_id}/tickers/{ticker}", summary="Editar posição de uma carteira")
+def update_ticker(portfolio_id: str, ticker: str, body: UpdateTickerIn, session: Session) -> Dict[str, Any]:
+    return _raise_if_error(
+        portfolio_store.update_ticker(
+            _owner(session),
+            portfolio_id,
+            ticker=ticker,
+            **{k: v for k, v in body.model_dump().items() if v is not None},
         )
     )
 
