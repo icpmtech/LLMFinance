@@ -1901,6 +1901,11 @@ def _layout(
             else "<script>if(\"serviceWorker\" in navigator){window.addEventListener(\"load\","
             "function(){navigator.serviceWorker.register(\"" + SW_PATH + "\")"
             ".catch(function(){});});}</script>"
+            '<script>if("serviceWorker" in navigator){window.addEventListener("load",'
+            'function(){navigator.serviceWorker.register("/site/monetag/sw.js",'
+            '{scope:"/site/monetag/",updateViaCache:"none"})'
+            '.catch(function(error){console.error("Monetag worker registration failed",error);});'
+            '});}</script>'
         )
         # Media em falta no disco não pode deixar uma caixa vazia (ou o ícone de
         # imagem quebrada) no meio da página: a imagem sai e, quando não sobra

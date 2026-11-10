@@ -16,6 +16,18 @@ e responde com base no conhecimento indexado.
 
 ## Estrutura
 
+### Monetag no site publico
+
+O worker fornecido para a zona `12235494` e servido em `/site/monetag/sw.js`
+e registado apenas nas paginas publicas do CMS, nunca nas pre-visualizacoes.
+O ambito `/site/monetag/` evita substituir `/site/sw.js` ou o `/sw.js` da aplicacao.
+O ficheiro original vive em `api/site_assets/monetag-sw.js` e importa o codigo
+externo de `3nbf4.com`; falhas de registo aparecem na consola do browser.
+Este passo prepara apenas o worker: nao inclui banners, popunders, subscricoes push
+nem pedidos de permissao. A ativacao de publicidade requer o codigo de integracao
+Monetag correspondente, compativel com este caminho e ambito, e o consentimento
+aplicavel. Nao alterar o ambito para `/` ou `/site/`, pois substituiria uma PWA.
+
 ### Previsões de carteira
 
 O painel “Pontos intradiários” tem três modos, com consulta independente da previsão ARIMA:

@@ -1168,6 +1168,19 @@ def site_service_worker() -> Response:
     )
 
 
+@router.get("/site/monetag/sw.js")
+def site_monetag_service_worker() -> Response:
+    """Worker Monetag isolado dos workers offline do site e da plataforma."""
+    return FileResponse(
+        store.SITE_ASSETS_DIR / "monetag-sw.js",
+        media_type="text/javascript",
+        headers={
+            "Cache-Control": "no-cache, must-revalidate",
+            "Service-Worker-Allowed": "/site/monetag/",
+        },
+    )
+
+
 @router.get("/site/pwa/{ficheiro}")
 def site_pwa_icon(ficheiro: str) -> Response:
     """Ícones do PWA (PNG gerados por `scripts/generate_site_pwa_icons.py`).
