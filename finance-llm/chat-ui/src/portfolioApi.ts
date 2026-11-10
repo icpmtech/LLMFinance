@@ -158,8 +158,9 @@ export type PortfolioAttributionResponse = {
   active_return: number;
   currency: string;
   sectors: PortfolioAttributionSector[];
-  top_contributors: { ticker: string; weight: number; return_pct: number; contribution_pct: number; name: string }[];
-  bottom_contributors: { ticker: string; weight: number; return_pct: number; contribution_pct: number; name: string }[];
+  excluded_tickers?: string[];
+  top_contributors: { ticker: string; weight: number; return_pct: number; contribution_pct: number; name: string; sector: string }[];
+  bottom_contributors: { ticker: string; weight: number; return_pct: number; contribution_pct: number; name: string; sector: string }[];
   as_of: string;
 };
 

@@ -792,36 +792,68 @@ def portfolio_attribution(
     tickers, w = _get_tickers_and_weights(tickers, weights)
     rows = enrich_tickers(tickers)
 
-    # Histórico dos últimos 6 meses para retornos.
-    history, valid_tickers = aligned_history(tickers, period="6mo")
-    if history.empty or len(valid_tickers) < 2:
-        return {"error": "Precisa de pelo menos 2 tickers com histórico para calcular attribution.", "tickers": tickers}
+    # Alinha pela data local de negociação: os timestamps de mercados diferentes
+    # têm fusos horários distintos, apesar de representarem o mesmo dia.
+    histories: Dict[str, pd.Series] = {}
+    for ticker in tickers:
+        frame = _fetch_history(ticker, period="6mo")
+        if frame.empty or "Close" not in frame.columns or "Date" not in frame.columns:
+            continue
+        dates = [pd.Timestamp(value).date() for value in frame["Date"]]
+        prices = pd.Series(
+            pd.to_numeric(frame["Close"], errors="coerce").to_numpy(),
+            index=dates,
+            dtype=float,
+        ).dropna()
+        prices = prices[~prices.index.duplicated(keep="last")].sort_index()
+        if len(prices) >= 2:
+            histories[ticker] = prices
 
-    # Retorno de cada ticker no período.
+    common_dates = (
+        sorted(set.intersection(*(set(history.index) for history in histories.values())))
+        if histories
+        else []
+    )
+    valid_tickers = list(histories) if len(common_dates) >= 2 else []
+    if len(valid_tickers) < 2:
+        return {
+            "error": "Precisa de pelo menos 2 tickers com histórico alinhado para calcular attribution.",
+            "tickers": tickers,
+            "excluded_tickers": [ticker for ticker in tickers if ticker not in valid_tickers],
+        }
+
     perf = {}
-    for t in valid_tickers:
-        col = f"{t}_Close"
-        if col in history.columns:
-            start = history[col].iloc[0]
-            end = history[col].iloc[-1]
-            perf[t] = (end / start - 1) if start else 0.0
+    for ticker in valid_tickers:
+        aligned_prices = histories[ticker].reindex(common_dates)
+        start = aligned_prices.iloc[0]
+        end = aligned_prices.iloc[-1]
+        perf[ticker] = (end / start - 1) if start else 0.0
+    excluded_tickers = [ticker for ticker in tickers if ticker not in valid_tickers]
+    weights_by_ticker = dict(
+        zip(valid_tickers, _normalise_weights([w[tickers.index(t)] for t in valid_tickers]))
+    )
 
     # Setores como agrupamento.
     sectors: Dict[str, List[str]] = {}
     info_map = {r["ticker"]: r for r in rows}
+    sector_by_ticker: Dict[str, str] = {}
     for t in valid_tickers:
-        sector = info_map.get(t, {}).get("sector") or "Outros"
+        info = info_map.get(t, {})
+        sector = info.get("sector")
+        if not sector or str(sector).strip().casefold() in {"n/a", "na", "none", "unknown"}:
+            sector = info.get("industry")
+        sector = str(sector).strip() if sector else "Outros"
+        sector_by_ticker[t] = sector
         sectors.setdefault(sector, []).append(t)
 
     # Brinson simplificado: atribuição por setor.
     sector_rows = []
     total_active_return = 0.0
     for sector, members in sectors.items():
-        pf_weight = sum(w[tickers.index(t)] for t in members if t in tickers)
+        pf_weight = sum(weights_by_ticker[t] for t in members)
         pf_return = sum(
-            perf.get(t, 0.0) * (w[tickers.index(t)] / pf_weight if pf_weight else 0)
+            perf[t] * (weights_by_ticker[t] / pf_weight if pf_weight else 0)
             for t in members
-            if t in tickers
         )
         # Benchmark dentro do setor: igualmente ponderado.
         bench_weight = 1.0 / len(sectors)
@@ -849,27 +881,31 @@ def portfolio_attribution(
 
     # Top contributors / detractors.
     contributions = []
-    for i, t in enumerate(tickers):
+    for t in tickers:
         if t in perf:
             contributions.append(
                 {
                     "ticker": t,
-                    "weight": round(float(w[i]), 4),
+                    "weight": round(weights_by_ticker[t], 4),
                     "return_pct": round(perf[t] * 100, 4),
-                    "contribution_pct": round(perf[t] * w[i] * 100, 4),
+                    "contribution_pct": round(perf[t] * weights_by_ticker[t] * 100, 4),
                     "name": info_map.get(t, {}).get("name", t),
+                    "sector": sector_by_ticker.get(t, "Outros"),
                 }
             )
     contributions.sort(key=lambda x: x["contribution_pct"], reverse=True)
 
     return {
         "period": "6mo",
-        "portfolio_return": round(sum(perf.get(t, 0.0) * w[i] for i, t in enumerate(tickers)) * 100, 4),
+        "portfolio_return": round(
+            sum(perf[t] * weights_by_ticker[t] for t in valid_tickers) * 100, 4
+        ),
         "active_return": round(total_active_return * 100, 4),
         "currency": "USD",
         "sectors": sector_rows,
         "top_contributors": contributions[:10],
         "bottom_contributors": contributions[-10:][::-1],
+        "excluded_tickers": excluded_tickers,
         "as_of": datetime.utcnow().isoformat() + "Z",
     }
 

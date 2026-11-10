@@ -175,6 +175,13 @@ export function PortfolioPage() {
               <Briefcase className="h-4 w-4" />
               Gerir carteiras
             </a>
+            <a
+              href={withPortfolioScope("/portfolio/attribution", portfolioId)}
+              className="inline-flex items-center gap-2 rounded-md bg-cyan-600/20 px-3 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-600/30"
+            >
+              <PieChart className="h-4 w-4" />
+              Ver o que impulsiona retornos
+            </a>
             <button
               onClick={() => void load()}
               disabled={loading}

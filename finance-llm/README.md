@@ -138,6 +138,18 @@ docker compose down
 
 Os volumes `./data`, `./model`, `./rag` e `./logs` são montados no backend (os mesmos dados da execução local), e o índice do Elasticsearch persiste no volume `es-data`. Mais detalhes em [`docs/docker-setup.md`](docs/docker-setup.md).
 
+Para atualizar localmente apenas o backend e o frontend, aproveitando as imagens
+Docker existentes sem reconstruir dependências:
+
+```powershell
+.\rebuild-local-incremental.ps1
+```
+
+O script compila a SPA com `VITE_API_URL=/api`, reconstrói as imagens
+incrementais e recria apenas os containers `backend` e `frontend`. Também é
+possível selecionar `-Target backend` ou `-Target frontend`. Elasticsearch e os
+outros serviços não são reiniciados.
+
 Serviços opcionais (perfis do compose):
 
 ```bash
