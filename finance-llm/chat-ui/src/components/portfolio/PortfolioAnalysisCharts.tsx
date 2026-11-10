@@ -82,6 +82,7 @@ function useChartRows(data: PortfolioTimeseriesResponse | null, mode: "index" | 
 export function PortfolioPerformanceChart({ data }: { data: PortfolioTimeseriesResponse | null }) {
   const [mode, setMode] = useState<"index" | "return">("index");
   const [includePortfolio, setIncludePortfolio] = useState(true);
+  const [logScale, setLogScale] = useState(false);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const rows = useChartRows(data, mode, includePortfolio);
 
@@ -122,6 +123,19 @@ export function PortfolioPerformanceChart({ data }: { data: PortfolioTimeseriesR
             ))}
           </div>
           <button
+            onClick={() => setLogScale((value) => !value)}
+            aria-pressed={logScale}
+            title="Escala logarítmica: compara melhor ativos com subidas muito diferentes"
+            className={[
+              "rounded-md border px-2.5 py-1 text-xs font-medium transition",
+              logScale
+                ? "border-sky-500/40 bg-sky-500/10 text-sky-300"
+                : "border-slate-700 text-slate-400 hover:text-slate-200",
+            ].join(" ")}
+          >
+            Log
+          </button>
+          <button
             onClick={() => setIncludePortfolio((value) => !value)}
             aria-pressed={includePortfolio}
             className={[
@@ -150,7 +164,10 @@ export function PortfolioPerformanceChart({ data }: { data: PortfolioTimeseriesR
             <YAxis
               stroke="#94a3b8"
               fontSize={11}
-              domain={["auto", "auto"]}
+              // Com `log` a variação % não pode descer a zero nem ficar negativa:
+              // é por isso que a escala log só é aplicada no modo base 100.
+              scale={logScale && mode === "index" ? "log" : "linear"}
+              domain={logScale && mode === "index" ? ["auto", "auto"] : ["auto", "auto"]}
               tickFormatter={(value: number) => (mode === "return" ? `${value}%` : String(Math.round(value)))}
             />
             <Tooltip

@@ -21,7 +21,6 @@ import {
   type PortfolioTimeseriesResponse,
 } from "../portfolioApi";
 import { usePortfolioScope, withPortfolioScope } from "../portfolioScope";
-import { PortfolioChart } from "../components/portfolio/PortfolioChart";
 import {
   PortfolioContributionChart,
   PortfolioCorrelationHeatmap,
@@ -265,21 +264,50 @@ export function PortfolioPage() {
               </div>
             ) : null}
 
+            {timeseries ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    label: "Retorno no período",
+                    value: `${timeseries.portfolio.return_pct >= 0 ? "+" : ""}${timeseries.portfolio.return_pct.toFixed(2)}%`,
+                    tone: timeseries.portfolio.return_pct >= 0 ? "text-emerald-400" : "text-rose-400",
+                    hint: `${timeseries.period} · ${timeseries.stats.observations} sessões`,
+                  },
+                  {
+                    label: "Volatilidade anualizada",
+                    value: `${timeseries.portfolio.volatility_pct.toFixed(2)}%`,
+                    tone: "text-sky-300",
+                    hint: `carteira ponderada pelos pesos`,
+                  },
+                  {
+                    label: "Drawdown máximo",
+                    value: `${timeseries.portfolio.max_drawdown_pct.toFixed(2)}%`,
+                    tone: "text-rose-400",
+                    hint: "pior queda face ao topo",
+                  },
+                  {
+                    label: "VaR 95% (1 dia)",
+                    value: `${timeseries.stats.var_95_pct.toFixed(2)}%`,
+                    tone: "text-amber-300",
+                    hint: `CVaR ${timeseries.stats.cvar_95_pct.toFixed(2)}%`,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">{item.label}</div>
+                    <div className={`mt-1 text-lg font-semibold ${item.tone}`}>{item.value}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">{item.hint}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-6">
                 {timeseries ? (
                   <PortfolioPerformanceChart data={timeseries} />
                 ) : (
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                        Performance normalizada (base 100)
-                      </h2>
-                    </div>
-                    <PortfolioChart history={{}} selected={selected} />
-                    <p className="mt-2 text-xs text-slate-500">
-                      Ainda a recolher o histórico de todos os ativos…
-                    </p>
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-8 text-center text-sm text-slate-500">
+                    A recolher o histórico de todos os ativos…
                   </div>
                 )}
 
