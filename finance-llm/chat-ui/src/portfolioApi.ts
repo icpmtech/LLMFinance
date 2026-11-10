@@ -324,8 +324,9 @@ export type IntradaySignal = {
   alerts: ("overbought" | "oversold")[]; reasons: string[];
 };
 export type IntradayFeed = {
-  mode: IntradayMode; fetched_at: string; source_date: string; source: string;
-  currency: string | null; age_seconds: number; poll_seconds: number; index: string; notice: string;
+  mode: IntradayMode; fetched_at: string; source_date: string | null; source: string;
+  currency: string | null; age_seconds: number | null; poll_seconds: number; index: string; notice: string;
+  total?: number; next_cursor?: string | null;
   points: { date: string; value: number; source_date: string; completed: boolean; signal?: IntradaySignal | null }[];
 };
 export type ForecastRequest = PortfolioRequest & {
@@ -430,11 +431,12 @@ export async function getPortfolioForecastHistory(
 }
 
 export async function getPortfolioIntraday(
-  req: { ticker: string; mode: IntradayMode; prepost: boolean; portfolio_id?: string }, signal: AbortSignal,
+  req: { ticker: string; mode: IntradayMode; prepost: boolean; portfolio_id?: string; start?: string; end?: string; cursor?: string },
+  signal: AbortSignal, history = false,
 ): Promise<IntradayFeed> {
   const params = new URLSearchParams();
   Object.entries(req).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
-  const response = await fetch(`${API_BASE}/portfolio/forecast/intraday?${params}`, { headers: authHeaders(), signal });
+  const response = await fetch(`${API_BASE}/portfolio/forecast/intraday${history ? "/history" : ""}?${params}`, { headers: authHeaders(), signal });
   if (!response.ok) {
     const payload = await response.json() as { detail?: string };
     throw new Error(payload.detail ?? `Erro intradiário HTTP ${response.status}`);

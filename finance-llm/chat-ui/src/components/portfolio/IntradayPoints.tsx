@@ -19,27 +19,48 @@ export function IntradayPoints({ ticker, portfolioId, prepost }: Props) {
   const [revision, setRevision] = useState(0);
   const [showLabels, setShowLabels] = useState(true);
   const [window, setWindow] = useState(30);
+  const [history, setHistory] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [range, setRange] = useState<{ start?: string; end: string } | null>(null);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [chartEnd, setChartEnd] = useState<number | null>(null);
+  const [busy, setBusy] = useState(true);
+  const cursor = cursors[cursors.length - 1];
+  const navigate = (nextCursors: (string | undefined)[]) => {
+    setCursors(nextCursors); setFeed(null); setError(null); setChartEnd(null); setBusy(true);
+  };
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       let success = false;
       try {
-        const result = await getPortfolioIntraday({ ticker, portfolio_id: portfolioId, prepost, mode }, controller.signal);
+        const result = await getPortfolioIntraday({
+          ticker, portfolio_id: portfolioId, prepost, mode,
+          ...(history ? { start: range?.start, end: range?.end, cursor } : {}),
+        }, controller.signal, history);
         if (!controller.signal.aborted) { setFeed(result); setError(null); success = true; }
       } catch (reason) {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason));
       } finally {
-        if (!controller.signal.aborted && enabled && (mode !== "provider" || success)) timer = setTimeout(poll, 15000);
+        if (!controller.signal.aborted) setBusy(false);
+        if (!controller.signal.aborted && !history && enabled && (mode !== "provider" || success)) timer = setTimeout(poll, 15000);
       }
     };
     void poll();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [ticker, portfolioId, prepost, mode, enabled, revision]);
-  const chartPoints = (window ? feed?.points.slice(-window) : feed?.points)?.map((point) => ({
+  }, [ticker, portfolioId, prepost, mode, enabled, revision, history, range, cursor]);
+  const end = Math.min(chartEnd ?? feed?.points.length ?? 0, feed?.points.length ?? 0);
+  const visible = window ? feed?.points.slice(Math.max(0, end - window), end) : feed?.points;
+  const chartPoints = visible?.map((point) => ({
     ...point, actionLabel: SIGNALS[point.signal?.action ?? "wait"].label,
   })) ?? [];
-  const latest = feed?.points.at(-1)?.signal;
+  const latest = chartPoints.at(-1)?.signal;
+  const enterHistory = () => {
+    setStartDate(""); setEndDate("");
+    setHistory(true); setRange({ end: new Date().toISOString() }); navigate([undefined]);
+  };
   return (
     <section className="space-y-3 rounded-lg border border-cyan-900 bg-slate-900/40 p-4" aria-label="Pontos intradiários acompanhados">
       <h2 className="font-semibold text-cyan-200">Pontos intradiários · {ticker}</h2>
@@ -47,30 +68,60 @@ export function IntradayPoints({ ticker, portfolioId, prepost }: Props) {
         <label>Fonte dos pontos
           <select aria-label="Modo dos pontos intradiários" value={mode} onChange={(event) => {
             const value = event.target.value;
-            if (value === "bars" || value === "samples" || value === "provider") { setMode(value); setFeed(null); setError(null); }
+            if (value === "bars" || value === "samples" || value === "provider") { setMode(value); navigate([undefined]); }
           }} className="ml-2 rounded bg-slate-800 p-2">
             <option value="bars">Barras reais de 1 minuto · Yahoo</option>
             <option value="samples">Uma amostra por consulta · Yahoo</option>
             <option value="provider">Feed externo · requer configuração</option>
           </select>
         </label>
-        <label><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Consultar a cada 15 s</label>
-        <button className="rounded bg-cyan-900 px-3 py-2" onClick={() => setRevision((value) => value + 1)}>Consultar pontos agora</button>
+        <label><input type="checkbox" checked={enabled} disabled={history} onChange={(event) => setEnabled(event.target.checked)} /> Consultar a cada 15 s</label>
+        <button disabled={busy} className="rounded bg-cyan-900 px-3 py-2 disabled:opacity-40" onClick={() => { setBusy(true); setRevision((value) => value + 1); }}>{history ? "Recarregar página guardada" : "Consultar pontos agora"}</button>
+        <button disabled={busy} className="rounded bg-slate-800 px-3 py-2 disabled:opacity-40" onClick={() => {
+          if (history) { setHistory(false); setRange(null); navigate([undefined]); }
+          else enterHistory();
+        }}>{history ? "Voltar ao acompanhamento" : "Navegar no histórico guardado"}</button>
       </div>
+      {history && <div className="space-y-2 rounded border border-slate-700 p-3 text-sm">
+        <p className="text-cyan-300">Histórico guardado · atualização automática suspensa · datas em UTC</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label>Desde <input aria-label="Histórico intradiário desde" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="rounded bg-slate-800 p-2" /></label>
+          <label>Até <input aria-label="Histórico intradiário até" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="rounded bg-slate-800 p-2" /></label>
+          <button disabled={busy} className="rounded bg-cyan-900 px-3 py-2 disabled:opacity-40" onClick={() => {
+            if (startDate && endDate && startDate > endDate) { setError("A data inicial deve ser anterior à final."); return; }
+            setRange({ start: startDate ? `${startDate}T00:00:00Z` : undefined, end: endDate ? `${endDate}T23:59:59.999Z` : new Date().toISOString() });
+            navigate([undefined]);
+          }}>Aplicar datas</button>
+          <button disabled={busy} className="rounded bg-slate-800 px-3 py-2 disabled:opacity-40" onClick={() => {
+            setStartDate(""); setEndDate(""); setRange({ end: new Date().toISOString() }); navigate([undefined]);
+          }}>Limpar datas</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button disabled={busy || cursors.length === 1} className="rounded bg-slate-800 px-3 py-2 disabled:opacity-40" onClick={() => navigate(cursors.slice(0, -1))}>Pontos mais recentes</button>
+          <span>Página {cursors.length} · {feed?.total ?? "…"} pontos guardados no período</span>
+          <button disabled={busy || !feed?.next_cursor} className="rounded bg-slate-800 px-3 py-2 disabled:opacity-40" onClick={() => { if (feed?.next_cursor) navigate([...cursors, feed.next_cursor]); }}>Pontos mais antigos</button>
+        </div>
+      </div>}
       <p className="text-xs text-slate-400">Pontos efetivamente recebidos, não simulados. A fonte pode ter atraso; polling não é streaming tick-a-tick. Barras usam a hora original do mercado; amostras usam a hora da consulta e podem repetir o mesmo preço. Estes pontos não pontuam previsões de outras escalas. O acompanhamento pára ao sair da página.</p>
       {error && <p role="alert" className="text-rose-300">{error}{feed ? " Últimos dados recebidos mantidos; atualização falhou." : ""}</p>}
-      {!feed && !error && <p role="status">A obter pontos intradiários…</p>}
+      {busy && <p role="status">{history ? "A ler pontos guardados…" : "A obter pontos intradiários…"}</p>}
       {feed && <>
-        <p className="text-sm text-cyan-300">{feed.points.length} pontos · {feed.source} · Consulta {time(feed.fetched_at)} UTC · Observação {time(feed.source_date)} UTC · Idade {feed.age_seconds} s</p>
+        <p className="text-sm text-cyan-300">{feed.points.length} pontos · {feed.source} · Consulta {time(feed.fetched_at)} UTC · Observação {feed.source_date ? time(feed.source_date) : "—"} UTC{feed.age_seconds === null ? "" : ` · Idade ${feed.age_seconds} s`}</p>
+        {feed.points.length === 0 && <p role="status" className="text-slate-400">Sem pontos guardados neste período e modo. Ajuste as datas ou volte ao acompanhamento para recolher novos pontos.</p>}
+        {feed.points.length > 0 && <p className="text-xs text-slate-400">Página: {new Date(feed.points[0].date).toLocaleString("pt-PT", { timeZone: "UTC" })} a {new Date(feed.points.at(-1)!.date).toLocaleString("pt-PT", { timeZone: "UTC" })} UTC</p>}
         <div className="flex flex-wrap gap-3 text-xs" aria-label="Legenda dos sinais intradiários">{Object.entries(SIGNALS).map(([key, signal]) => <span key={key} style={{ color: signal.color }}>● {signal.label}</span>)}</div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label><input type="checkbox" checked={showLabels} onChange={(event) => setShowLabels(event.target.checked)} /> Mostrar BUY/SELL/HOLD em cada ponto</label>
           <label>Pontos visíveis <select aria-label="Janela de pontos intradiários" value={window} onChange={(event) => setWindow(Number(event.target.value))} className="rounded bg-slate-800 p-2">
             {[15, 30, 60, 0].map((value) => <option value={value} key={value}>{value || "Todos"}</option>)}
           </select></label>
+          {window > 0 && feed.points.length > 0 && <label className="flex items-center gap-2">Navegar nos pontos da página
+            <input aria-label="Posição no histórico intradiário" type="range" min={1} max={feed.points.length} value={end} onChange={(event) => setChartEnd(Number(event.target.value))} />
+            <span>{Math.max(1, end - window + 1)}–{end} / {feed.points.length}</span>
+          </label>}
         </div>
         {latest && <p className="text-sm" style={{ color: SIGNALS[latest.action].color }}>
-          Último sinal: <strong>{SIGNALS[latest.action].label}</strong> · {latest.provisional ? "Provisório" : "Barra concluída"} · RSI {metric(latest.rsi14)} · MACD hist. {metric(latest.macd_histogram)} · Pontuação {latest.score ?? "—"}
+          {history || chartEnd !== null ? "Sinal no ponto visível:" : "Último sinal:"} <strong>{SIGNALS[latest.action].label}</strong> · {latest.provisional ? "Provisório" : "Barra concluída"} · RSI {metric(latest.rsi14)} · MACD hist. {metric(latest.macd_histogram)} · Pontuação {latest.score ?? "—"}
           {latest.alerts.map((alert) => ` · ${alert === "overbought" ? "Sobrecompra" : "Sobrevenda"}`)}
         </p>}
         {latest && <p className="text-xs text-slate-400">{latest.reasons.join("; ")}</p>}
@@ -78,7 +129,7 @@ export function IntradayPoints({ ticker, portfolioId, prepost }: Props) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartPoints} margin={{ left: 10, right: 35, top: 55 }}>
               <CartesianGrid stroke="#1e293b" />
-              <XAxis dataKey="date" tickFormatter={time} minTickGap={45} tick={{ fontSize: 10 }} />
+              <XAxis dataKey="date" tickFormatter={(value: string) => history ? new Date(value).toLocaleString("pt-PT", { timeZone: "UTC", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : time(value)} minTickGap={45} tick={{ fontSize: 10 }} />
               <YAxis domain={["auto", "auto"]} width={65} tick={{ fontSize: 10 }} />
               <Tooltip content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
@@ -86,7 +137,7 @@ export function IntradayPoints({ ticker, portfolioId, prepost }: Props) {
                 if (!point) return null;
                 const signal = point.signal;
                 return <div className="max-w-72 rounded border border-slate-700 bg-slate-900 p-3 text-xs">
-                  <p>{time(point.date)} UTC · {point.value.toFixed(4)} {feed.currency}</p>
+                  <p>{new Date(point.date).toLocaleString("pt-PT", { timeZone: "UTC" })} UTC · {point.value.toFixed(4)} {feed.currency}</p>
                   <p style={{ color: SIGNALS[signal?.action ?? "wait"].color }}>{point.actionLabel} · {signal?.provisional ? "Provisório" : signal ? "Concluído" : "Sem análise guardada"}</p>
                   <p>RSI {metric(signal?.rsi14)} · MACD {metric(signal?.macd)} / {metric(signal?.macd_signal)}</p>
                   <p>SMA20 {metric(signal?.sma20)} / SMA50 {metric(signal?.sma50)} · Pontuação {signal?.score ?? "—"}</p>
@@ -117,7 +168,7 @@ export function IntradayPoints({ ticker, portfolioId, prepost }: Props) {
             </tr>)}</tbody>
           </table></div>
         </details>
-        <p className="text-xs text-slate-500">{feed.notice} Até 390 pontos recentes recuperados do índice {feed.index}; os restantes continuam guardados.</p>
+        <p className="text-xs text-slate-500">{feed.notice} Até 390 pontos por página recuperados do índice {feed.index}; navegue no histórico para consultar os restantes. Os sinais guardados não são recalculados ao navegar.</p>
         <p className="text-xs text-slate-400">Sinais técnicos, sem ARIMA: RSI≤30 soma +1, RSI≥70 soma −1; MACD acima/abaixo do sinal e SMA20 acima/abaixo da SMA50 somam +1/−1. ±3: STRONG BUY/SELL; ±2: BUY/SELL; senão HOLD. WAIT: menos de 50 observações distintas ou fonte com mais de 180 s. “Strong” significa confluência, não probabilidade de lucro. Indicadores das amostras Yahoo usam barras de 1 minuto, não repetições da consulta; no feed externo usam observações distintas do fornecedor. Sinais provisórios podem mudar; sinais concluídos ficam guardados. Não envia ordens reais nem constitui aconselhamento financeiro.</p>
       </>}
     </section>

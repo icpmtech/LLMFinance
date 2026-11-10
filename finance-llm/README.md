@@ -60,6 +60,17 @@ Ao concluir uma barra, o sinal é congelado no Elasticsearch com o preço; docum
 sem sinal podem ser enriquecidos uma vez, sem alterar o preço concluído. Dados ainda sem
 análise guardada mostram WAIT na interface. Recarregar recupera os sinais persistidos.
 
+“Navegar no histórico guardado” consulta apenas o Elasticsearch, mesmo se o fornecedor
+estiver indisponível: não recalcula sinais nem recolhe cotações. Permite filtrar datas UTC,
+percorrer páginas de até 390 pontos com “Pontos mais antigos”/“Pontos mais recentes” e
+navegar dentro da página pelo slider (janelas de 15/30/60/todos). Gráfico, tooltip e tabela
+mostram os sinais originais guardados. A atualização automática fica suspensa nesta vista;
+“Voltar ao acompanhamento” retoma a recolha. O total refere-se a todos os pontos do período,
+não só à página. A paginação por cursor não tem o limite de 10.000 resultados do `from`.
+O endpoint autenticado `GET /portfolio/forecast/intraday/history` aceita `ticker`, `mode`,
+`prepost`, escopo, `start`, `end`, `cursor` e `limit`, sempre isolados pela conta da sessão.
+O histórico só contém pontos efetivamente recolhidos; não é criado um worker em segundo plano.
+
 Em `/portfolio/forecast`, as previsões resumidas incluem todos os ativos da carteira,
 incluindo os erros individuais quando não há dados suficientes. A tabela mostra o último
 fecho, a previsão final, a variação, os limites de confiança e as métricas do modelo.

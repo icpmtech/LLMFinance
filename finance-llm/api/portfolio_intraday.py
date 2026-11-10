@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import math
 import os
+import base64
+import json
+import binascii
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -12,6 +15,66 @@ import requests
 from api import portfolio_forecast_store as store
 from forecasting.market_series import load_market_series, serialize_date
 from forecasting.trading_signals import intraday_signal, technical_indicators
+
+
+def _point(hit: dict) -> dict:
+    doc = hit["_source"]
+    return {
+        "date": doc["target_key"], "value": doc["actual"], "source_date": doc["reference_date"],
+        "completed": doc["status"] == "completed", "signal": doc.get("signal"),
+    }
+
+
+def intraday_history(
+    owner_id: str, scope_id: str, ticker: str, mode: str, prepost: bool,
+    start: str | None = None, end: str | None = None, cursor: str | None = None,
+    limit: int = 390,
+) -> dict:
+    if not 1 <= limit <= 390:
+        raise ValueError("Limite de pontos deve estar entre 1 e 390.")
+    after = None
+    bounds = {}
+    for key, value in (("gte", start), ("lte", end)):
+        if value:
+            stamp = pd.Timestamp(value)
+            if pd.isna(stamp):
+                raise ValueError("Data invalida.")
+            stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
+            bounds[key] = stamp.isoformat()
+    if "gte" in bounds and "lte" in bounds and bounds["gte"] > bounds["lte"]:
+        raise ValueError("Inicio deve ser anterior ao fim.")
+    if cursor:
+        try:
+            after = json.loads(base64.urlsafe_b64decode(cursor).decode())
+            if not isinstance(after, list) or len(after) != 2 or any(not isinstance(item, (str, int)) for item in after):
+                raise ValueError("Invalid cursor.")
+        except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
+            raise ValueError("Cursor intradiario invalido.") from exc
+    kind = {"bars": "minute", "samples": "sample", "provider": "provider"}[mode]
+    filters = store._filters(owner_id, scope_id, ticker, "1m", prepost) + [{"term": {"kind": kind}}]
+    if bounds:
+        filters.append({"range": {"target_date": bounds}})
+    body = {
+        "size": limit + 1, "track_total_hits": True, "query": {"bool": {"filter": filters}},
+        "sort": [{"target_date": "desc"}, {"sort_id": "desc"}],
+    }
+    if after is not None:
+        body["search_after"] = after
+    client = store._client()
+    result = client.search(index=store.INDEX, body=body)
+    hits = result["hits"]["hits"]
+    has_more = len(hits) > limit
+    hits = hits[:limit]
+    latest = hits[0]["_source"] if hits else {}
+    return {
+        "mode": mode, "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "source_date": latest.get("reference_date"), "source": latest.get("source", "Elasticsearch"),
+        "currency": latest.get("currency"), "age_seconds": None, "poll_seconds": 15, "index": store.INDEX,
+        "points": [_point(hit) for hit in reversed(hits)],
+        "total": result["hits"]["total"]["value"],
+        "next_cursor": base64.urlsafe_b64encode(json.dumps(hits[-1]["sort"]).encode()).decode() if has_more else None,
+        "notice": "Historico persistido: leitura do Elasticsearch, sem consultar o fornecedor nem recalcular sinais.",
+    }
 
 
 def _external_quote(ticker: str) -> dict:
@@ -129,11 +192,7 @@ def intraday_points(owner_id: str, scope_id: str, ticker: str, mode: str, prepos
         "mode": mode, "fetched_at": fetched, "source_date": quote["source_date"],
         "source": quote["source"], "currency": quote["currency"], "age_seconds": quote["age_seconds"],
         "poll_seconds": 15, "index": store.INDEX,
-        "points": [{
-            "date": hit["_source"]["target_key"], "value": hit["_source"]["actual"],
-            "source_date": hit["_source"]["reference_date"], "completed": hit["_source"]["status"] == "completed",
-            "signal": hit["_source"].get("signal"),
-        } for hit in reversed(result["hits"]["hits"])],
+        "points": [_point(hit) for hit in reversed(result["hits"]["hits"])],
         "notice": "Consulta de 15 em 15 s, nao tick-a-tick. "
                   + ("Amostras da consulta: o mesmo preco da fonte pode repetir-se." if mode == "samples"
                      else "Latencia e cobertura dependem do fornecedor; timestamps originais preservados."),

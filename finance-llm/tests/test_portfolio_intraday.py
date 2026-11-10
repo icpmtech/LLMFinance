@@ -150,3 +150,108 @@ def test_samples_use_source_minute_indicators_instead_of_poll_repetitions():
     assert signal["rsi14"] == expected["rsi14"]
     assert signal["action"] == "wait"
     assert any("180" in reason for reason in signal["reasons"])
+
+
+def test_history_reads_only_elasticsearch_with_owner_scope_dates_and_cursor():
+    client = Mock()
+    doc = {
+        "target_key": "2026-01-01T10:01:00+00:00", "actual": 101,
+        "reference_date": "2026-01-01T10:01:00+00:00", "status": "completed",
+        "signal": {"action": "buy"}, "source": "test", "currency": "USD",
+    }
+    client.search.return_value = {"hits": {"total": {"value": 30000}, "hits": [
+        {"_source": doc, "sort": [1, "one"]}, {"_source": doc, "sort": [0, "two"]},
+    ]}}
+    with patch.object(feed.store, "_client", return_value=client), patch.object(feed, "load_market_series") as source:
+        page = feed.intraday_history("a", "p", "AAA", "bars", True,
+                                    "2026-01-01", "2026-01-02", limit=1)
+        assert page["total"] == 30000
+        assert page["points"][0]["signal"]["action"] == "buy"
+        assert page["next_cursor"]
+        feed.intraday_history("a", "p", "AAA", "bars", True, cursor=page["next_cursor"], limit=1)
+        source.assert_not_called()
+    first = client.search.call_args_list[0].kwargs["body"]
+    filters = first["query"]["bool"]["filter"]
+    assert {"term": {"owner_id": "a"}} in filters
+    assert {"term": {"scope_id": "p"}} in filters
+    assert {"term": {"kind": "minute"}} in filters
+    assert {"range": {"target_date": {"gte": "2026-01-01T00:00:00+00:00", "lte": "2026-01-02T00:00:00+00:00"}}} in filters
+    assert client.search.call_args.kwargs["body"]["search_after"] == [1, "one"]
+    assert "from" not in first
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"start": "not-a-date"}, {"start": "2026-02-01", "end": "2026-01-01"},
+    {"cursor": "invalid"}, {"cursor": "e30="}, {"limit": 391},
+])
+def test_history_rejects_invalid_dates_cursors_and_limits(kwargs):
+    with pytest.raises(ValueError):
+        feed.intraday_history("a", "p", "AAA", "bars", True, **kwargs)
+
+
+def test_history_empty_results_are_explicit_and_do_not_need_a_provider():
+    client = Mock()
+    client.search.return_value = {"hits": {"total": {"value": 0}, "hits": []}}
+    with patch.object(feed.store, "_client", return_value=client), patch.object(feed, "_external_quote") as quote:
+        result = feed.intraday_history("a", "p", "AAA", "provider", True)
+    quote.assert_not_called()
+    assert result["total"] == 0
+    assert result["points"] == []
+    assert result["source_date"] is None
+    assert result["next_cursor"] is None
+
+
+def test_history_route_requires_auth_and_rejects_foreign_scope():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from types import SimpleNamespace
+    from api import portfolio_routes as routes
+    from api.auth_routes import optional_session
+    app = FastAPI()
+    app.include_router(routes.router)
+    app.dependency_overrides[optional_session] = lambda: None
+    client = TestClient(app)
+    assert client.get("/portfolio/forecast/intraday/history?ticker=AAA").status_code == 401
+    app.dependency_overrides[optional_session] = lambda: SimpleNamespace(user=SimpleNamespace(id="a"))
+    with patch.object(routes.portfolio_store, "get_portfolio", return_value=None):
+        assert client.get("/portfolio/forecast/intraday/history?ticker=AAA&portfolio_id=foreign").status_code == 404
+    with patch.object(feed, "intraday_history", return_value={"points": []}) as read:
+        assert client.get("/portfolio/forecast/intraday/history?ticker=AAA&mode=samples&limit=10").status_code == 200
+        assert read.call_args.args == ("a", "default", "AAA", "samples", True, None, None, None, 10)
+
+
+@pytest.mark.skipif(os.getenv("FORECAST_STORE_INTEGRATION") != "1", reason="Requires local Elasticsearch")
+def test_history_real_elasticsearch_pages_dates_and_signals_survive_reopening():
+    owner = f"intraday-history-test-{uuid.uuid4().hex}"
+    client = feed.store._client()
+    try:
+        base = {"owner_id": owner, "scope_id": "test", "ticker": "AAA", "interval": "1m",
+                "prepost": True, "kind": "minute", "status": "completed", "source": "test"}
+        operations = []
+        for index, date in enumerate(pd.date_range("2026-01-01", periods=405, freq="min", tz="UTC")):
+            stamp = date.isoformat()
+            operations.append({"_op_type": "create", "_index": feed.store.INDEX,
+                               "_id": f"{owner}-{index}", "_source": {
+                                   **base, "target_date": stamp, "target_key": stamp, "reference_date": stamp,
+                                   "sort_id": f"{index:04}", "recorded_at": stamp, "actual": 100 + index,
+                                   "signal": {"action": "buy", "score": 2},
+                               }})
+        feed.store._write(client, operations)
+        first = feed.intraday_history(owner, "test", "AAA", "bars", True)
+        second = feed.intraday_history(owner, "test", "AAA", "bars", True, cursor=first["next_cursor"])
+        reopened = feed.intraday_history(owner, "test", "AAA", "bars", True)
+        assert first["total"] == 405
+        assert len(first["points"]) == 390
+        assert len(second["points"]) == 15
+        assert second["next_cursor"] is None
+        assert second["points"][-1]["date"] < first["points"][0]["date"]
+        assert reopened["points"] == first["points"]
+        assert all(point["signal"]["action"] == "buy" for point in second["points"])
+        bounded = feed.intraday_history(owner, "test", "AAA", "bars", True,
+                                        "2026-01-01T00:05:00Z", "2026-01-01T00:10:00Z")
+        assert len(bounded["points"]) == bounded["total"] == 6
+        assert feed.intraday_history(owner, "foreign", "AAA", "bars", True)["total"] == 0
+        assert feed.intraday_history(owner, "test", "AAA", "samples", True)["total"] == 0
+        assert feed.intraday_history(owner, "test", "AAA", "bars", False)["total"] == 0
+    finally:
+        client.delete_by_query(index=feed.store.INDEX, query={"term": {"owner_id": owner}}, refresh=True)

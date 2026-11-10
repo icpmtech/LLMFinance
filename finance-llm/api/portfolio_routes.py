@@ -299,6 +299,33 @@ def portfolio_forecast_history(
         raise HTTPException(status_code=503, detail="Elasticsearch indisponivel para consultar simulacoes.") from exc
 
 
+@router.get("/forecast/intraday/history", summary="Navegar nos pontos intradiarios guardados")
+def portfolio_intraday_history(
+    session: Session,
+    ticker: str = Query(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9.^=_-]+$"),
+    mode: Literal["bars", "samples", "provider"] = "bars",
+    prepost: bool = True,
+    portfolio_id: Optional[str] = None,
+    watchlist_id: Optional[str] = None,
+    start: Optional[str] = Query(None, max_length=64),
+    end: Optional[str] = Query(None, max_length=64),
+    cursor: Optional[str] = Query(None, max_length=2048),
+    limit: int = Query(390, ge=1, le=390),
+) -> Dict[str, Any]:
+    if session is None:
+        raise HTTPException(status_code=401, detail="Sessao necessaria para consultar historico intradiario.")
+    storage_scope = _forecast_storage_scope(session, portfolio_id, watchlist_id)
+    try:
+        return portfolio_intraday.intraday_history(
+            str(session.user.id), storage_scope, ticker, mode, prepost, start, end, cursor, limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ApiError, TransportError, RuntimeError) as exc:
+        logger.exception("Falha ao ler historico intradiario de %s", ticker)
+        raise HTTPException(status_code=503, detail="Nao foi possivel ler os pontos guardados.") from exc
+
+
 @router.get("/forecast/intraday", summary="Pontos intradiarios observados e persistidos")
 def portfolio_intraday_points(
     session: Session,
