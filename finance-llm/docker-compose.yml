@@ -104,6 +104,8 @@ services:
       - PYTHONPATH=/app
       # Nome do serviço do compose, não 127.0.0.1 (dentro do container o host é outro)
       - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+      - PORTFOLIO_REALTIME_URL=${PORTFOLIO_REALTIME_URL:-}
+      - PORTFOLIO_REALTIME_TOKEN=${PORTFOLIO_REALTIME_TOKEN:-}
       # MiroFish (módulo `/mirofish/*`): API do motor de simulação por enxame de
       # agentes, vista de dentro do container pelo nome do serviço. Fora do Docker
       # o backend usa `http://127.0.0.1:5001` (valor por omissão do módulo).

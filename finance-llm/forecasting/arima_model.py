@@ -202,7 +202,12 @@ def download_close_prices(
     # yfinance com auto_adjust=True devolve coluna "Close" (já ajustada).
     close = df["Close"].copy()
     close.index = pd.to_datetime(close.index)
-    close = close.squeeze()
+    if isinstance(close, pd.DataFrame):
+        if close.shape[1] != 1:
+            raise ValueError(f"Colunas de fecho ambíguas para {ticker}.")
+        close = close.iloc[:, 0]
+    if len(close) < 2:
+        raise ValueError(f"Histórico insuficiente para {ticker}: são necessários pelo menos dois fechos.")
     close = close.asfreq("B").ffill()
     close.name = "Close"
     return close

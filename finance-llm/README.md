@@ -16,6 +16,129 @@ e responde com base no conhecimento indexado.
 
 ## Estrutura
 
+### Previsões de carteira
+
+O painel “Pontos intradiários” tem três modos, com consulta independente da previsão ARIMA:
+barras reais de 1 minuto (até sete dias disponibilizados pelo Yahoo, janela visível de 390 pontos),
+uma amostra por consulta (timestamps da consulta e da fonte apresentados separadamente)
+e um adaptador para fornecedor externo. A consulta é imediata e depois a cada 15 segundos
+após concluir o pedido, sem sobreposição; pode ser pausada ou pedida manualmente.
+Os pontos são visíveis no gráfico e numa tabela. Barras parciais são revistas; amostras
+preservam cada consulta mesmo quando o preço não muda. Os tipos `minute`, `sample` e
+`provider` no índice `finance_portfolio_forecast_points` ficam separados das previsões,
+com isolamento por conta/escopo e recuperação após reload. Não pontuam previsões de outras escalas.
+A escala `1m` também está disponível para simular/prever e avaliar barras de um minuto;
+a anualização usa aproximadamente 252×390 barras por ano.
+
+Não existe fornecedor externo configurado por omissão. O modo externo devolve erro explícito,
+sem fallback enganador para Yahoo. Para integrar um fornecedor/API próprio, configure no
+servidor `PORTFOLIO_REALTIME_URL` (HTTPS) e opcionalmente `PORTFOLIO_REALTIME_TOKEN`
+(Bearer, nunca no browser). O endpoint recebe `?symbol=INTC` e deve devolver
+`{"price": 100.25, "timestamp": "2026-11-10T15:30:01Z", "currency": "USD"}`:
+preço positivo finito, timestamp original com fuso, moeda opcional. APIs com outro contrato
+precisam de um adaptador do lado do fornecedor/servidor. Repetir o mesmo timestamp externo
+não duplica o ponto. Não são seguidos redirects; erros não expõem tokens.
+Este adaptador consulta a última cotação, não assina WebSockets nem garante receber todos
+os negócios. “Tempo real” depende da licença, latência e cobertura do fornecedor.
+Yahoo e polling não são um feed tick-a-tick garantido; a UI mostra a idade da observação.
+
+Em `/portfolio/forecast`, as previsões resumidas incluem todos os ativos da carteira,
+incluindo os erros individuais quando não há dados suficientes. A tabela mostra o último
+fecho, a previsão final, a variação, os limites de confiança e as métricas do modelo.
+Selecione um ticker para consultar o gráfico, as previsões diárias ou exportar o CSV completo.
+O gráfico permite alternar entre histórico e previsão, escolher a janela histórica (incluindo
+todo o histórico) e mostrar/ocultar as bandas tracejadas. A vista “Só previsão” amplia o horizonte
+futuro; as datas incluem o ano para distinguir observações de anos diferentes.
+
+O ajuste ARIMA pode ser automático (quatro ordens de log-retornos comparadas por RMSE em
+dez observações anteriores ao backtest) ou manual (`p,q` entre 0 e 3; `d` entre 0 e 1).
+O backtest prevê cada observação antes de incorporar o retorno observado, atualizando
+o estado sem reestimar parâmetros; o modelo é depois reajustado aos dados recentes até ao
+último fecho para projetar o futuro, sem mistura artificial de tendência. O ajuste usa no máximo
+uma janela configurável de 60 a 1000 observações; o CSV mantém todo o histórico disponível.
+RMSE/MAPE são comparados com a referência do último fecho. A simulação permite reproduzir ou
+selecionar cada dia da previsão e do backtest. Padrões descritivos incluem SMA20/SMA50,
+volatilidade anualizada, autocorrelação lag 1 e suportes/resistências de extremos locais dos
+fechos recentes; não representam sinais garantidos. As bandas futuras são aproximações a 95%
+baseadas na volatilidade residual. O calendário de dias úteis não exclui feriados de cada bolsa.
+
+Cada ticker pode ter parâmetros, janela de treino, horizonte e escala próprios durante a sessão
+da página. As escalas horária, diária, semanal e mensal usam barras reais: a horária consulta
+até 60 dias, incluindo pré/pós-mercado quando ativado e disponibilizado pela fonte; semanas e
+meses agregam os últimos fechos diários observados, sem preencher lacunas com preços inventados.
+O histórico diário disponível é de até dez anos. Barras em formação são usadas na projeção,
+mas excluídas da validação e do backtest. Horas são apresentadas em UTC, com o fuso da bolsa indicado.
+
+“Acompanhar preços” consulta o ticker selecionado 60 segundos após cada atualização concluída,
+sem pedidos sobrepostos. Novos preços ou revisões da barra atual geram nova projeção; erros e ausência
+de novos dados ficam visíveis. Não é um feed tick-a-tick nem uma garantia de preços em tempo real.
+Ao mudar de ativo, o acompanhamento é desligado. Previsões anteriores são comparadas com novas
+barras concluídas de timestamp correspondente, sem reescrever a previsão original; esses registos
+existem apenas enquanto se acompanha o mesmo ativo. Datas futuras são aproximadas e podem não
+coincidir com feriados ou alterações de horário da bolsa.
+
+A série ciano mostra os preços reais observados, incluindo o histórico guardado no Elasticsearch,
+separados da previsão violeta; “Só previsão” inclui as últimas 30 barras reais para comparação.
+Não se inventam observações com a hora da consulta. A previsão original guardada da última
+simulação é uma linha rosa tracejada; os snapshots anteriores estão na tabela persistente.
+
+Com sessão autenticada, cada cálculo/consulta de acompanhamento guarda no índice
+`finance_portfolio_forecast_points` os pontos futuros, backtests, sinais técnicos (RSI, MACD,
+médias, motivos e estado da operação simulada) e a série real. As queries e os IDs isolam
+conta, carteira/watchlist, ativo, escala e pré/pós-mercado. Cada snapshot inclui parâmetros,
+preço de referência e hora do registo, ordem realmente selecionada, ponto original completo
+(incluindo bandas/cenários), métricas e metadados da fonte; pontos idênticos usam IDs determinísticos e `create`,
+sem reescrever a previsão original. Revisões da mesma barra parcial atualizam a observação;
+a primeira observação concluída e a primeira avaliação ficam congeladas para auditoria.
+Novos snapshots podem refletir correções posteriores da fonte sem alterar os anteriores.
+
+A cada consulta, previsões pendentes são comparadas com barras reais concluídas de timestamp
+exato, incluindo observações já guardadas. Não há interpolação nem alinhamento por posição.
+São guardados preço real, erro absoluto/percentual e dois critérios independentes: direção
+igual à observada (zona estável de ±0,20% relativamente à referência) e preço a até 1% do real.
+Só previsões registadas antes do início do timestamp alvo são elegíveis para avaliação ao vivo;
+alvos já iniciados ficam identificados sem pontuação. Backtests históricos são avaliados numa
+categoria separada e nunca entram nas estatísticas ao vivo. Sinais históricos guardam o estado,
+mas não ganham elegibilidade retroativa. Estes critérios não representam rentabilidade da ordem.
+
+`GET /portfolio/forecast/history` recupera os registos da sessão autenticada com filtros de
+escopo/ativo/escala/pré-pós e `kind=forecast|backtest|signal`. A paginação usa `next_cursor`
+e `next_offset`, sem truncar ao limite de 10.000 resultados do Elasticsearch. A interface
+mostra totais completos e páginas de 100 pontos; o gráfico recupera até 500 observações reais
+recentes, além do histórico devolvido pela fonte. Erros de persistência são explícitos, sem
+esconder os preços disponíveis. A recolha e avaliação acontecem ao consultar/acompanhar a
+página, não existe um worker que continue com o browser fechado. Fechar/reabrir não apaga
+registos; as configurações de edição da página continuam a ser locais à sessão.
+
+A seleção estatística automática (sem LLM) compara ARIMA, preço anterior e tendência log-linear
+de 20 observações na janela anterior ao backtest, apresentando também o desempenho num backtest
+reservado que não influencia a escolha. A tendência e o modelo escolhido são séries separadas,
+com visibilidade independente; não alteram a previsão ARIMA. Nenhuma seleção garante resultados futuros.
+
+A simulação de compra/venda combina RSI14 (médias simples de ganhos/perdas, como nos indicadores
+existentes), MACD(12/26/9), SMA20/SMA50 e previsão ARIMA de uma barra. RSI≤30 soma +1, RSI≥70
+soma −1; histograma MACD e diferença SMA20−SMA50 somam +1/−1 pelo sinal. A previsão soma
++1 acima de +0,20% e −1 abaixo de −0,20%. Vender tem prioridade quando RSI≥70, pontuação≤−2
+ou previsão<−0,20%; comprar requer pontuação≥2 e previsão>+0,20%; caso contrário manter.
+As regras são fixas, não escolhidas pelo resultado do backtest. RSI de preços planos é 50,
+com só ganhos é 100 e com só perdas é 0.
+
+Os pontos verdes/vermelhos/cinzentos marcam decisões no fecho de barras concluídas, nas vistas
+de histórico e backtest; não são ordens nem sinais calculados de preços futuros simulados.
+O gráfico RSI, a tabela completa e o CSV permitem inspecionar indicadores, motivos e execuções.
+A simulação começa fora do mercado com índice 100 no período reservado, executa no fecho
+seguinte, usa toda a posição ou caixa e cobra 0,10% por compra/venda. Não vende a descoberto
+nem duplica compras. O valor líquido e o drawdown incluem a comissão estimada para liquidar
+posições ainda abertas; as comissões pagas não incluem essa saída hipotética. A referência
+comprar-e-manter usa a mesma primeira execução e custos de entrada/saída.
+O último sinal aguarda a barra seguinte, sem execução inventada. Barras parciais não alteram
+os sinais; a previsão usada por estes continua o estado ARIMA do backtest, atualizado só com
+barras concluídas (distinto do reajuste da projeção, que pode incluir a barra parcial).
+A janela de operações é recalculada em cada consulta: cada estado fica guardado no journal,
+mas não constitui um livro contínuo de posições ao vivo entre janelas.
+Intradiário usa a escala horária e pode manter posições durante a noite. Não inclui spread,
+slippage, impostos ou execução garantida e nunca envia ordens reais.
+
 ```
 finance-llm/
 ├── api/                 # Backend FastAPI + agente financeiro + RAG

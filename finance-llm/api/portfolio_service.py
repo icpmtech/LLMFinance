@@ -1137,20 +1137,30 @@ def portfolio_forecast(
     tickers: Optional[List[str]] = None,
     future_days: int = 30,
     use_sentiment: bool = False,
+    arima_mode: str = "auto",
+    arima_order: Tuple[int, int, int] = (1, 0, 1),
+    backtest_days: int = 20,
+    interval: str = "1d",
+    train_window: int = 252,
+    prepost: bool = True,
+    include_news: bool = True,
 ) -> Dict[str, Any]:
     tickers, _ = _get_tickers_and_weights(tickers, None)
     forecasts = []
-    for ticker in tickers[:5]:  # limitar para não bloquear
+    for ticker in tickers:
         try:
-            from forecasting.arima_model import run_full_pipeline
+            from forecasting.portfolio_simulation import simulate_portfolio_ticker
             from api.tools import _normalize_ticker
 
-            raw_result = run_full_pipeline(
+            raw_result = simulate_portfolio_ticker(
                 ticker=_normalize_ticker(ticker),
                 future_steps=future_days,
-                period="5y",
-                order=(2, 1, 2),
-                train_ratio=0.85,
+                mode=arima_mode,
+                order=arima_order,
+                backtest_days=backtest_days,
+                interval=interval,
+                train_window=train_window,
+                prepost=prepost,
             )
             result = raw_result.to_dict() if hasattr(raw_result, "to_dict") else raw_result
             points = []
@@ -1161,6 +1171,8 @@ def portfolio_forecast(
                         "price": _safe_float(p.get("price")),
                         "lower": _safe_float(p.get("lower")),
                         "upper": _safe_float(p.get("upper")),
+                        "trend": _safe_float(p.get("trend")),
+                        "recommended": _safe_float(p.get("recommended")),
                     }
                 )
             series = []
@@ -1177,13 +1189,19 @@ def portfolio_forecast(
                     "ticker": ticker,
                     "rmse": _safe_float(result.get("rmse")),
                     "mape": _safe_float(result.get("mape")),
-                    "currency": result.get("currency", "USD"),
-                    "company_name": result.get("company_name") or result.get("ticker"),
+                    "currency": result.get("market", {}).get("currency") or result.get("currency"),
+                    "company_name": result.get("market", {}).get("company_name") or result.get("ticker"),
                     "forecast": points,
                     "series": series,
                     "last_train_date": result.get("last_train_date"),
                     "last_test_date": result.get("last_test_date"),
                     "model_summary": result.get("model_summary") or "ARIMA",
+                    **{key: result.get(key) for key in (
+                        "order", "mode", "backtest", "validation", "patterns",
+                        "baseline_rmse", "baseline_mape", "warnings",
+                        "market", "interval", "train_window", "comparison",
+                        "recommended_model", "holdout_comparison", "trading",
+                    )},
                 }
             )
         except Exception as exc:
@@ -1194,12 +1212,13 @@ def portfolio_forecast(
                     "error": str(exc),
                     "forecast": [],
                     "series": [],
+                    "interval": interval,
                 }
             )
 
     # Notícias para contexto.
-    news = _fetch_news_from_es(tickers=tickers, size=10, hours=72)
-    if len(news) < 4:
+    news = _fetch_news_from_es(tickers=tickers, size=10, hours=72) if include_news else []
+    if include_news and len(news) < 4:
         for t in tickers[:2]:
             news.extend(_fetch_yahoo_news(t, size=4))
 

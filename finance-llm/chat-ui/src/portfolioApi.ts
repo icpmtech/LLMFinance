@@ -201,8 +201,33 @@ export type PortfolioOptimizeResponse = {
   error?: string;
 };
 
-export type ForecastPoint = { date: string; price?: number; lower?: number; upper?: number };
+export type ForecastPoint = { date: string; price?: number; lower?: number; upper?: number; trend?: number; recommended?: number };
 export type ForecastSeries = { date: string; value?: number; type: string };
+export type TradingSignal = {
+  date: string; price: number; rsi14: number; macd: number; macd_signal: number;
+  macd_histogram: number; sma20: number; sma50: number; prediction: number;
+  expected_return_pct: number; action: "buy" | "sell" | "hold"; score: number; reasons: string[];
+  execution_date?: string; execution?: "buy" | "sell" | "none"; execution_price?: number;
+  fee?: number; equity?: number; position?: "long" | "cash";
+};
+export type TradingSimulation = {
+  signals: TradingSignal[]; latest: TradingSignal; initial_equity: number; final_equity: number;
+  return_pct: number; buy_hold_return_pct: number; max_drawdown_pct: number;
+  fees_paid: number; fee_pct: number; trades: number; position: "long" | "cash";
+};
+export type ForecastJournalPoint = {
+  id: string; kind: "forecast" | "backtest" | "signal"; run_id: string; recorded_at: string;
+  target_date: string; target_key: string; reference_date: string; reference_price: number;
+  predicted: number; actual?: number; error_pct?: number; absolute_error?: number;
+  direction_hit?: boolean; price_hit?: boolean; status: "pending" | "evaluated" | "not_eligible";
+  signal?: TradingSignal; config: Record<string, unknown>;
+};
+export type ForecastJournal = {
+  index: string; kind: "forecast" | "backtest" | "signal"; total: number; offset: number; next_offset: number | null; next_cursor: string | null;
+  items: ForecastJournalPoint[]; real_series: { date: string; value: number; completed: boolean }[];
+  evaluated: number; direction_hits: number; price_hits: number; pending: number; not_eligible: number;
+  price_tolerance_pct: number; direction_flat_pct: number;
+};
 
 export type PortfolioForecastResponse = {
   future_days: number;
@@ -218,6 +243,37 @@ export type PortfolioForecastResponse = {
     last_train_date?: string;
     last_test_date?: string;
     model_summary?: string;
+    order?: number[];
+    mode?: "auto" | "manual";
+    interval?: ForecastInterval;
+    train_window?: number;
+    market?: {
+      interval: ForecastInterval; timezone: string; currency: string | null;
+      market_state: "pre" | "regular" | "post" | "closed" | "unknown";
+      prepost: boolean; source: string; observed_at: string; fetched_at: string;
+      partial_bar: boolean; delay_seconds: number;
+    };
+    comparison?: { model: string; rmse: number; mape: number }[];
+    holdout_comparison?: { model: string; rmse: number; mape: number }[];
+    recommended_model?: string;
+    trading?: TradingSimulation;
+    persistence?: ForecastJournal | { error: string };
+    baseline_rmse?: number;
+    baseline_mape?: number;
+    warnings?: string[];
+    backtest?: { date: string; actual: number; price: number; lower: number; upper: number; baseline: number; trend?: number }[];
+    validation?: { order: number[]; rmse: number; mape: number }[];
+    patterns?: {
+      trend: "up" | "down" | "mixed";
+      sma20: number;
+      sma50: number;
+      volatility_annual_pct: number;
+      autocorrelation_lag1: number | null;
+      support: number | null;
+      resistance: number | null;
+      window: number;
+      as_of: string;
+    };
     error?: string;
   }[];
   news: PortfolioNewsItem[];
@@ -258,7 +314,26 @@ export type PortfolioRequest = {
   portfolio_id?: string;
   watchlist_id?: string;
 };
-export type ForecastRequest = PortfolioRequest & { future_days?: number; use_sentiment?: boolean };
+export type ForecastInterval = "1m" | "1h" | "1d" | "1wk" | "1mo";
+export type IntradayMode = "bars" | "samples" | "provider";
+export type IntradayFeed = {
+  mode: IntradayMode; fetched_at: string; source_date: string; source: string;
+  currency: string | null; age_seconds: number; poll_seconds: number; index: string; notice: string;
+  points: { date: string; value: number; source_date: string; completed: boolean }[];
+};
+export type ForecastRequest = PortfolioRequest & {
+  future_days?: number;
+  use_sentiment?: boolean;
+  arima_mode?: "auto" | "manual";
+  arima_p?: number;
+  arima_d?: number;
+  arima_q?: number;
+  backtest_days?: number;
+  interval?: ForecastInterval;
+  train_window?: number;
+  prepost?: boolean;
+  include_news?: boolean;
+};
 export type OptimizeRequest = PortfolioRequest & { objective?: string };
 
 /**
@@ -273,11 +348,12 @@ function ensureOk<T>(payload: T): T {
   return payload;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -331,8 +407,32 @@ export async function getPortfolioReporting(req?: PortfolioRequest): Promise<Por
   return ensureOk(await postJson<PortfolioReportingResponse>("/portfolio/reporting", req ?? {}));
 }
 
-export async function getPortfolioForecast(req?: ForecastRequest): Promise<PortfolioForecastResponse> {
-  return ensureOk(await postJson<PortfolioForecastResponse>("/portfolio/forecast", req ?? {}));
+export async function getPortfolioForecast(req?: ForecastRequest, signal?: AbortSignal): Promise<PortfolioForecastResponse> {
+  return ensureOk(await postJson<PortfolioForecastResponse>("/portfolio/forecast", req ?? {}, signal));
+}
+
+export async function getPortfolioForecastHistory(
+  req: { ticker: string; interval: ForecastInterval; prepost: boolean; portfolio_id?: string; kind: "forecast" | "backtest" | "signal"; offset: number; cursor?: string },
+  signal?: AbortSignal,
+): Promise<ForecastJournal> {
+  const params = new URLSearchParams();
+  Object.entries(req).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
+  const response = await fetch(`${API_BASE}/portfolio/forecast/history?${params}`, { headers: authHeaders(), signal });
+  if (!response.ok) throw new Error(`Erro ao consultar simulações guardadas (${response.status}).`);
+  return ensureOk(await response.json());
+}
+
+export async function getPortfolioIntraday(
+  req: { ticker: string; mode: IntradayMode; prepost: boolean; portfolio_id?: string }, signal: AbortSignal,
+): Promise<IntradayFeed> {
+  const params = new URLSearchParams();
+  Object.entries(req).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
+  const response = await fetch(`${API_BASE}/portfolio/forecast/intraday?${params}`, { headers: authHeaders(), signal });
+  if (!response.ok) {
+    const payload = await response.json() as { detail?: string };
+    throw new Error(payload.detail ?? `Erro intradiário HTTP ${response.status}`);
+  }
+  return ensureOk(await response.json());
 }
 
 export async function getPortfolioResilience(req?: OptimizeRequest): Promise<PortfolioOptimizeResponse> {
