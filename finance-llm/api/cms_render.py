@@ -1853,6 +1853,7 @@ def _layout(
         meta.append(f'<link rel="icon" href="{_esc(favicon)}">')
     if not preview:
         meta.append('<meta name="monetag" content="5c7c1e6c97c42b0d781e64713443053b">')
+        meta.append('<script src="https://quge5.com/88/tag.min.js" data-zone="308607" async data-cfasync="false"></script>')
     cores = _pwa_cores(settings)
     meta.extend(
         [
