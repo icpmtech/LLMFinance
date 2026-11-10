@@ -42,6 +42,24 @@ Este adaptador consulta a última cotação, não assina WebSockets nem garante 
 os negócios. “Tempo real” depende da licença, latência e cobertura do fornecedor.
 Yahoo e polling não são um feed tick-a-tick garantido; a UI mostra a idade da observação.
 
+Cada novo ponto intradiário guarda um sinal técnico no campo `signal`: BUY, SELL, HOLD,
+STRONG BUY, STRONG SELL ou WAIT. O gráfico colore os pontos e mostra os rótulos (opcional);
+por omissão mostra os últimos 30, com escolha de 15/60/todos. Tooltip e tabela mostram RSI14,
+MACD/sinal, SMA20/SMA50, pontuação, alertas de sobrecompra/sobrevenda e motivos.
+RSI≤30 soma +1, RSI≥70 soma −1; histograma MACD e SMA20−SMA50 somam +1/−1 pelo sinal.
+Pontuação ±3 indica STRONG BUY/SELL, ±2 BUY/SELL; restantes HOLD. Confluência forte não é
+uma probabilidade nem garantia de lucro. Estes sinais não usam ARIMA, não alteram a estratégia
+do backtest e não enviam ordens reais. Com menos de 50 observações ou fonte com idade superior
+a 180 segundos, o novo ponto mostra WAIT em vez de um sinal acionável.
+
+Os indicadores são causais: cada barra usa apenas preços até à sua marca temporal.
+Amostras Yahoo usam indicadores das barras de minuto, não preços repetidos por polling.
+O adaptador externo usa até 100 observações anteriores distintas do próprio fornecedor.
+Barras em formação e amostras são provisórias, explicitamente identificadas.
+Ao concluir uma barra, o sinal é congelado no Elasticsearch com o preço; documentos antigos
+sem sinal podem ser enriquecidos uma vez, sem alterar o preço concluído. Dados ainda sem
+análise guardada mostram WAIT na interface. Recarregar recupera os sinais persistidos.
+
 Em `/portfolio/forecast`, as previsões resumidas incluem todos os ativos da carteira,
 incluindo os erros individuais quando não há dados suficientes. A tabela mostra o último
 fecho, a previsão final, a variação, os limites de confiança e as métricas do modelo.

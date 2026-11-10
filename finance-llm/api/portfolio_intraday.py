@@ -11,6 +11,7 @@ import requests
 
 from api import portfolio_forecast_store as store
 from forecasting.market_series import load_market_series, serialize_date
+from forecasting.trading_signals import intraday_signal, technical_indicators
 
 
 def _external_quote(ticker: str) -> dict:
@@ -52,9 +53,23 @@ def intraday_points(owner_id: str, scope_id: str, ticker: str, mode: str, prepos
             raise RuntimeError("Feed externo indisponivel ou resposta invalida; verifique a configuracao do fornecedor.") from exc
         bars = []
         market = {"source": quote["source"], "currency": quote["currency"]}
+        client = store._client()
+        previous = client.search(index=store.INDEX, body={
+            "size": 100, "query": {"bool": {"filter": store._filters(owner_id, scope_id, ticker, "1m", prepost)
+                + [{"term": {"kind": "provider"}}, {"range": {"target_date": {"lt": quote["source_date"]}}}]}},
+            "sort": [{"target_date": "desc"}],
+        })
+        prices = pd.Series(
+            [hit["_source"]["actual"] for hit in reversed(previous["hits"]["hits"])] + [quote["value"]],
+            index=pd.DatetimeIndex(
+                [hit["_source"]["target_key"] for hit in reversed(previous["hits"]["hits"])] + [quote["source_date"]]
+            ),
+        )
     else:
         observed = load_market_series(ticker, "1m", prepost)
         market = observed.metadata
+        prices = observed.prices
+        client = store._client()
         completed = set(observed.completed.index)
         bars = [{
             "date": serialize_date(date, "1m"), "value": float(value), "completed": date in completed,
@@ -67,7 +82,8 @@ def intraday_points(owner_id: str, scope_id: str, ticker: str, mode: str, prepos
         }
     if not math.isfinite(quote["value"]) or quote["value"] <= 0:
         raise ValueError("Fonte devolveu preco invalido.")
-    client = store._client()
+    indicators = technical_indicators(prices)
+    technical = {serialize_date(date, "1m"): values.to_dict() for date, values in indicators.iterrows()}
     base = {
         "owner_id": owner_id, "scope_id": scope_id, "ticker": ticker, "interval": "1m",
         "prepost": prepost, "version": store.VERSION,
@@ -79,19 +95,25 @@ def intraday_points(owner_id: str, scope_id: str, ticker: str, mode: str, prepos
         "value": quote["value"], "source_date": quote["source_date"], "completed": False,
     }]
     for point in points:
+        values = technical.get(point["source_date"], {})
+        signal = intraday_signal(
+            values, provisional=not point["completed"],
+            stale=(mode != "bars" or point["date"] == bars[-1]["date"]) and quote["age_seconds"] > 180,
+        )
         doc_id = store._hash([base, kind, point["date"]])
         doc = {
             **base, "kind": kind, "target_date": point["date"], "target_key": point["date"],
             "sort_id": doc_id, "recorded_at": fetched, "actual": point["value"],
             "reference_date": point["source_date"], "source": quote["source"],
             "currency": quote["currency"], "status": "completed" if point["completed"] else "partial",
+            "signal": signal,
         }
         if mode == "bars":
             operations.append({
                 "_op_type": "update", "_index": store.INDEX, "_id": doc_id, "scripted_upsert": True,
                 "script": {
                     "lang": "painless",
-                    "source": "if (ctx.op == 'create' || ctx._source.status != 'completed') { ctx._source = params.doc; } else { ctx.op = 'noop'; }",
+                    "source": "if (ctx.op == 'create' || ctx._source.status != 'completed') { ctx._source = params.doc; } else if (ctx._source.signal == null) { ctx._source.signal = params.doc.signal; } else { ctx.op = 'noop'; }",
                     "params": {"doc": doc},
                 }, "upsert": {},
             })
@@ -110,6 +132,7 @@ def intraday_points(owner_id: str, scope_id: str, ticker: str, mode: str, prepos
         "points": [{
             "date": hit["_source"]["target_key"], "value": hit["_source"]["actual"],
             "source_date": hit["_source"]["reference_date"], "completed": hit["_source"]["status"] == "completed",
+            "signal": hit["_source"].get("signal"),
         } for hit in reversed(result["hits"]["hits"])],
         "notice": "Consulta de 15 em 15 s, nao tick-a-tick. "
                   + ("Amostras da consulta: o mesmo preco da fonte pode repetir-se." if mode == "samples"

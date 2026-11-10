@@ -316,10 +316,17 @@ export type PortfolioRequest = {
 };
 export type ForecastInterval = "1m" | "1h" | "1d" | "1wk" | "1mo";
 export type IntradayMode = "bars" | "samples" | "provider";
+export type IntradayAction = "buy" | "sell" | "hold" | "strong_buy" | "strong_sell" | "wait";
+export type IntradaySignal = {
+  action: IntradayAction; score: number | null; provisional: boolean; method: "technical_only";
+  rsi14?: number | null; macd?: number | null; macd_signal?: number | null;
+  macd_histogram?: number | null; sma20?: number | null; sma50?: number | null;
+  alerts: ("overbought" | "oversold")[]; reasons: string[];
+};
 export type IntradayFeed = {
   mode: IntradayMode; fetched_at: string; source_date: string; source: string;
   currency: string | null; age_seconds: number; poll_seconds: number; index: string; notice: string;
-  points: { date: string; value: number; source_date: string; completed: boolean }[];
+  points: { date: string; value: number; source_date: string; completed: boolean; signal?: IntradaySignal | null }[];
 };
 export type ForecastRequest = PortfolioRequest & {
   future_days?: number;

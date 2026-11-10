@@ -1,11 +1,49 @@
 """Causal close-based signals and a long/cash paper-trading simulation."""
 from __future__ import annotations
 
+import math
 import pandas as pd
 
 from forecasting.market_series import serialize_date
 
 FEE = 0.001
+
+
+def intraday_signal(values: dict, *, provisional: bool, stale: bool = False) -> dict:
+    indicators = {
+        key: float(value) if pd.notna(value) and math.isfinite(float(value)) else None for key, value in values.items()
+    }
+    result = {
+        **indicators, "provisional": provisional, "method": "technical_only",
+        "score": None, "alerts": [], "action": "wait", "reasons": [],
+    }
+    if any(value is None for value in indicators.values()) or not indicators:
+        result["reasons"] = ["Historico insuficiente: requer 50 barras/observacoes distintas."]
+        return result
+    rsi = indicators["rsi14"]
+    histogram = indicators["macd_histogram"]
+    spread = indicators["sma20"] - indicators["sma50"]
+    score = (
+        (1 if rsi <= 30 else -1 if rsi >= 70 else 0)
+        + (1 if histogram > 0 else -1 if histogram < 0 else 0)
+        + (1 if spread > 0 else -1 if spread < 0 else 0)
+    )
+    result["score"] = score
+    result["alerts"] = ["oversold"] if rsi <= 30 else ["overbought"] if rsi >= 70 else []
+    result["reasons"] = [
+        f"RSI14 {rsi:.2f} (<=30 +1; >=70 -1)",
+        f"Histograma MACD {histogram:+.4f}",
+        f"SMA20-SMA50 {spread:+.4f}",
+        "Sem previsao ARIMA neste sinal tecnico.",
+    ]
+    if stale:
+        result["reasons"].append("Fonte desatualizada: mais de 180 segundos.")
+        return result
+    result["action"] = (
+        "strong_buy" if score == 3 else "strong_sell" if score == -3
+        else "buy" if score >= 2 else "sell" if score <= -2 else "hold"
+    )
+    return result
 
 
 def technical_indicators(prices: pd.Series) -> pd.DataFrame:

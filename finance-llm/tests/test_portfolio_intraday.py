@@ -40,6 +40,8 @@ def test_bars_and_poll_samples_are_separate_and_keep_source_timestamp(mode, kind
     assert {"term": {"owner_id": "a"}} in filters
     assert {"term": {"prepost": True}} in filters
     assert result["poll_seconds"] == 15
+    assert doc["signal"]["action"] == "wait"
+    assert doc["signal"]["provisional"] is True
 
 
 def test_unconfigured_external_provider_never_uses_yahoo_as_fake_realtime():
@@ -103,5 +105,48 @@ def test_intraday_real_storage_keeps_bars_and_poll_samples_distinct():
         assert samples["points"][0]["source_date"] == bars["points"][-1]["date"]
         assert bars["points"][0]["completed"] is True
         assert bars["points"][-1]["completed"] is False
+        assert all(point["signal"]["action"] == "wait" for point in bars["points"])
+        assert samples["points"][0]["signal"]["method"] == "technical_only"
     finally:
         client.delete_by_query(index=feed.store.INDEX, query={"term": {"owner_id": owner}}, refresh=True)
+
+
+def test_intraday_signal_history_is_causal_and_each_point_is_persisted():
+    import numpy as np
+    series = pd.Series(100 + np.sin(np.arange(100) / 3), index=pd.date_range("2026-01-01", periods=100, freq="min", tz="UTC"))
+    changed = series.copy()
+    changed.iloc[80:] *= 2
+    client = Mock()
+    client.search.return_value = {"hits": {"hits": []}}
+    snapshots = []
+    with patch.object(feed.store, "_client", return_value=client), patch.object(feed.store, "_write") as write:
+        for prices in (series, changed):
+            observed = MarketSeries(prices, prices.iloc[:-1], {"source": "test", "currency": "USD", "delay_seconds": 30})
+            with patch.object(feed, "load_market_series", return_value=observed):
+                feed.intraday_points("a", "p", "AAA", "bars", True)
+            snapshots.append([op["script"]["params"]["doc"]["signal"] for op in write.call_args.args[1]])
+    assert snapshots[0][:80] == snapshots[1][:80]
+    assert len(snapshots[0]) == 100
+    assert snapshots[0][48]["action"] == "wait"
+    assert snapshots[0][49]["action"] != "wait"
+    assert snapshots[0][-1]["provisional"] is True
+    assert snapshots[0][-2]["provisional"] is False
+
+
+def test_samples_use_source_minute_indicators_instead_of_poll_repetitions():
+    import numpy as np
+    series = pd.Series(100 + np.sin(np.arange(100) / 3), index=pd.date_range("2026-01-01", periods=100, freq="min", tz="UTC"))
+    observed = MarketSeries(series, series.iloc[:-1], {"source": "test", "currency": "USD", "delay_seconds": 181})
+    client = Mock()
+    client.search.return_value = {"hits": {"hits": []}}
+    with (
+        patch.object(feed.store, "_client", return_value=client),
+        patch.object(feed.store, "_write") as write,
+        patch.object(feed, "load_market_series", return_value=observed),
+    ):
+        feed.intraday_points("a", "p", "AAA", "samples", True)
+    signal = write.call_args.args[1][0]["_source"]["signal"]
+    expected = feed.technical_indicators(series).iloc[-1]
+    assert signal["rsi14"] == expected["rsi14"]
+    assert signal["action"] == "wait"
+    assert any("180" in reason for reason in signal["reasons"])

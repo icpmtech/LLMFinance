@@ -4,6 +4,26 @@ import pytest
 from unittest.mock import patch
 
 from forecasting.trading_signals import classify_signal, simulate_trading, technical_indicators
+from forecasting.trading_signals import intraday_signal
+
+
+@pytest.mark.parametrize("rsi,hist,spread,expected", [
+    (25, 1, 1, "strong_buy"), (75, -1, -1, "strong_sell"),
+    (50, 1, 1, "buy"), (50, -1, -1, "sell"), (50, 1, -1, "hold"),
+])
+def test_intraday_signal_confluence_categories(rsi, hist, spread, expected):
+    values = {"rsi14": rsi, "macd_histogram": hist, "sma20": 100 + spread, "sma50": 100}
+    result = intraday_signal(values, provisional=True)
+    assert result["action"] == expected
+    assert result["provisional"]
+    assert result["method"] == "technical_only"
+    assert intraday_signal(values, provisional=False, stale=True)["action"] == "wait"
+
+
+def test_intraday_signal_waits_for_missing_and_nonfinite_indicators():
+    assert intraday_signal({}, provisional=True)["action"] == "wait"
+    assert intraday_signal({"rsi14": float("nan")}, provisional=True)["rsi14"] is None
+    assert intraday_signal({"rsi14": float("inf")}, provisional=True)["action"] == "wait"
 
 
 def prices(values):
