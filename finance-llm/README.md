@@ -20,6 +20,9 @@ e responde com base no conhecimento indexado.
 
 O worker fornecido para a zona `12235494` e servido em `/site/monetag/sw.js`
 e registado apenas nas paginas publicas do CMS, nunca nas pre-visualizacoes.
+O cabecalho dessas paginas inclui a meta tag `monetag` para verificacao do site.
+A pagina inicial `/` tambem inclui essa meta tag, sem registar o worker Monetag
+na aplicacao.
 O ambito `/site/monetag/` evita substituir `/site/sw.js` ou o `/sw.js` da aplicacao.
 O ficheiro original vive em `api/site_assets/monetag-sw.js` e importa o codigo
 externo de `3nbf4.com`; falhas de registo aparecem na consola do browser.

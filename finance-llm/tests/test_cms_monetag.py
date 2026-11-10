@@ -30,6 +30,9 @@ def test_public_layout_registers_separate_workers_but_preview_does_not():
     assert 'scope:"/site/monetag/"' in public
     assert "requestPermission" not in public
     assert "monetag/sw.js" not in preview
+    verification = '<meta name="monetag" content="5c7c1e6c97c42b0d781e64713443053b">'
+    assert public.split("</head>", 1)[0].count(verification) == 1
+    assert verification not in preview
 
 
 def test_offline_workers_do_not_import_monetag():
@@ -39,3 +42,11 @@ def test_offline_workers_do_not_import_monetag():
     for worker in (app_worker, site_worker):
         assert "3nbf4.com" not in worker
         assert "12235494" not in worker
+
+
+def test_root_html_contains_monetag_verification_without_worker_registration():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "chat-ui" / "index.html").read_text(encoding="utf-8")
+    head = html.split("</head>", 1)[0]
+    assert head.count('<meta name="monetag" content="5c7c1e6c97c42b0d781e64713443053b"') == 1
+    assert "/site/monetag/sw.js" not in html

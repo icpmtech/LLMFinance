@@ -1851,6 +1851,8 @@ def _layout(
     favicon = _media_url(settings.get("favicon_id"))
     if favicon:
         meta.append(f'<link rel="icon" href="{_esc(favicon)}">')
+    if not preview:
+        meta.append('<meta name="monetag" content="5c7c1e6c97c42b0d781e64713443053b">')
     cores = _pwa_cores(settings)
     meta.extend(
         [
