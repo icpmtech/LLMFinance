@@ -16,22 +16,12 @@ e responde com base no conhecimento indexado.
 
 ## Estrutura
 
-### Monetag no site publico
+### Remocao da Monetag
 
-O worker fornecido para a zona `12235494` e servido em `/site/monetag/sw.js`
-e registado apenas nas paginas publicas do CMS, nunca nas pre-visualizacoes.
-O cabecalho dessas paginas inclui a meta tag `monetag` para verificacao do site.
-A pagina inicial `/` tambem inclui essa meta tag, sem registar o worker Monetag
-na aplicacao.
-O ambito `/site/monetag/` evita substituir `/site/sw.js` ou o `/sw.js` da aplicacao.
-O ficheiro original vive em `api/site_assets/monetag-sw.js` e importa o codigo
-externo de `3nbf4.com`; falhas de registo aparecem na consola do browser.
-As paginas publicas do CMS carregam tambem o script Monetag
-`https://quge5.com/88/tag.min.js`, zona `308607`, com `async` e `data-cfasync="false"`.
-Este script nao entra nas pre-visualizacoes nem na aplicacao; os formatos exibidos
-dependem da configuracao da zona no fornecedor. O consentimento aplicavel deve
-ser configurado antes da publicacao. Nao alterar o ambito do worker para `/`
-ou `/site/`, pois substituiria uma PWA.
+Scripts de anuncios e meta tags Monetag foram removidos do site e da aplicacao.
+O site remove apenas registos antigos com o ambito `/site/monetag/`, preservando
+as PWAs. O antigo endpoint `/site/monetag/sw.js` serve apenas um worker de
+desativacao, sem imports externos, para retirar instalacoes anteriores.
 
 ### Previsões de carteira
 

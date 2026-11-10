@@ -1170,7 +1170,7 @@ def site_service_worker() -> Response:
 
 @router.get("/site/monetag/sw.js")
 def site_monetag_service_worker() -> Response:
-    """Worker Monetag isolado dos workers offline do site e da plataforma."""
+    """Desativa instalacoes antigas do worker de publicidade."""
     return FileResponse(
         store.SITE_ASSETS_DIR / "monetag-sw.js",
         media_type="text/javascript",

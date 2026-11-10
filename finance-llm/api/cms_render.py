@@ -1851,9 +1851,6 @@ def _layout(
     favicon = _media_url(settings.get("favicon_id"))
     if favicon:
         meta.append(f'<link rel="icon" href="{_esc(favicon)}">')
-    if not preview:
-        meta.append('<meta name="monetag" content="5c7c1e6c97c42b0d781e64713443053b">')
-        meta.append('<script src="https://quge5.com/88/tag.min.js" data-zone="308607" async data-cfasync="false"></script>')
     cores = _pwa_cores(settings)
     meta.extend(
         [
@@ -1905,9 +1902,12 @@ def _layout(
             "function(){navigator.serviceWorker.register(\"" + SW_PATH + "\")"
             ".catch(function(){});});}</script>"
             '<script>if("serviceWorker" in navigator){window.addEventListener("load",'
-            'function(){navigator.serviceWorker.register("/site/monetag/sw.js",'
-            '{scope:"/site/monetag/",updateViaCache:"none"})'
-            '.catch(function(error){console.error("Monetag worker registration failed",error);});'
+            'function(){navigator.serviceWorker.getRegistrations().then(function(registrations){'
+            'return Promise.all(registrations.filter(function(registration){'
+            'return registration.scope===location.origin+"/site/monetag/";'
+            '}).map(function(registration){return registration.unregister().then(function(removed){'
+            'if(!removed)throw new Error("Worker removal failed");});}));'
+            '}).catch(function(error){console.error("Legacy ad worker cleanup failed",error);});'
             '});}</script>'
         )
         # Media em falta no disco não pode deixar uma caixa vazia (ou o ícone de
